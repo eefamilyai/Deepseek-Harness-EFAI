@@ -47,6 +47,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   write: 'write',
   edit: 'edit',
   run_code: 'code',
+  kernel: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
   // The three run-control verbs take one package id and produce a receipt, so
@@ -60,6 +61,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
 
 /** Tool-owned titles that refine a generic row variant without replacing it. */
 const TOOL_TITLES: Record<string, string> = {
+  kernel: 'Python',
   cordis_package_inspect: 'Inspect',
   cordis_runtime_inspect: 'Inspect',
   cordis_run: 'Run Cordis Plugin',

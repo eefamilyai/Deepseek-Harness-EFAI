@@ -6,7 +6,7 @@
 import { z } from 'zod'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
-import type { ConfigurableProviderView, DiscoveredModelView } from './llm.ts'
+import type { AddAccountView, ConfigurableProviderView, DiscoveredModelView } from './llm.ts'
 import { modelCatalogFailureSchema, modelProviderGroupSchema } from './sessions.schema.ts'
 
 /** ConfigurableProviderView row of llm.providers. */
@@ -62,3 +62,22 @@ export const llmDiscoverModelsRequestSchema = z.object({
 export const llmDiscoverModelsValueSchema = z.object({
   models: z.array(discoveredModelViewSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'llm.discoverModels'>>>
+
+/** llm.addAccount request payload. */
+export const llmAddAccountRequestSchema = z.object({
+  provider: z.string().min(1),
+  email: z.string().min(1).optional(),
+  mobile: z.string().min(1).optional(),
+  areaCode: z.string().min(1).optional(),
+  // Write-only, exactly like discoverModels' apiKey: used for the one login
+  // test, never stored by the host and never returned.
+  apiKey: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'llm.addAccount'>>>
+
+/** llm.addAccount response value. */
+export const llmAddAccountValueSchema = z.object({
+  ok: z.boolean(),
+  account: z.string().min(1).optional(),
+  route: z.string().min(1).optional(),
+  message: z.string().optional(),
+}) satisfies z.ZodType<Wire<AddAccountView>>

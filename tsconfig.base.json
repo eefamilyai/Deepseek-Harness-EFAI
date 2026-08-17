@@ -229,6 +229,7 @@
         "./packages/core/*/src",
         "./packages/prompt/*/src",
         "./packages/llm/*/src",
+        "./packages/kernel/*/src",
         "./packages/shell/*/src",
         "./packages/terminal/*/src",
         "./packages/subprocess/*/src",

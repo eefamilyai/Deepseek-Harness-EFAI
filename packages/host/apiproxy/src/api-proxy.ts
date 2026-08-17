@@ -1951,9 +1951,19 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
    * remotely readable or writable by default.
    */
   function exposedNamespaces(): Set<string> {
+    // Expose every namespace the running settings service actually registered.
+    // The previous whitelist was the reason a user-facing setting could exist
+    // but stay invisible/read-only in the Web client. Keep the static entries
+    // as a fallback for a deployment whose service cannot enumerate itself.
     const exposed = modelProviderNamespaces()
     for (const ns of WEB_SETTINGS_NAMESPACES) exposed.add(ns)
     for (const ns of PRODUCT_SETTINGS_NAMESPACES) exposed.add(ns)
+    const settings = ctx.get('settings')
+    if (settings !== undefined) {
+      for (const descriptor of settings.describe({ redactSecrets: true })) {
+        exposed.add(String(descriptor.ns))
+      }
+    }
     return exposed
   }
 
@@ -3421,6 +3431,34 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             code: 'model-discovery-failed',
             message: error instanceof Error ? error.message : String(error),
             details: { settingsNs, ...baseURL === undefined ? {} : { baseURL } },
+          })
+        }
+      },
+
+      async addAccount(request) {
+        const { provider, email, mobile, areaCode, apiKey } = request.payload
+        try {
+          // The transport calls the secret `apiKey` for one redaction path
+          // across the configuration plane; for a login it is the password.
+          const result = await ctx.llm.addAccount(provider, {
+            password: apiKey,
+            ...email === undefined ? {} : { email },
+            ...mobile === undefined ? {} : { mobile },
+            ...areaCode === undefined ? {} : { area_code: areaCode },
+          })
+          return ok(request, {
+            ok: result.ok,
+            ...result.account === undefined ? {} : { account: result.account },
+            ...result.route === undefined ? {} : { route: result.route },
+            ...result.message === undefined ? {} : { message: result.message },
+          })
+        } catch (error: unknown) {
+          // A misregistered provider or empty credential lands here; the message
+          // repeats only what the caller controls, never the password.
+          return err(request, {
+            code: 'add-account-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
           })
         }
       },

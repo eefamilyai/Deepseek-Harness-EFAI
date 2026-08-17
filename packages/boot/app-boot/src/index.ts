@@ -25,7 +25,68 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
+    /** Settings-document flag reader available to Loader `!!js` config expressions. */
+    dshSettingFlag?: typeof dshSettingFlag
   }
+}
+
+/**
+ * Boot-time snapshots of the settings document, one read per resolved path.
+ *
+ * Reading once is the point, not an optimization: Loader entries evaluate their
+ * `disabled` expressions at different moments, and a document edited mid-boot
+ * would otherwise enable half a roster and disable the other half. A
+ * composition decides its shape from one consistent answer. One boot resolves
+ * one harness home, so keying by path preserves that exactly while leaving the
+ * function honest about a `$DSH_HOME` that differs between calls.
+ */
+const settingsSnapshots = new Map<string, Record<string, unknown>>()
+
+/** Read and cache `$DSH_HOME/settings.yaml`; an absent or broken document reads as empty. */
+function readSettingsDocument(): Record<string, unknown> {
+  const filename = dshHomePath('settings.yaml')
+  const cached = settingsSnapshots.get(filename)
+  if (cached !== undefined) return cached
+  let parsed: unknown
+  try {
+    parsed = yaml.load(readFileSync(filename, 'utf8'))
+  } catch {
+    // Absent, unreadable, or malformed: a composition must still boot, and it
+    // boots on the defaults its `!!js` callers pass. The settings service
+    // reports the document's real problems when it loads it for itself.
+    parsed = undefined
+  }
+  const document = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {}
+  settingsSnapshots.set(filename, document)
+  return document
+}
+
+/**
+ * Read one boolean from the user's settings document, for compositions whose
+ * SHAPE a setting decides.
+ *
+ * This exists for the narrow case a settings *value* cannot cover: whether a
+ * plugin is mounted at all. A tool's prompt sections, its registry entry, and
+ * its backing service come and go together with its Loader entry, so a roster
+ * chosen by a switch has to be chosen here — a plugin that mounted and then
+ * hid its own tool would leave its instructions in the system prompt,
+ * describing a tool the model cannot call.
+ *
+ * Because the read happens once at boot, a namespace using it must register
+ * with `applies: 'restart'`, which is what tells the settings UI to say so.
+ * @param path - dot-separated path into the document, e.g. `kernel.enabled`.
+ * @param fallback - the value for an absent path or a non-boolean at it.
+ * @returns the stored boolean, or `fallback`.
+ */
+export function dshSettingFlag(path: string, fallback = false): boolean {
+  let node: unknown = readSettingsDocument()
+  for (const segment of path.split('.')) {
+    if (typeof node !== 'object' || node === null || Array.isArray(node)) return fallback
+    node = (node as Record<string, unknown>)[segment]
+  }
+  return typeof node === 'boolean' ? node : fallback
 }
 
 export {
@@ -768,6 +829,7 @@ export async function boot(
   try {
     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
     ctx.provide('dshHomePath', dshHomePath)
+    ctx.provide('dshSettingFlag', dshSettingFlag)
     await ctx.plugin(Loader)
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'

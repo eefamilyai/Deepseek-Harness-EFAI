@@ -6,6 +6,16 @@ The code-execution seam — a [capability seam](../../.agents/notes/implemented/
 
 Source: [`packages/code-runtime/code-runtime/src/types.ts`](../../packages/code-runtime/code-runtime/src/types.ts)
 
+## The other execution seam: `ctx.kernel`
+
+A second capability seam lives on this page because it answers the same question — how does model-written code run — with the opposite answer about state.
+
+`ctx.codeRuntime` runs **one isolated program**: bindings in, value and logs out, nothing kept. [`dsh-kernel`](../../packages/kernel/kernel) (`ctx.kernel`) runs **one cell in a namespace that persists**, so a variable bound in one call is still bound in the next, and the process outlives the call. That difference decides everything else about the two seams. An isolated run can be retried, run in parallel with its siblings, and abandoned without consequence; a kernel cell cannot — cells serialize, because a shared mutable namespace makes two concurrent cells interleave their assignments, and a cancelled or overrunning cell costs the whole namespace, which the seam reports rather than hides (`restarted`, and an `outcome` of `timeout`/`cancelled`/`crashed`).
+
+The backend that ships is [`dsh-kernel-python`](../../packages/kernel/kernel-python), a Python child process over a framed stdio protocol; the model-facing tool is [`dsh-tool-kernel`](../../packages/kernel/tool-kernel). Whether the seam is mounted at all is a user setting rather than a fixed composition — see [`dsh-kernel-mode`](../../packages/kernel/kernel-mode), which gates the kernel rows and the tools the kernel replaces on one switch read at boot.
+
+Source: [`packages/kernel/kernel/src/types.ts`](../../packages/kernel/kernel/src/types.ts)
+
 ## The run: request in, result out
 
 A `CodeRunRequest` carries **everything the runtime acts on** — per the "explicit > implicit at package boundaries" rule, defaulting (time budgets, output caps) is the implementation's validated config, never a hidden `??` inside `run()`:
@@ -188,4 +198,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
 ```
 
 Source: [`packages/code-runtime/code-runtime/src/index.ts:102`](../../packages/code-runtime/code-runtime/src/index.ts)
+
+<a id="ctxkernel--kernelruntime"></a>
+
+### `ctx.kernel` — `KernelRuntime`
+
+The persistent-kernel service, registered as `ctx.kernel` (one instance per context).
+
+Selection semantics (resolved at execution time, never order-dependent):
+
+- A configured id that is registered and `available()` → that backend.
+- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.
+- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.
+- No id configured, exactly one registered usable backend → that backend.
+- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.
+- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.
+
+```ts cordis-catalog
+/**
+ * Register a kernel backend. Throws {@link KernelError}
+ * `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a
+ * disposer; disposed with the calling fiber.
+ * @param provider - the backend; its `id` is the registry key.
+ * @returns the disposer that unregisters the backend.
+ */
+registerProvider(provider: KernelProvider): () => void
+
+/**
+ * Execute one cell in the persistent namespace. Resolves the backend at call
+ * time with the selection rules above; throws {@link KernelError} when the
+ * capability itself cannot run. A cell that raises is a *result* carrying the
+ * traceback, never a throw — the model is expected to read it and fix the code.
+ * @param request - the cell and its optional budget.
+ * @param signal - optional cancellation; an aborted cell restarts the kernel.
+ * @returns the captured output and how the cell ended.
+ */
+async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
+
+/**
+ * Discard the namespace and start a fresh kernel.
+ * @returns once the replacement kernel is ready.
+ */
+async restart(): Promise<void>
+
+/**
+ * List the names currently bound in the namespace.
+ * @returns the bound names, in the backend's order.
+ */
+async names(): Promise<readonly string[]>
+```
+
+Source: [`packages/kernel/kernel/src/index.ts:61`](../../packages/kernel/kernel/src/index.ts)
 <!-- END GENERATED cordis-surface -->

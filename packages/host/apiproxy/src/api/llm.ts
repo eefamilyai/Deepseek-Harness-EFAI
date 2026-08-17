@@ -74,6 +74,38 @@ export interface LlmApi {
     }>,
     signal?: AbortSignal,
   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
+
+  /**
+   * Test a login for an account-pooling provider (DeepSeek web) and, on
+   * success, add it so it becomes a selectable route immediately.
+   *
+   * `provider` is the route that pools logins. The password is write-only here:
+   * it drives the one login test and is never stored by the host or returned.
+   * A success carries the new account id and its route; a failure carries a
+   * plain reason (bad credentials, a blocked endpoint) with no secret in it.
+   */
+  addAccount(
+    request: RpcRequest<{
+      provider: string
+      email?: string
+      mobile?: string
+      areaCode?: string
+      apiKey: string
+    }>,
+    signal?: AbortSignal,
+  ): Promise<RpcResponse<AddAccountView>>
+}
+
+/** Wire result of llm.addAccount. */
+export interface AddAccountView {
+  /** Whether the login tested successfully and was added. */
+  ok: boolean
+  /** The added login id, on success. */
+  account?: string
+  /** The route now bound to that login, selectable immediately, on success. */
+  route?: string
+  /** A plain failure reason, on failure — never the credential. */
+  message?: string
 }
 
 /** Wire view of one model an interrogated endpoint advertises. */

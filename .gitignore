@@ -38,3 +38,27 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+
+# DeepSeek web credentials (token, WAF cookie, login password) — never commit
+ds_config.json
+**/ds_config.json
+.kiln_kernel_state/
+
+# Local machine recon / agent memory - never publish
+.freebuff/
+KILN.md
+acl_scan_output.txt
+notes_output.txt
+schtasks_system_scan.tsv
+start.cmd
+.waf-refs/
+
+
+# Runtime state that can hold live session tokens
+
+python/kiln/runtime/ds_sessions.json
+
+python/kiln/runtime/subkernels.json
+
+python/kiln/runtime/.kiln_memory/
+

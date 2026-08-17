@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import {
-  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot,
+  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot, dshSettingFlag,
   FAIL_LOUD_RELEASE_TIMEOUT_MS, HARNESS_SOURCE_SECTION,
   installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudProcess,
 } from '../src/index.ts'
@@ -831,5 +831,38 @@ describe('addHarnessSourceSection', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+})
+
+describe('dshSettingFlag', () => {
+  const homeWith = (document: string): string => {
+    const home = tmp()
+    writeFileSync(join(home, 'settings.yaml'), document)
+    return home
+  }
+
+  it('reads a boolean at a dotted path', () => {
+    vi.stubEnv('DSH_HOME', homeWith('kernel:\n  enabled: false\n'))
+    expect(dshSettingFlag('kernel.enabled', true)).toBe(false)
+  })
+
+  it('falls back when the path, the document, or the file is absent', () => {
+    vi.stubEnv('DSH_HOME', homeWith('other:\n  thing: 1\n'))
+    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
+    vi.stubEnv('DSH_HOME', tmp())
+    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
+    expect(dshSettingFlag('kernel.enabled', false)).toBe(false)
+  })
+
+  it('falls back for a non-boolean value rather than coercing it', () => {
+    // A composition row turns this into a mounted-or-not decision, and
+    // `'no'` coercing to true would silently mount the opposite roster.
+    vi.stubEnv('DSH_HOME', homeWith("kernel:\n  enabled: 'no'\n"))
+    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
+  })
+
+  it('falls back when a malformed document cannot be parsed', () => {
+    vi.stubEnv('DSH_HOME', homeWith('kernel: [unclosed\n'))
+    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
   })
 })

@@ -281,6 +281,33 @@ export interface DirectoryRegistrationHandle {
  * The abstract `llm` service: an adapter registry plus a streaming model-call
  * API, interceptable via the `llm/stream` waterfall.
  */
+/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
+export interface LlmAccountDraft {
+  /** Login email, when the account signs in with one. */
+  readonly email?: string
+  /** Login mobile, when the account signs in with one. */
+  readonly mobile?: string
+  /** Area code for a mobile login. */
+  readonly area_code?: string
+  /** Password, used only to test the login; never stored or returned by the runtime. */
+  readonly password: string
+}
+
+/** The outcome of adding one account: its id and new route on success, or a reason. */
+export interface LlmAccountAddResult {
+  /** Whether the login tested successfully and the account was added. */
+  readonly ok: boolean
+  /** The added login id, on success. */
+  readonly account?: string
+  /** The route now bound to that login, on success (selectable immediately). */
+  readonly route?: string
+  /** A plain failure reason, on failure — never the credential. */
+  readonly message?: string
+}
+
+/** Tests a login and, on success, makes it a selectable route for its provider. */
+export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>
+
 export class LlmRuntime extends Service {
   private adapters = new Map<string, AdapterRegistration>()
   private directory = new Map<string, LlmConfigurableProvider>()
@@ -288,6 +315,7 @@ export class LlmRuntime extends Service {
     string,
     (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>
   >()
+  private accountAdders = new Map<string, LlmAccountAdder>()
 
   constructor(ctx: Context) {
     super(ctx, 'llm')
@@ -556,6 +584,59 @@ export class LlmRuntime extends Service {
       })
     }
     return models
+  }
+
+  /**
+   * Register the handler that tests and adds a login for one account-pooling
+   * provider route (`ds_direct` is the only one today). Mirrors
+   * {@link registerModelDiscovery}: one handler per route, released with the
+   * returned disposer. The handler owns making the new login selectable — it
+   * re-registers its own routes — so the runtime only routes the call.
+   * @param provider - the provider route that pools logins.
+   * @param add - tests a login and, on success, adds it.
+   * @returns a disposer that withdraws the handler.
+   */
+  registerAccountProvider(provider: string, add: LlmAccountAdder): () => void {
+    const dispose = this.ctx.effect(function* (this: LlmRuntime) {
+      if (provider.length === 0) {
+        throw new LlmError('an account provider needs a non-empty route', 'INVALID_ACCOUNT_PROVIDER')
+      }
+      if (this.accountAdders.has(provider)) {
+        throw new LlmError(`an account provider for "${provider}" is already registered`, 'DUPLICATE_ACCOUNT_PROVIDER')
+      }
+      this.accountAdders.set(provider, add)
+      yield () => {
+        this.accountAdders.delete(provider)
+      }
+    }.bind(this), 'llm.registerAccountProvider()')
+    return () => void dispose()
+  }
+
+  /** The provider routes that accept account additions, for a surface to offer. */
+  listAccountProviders(): string[] {
+    return [...this.accountAdders.keys()]
+  }
+
+  /**
+   * Test a login for one account-pooling provider and, on success, make it a
+   * selectable route. The password is used only for the test and never stored
+   * or returned here — the reply is the account id and its route, or a reason.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login to test.
+   * @returns the added account and route, or the failure reason.
+   */
+  async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult> {
+    const add = this.accountAdders.get(provider)
+    if (add === undefined) {
+      throw new LlmError(`no account provider is registered for "${provider}"`, 'NO_ACCOUNT_PROVIDER')
+    }
+    if (account.password.length === 0) {
+      throw new LlmError('an account needs a password to test the login', 'INVALID_ACCOUNT')
+    }
+    if ((account.email ?? '').length === 0 && (account.mobile ?? '').length === 0) {
+      throw new LlmError('an account needs an email or a mobile number', 'INVALID_ACCOUNT')
+    }
+    return add(account)
   }
 
   /**

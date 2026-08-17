@@ -51,9 +51,40 @@ export class ModelDirectory {
    */
   constructor(
     private readonly sessions: Pick<IApiClient['sessions'], 'models' | 'selectModel'>,
+    private readonly llm: Pick<IApiClient['llm'], 'addAccount'>,
     private readonly sessionId: SessionId,
     private readonly available: () => boolean,
   ) {}
+
+  /**
+   * Test a login for an account-pooling provider and, on success, add it.
+   *
+   * The password is write-only: it rides the request for the one login test and
+   * is never stored client-side. A success makes the host emit
+   * `llm/adapters-updated`, which the resolver already turns into a reload — and
+   * this reloads once more so the caller sees the new route without the race.
+   * @param provider - the provider route that pools logins (the DeepSeek base route).
+   * @param draft - the login to test.
+   * @returns whether it was added, with the failure reason otherwise.
+   */
+  async addAccount(
+    provider: string,
+    draft: Readonly<{ email?: string; mobile?: string; areaCode?: string; password: string }>,
+  ): Promise<{ ok: boolean; account?: string; message?: string }> {
+    this.assertAvailable()
+    const { result } = await this.llm.addAccount({
+      provider,
+      apiKey: draft.password,
+      ...draft.email === undefined || draft.email.length === 0 ? {} : { email: draft.email },
+      ...draft.mobile === undefined || draft.mobile.length === 0 ? {} : { mobile: draft.mobile },
+      ...draft.areaCode === undefined || draft.areaCode.length === 0 ? {} : { areaCode: draft.areaCode },
+    })
+    if (!result.ok) return { ok: false, message: `${result.error.code}: ${result.error.message}` }
+    const value = result.value
+    if (!value.ok) return { ok: false, ...value.message === undefined ? {} : { message: value.message } }
+    await this.load().catch(() => undefined)
+    return { ok: true, ...value.account === undefined ? {} : { account: value.account } }
+  }
 
   /**
    * Refresh the advisory directory (both entries call this on open).

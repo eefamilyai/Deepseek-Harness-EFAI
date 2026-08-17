@@ -784,6 +784,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'kernel',
+    summary: 'The persistent-kernel service, registered as `ctx.kernel` (one instance per context).',
+    description: 'The persistent-kernel service, registered as `ctx.kernel` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that backend.\n- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable backend → that backend.\n- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: KernelProvider): () => void',
+        description: 'Register a kernel backend. Throws KernelError `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a disposer; disposed with the calling fiber.',
+        parameters: [{ name: 'provider', description: 'the backend; its `id` is the registry key.' }],
+        returns: 'the disposer that unregisters the backend.',
+      },
+      {
+        signature: 'async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>',
+        description: 'Execute one cell in the persistent namespace. Resolves the backend at call time with the selection rules above; throws KernelError when the capability itself cannot run. A cell that raises is a *result* carrying the traceback, never a throw — the model is expected to read it and fix the code.',
+        parameters: [{ name: 'request', description: 'the cell and its optional budget.' }, { name: 'signal', description: 'optional cancellation; an aborted cell restarts the kernel.' }],
+        returns: 'the captured output and how the cell ended.',
+      },
+      {
+        signature: 'async restart(): Promise<void>',
+        description: 'Discard the namespace and start a fresh kernel.',
+        parameters: [],
+        returns: 'once the replacement kernel is ready.',
+      },
+      {
+        signature: 'async names(): Promise<readonly string[]>',
+        description: 'List the names currently bound in the namespace.',
+        parameters: [],
+        returns: 'the bound names, in the backend\'s order.',
+      },
+    ],
+  },
+  {
     key: 'llm',
     summary: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
     description: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
@@ -3240,6 +3271,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'JsonValue',
     declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
+  },
+  {
+    name: 'KernelExecuteRequest',
+    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n}',
+  },
+  {
+    name: 'KernelExecuteResult',
+    declaration: 'export interface KernelExecuteResult {\n    readonly output: string;\n    readonly outcome: KernelOutcome;\n    readonly restarted: boolean;\n}',
+  },
+  {
+    name: 'KernelOutcome',
+    declaration: 'export type KernelOutcome = \'ok\' | \'timeout\' | \'cancelled\' | \'crashed\';',
+  },
+  {
+    name: 'KernelProvider',
+    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n}',
   },
   {
     name: 'KnobState',

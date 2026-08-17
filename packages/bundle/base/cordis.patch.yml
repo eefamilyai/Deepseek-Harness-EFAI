@@ -95,6 +95,31 @@
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
 
+    # The Kiln provider registry: sixteen presets (Anthropic, OpenAI, Gemini,
+    # OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together,
+    # Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio) plus
+    # `ds_direct`, DeepSeek's free web session. Routes are named `kiln-<id>` so
+    # they cannot collide with `deepseek-official` or the pi-ai catalog names.
+    #
+    # None of these providers has a `tools` field — ds_direct is a web chat
+    # session and cannot have one — so the harness's tool schemas reach the
+    # model as text and a tool call comes back as text: one `<tool_calls>`
+    # block, generated from and parsed against the request's own tool schemas.
+    # That single encoding is what makes a text-only route a usable agent here.
+    # No provider in the Python runtime adds a prompt of its own; the system
+    # slot carries the harness's prompt and the format statement, and nothing
+    # else.
+    #
+    # Keys are never configuration: each preset names the environment variable
+    # holding its key, resolved per request by the Python sidecar. A route with
+    # no key stays visible and selectable, and fails per request with the
+    # registry's own message naming the variable to set.
+    - id: llm-kiln
+      name: '@deepseek-ai/dsh-llm-kiln'
+      config:
+        routePrefix: kiln-
+        onlyConfigured: false
+
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
       config:
@@ -207,27 +232,80 @@
     - id: shell-env
       name: '@deepseek-ai/dsh-shell-env'
 
+    # ── the kernel switch ───────────────────────────────────────────────────
+    #
+    # `kernel.enabled` (default true) picks between two ways for the model to
+    # act on this machine, and the rows below read it through
+    # `dshSettingFlag('kernel.enabled', true)`.
+    #
+    #   ON  — `kernel`, a persistent Python namespace. Reading a file, editing
+    #         it, searching the tree, running a command are function calls
+    #         inside it, so the shell, filesystem, search, and background-job
+    #         rows switch OFF.
+    #   OFF — those rows switch ON and the kernel switches off.
+    #
+    # Only the rows the kernel REPLACES move. Everything the kernel cannot do —
+    # web access, skills, goals, delegation, planning, todos, asking the user —
+    # is mounted either way.
+    #
+    # `kernel-mode` owns the setting and is deliberately NOT gated by it: a
+    # switch that vanished in one of its own positions could never be flipped
+    # back. It also declares `applies: 'restart'`, because these are Loader
+    # `disabled` expressions read once at boot. That is the point rather than a
+    # limitation — a tool plugin registers its system-prompt section when it
+    # mounts, so a tool merely hidden at runtime would leave instructions in the
+    # prompt for a tool the model cannot call. Only not mounting takes both.
+    - id: kernel-mode
+      name: '@deepseek-ai/dsh-kernel-mode'
+      config:
+        enabled: true
+
     - id: tool-bash
       name: '@deepseek-ai/dsh-tool-bash'
-      disabled: !!js process.platform === 'win32'
+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: tool-pwsh
       name: '@deepseek-ai/dsh-tool-pwsh'
-      disabled: !!js process.platform !== 'win32'
+      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: tool-jobs
       name: '@deepseek-ai/dsh-tool-jobs'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: fs-observation-policy
       name: '@deepseek-ai/dsh-fs-observation-policy'
 
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: tool-fs-search
       name: '@deepseek-ai/dsh-tool-fs-search'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         sampleOverCapGlobResults: false
+
+    # The kernel seam, its Kiln-backed Python process, and the model-facing
+    # tool. The process is lazy — nothing spawns until the first cell — but the
+    # interpreter is resolved at load, so a machine without Python reports an
+    # unavailable provider at selection time rather than mid-cell.
+    - id: kernel
+      name: '@deepseek-ai/dsh-kernel'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+      config:
+        defaultTimeoutMs: 180000
+
+    - id: kernel-python
+      name: '@deepseek-ai/dsh-kernel-python'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+      config:
+        cwd: !!js process.env.DSH_KERNEL_CWD
+
+    - id: tool-kernel
+      name: '@deepseek-ai/dsh-tool-kernel'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+      config:
+        timeoutMs: 180000
 
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'
@@ -383,6 +461,7 @@
 
     - id: tool-str-replace-editor
       name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         maxOutputChars: 16000
 
@@ -416,6 +495,16 @@
       config:
         fetch: false
         searchTimeoutMs: 60000
+
+    # A self-hosted headless browser (Playwright). The `browser` tool lets the
+    # model read a page as text and act by element ref — for JS-rendered sites
+    # and multi-step flows a plain fetch cannot handle. It needs a one-time
+    # `npx playwright install chromium`; a launch without the binary fails with
+    # that exact instruction rather than a stack trace. The browser-rendered
+    # fetch provider registers too, dormant until web_fetch is turned on and the
+    # web seam's fetchProvider is pointed at `browser`.
+    - id: web-browser
+      name: '@deepseek-ai/dsh-web-browser'
 
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 

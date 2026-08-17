@@ -76,6 +76,7 @@ export class ModelDirectoryResolver extends Service {
     const connection = this.ctx.get('connection') as ConnectionHandle
     const directory = new ModelDirectory(
       connection.api.sessions,
+      connection.api.llm,
       sessionId,
       () => sessions.subagentAddress(sessionId) === undefined,
     )

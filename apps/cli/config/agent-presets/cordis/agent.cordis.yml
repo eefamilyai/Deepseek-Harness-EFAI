@@ -44,11 +44,23 @@
 # host-plane too.
 - id: tool-bash
   name: '@deepseek-ai/dsh-tool-bash'
-  disabled: !!js process.platform === 'win32'
+  disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
 - id: tool-pwsh
   name: '@deepseek-ai/dsh-tool-pwsh'
-  disabled: !!js process.platform !== 'win32'
+  disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+
+# ── the kernel ──────────────────────────────────────────────────────────────
+
+# The model-facing tool only. The kernel SEAM and its Python backend stay on the
+# host plane: the backend owns one interpreter probe and one child process, and
+# an entry-local realm here would mean a second interpreter resolution — and a
+# second kernel — for every preset a session mounts.
+- id: tool-kernel
+  name: '@deepseek-ai/dsh-tool-kernel'
+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+  config:
+    timeoutMs: 180000
 
 # ── filesystem ──────────────────────────────────────────────────────────────
 
@@ -56,9 +68,11 @@
 # they need no realm. The `fs` service and its policy stay in the host.
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
 - id: tool-fs-search
   name: '@deepseek-ai/dsh-tool-fs-search'
+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
   config:
     sampleOverCapGlobResults: false
 
@@ -73,6 +87,7 @@
 # chooses is whether its agent can collect and stop background work at all.
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
 # ── goals ───────────────────────────────────────────────────────────────────
 

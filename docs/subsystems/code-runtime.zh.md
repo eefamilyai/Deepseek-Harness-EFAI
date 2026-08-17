@@ -6,6 +6,16 @@
 
 源码：[`packages/code-runtime/code-runtime/src/types.ts`](../../packages/code-runtime/code-runtime/src/types.ts)
 
+## 另一个执行 seam：`ctx.kernel`
+
+本页还收录了第二个能力 seam，因为它回答的是同一个问题——模型编写的代码如何运行——只是在“状态”这一点上给出了相反的答案。
+
+`ctx.codeRuntime` 运行的是**一段隔离的程序**：传入绑定，返回值与日志，不保留任何状态。[`dsh-kernel`](../../packages/kernel/kernel)（`ctx.kernel`）运行的是**一个 cell，且其命名空间会持续存在**：某次调用中绑定的变量在下次调用中依然存在，进程的生命周期长于单次调用。这一差异决定了两个 seam 的其余全部特性。隔离的运行可以重试、可以与同级并行、可以随意丢弃；kernel cell 不行——cell 之间串行执行，因为共享可变命名空间会让两个并发 cell 的赋值相互穿插；而一个被取消或超时的 cell 会葬送整个命名空间，seam 会如实上报而非隐瞒（`restarted`，以及取值为 `timeout`/`cancelled`/`crashed` 的 `outcome`）。
+
+随包提供的后端是 [`dsh-kernel-python`](../../packages/kernel/kernel-python)，即一个通过分帧 stdio 协议通信的 Python 子进程；面向模型的工具是 [`dsh-tool-kernel`](../../packages/kernel/tool-kernel)。该 seam 是否挂载并非固定的 composition，而是由用户设置决定——参见 [`dsh-kernel-mode`](../../packages/kernel/kernel-mode)：它以一个在启动时读取的开关，同时控制 kernel 各行以及被 kernel 取代的那些工具。
+
+源码：[`packages/kernel/kernel/src/types.ts`](../../packages/kernel/kernel/src/types.ts)
+
 ## 运行：请求进，结果出
 
 `CodeRunRequest` 携带**运行时要处理的一切内容**。按照「包边界处显式优于隐式」的规则，默认值（时间预算、输出上限）来自实现的已校验配置，绝不是 `run()` 内部隐藏的 `??`：
@@ -188,4 +198,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
 ```
 
 Source: [`packages/code-runtime/code-runtime/src/index.ts:102`](../../packages/code-runtime/code-runtime/src/index.ts)
+
+<a id="ctxkernel--kernelruntime"></a>
+
+### `ctx.kernel` — `KernelRuntime`
+
+The persistent-kernel service, registered as `ctx.kernel` (one instance per context).
+
+Selection semantics (resolved at execution time, never order-dependent):
+
+- A configured id that is registered and `available()` → that backend.
+- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.
+- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.
+- No id configured, exactly one registered usable backend → that backend.
+- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.
+- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.
+
+```ts cordis-catalog
+/**
+ * Register a kernel backend. Throws {@link KernelError}
+ * `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a
+ * disposer; disposed with the calling fiber.
+ * @param provider - the backend; its `id` is the registry key.
+ * @returns the disposer that unregisters the backend.
+ */
+registerProvider(provider: KernelProvider): () => void
+
+/**
+ * Execute one cell in the persistent namespace. Resolves the backend at call
+ * time with the selection rules above; throws {@link KernelError} when the
+ * capability itself cannot run. A cell that raises is a *result* carrying the
+ * traceback, never a throw — the model is expected to read it and fix the code.
+ * @param request - the cell and its optional budget.
+ * @param signal - optional cancellation; an aborted cell restarts the kernel.
+ * @returns the captured output and how the cell ended.
+ */
+async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
+
+/**
+ * Discard the namespace and start a fresh kernel.
+ * @returns once the replacement kernel is ready.
+ */
+async restart(): Promise<void>
+
+/**
+ * List the names currently bound in the namespace.
+ * @returns the bound names, in the backend's order.
+ */
+async names(): Promise<readonly string[]>
+```
+
+Source: [`packages/kernel/kernel/src/index.ts:61`](../../packages/kernel/kernel/src/index.ts)
 <!-- END GENERATED cordis-surface -->

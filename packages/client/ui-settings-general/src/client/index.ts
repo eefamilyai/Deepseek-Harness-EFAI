@@ -23,6 +23,8 @@ import type {
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
+import { AdvancedSection } from './AdvancedSection.tsx'
+import type { AdvancedSectionInjected } from './AdvancedSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { refreshDocumentIfLoaded, SettingsDocumentStore } from './settings-document-store.ts'
@@ -175,4 +177,16 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
+
+  const advancedInjected = (): AdvancedSectionInjected => ({
+    api: connection.api,
+  })
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'advanced',
+    order: 100,
+    label: () => t('advanced.nav'),
+    locale: NS,
+    inject: advancedInjected,
+  }, AdvancedSection))
 }

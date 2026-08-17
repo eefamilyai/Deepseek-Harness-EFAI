@@ -60,6 +60,8 @@ import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
+import KernelRuntime from '@deepseek-ai/dsh-kernel'
+import * as ToolKernel from '@deepseek-ai/dsh-tool-kernel'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
@@ -550,6 +552,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-kernel',
+    dir: 'tool-kernel',
+    source: 'packages/kernel/tool-kernel/src/index.ts',
+    requires: ['ctx.tools', 'ctx.kernel', 'ctx.systemPrompt'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // The seam alone: the schema does not depend on which backend is
+      // registered, or on one being registered at all, and harvesting must not
+      // resolve a Python interpreter.
+      await ctx.plugin(KernelRuntime)
+      await ctx.plugin(ToolKernel)
+    },
+    note:
+      'kernel runs one cell in a namespace that persists across calls, so it is registered exclusive (no `isConcurrencySafe`): two overlapping cells would interleave their assignments and their captured output. Whether it is mounted at all is the `kernel.enabled` setting, read once at boot.',
   },
 ]
 

@@ -86,6 +86,13 @@ export interface RpcErrorDetailsMap {
    * details name the endpoint asked, never the credential offered.
    */
   'model-discovery-failed': { settingsNs: string; baseURL?: string }
+  /**
+   * Testing a login for an account-pooling provider failed before it could be
+   * added: no provider pools accounts under that route, the credential was
+   * empty, or the sign-in itself was refused. The message is the adapter's own
+   * text; the details name only the provider route, never the password.
+   */
+  'add-account-failed': { provider: string }
   'title-invalid': { sessionId: SessionId }
   'fork-unavailable': { sessionId: SessionId }
   'subagent-parent-unavailable': { parentSessionId: SessionId }

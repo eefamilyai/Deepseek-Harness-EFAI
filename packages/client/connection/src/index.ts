@@ -116,6 +116,10 @@ const PRIVILEGED_METHODS = new Set([
   'credentials.set',
   'credentials.unset',
   'llm.discoverModels',
+  // Carries a login password and makes the HOST attempt a sign-in to a provider
+  // — the same privileged plane as discoverModels, never for an anonymous LAN
+  // caller.
+  'llm.addAccount',
 ])
 
 /**

@@ -1,0 +1,182 @@
+/**
+ * The Kiln-backed {@link KernelProvider}: one persistent `kernel_child.py`
+ * process, restarted on every outcome that loses the namespace.
+ * @module @deepseek-ai/dsh-kernel-python/provider
+ */
+
+import type { KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider } from '@deepseek-ai/dsh-kernel'
+import { KernelAbortError, KernelChild, parseControlResult } from './child.ts'
+import type { KernelChildOptions } from './child.ts'
+
+/**
+ * The sentence appended to every restart notice.
+ *
+ * Every restart path says the same thing because the model's next move depends
+ * on it: the Python namespace really is gone, but the durable store is a
+ * different tier and survived. Without this the model either assumes its
+ * variables are still there (and gets `NameError`s it cannot explain) or assumes
+ * everything is lost (and redoes work it does not need to).
+ */
+const LOST_NOTICE = ' Variables in the namespace are gone; anything you saved with'
+  + ' remember() survived — recall() lists what is still there.'
+
+/**
+ * Budget for a cell whose request carries none.
+ *
+ * The seam always fills `timeoutMs`, but this provider is a public class and a
+ * direct caller may not. Without a real default here the missing value becomes
+ * `setTimeout(..., 0)` — every cell timing out instantly — which is the worst
+ * possible reading of "no timeout given".
+ */
+const FALLBACK_TIMEOUT_MS = 180_000
+
+/** The cell budget this request runs under. */
+function budgetOf(request: KernelExecuteRequest): number {
+  return request.timeoutMs ?? FALLBACK_TIMEOUT_MS
+}
+
+/** How a restart-causing outcome is reported to the model. */
+const RESTART_NOTICE: Readonly<Record<Exclude<KernelOutcome, 'ok'>, (request: KernelExecuteRequest) => string>> = {
+  cancelled: () => 'STOPPED: Interrupted by user. Kernel restarted; state was lost.',
+  timeout: request => `TIMEOUT: Cell exceeded ${Math.round(budgetOf(request) / 1000)}s. Kernel restarted; state was lost.`,
+  crashed: () => 'ERROR: Kernel crashed mid-run; restarted. State lost.',
+}
+
+/** Launch facts plus the id this backend registers under. */
+export interface KilnKernelProviderOptions extends KernelChildOptions {
+  /** Registry key on `ctx.kernel`. */
+  readonly id: string
+}
+
+/**
+ * A persistent Python kernel over the vendored Kiln runtime.
+ *
+ * Cells are serialized: the namespace is shared mutable state, so two cells in
+ * flight against one process would interleave their writes and their captured
+ * output. The queue is the reason a caller never has to reason about that.
+ */
+export class KilnKernelProvider implements KernelProvider {
+  readonly id: string
+  private readonly launch: KernelChildOptions
+  private child: KernelChild | undefined
+  /** Tail of the serialization chain; each execute links onto it. */
+  private queue: Promise<unknown> = Promise.resolve()
+  private disposed = false
+
+  constructor(options: KilnKernelProviderOptions) {
+    this.id = options.id
+    this.launch = options
+  }
+
+  available(): boolean {
+    return !this.disposed
+  }
+
+  /** The live child, started on first use and after every restart. */
+  private ensureChild(): KernelChild {
+    if (this.child === undefined || this.child.dead) this.child = new KernelChild(this.launch)
+    return this.child
+  }
+
+  /** Run `task` after every previously queued one, whatever their outcome. */
+  private serialize<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(task, task)
+    // Swallow on the chain only: the returned promise still rejects. Without
+    // this a failed cell would mark the shared tail rejected and take the next
+    // caller down with an error that was never theirs.
+    this.queue = run.then(() => undefined, () => undefined)
+    return run
+  }
+
+  async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult> {
+    return this.serialize(async () => {
+      const child = this.ensureChild()
+      child.send(request.code, request.timeoutMs)
+      const outcome = await this.awaitCell(child, request, signal)
+      if (outcome.kind === 'ok') {
+        return { output: outcome.output, outcome: 'ok' as const, restarted: false }
+      }
+      await this.replace(child)
+      return {
+        output: RESTART_NOTICE[outcome.kind](request) + LOST_NOTICE,
+        outcome: outcome.kind,
+        restarted: true,
+      }
+    })
+  }
+
+  /**
+   * Wait for the cell's frame, bounded by the request budget and the caller's
+   * signal, and classify what came back.
+   */
+  private async awaitCell(
+    child: KernelChild,
+    request: KernelExecuteRequest,
+    signal?: AbortSignal,
+  ): Promise<{ kind: 'ok'; output: string } | { kind: Exclude<KernelOutcome, 'ok'> }> {
+    const budget = new AbortController()
+    const onAbort = (): void => { budget.abort(new KernelAbortError('cancelled')) }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    const timer = setTimeout(() => { budget.abort(new KernelAbortError('timeout')) }, budgetOf(request))
+    timer.unref()
+    try {
+      const frame = await child.nextFrame(budget.signal)
+      // A dead child resolves waiters with an empty frame rather than hanging;
+      // an empty frame from a live child is a cell that genuinely printed
+      // nothing, so the liveness check is what tells the two apart.
+      if (child.dead) return { kind: 'crashed' }
+      return { kind: 'ok', output: joinCellOutput(frame.out ?? '', frame.error ?? null) }
+    } catch (reason) {
+      return { kind: reason instanceof KernelAbortError ? reason.kind : 'cancelled' }
+    } finally {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+    }
+  }
+
+  /** Kill `child` and drop it, so the next cell starts a fresh namespace. */
+  private async replace(child: KernelChild): Promise<void> {
+    await child.kill()
+    if (this.child === child) this.child = undefined
+  }
+
+  async restart(): Promise<void> {
+    await this.serialize(async () => {
+      const child = this.child
+      if (child !== undefined) await this.replace(child)
+    })
+  }
+
+  async names(): Promise<readonly string[]> {
+    return this.serialize(async () => {
+      const child = this.ensureChild()
+      child.sendControl({ cmd: 'list_names' })
+      const result = parseControlResult(await child.nextFrame())
+      if (typeof result !== 'object' || result === null) return []
+      const { names } = result as { names?: unknown }
+      if (!Array.isArray(names)) return []
+      return names.filter((name): name is string => typeof name === 'string')
+    })
+  }
+
+  /** Stop the kernel and refuse further work. Called on plugin dispose. */
+  async dispose(): Promise<void> {
+    this.disposed = true
+    const child = this.child
+    this.child = undefined
+    if (child !== undefined) await child.kill()
+  }
+}
+
+/**
+ * Join a cell's captured output with its traceback the way the Kiln kernel
+ * does: the traceback follows the output, on its own line.
+ * @param out - captured stdout, stderr, and echoed expression values.
+ * @param error - the formatted traceback, or null.
+ * @returns the model-facing cell output.
+ */
+export function joinCellOutput(out: string, error: string | null): string {
+  if (error === null || error.length === 0) return out
+  if (out.length === 0) return error
+  return out.endsWith('\n') ? out + error : `${out}\n${error}`
+}

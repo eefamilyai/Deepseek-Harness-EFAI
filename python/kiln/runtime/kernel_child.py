@@ -1,0 +1,1884 @@
+# kernel_child.py
+import ast
+import base64
+import contextlib
+import io
+import json
+import linecache
+import locale
+import os
+import re
+import subprocess
+import sys
+import time
+import traceback
+import urllib.parse
+import urllib.request
+import uuid
+from html.parser import HTMLParser
+
+
+def decode_bytes(data: bytes) -> str:
+    if not data:
+        return ""
+    if data.startswith(b'\xff\xfe') or data.startswith(b'\xfe\xff'):
+        try:
+            return data.decode('utf-16')
+        except UnicodeDecodeError:
+            pass
+    pref = locale.getpreferredencoding(False) or 'utf-8'
+    # every attempt is strict except the guaranteed-last one (latin-1 never
+    # fails) — with errors='replace' the first try always "succeeds" and the
+    # platform/cp1252/cp850 fallbacks below are unreachable dead code
+    for enc in [('utf-8-sig', 'strict'), (pref, 'strict'),
+                ('cp1252', 'strict'), ('cp850', 'strict'), ('latin-1', 'strict')]:
+        try:
+            return data.decode(enc[0], enc[1])
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return data.decode('latin-1', 'strict')
+
+
+# The kernel process outlives a single chat. Python's cwd is mutable, so a
+# cell that os.chdir()'d in the previous chat must not leak into this one:
+# every cell is executed from _KERNEL_CWD, which starts at launch cwd and
+# only changes when the model explicitly calls set_cwd().
+_STARTUP_CWD = os.path.abspath(os.getcwd())
+_KERNEL_CWD = _STARTUP_CWD
+
+def sh(cmd, timeout=None, **kwargs):
+    """Run a shell command and return its combined output.
+
+    Extra keyword arguments are accepted and ignored so that idioms the model
+    picks up from other harnesses (``capture=True``, ``check=True``, ``text``,
+    ``shell=``) never crash the call — this helper ALWAYS captures output and
+    returns it as text, which is what those kwargs would request anyway.
+    """
+    # a list command is fine too — subprocess joins it per-platform with
+    # shell=True (spaces on POSIX, list2cmdline on Windows)
+    try:
+        r = subprocess.run(cmd, shell=True, capture_output=True, timeout=timeout)
+        return decode_bytes(r.stdout) + decode_bytes(r.stderr)
+    except subprocess.TimeoutExpired:
+        return f"Command timed out after {timeout}s"
+    except Exception as e:
+        return f"Error running command: {e}"
+
+def fetch(url, timeout=30):
+    """GET a URL and return its text. Transient failures (429/5xx, connection
+    refused/reset/timeout) are retried with backoff instead of failing the
+    model's turn on a blip."""
+    import time as _t
+    import urllib.error
+    import urllib.request
+    _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+           'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')
+    last = None
+    for attempt in range(3):
+        req = urllib.request.Request(url, headers={'User-Agent': _UA})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return decode_bytes(resp.read())
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503, 504) and attempt < 2:
+                last = "HTTP %d" % e.code
+                _t.sleep(1.5 * (attempt + 1))
+                continue
+            return f"Fetch error: HTTP {e.code}: {e.reason}"
+        except (urllib.error.URLError, ConnectionError, TimeoutError,
+                OSError) as e:
+            if attempt < 2:
+                last = str(e)
+                _t.sleep(1.5 * (attempt + 1))
+                continue
+            return f"Fetch error: {e}"
+        except Exception as e:
+            return f"Fetch error: {e}"
+    return f"Fetch error: {last} (retried 3x)"
+
+
+class _DuckParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.results = []
+        self._in_result = False
+        self._cur = {}
+        self._in_title = False
+        self._in_snippet = False
+        self._buf = []
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        cls = attrs.get('class','')
+        if tag=='a' and 'result__a' in cls:
+            self._in_result = True
+            self._cur['url'] = attrs.get('href','')
+            self._in_title = True
+            self._buf=[]
+        elif tag=='a' and 'result__snippet' in cls:
+            self._in_snippet = True
+            self._buf=[]
+    def handle_data(self, data):
+        if self._in_title or self._in_snippet:
+            self._buf.append(data)
+    def handle_endtag(self, tag):
+        if tag=='a' and self._in_title:
+            self._cur['title'] = ''.join(self._buf).strip()
+            self._in_title=False
+        elif tag=='a' and self._in_snippet:
+            self._cur['snippet'] = ''.join(self._buf).strip()
+            self._in_snippet=False
+            if self._in_result:
+                self.results.append(self._cur)
+                self._cur={}
+                self._in_result=False
+
+def search(query, limit=8):
+    """Web search -> [{title, url, snippet}].
+
+    Prefers the real headless browser (browser_tools): it renders the JS results
+    page, carries a browser fingerprint + cookies, and clears consent walls that
+    make a raw HTTP scrape come back empty or blocked. Falls back to the raw
+    DuckDuckGo HTML scrape when Playwright is unavailable or the browser search
+    finds nothing.
+    """
+    try:
+        from browser_tools import browser_search
+        res = browser_search(query, limit=limit)
+        if res:
+            return res
+    except Exception:
+        pass
+    url = 'https://html.duckduckgo.com/html/?q=' + urllib.parse.quote(query)
+    req = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36'})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read().decode('utf-8','replace')
+        p = _DuckParser()
+        p.feed(data)
+        return p.results[:limit]
+    except Exception as e:
+        return [{"title":"Search error","url":"","snippet":str(e)}]
+
+# ── Cline-style file helpers ────────────────────────────────────────────────
+_READ_CAP = 200_000
+
+# Change tracking (timeline + revert). Every file-modifying helper records a
+# JSONL entry + a byte backup when KILN_HISTORY_DIR is set (the server sets it
+# per run). The UI shows the timeline and can restore the backup. Writing this
+# must never break the helper that calls it — failures are swallowed.
+
+def _record_change(op, path, backup, had_original, diff=None):
+    hdir = os.environ.get("KILN_HISTORY_DIR") or ""
+    if not hdir:
+        return
+    try:
+        os.makedirs(hdir, exist_ok=True)
+        seq = uuid.uuid4().hex[:8]
+        rec = {
+            "id": "%s_%s" % (os.path.basename(hdir) or "run", seq),
+            "ts": time.time(),
+            "op": op,
+            "path": os.path.abspath(path),
+            "conv": os.environ.get("KILN_CONV_ID", ""),
+            "had_original": bool(had_original),
+            "size": len(backup) if backup else 0,
+        }
+        if diff:
+            rec["diff"] = diff[:20000]
+        if backup is not None:
+            bdir = os.path.join(hdir, "backups")
+            os.makedirs(bdir, exist_ok=True)
+            with open(os.path.join(bdir, seq), "wb") as f:
+                f.write(backup)
+        with open(os.path.join(hdir, "changes.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+
+def read_file(path, max_chars=_READ_CAP):
+    """Return a file's text (head+tail if huge)."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            data = f.read()
+    except Exception as e:
+        return f"read_file error: {e}"
+    if len(data) > max_chars:
+        return (data[: max_chars // 2]
+                + f"\n…[{len(data) - max_chars} chars omitted — read a slice]…\n"
+                + data[-max_chars // 2:])
+    return data
+
+
+def _detect_newline(path, default="\n"):
+    """The line ending an existing file already uses; LF for a new one.
+
+    Text-mode writes translate "\\n" to os.linesep, so on Windows every file
+    the agent wrote silently became CRLF — it could not produce an LF file at
+    all, and the byte count never matched the character count it reported.
+    Editing a file must not rewrite every line ending either, so existing
+    files keep whatever they already use.
+    """
+    try:
+        with open(path, "rb") as f:
+            head = f.read(65536)
+    except OSError:
+        return default
+    if b"\r\n" in head:
+        return "\r\n"
+    if b"\n" in head:
+        return "\n"
+    return default
+
+
+def _written(path, verb, chars):
+    """Report what is ACTUALLY on disk, read back after the write.
+
+    The old message reported len(content) as "chars", which is neither what
+    the OS reports nor what the user sees in a file listing — a model that
+    quotes it is quoting its own intent, not the result. Reading the size back
+    means the number cannot be wrong.
+    """
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return f"{verb} {path} (could not stat the file afterwards)"
+    extra = "" if size == chars else f" ({chars} chars)"
+    return f"{verb} {path} — {size} bytes on disk{extra}"
+
+
+def write_file(path, content):
+    """Write text to a file (creates folders). Returns a confirmation."""
+    try:
+        folder = os.path.dirname(os.path.abspath(path))
+        os.makedirs(folder, exist_ok=True)
+        had = os.path.isfile(path)
+        backup = None
+        if had:
+            with open(path, "rb") as f:
+                backup = f.read()
+        with open(path, "w", encoding="utf-8", newline=_detect_newline(path)) as f:
+            f.write(content)
+        _record_change("write", path, backup, had)
+        return _written(path, "wrote", len(content))
+    except Exception as e:
+        return f"write_file error: {e}"
+
+
+def append_file(path, content):
+    """Append text to a file. Returns a confirmation."""
+    try:
+        folder = os.path.dirname(os.path.abspath(path))
+        os.makedirs(folder, exist_ok=True)
+        had = os.path.isfile(path)
+        backup = None
+        if had:
+            with open(path, "rb") as f:
+                backup = f.read()
+        with open(path, "a", encoding="utf-8", newline=_detect_newline(path)) as f:
+            f.write(content)
+        _record_change("append", path, backup, had)
+        return _written(path, "appended to", len(content))
+    except Exception as e:
+        return f"append_file error: {e}"
+
+
+# ── project memory (KILN.md) ────────────────────────────────────────────────
+# The agent's persistent memory: a KILN.md in the working directory whose
+# contents are loaded into the system prompt every run. The model appends
+# durable conventions/decisions with memory_append() so future runs don't
+# relearn them from scratch.
+
+def memory_read():
+    """Return the project memory file (KILN.md in the working directory)."""
+    p = os.path.join(os.getcwd(), "KILN.md")
+    if not os.path.isfile(p):
+        return "(no KILN.md yet — call memory_append() to create one)"
+    try:
+        with open(p, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except Exception as e:
+        return f"memory_read error: {e}"
+
+
+def memory_append(text):
+    """Append a dated note to KILN.md (creating it if needed). Use it to
+    persist durable conventions/decisions future runs should know."""
+    try:
+        p = os.path.join(os.getcwd(), "KILN.md")
+        entry = time.strftime("%Y-%m-%d %H:%M") + " — " + str(text).strip() + "\n"
+        if os.path.isfile(p):
+            with open(p, "a", encoding="utf-8", newline=_detect_newline(p)) as f:
+                f.write("\n" + entry)
+        else:
+            with open(p, "w", encoding="utf-8", newline="\n") as f:
+                f.write("# Project memory (KILN.md)\n\n"
+                        "Durable notes the agent keeps across runs; loaded into "
+                        "every run's system prompt. Append with memory_append().\n\n"
+                        + entry)
+        return "appended a note to " + p
+    except Exception as e:
+        return f"memory_append error: {e}"
+
+
+# ── durable memory (remember / recall / forget) ──────────────────────────────
+# The Python namespace is the model's working memory, but it dies with the
+# kernel: a timeout, an interrupt or a crash restarts the child and every
+# variable goes with it. And anything the model does NOT print is invisible to
+# it next turn, while anything it DOES print is re-sent forever.
+#
+# remember() writes through to disk (see kiln_memory.py), so a name survives a
+# kernel restart, compaction, the end of the run, and being scrolled out of
+# context. recall() brings it back on demand — which is what makes it safe to
+# keep big things OUT of the transcript instead of printing them to be sure.
+import kiln_memory  # noqa: E402
+
+
+def _memory_store():
+    """This conversation's store. None when the kernel was started outside a
+    conversation (bare `python kernel_child.py`), where there is nothing to
+    key on — the helpers then say so rather than writing to a stray folder."""
+    conv = os.environ.get("KILN_CONV_ID") or ""
+    if not conv:
+        return None
+    try:
+        return kiln_memory.MemoryStore(conv, os.environ.get("KILN_MEMORY_DIR") or None)
+    except Exception:
+        return None
+
+
+def _as_text(value):
+    """Text for storage. Strings go verbatim; everything else is rendered so
+    that what comes back is what the model actually saw."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        return decode_bytes(bytes(value))
+    try:
+        if isinstance(value, (dict, list, tuple)):
+            return json.dumps(value, ensure_ascii=False, indent=2, default=repr)
+    except Exception:
+        pass
+    return repr(value)
+
+
+def remember(name, value):
+    """Store something durably under `name`, and keep the live object too.
+
+        remember("api_shape", parsed)     # survives a kernel restart
+
+    The value stays in the namespace under its own name as well, so normal
+    Python keeps working. What this adds is the disk copy: recall("api_shape")
+    returns it even after a timeout, a crash, a compaction, or a new run.
+
+    Use it for anything you would otherwise print "so you don't lose it" —
+    printing costs those tokens on every later turn, this costs them once.
+    """
+    store = _memory_store()
+    if store is None:
+        return "remember: no conversation to store into (KILN_CONV_ID is unset)"
+    key = str(name).strip()
+    if not key:
+        return "remember: name must not be empty"
+    try:
+        text = _as_text(value)
+        entry = store.put(key, text, kind="note")
+    except Exception as e:
+        return f"remember error: {e}"
+    # keep the live object addressable by the same name
+    try:
+        _ns[key] = value
+    except Exception:
+        pass
+    n = entry["lines"]
+    return (f"remembered {key!r} — {entry['chars']} chars, "
+            f"{n} line{'' if n == 1 else 's'}. "
+            f"Get it back any time with recall({key!r}).")
+
+
+def recall(name=None, start=1, lines=200):
+    """Read back something stored with remember(), or list what is stored.
+
+        recall()                  # every name, with size and preview
+        recall("api_shape")       # the first 200 lines
+        recall("out_3", start=201)  # the next window
+
+    Also resolves the automatic names Kiln creates for you: `out_N` for a cell
+    whose output was too long to show in full, and `turns_N` for the turns a
+    compaction summarized away. Nothing that was ever in your context is
+    unreachable — it is only off-screen.
+    """
+    store = _memory_store()
+    if store is None:
+        return "recall: no conversation to read from (KILN_CONV_ID is unset)"
+    if name is None:
+        entries = store.entries()
+        if not entries:
+            return "nothing stored yet — remember(name, value) puts something here"
+        rows = sorted(entries.values(), key=lambda e: e.get("ts", 0), reverse=True)
+        out = ["%d stored:" % len(rows)]
+        for e in rows:
+            out.append("  %-24s %7d chars  %-7s  %s"
+                       % (e.get("name", "?"), e.get("chars", 0),
+                          e.get("kind", "note"), e.get("preview", "")[:80]))
+        return "\n".join(out)
+    entry, text = store.get(str(name))
+    if entry is None:
+        known = ", ".join(sorted(store.entries())[:20]) or "(nothing stored)"
+        return f"recall: nothing stored under {str(name)!r}. Stored names: {known}"
+    if text is None:
+        return f"recall: the blob for {str(name)!r} is missing from disk"
+    return kiln_memory.slice_text(text, start, lines)
+
+
+def forget(name):
+    """Stop a remembered name resolving. The bytes stay on disk — this is a
+    tombstone, not a delete, so it can never destroy something you still need."""
+    store = _memory_store()
+    if store is None:
+        return "forget: no conversation to write to (KILN_CONV_ID is unset)"
+    key = str(name)
+    if key not in store.entries():
+        return f"forget: nothing stored under {key!r}"
+    try:
+        store.tombstone(key)
+    except Exception as e:
+        return f"forget error: {e}"
+    return f"forgot {key!r} (the stored copy is kept on disk, just unnamed)"
+
+
+def _make_diff(path, old_text, new_text):
+    """Unified diff of an edit, capped so huge files don't flood the model."""
+    import difflib
+    diff = "\n".join(difflib.unified_diff(
+        old_text.splitlines(), new_text.splitlines(),
+        fromfile="a/" + path, tofile="b/" + path, lineterm=""))
+    lines = diff.splitlines()
+    if len(lines) > 120:
+        diff = "\n".join(lines[:60] + ["… %d lines omitted …" % (len(lines) - 120)] + lines[-60:])
+    return diff
+
+
+def edit_file(path, old, new):
+    """Replace `old` with `new` in a file. `old` must match EXACTLY ONE
+    occurrence — an ambiguous pattern is refused so the wrong spot is never
+    patched silently. Returns the unified diff of the change."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = f.read()
+    except Exception as e:
+        return f"edit_file error: {e}"
+    n = data.count(old)
+    if n == 0:
+        return f"edit_file error: pattern not found in {path}"
+    if n > 1:
+        return (f"edit_file error: the `old` text appears {n} times in {path} — "
+                f"include more surrounding context so it matches exactly one occurrence")
+    data2 = data.replace(old, new, 1)
+    diff = _make_diff(path, data, data2)
+    try:
+        with open(path, "rb") as f:
+            backup = f.read()
+        # keep the file's existing line endings — an edit must not rewrite
+        # every line as a side effect
+        with open(path, "w", encoding="utf-8", newline=_detect_newline(path)) as f:
+            f.write(data2)
+        _record_change("edit", path, backup, True, diff=diff)
+    except Exception as e:
+        return f"edit_file error: {e}"
+    return f"{_written(path, 'edited', len(data2))}\n--- diff ---\n{diff}"
+
+
+def delete_file(path):
+    """Delete a file. Returns a confirmation."""
+    try:
+        with open(path, "rb") as f:
+            backup = f.read()
+        os.remove(path)
+        _record_change("delete", path, backup, True)
+        return f"deleted {path}"
+    except Exception as e:
+        return f"delete_file error: {e}"
+
+
+def list_dir(path=".", depth=1, max_entries=200):
+    """Pretty directory tree, skipping noise folders."""
+    _SKIP = {".git", "__pycache__", "node_modules", ".venv", "venv", ".idea", ".vscode"}
+    try:
+        root = os.path.abspath(path)
+        lines, count = [], [0]
+
+        def walk(cur, d):
+            if count[0] >= max_entries:
+                return
+            try:
+                entries = sorted(os.listdir(cur))
+            except Exception:
+                return
+            for name in entries:
+                if count[0] >= max_entries:
+                    return
+                if name in _SKIP:
+                    continue
+                full = os.path.join(cur, name)
+                indent = "  " * d
+                if os.path.isdir(full):
+                    lines.append(f"{indent}{name}/")
+                    count[0] += 1
+                    if d < depth:
+                        walk(full, d + 1)
+                else:
+                    try:
+                        lines.append(f"{indent}{name}  ({os.path.getsize(full)}b)")
+                    except Exception:
+                        lines.append(f"{indent}{name}")
+                    count[0] += 1
+
+        walk(root, 0)
+        return "\n".join(lines) or "(empty)"
+    except Exception as e:
+        return f"list_dir error: {e}"
+
+
+def find(pattern, path=".", max_results=50):
+    """Grep: regex over text files, lines like `path:lineno: line`."""
+    try:
+        rx = re.compile(pattern)
+    except Exception as e:
+        return f"find error: bad regex — {e}"
+    _BIN = (".pyc", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".wasm", ".exe",
+            ".dll", ".so", ".dylib", ".woff", ".woff2", ".ttf")
+    _SKIP = {".git", "__pycache__", "node_modules", ".venv", "venv", ".idea"}
+    out = []
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in _SKIP]
+        for fn in files:
+            if len(out) >= max_results:
+                break
+            if fn.endswith(_BIN):
+                continue
+            full = os.path.join(root, fn)
+            try:
+                with open(full, "r", encoding="utf-8", errors="replace") as f:
+                    for i, line in enumerate(f, 1):
+                        if rx.search(line):
+                            out.append(f"{full}:{i}: {line.rstrip()[:200]}")
+                            break
+            except Exception:
+                continue
+        if len(out) >= max_results:
+            break
+    return "\n".join(out[:max_results]) or f"no matches for {pattern!r}"
+
+
+def glob(pattern, path=".", max_results=100):
+    """Glob: match file paths by pattern (**/*.py style, case-sensitive),
+    relative to `path`. Returns one path per line, up to max_results."""
+    import pathlib
+    try:
+        root = pathlib.Path(path)
+        out = []
+        for p in root.glob(pattern):
+            if len(out) >= max_results:
+                break
+            if p.is_file():
+                try:
+                    out.append(p.relative_to(root).as_posix())
+                except ValueError:
+                    out.append(str(p))
+        return "\n".join(sorted(out)) or f"no matches for {pattern!r}"
+    except Exception as e:
+        return f"glob error: {e}"
+
+
+# ── Task list (the model maintains a visible to-do list per conversation) ───
+def update_todos(items):
+    """Set this conversation's task list. `items` is a list of
+    {"subject": str, "status": "pending" | "in_progress" | "completed"}.
+    Pass the FULL desired list each time — it replaces the previous one.
+    The list renders live in the UI's Tasks panel. Returns a confirmation."""
+    try:
+        norm = []
+        for it in items or []:
+            if not isinstance(it, dict):
+                continue
+            subj = str(it.get("subject") or "").strip()
+            st = str(it.get("status") or "pending").strip().lower()
+            if st not in ("pending", "in_progress", "completed"):
+                st = "pending"
+            if subj:
+                norm.append({"subject": subj, "status": st})
+        hdir = os.environ.get("KILN_HISTORY_DIR") or ""
+        if not hdir:
+            return "update_todos error: KILN_HISTORY_DIR not set"
+        os.makedirs(hdir, exist_ok=True)
+        rec = {"conv": os.environ.get("KILN_CONV_ID", ""),
+               "ts": time.time(),
+               "items": norm}
+        with open(os.path.join(hdir, "todos.json"), "w", encoding="utf-8") as f:
+            json.dump(rec, f)
+        if not norm:
+            return "task list cleared"
+        return "tasks set:\n" + "\n".join(
+            f"- [{it['status']}] {it['subject']}" for it in norm)
+    except Exception as e:
+        return f"update_todos error: {e}"
+
+
+# ── Web helpers (Cline-style) ────────────────────────────────────────────────
+
+def web_search(query, limit=8):
+    """Alias of search() — keyless web search returning [{title,url,snippet}]."""
+    return search(query, limit=limit)
+
+
+def web_fetch(url, timeout=30):
+    """Alias of fetch() — HTTP GET returning the body as text."""
+    return fetch(url, timeout=timeout)
+
+
+from browser_tools import browser_use  # noqa: E402 — full sandboxed browser toolset (deferred: heavy deps)
+from context_store import context_stats, index_context, search_context  # noqa: E402 — deferred: heavy deps
+
+
+# ── Skills (Cline-style) ─────────────────────────────────────────────────────
+def _skills_dir():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "skills")
+
+
+def list_skills():
+    """List saved skills as [{name, description}]."""
+    d = _skills_dir()
+    out = []
+    if os.path.isdir(d):
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(d, fn), encoding="utf-8") as f:
+                    s = json.load(f)
+                out.append({"name": s.get("name", fn[:-5]),
+                            "description": s.get("description", "")})
+            except Exception:
+                continue
+    return out or "(no skills saved — create them in Settings → Skills)"
+
+
+def use_skill(name):
+    """Return a skill's instructions so the model can apply them."""
+    safe = re.sub(r"[^A-Za-z0-9 _-]", "", name or "").strip()[:64]
+    path = os.path.join(_skills_dir(), safe + ".json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            s = json.load(f)
+    except Exception:
+        avail = list_skills()
+        names = ", ".join(x["name"] for x in avail) if isinstance(avail, list) else avail
+        return f"use_skill: skill {name!r} not found. Available: {names}"
+    parts = [f"SKILL: {s.get('name')}"]
+    if s.get("description"):
+        parts.append("DESCRIPTION: " + s["description"])
+    if s.get("instructions"):
+        parts.append("INSTRUCTIONS:\n" + s["instructions"])
+    if s.get("template"):
+        parts.append("TEMPLATE:\n" + s["template"])
+    return "\n\n".join(parts)
+
+
+# ── ask_user (Cline-style follow-up question) ────────────────────────────────
+_ASK_PREFIX = "[KILN-ASK] "
+
+
+def ask_user(question):
+    """Pause the run and ask the human a question. Use it INSIDE a cell like:
+
+        print(ask_user("Which port should I use?"))
+
+    The run pauses, the question appears in the UI, and the human's answer is
+    returned in the cell output as `[User answered] ...`.
+    """
+    return _ASK_PREFIX + str(question)
+
+
+# ── extra kernel utilities ───────────────────────────────────────────────────
+
+def get_env(name=None):
+    """Read environment variables. No argument lists all name=value pairs;
+    with an argument returns that variable's value ('' when unset)."""
+    if name is None:
+        return "\n".join(f"{k}={v}" for k, v in sorted(os.environ.items()))
+    return os.environ.get(str(name), "")
+
+
+def which(cmd):
+    """Return the resolved path of a command on PATH, or '' when absent."""
+    import shutil
+    return shutil.which(str(cmd)) or ""
+
+
+def read_json(path):
+    """Read a JSON file and return it decoded (dict/list)."""
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_json(path, obj):
+    """Write `obj` as pretty JSON. Returns a one-line confirmation."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+    return f"wrote {path} — {os.path.getsize(path)} bytes"
+
+
+def download(url, path):
+    """Download a URL to `path`. Returns bytes written or an error string."""
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            data = resp.read()
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+        return f"downloaded {len(data)} bytes to {path}"
+    except Exception as e:
+        return f"download error: {e}"
+
+
+def sha256(path):
+    """Hex SHA-256 of a file."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def md5(path):
+    """Hex MD5 of a file."""
+    import hashlib
+    h = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def copy(src, dst):
+    """Copy a file or directory tree."""
+    import shutil
+    if os.path.isdir(src):
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(dst)) or ".", exist_ok=True)
+        shutil.copy2(src, dst)
+    return f"copied {src} -> {dst}"
+
+
+def move(src, dst):
+    """Move/rename a file or directory."""
+    import shutil
+    shutil.move(src, dst)
+    return f"moved {src} -> {dst}"
+
+
+def head(path, n=10):
+    """First `n` lines of a text file."""
+    out = []
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for i, line in enumerate(f):
+            if i >= n:
+                break
+            out.append(line)
+    return "".join(out)
+
+
+def tail(path, n=10):
+    """Last `n` lines of a text file."""
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return "".join(f.readlines()[-n:])
+
+
+def grep(pattern, path=".", include=None, max_matches=100):
+    """Regex-search text files under `path`. Optional `include` glob like
+    '*.ts' narrows filenames. Returns file:line:line-text matches."""
+    import fnmatch
+    try:
+        rx = re.compile(pattern)
+    except Exception as e:
+        return f"grep error: bad regex — {e}"
+    matches = []
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "__pycache__", ".venv", "venv"}]
+        for fn in files:
+            if include is not None and not fnmatch.fnmatch(fn, include):
+                continue
+            fp = os.path.join(root, fn)
+            try:
+                with open(fp, "r", encoding="utf-8", errors="replace") as f:
+                    for lineno, line in enumerate(f, 1):
+                        if rx.search(line):
+                            matches.append(f"{fp}:{lineno}:{line.rstrip()}")
+                            if len(matches) >= max_matches:
+                                return "\n".join(matches)
+            except OSError:
+                continue
+    return "\n".join(matches) or f"no matches for {pattern!r}"
+
+
+def tree(path=".", depth=2, max_entries=100):
+    """Print a directory tree up to `depth` levels."""
+    root = os.path.abspath(path)
+    if not os.path.exists(root):
+        return f"tree: {path} does not exist"
+    out = [root]
+    def walk(d, dnum):
+        if dnum > depth:
+            return
+        try:
+            entries = sorted(os.listdir(d), key=lambda x: (not os.path.isdir(os.path.join(d, x)), x.lower()))
+        except OSError as e:
+            out.append(f"{'  ' * (dnum + 1)}ERROR: {e}")
+            return
+        for name in entries:
+            if len(out) >= max_entries:
+                return
+            full = os.path.join(d, name)
+            prefix = "  " * (dnum + 1)
+            if os.path.isdir(full):
+                out.append(f"{prefix}[D] {name}")
+                walk(full, dnum + 1)
+            else:
+                out.append(f"{prefix}{name}")
+    walk(root, 0)
+    return "\n".join(out)
+
+
+# ── advanced helpers ─────────────────────────────────────────────────────────
+
+def http(url, method="GET", headers=None, data=None, json_body=None, timeout=30):
+    """HTTP request returning {status, headers, body}. `json_body` is JSON-encoded
+    and sent with a JSON content-type. `data` is sent as-is (bytes/str)."""
+    payload = None
+    if json_body is not None:
+        payload = json.dumps(json_body, ensure_ascii=False).encode("utf-8")
+        hdrs = dict(headers or {})
+        hdrs.setdefault("Content-Type", "application/json")
+    else:
+        hdrs = dict(headers or {})
+        payload = data.encode("utf-8") if isinstance(data, str) else data
+    req = urllib.request.Request(url, data=payload, headers=hdrs, method=method.upper())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read()
+            ctype = resp.headers.get("Content-Type", "")
+            text = None
+            if "application/json" in ctype:
+                try:
+                    text = json.loads(body.decode("utf-8"))
+                except Exception:
+                    text = body.decode("utf-8", errors="replace")
+            else:
+                text = body.decode("utf-8", errors="replace")
+            return {"status": resp.status, "headers": dict(resp.headers), "body": text}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def re_find(pattern, text, flags=0):
+    """Return all regex matches. Each match is a tuple of groups (or the whole
+    match when no groups)."""
+    rx = re.compile(pattern, flags)
+    out = []
+    for m in rx.finditer(str(text)):
+        out.append(m.groups() if m.groups() else m.group(0))
+    return out
+
+
+def re_sub(pattern, repl, text, count=0):
+    """Regex substitution."""
+    return re.sub(pattern, repl, str(text), count=count)
+
+
+def file_info(path):
+    """Structured metadata: size, mode, mtime, ctime, type, is_file, is_dir."""
+    st = os.stat(path)
+    out = {
+        "path": path,
+        "size": st.st_size,
+        "mtime": st.st_mtime,
+        "ctime": st.st_ctime,
+        "mode": oct(st.st_mode),
+        "is_file": os.path.isfile(path),
+        "is_dir": os.path.isdir(path),
+    }
+    if os.path.isfile(path) and st.st_size <= 65536:
+        try:
+            out["sha256"] = sha256(path)
+        except Exception:
+            pass
+    return out
+
+
+def read_csv(path, delim=",", has_header=True):
+    """Read a CSV/TSV into a list of dicts (header row required when
+    has_header=True)."""
+    import csv
+    with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
+        if has_header:
+            reader = csv.DictReader(f, delimiter=delim)
+            return [dict(row) for row in reader]
+        reader = csv.reader(f, delimiter=delim)
+        return [row for row in reader]
+
+
+def write_csv(path, rows, delim=",", columns=None):
+    """Write a list of dicts (or lists) to CSV. Dicts use their keys as the
+    header; pass `columns` to choose/order them."""
+    import csv
+    if not rows:
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            f.write("")
+        return f"wrote {path} — 0 bytes"
+    if isinstance(rows[0], dict):
+        cols = columns or list(rows[0].keys())
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=cols, delimiter=delim, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(rows)
+    else:
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f, delimiter=delim)
+            if columns:
+                w.writerow(columns)
+            w.writerows(rows)
+    return f"wrote {path} — {os.path.getsize(path)} bytes"
+
+
+def read_yaml(path):
+    """Read a YAML file into Python objects. Requires PyYAML."""
+    try:
+        import yaml
+    except ImportError:
+        return "read_yaml error: PyYAML is not installed (pip install pyyaml)"
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def write_yaml(path, obj):
+    """Write a Python object as YAML. Requires PyYAML."""
+    try:
+        import yaml
+    except ImportError:
+        return "write_yaml error: PyYAML is not installed (pip install pyyaml)"
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(obj, f, sort_keys=False, allow_unicode=True)
+    return f"wrote {path} — {os.path.getsize(path)} bytes"
+
+
+def read_toml(path):
+    """Read a TOML file (Python 3.11+ tomllib)."""
+    import tomllib
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def base64e(data):
+    """Base64-encode text/bytes."""
+    b = data if isinstance(data, (bytes, bytearray)) else str(data).encode("utf-8")
+    return base64.b64encode(bytes(b)).decode("ascii")
+
+
+def base64d(data):
+    """Base64-decode text/bytes."""
+    b = data if isinstance(data, (bytes, bytearray)) else str(data).encode("utf-8")
+    return base64.b64decode(bytes(b)).decode("utf-8")
+
+
+def zip_dir(src, dst):
+    """Zip a directory tree into `dst`."""
+    import zipfile
+    src = os.path.abspath(src)
+    os.makedirs(os.path.dirname(os.path.abspath(dst)) or ".", exist_ok=True)
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+        for root, dirs, files in os.walk(src):
+            for fn in files:
+                full = os.path.join(root, fn)
+                arc = os.path.relpath(full, src)
+                z.write(full, arc)
+    return f"zipped {src} -> {dst} ({os.path.getsize(dst)} bytes)"
+
+
+def unzip(src, dst):
+    """Extract a zip archive to `dst`."""
+    import zipfile
+    os.makedirs(dst, exist_ok=True)
+    with zipfile.ZipFile(src, "r") as z:
+        z.extractall(dst)
+    return f"extracted {src} -> {dst}"
+
+
+def jq(obj, expr):
+    """Tiny JSON-path query using dot notation (a.b.0.c)."""
+    cur = obj
+    for part in str(expr).split("."):
+        part = part.strip()
+        if part == "":
+            continue
+        if isinstance(cur, (list, tuple)):
+            try:
+                cur = cur[int(part)]
+            except (ValueError, IndexError):
+                return None
+        elif isinstance(cur, dict):
+            if part not in cur:
+                return None
+            cur = cur[part]
+        else:
+            return None
+    return cur
+
+
+def search_files(query, path=".", max_matches=100, case_sensitive=False):
+    """Unified search: filenames AND file contents. Returns structured list."""
+    q = query if case_sensitive else query.lower()
+    out = []
+    for root, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "__pycache__", ".venv", "venv"}]
+        for fn in files:
+            full = os.path.join(root, fn)
+            hit_kind = None
+            if case_sensitive:
+                if q in fn:
+                    hit_kind = "name"
+            else:
+                if q in fn.lower():
+                    hit_kind = "name"
+            if hit_kind is None:
+                try:
+                    with open(full, "r", encoding="utf-8", errors="ignore") as f:
+                        for lineno, line in enumerate(f, 1):
+                            target = line if case_sensitive else line.lower()
+                            if q in target:
+                                hit_kind = "content"
+                                break
+                except OSError:
+                    continue
+            if hit_kind:
+                out.append({"path": full, "hit": hit_kind})
+                if len(out) >= max_matches:
+                    return out
+    return out
+
+
+def disk_usage(path="."):
+    """shutil.disk_usage(path) as {total, used, free} bytes."""
+    import shutil
+    t, u, f = shutil.disk_usage(path)
+    return {"total": t, "used": u, "free": f}
+
+
+def parse_xml(text):
+    """Parse XML text into a nested dict. Attributes are prefixed with @."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(str(text))
+    def conv(el):
+        d = {}
+        if el.attrib:
+            for k, v in el.attrib.items():
+                d["@" + k] = v
+        for child in el:
+            cd = conv(child)
+            tag = child.tag
+            if tag in d:
+                if not isinstance(d[tag], list):
+                    d[tag] = [d[tag]]
+                d[tag].append(cd)
+            else:
+                d[tag] = cd
+        if el.text and el.text.strip():
+            d["#text"] = el.text.strip()
+        return d
+    return {root.tag: conv(root)}
+
+
+def process_list():
+    """Running processes. Uses psutil if present, otherwise tasklist on Windows."""
+    try:
+        import psutil
+        return [{"pid": p.pid, "name": p.name()} for p in psutil.process_iter()]
+    except Exception:
+        pass
+    try:
+        out = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, timeout=30)
+        return out.stdout.strip() if out.returncode == 0 else "tasklist failed"
+    except Exception:
+        return "process_list unavailable"
+
+
+
+def cell_timeout():
+    """Return the per-cell timeout requested for the most recent cell (ms), or None."""
+    return _LAST_CELL_TIMEOUT_MS[0]
+
+
+
+def set_cwd(path):
+    """Change the kernel cwd used for future cells. Persistent across cells."""
+    global _KERNEL_CWD
+    target = os.path.abspath(os.path.expanduser(str(path)))
+    if not os.path.isdir(target):
+        return f"set_cwd error: not a directory: {target}"
+    os.chdir(target)
+    _KERNEL_CWD = target
+    return f"kernel cwd set to {target}"
+
+
+def get_cwd():
+    """Return the kernel cwd that will be restored at the start of each cell."""
+    return _KERNEL_CWD
+
+
+# engine setup
+prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
+                   read_file=read_file, write_file=write_file, append_file=append_file,
+                   edit_file=edit_file, delete_file=delete_file, list_dir=list_dir,
+                   find=find, glob=glob, update_todos=update_todos,
+                   web_search=web_search, web_fetch=web_fetch,
+                   browser_use=browser_use, list_skills=list_skills, use_skill=use_skill,
+                   ask_user=ask_user,
+
+                   memory_read=memory_read, memory_append=memory_append,
+                   remember=remember, recall=recall, forget=forget,
+                   index_context=index_context, search_context=search_context,
+                   context_stats=context_stats)
+# ── expression echo ───────────────────────────────────────────────────────────
+# The model's only feedback channel is the cell's captured output. A bare
+# expression statement — `browser_use("screenshot")`, `read_file("x")` — must
+# therefore SHOW its value, or the model gets an empty OUTPUT and is left to
+# guess what happened (it guesses badly: it fabricates plausible results).
+#
+# Both engines echo EVERY top-level bare expression, not just the last one,
+# because the model routinely writes multi-call cells. Strings print raw
+# (tool results are multi-line text; repr() would collapse them into one
+# escaped line); everything else prints repr().
+_ECHO_FN = "__kiln_echo__"
+
+
+def __kiln_echo__(value):
+    """Display a bare top-level expression's value. None is silent."""
+    if value is None:
+        return
+    print(value if isinstance(value, str) else repr(value))
+
+
+_CELL_FILE = "<cell>"
+
+
+def _compile_cell(code, filename=_CELL_FILE):
+    """Compile a cell, rewriting each top-level bare expression `x` into
+    `__kiln_echo__(x)`. Nested expressions (inside defs, loops, ifs) are left
+    alone — same scope rule as IPython's ast_node_interactivity='all'."""
+    # register the source so tracebacks can show the offending LINE, not just
+    # its number — the model reads the traceback to decide what to fix
+    linecache.cache[filename] = (len(code), None, code.splitlines(True), filename)
+    tree = ast.parse(code, filename)
+    for i, node in enumerate(tree.body):
+        if isinstance(node, ast.Expr):
+            call = ast.Call(func=ast.Name(id=_ECHO_FN, ctx=ast.Load()),
+                            args=[node.value], keywords=[])
+            tree.body[i] = ast.Expr(value=call)
+    ast.fix_missing_locations(tree)
+    return compile(tree, filename, "exec")
+
+
+prompt_dict[_ECHO_FN] = __kiln_echo__
+
+# ONE engine, always. There used to be an optional IPython engine here with
+# plain exec() as a silent fallback, and that split is exactly what produced
+# the worst bug this kernel has had: IPython was not installed, exec echoes
+# nothing, so every `browser_use("screenshot")` returned its result into the
+# void and the model — handed an empty OUTPUT — invented plausible results
+# instead. A fallback that is never exercised is a fallback that is broken.
+#
+# IPython was also actively wrong for this job: it prefixes "Out[N]: ",
+# emits ANSI colour escapes and a duplicate traceback into the model's
+# context, and its displayhook cannot be swapped for a quiet one without
+# fighting the class. None of its real features (magics, rich display) are
+# reachable by a model whose entire interface is a ```python fence.
+engine = "exec"
+_ns = dict(prompt_dict)
+
+
+
+# ─────────────────────────────────────────────────────────────
+# Multi-kernel orchestration
+#
+# The agent can summon additional kernel processes at runtime:
+#
+#     k = spawn_kernel("worker", permanent=False)   # or "permanent": True
+#     out = k.execute("x = 21; x*2", tags=True)     # returns tagged {kernel, ts, out}
+#     close_subkernel(k)
+#
+# Sub-kernels are true child processes running this same kernel_child.py.
+# They share the wire protocol (base64 JSON frames). Output is tagged with the
+# kernel id + a timestamp so the model can attribute results correctly.
+#
+#   - permanent=False (default): killed automatically when the MAIN kernel shuts
+#     down (end of run). Reaped here.
+#   - permanent=True: survives the run. Its PID is written to subkernels.json so
+#     the server can adopt/reap it on next startup (avoids orphan zombie procs).
+# ─────────────────────────────────────────────────────────────
+
+import json as _json  # noqa: E402 — section-local aliases (module top already imports these names)
+import subprocess as _subproc  # noqa: E402
+import threading as _threading  # noqa: E402
+import time as _time  # noqa: E402
+
+_SUBKERNELS = {}          # id -> dict(proc=..., permanent=..., name=..., created=...)
+_SUBKERNEL_COUNTER = [0]
+# KILN_STATE_DIR for the same reason as ds_direct's session pin: the harness
+# ships this tree read-only, and a permanent sub-kernel's PID must outlive it so
+# the next startup can still reap the process.
+_SUBKERNEL_REGISTRY = os.path.join(
+    os.environ.get("KILN_STATE_DIR") or os.path.dirname(os.path.abspath(__file__)),
+    "subkernels.json")
+
+class SubKernel:
+    """A lightweight, scriptable kernel sub-process."""
+
+    def __init__(self, proc, kid, name, permanent, cwd):
+        self.proc = proc
+        self.id = kid
+        self.name = name or kid
+        self.permanent = bool(permanent)
+        self.cwd = cwd
+        self._lock = _threading.Lock()
+        self._results = []
+        self._reader = _threading.Thread(target=self._read_loop, daemon=True)
+        self._reader.start()
+        # drain the child's startup ready-frame so it never gets mistaken for
+        # the response to the first execute() call
+        for _ in range(50):
+            if self._results:
+                self._results.clear()
+                break
+            _time.sleep(0.02)
+
+    def _read_loop(self):
+        try:
+            while True:
+                line = self.proc.stdout.readline()
+                if line == "":
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    frame = _json.loads(base64.b64decode(line).decode("utf-8"))
+                    self._results.append(frame)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def execute(self, code, timeout=None, tags=True):
+        """Send a code cell to the sub-kernel; return its output.
+
+        If tags is True (default), returns a dict with kernel id + timestamp +
+        raw output, so the AI knows which kernel produced it and when.
+        Returns {"kernel":..., "ts":..., "out":..., "error":...} on tagged mode;
+        returns the plain output string when tags=False.
+        """
+        if self.proc.poll() is not None:
+            return {
+                "kernel": self.id,
+                "ts": _time.time(),
+                "out": "",
+                "error": "Sub-kernel is not running (exit %s)" % self.proc.returncode,
+            }
+        frame_in = base64.b64encode(code.encode("utf-8")).decode("ascii") + "\n"
+        try:
+            self.proc.stdin.write(frame_in)
+            self.proc.stdin.flush()
+        except Exception as e:
+            return {"kernel": self.id, "ts": _time.time(), "out": "",
+                    "error": "Sub-kernel write failed: %s" % e}
+        start = _time.time()
+        while True:
+            if timeout is not None and (_time.time() - start) > timeout:
+                self.kill()
+                return {"kernel": self.id, "ts": _time.time(), "out": "",
+                        "error": "Sub-kernel timed out after %ss and was killed" % timeout}
+            if self._results:
+                frame = self._results.pop(0)
+                if tags:
+                    # errors arrive in the 'error' field (traceback text)
+                    return {"kernel": self.id, "name": self.name, "ts": _time.time(),
+                            "out": frame.get("out", ""), "error": frame.get("error")}
+                return frame.get("out", "")
+            if self.proc.poll() is not None:
+                return {"kernel": self.id, "ts": _time.time(), "out": "",
+                        "error": "Sub-kernel died mid-execution (exit %s)" % self.proc.returncode}
+            _time.sleep(0.02)
+
+    def is_alive(self):
+        if self.proc is None:
+            return False
+        if self.id not in _SUBKERNELS:
+            return False   # was closed/killed
+        # give the OS a tick to reap a just-killed process
+        for _ in range(5):
+            if self.proc.poll() is not None:
+                return False
+            _time.sleep(0.02)
+        return True
+
+    def kill(self):
+        """Terminate this sub-kernel process immediately."""
+        try:
+            if self.proc and self.proc.poll() is None:
+                self.proc.kill()
+        except Exception:
+            pass
+        _SUBKERNELS.pop(self.id, None)
+
+    def close(self):
+        """Graceful shutdown: send blank line to let it exit, then kill if needed."""
+        try:
+            if self.proc and self.proc.poll() is None:
+                self.proc.stdin.write("\n")
+                self.proc.stdin.flush()
+                self.proc.wait(timeout=3)
+        except Exception:
+            pass
+        try:
+            if self.proc and self.proc.poll() is None:
+                self.proc.kill()
+        except Exception:
+            pass
+        _SUBKERNELS.pop(self.id, None)
+
+
+def spawn_kernel(name=None, permanent=False, cwd=None):
+    """Spawn a new sub-kernel child process and return a SubKernel handle.
+
+    Use it to run multiple independent Python namespaces in parallel.
+
+        k1 = spawn_kernel("worker1")
+        k2 = spawn_kernel("worker2", permanent=True)
+
+    Default cwd is the same as the current process. persistent namespaces are
+    scoped per sub-kernel; they do NOT share variables with the main kernel or
+    with each other (unless you explicitly pass data via stdout/shell/files).
+    """
+    _SUBKERNEL_COUNTER[0] += 1
+    kid = "sk_%d_%d" % (os.getpid(), _SUBKERNEL_COUNTER[0])
+    kname = name or kid
+    child_script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "kernel_child.py")
+    kcwd = os.path.abspath(cwd) if cwd else os.getcwd()
+    env = os.environ.copy()
+    env["KILN_SUBKERNEL_ID"] = kid
+    env["KILN_SUBKERNEL_PERMANENT"] = "1" if permanent else "0"
+    try:
+        proc = _subproc.Popen(
+            [sys.executable, child_script, "--subkernel", kid],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            cwd=kcwd,
+            env=env,
+            bufsize=1,
+            text=True,
+        )
+    except Exception as e:
+        raise RuntimeError("Failed to spawn sub-kernel: %s" % e)
+    k = SubKernel(proc, kid, kname, permanent, kcwd)
+    _SUBKERNELS[kid] = {"proc": proc, "permanent": bool(permanent),
+                        "name": kname, "created": _time.time()}
+    _write_subkernel_registry()
+    return k
+
+
+def list_subkernels():
+    """Return a summary of live sub-kernels (id, name, permanent, alive)."""
+    out = []
+    for kid, rec in list(_SUBKERNELS.items()):
+        out.append({
+            "id": kid,
+            "name": rec["name"],
+            "permanent": rec["permanent"],
+            "alive": rec["proc"].poll() is None,
+            "created": rec["created"],
+        })
+    return out
+
+
+def close_subkernel(k):
+    """Gracefully shut down a specific sub-kernel."""
+    if isinstance(k, SubKernel):
+        k.close()
+    elif isinstance(k, str):
+        rec = _SUBKERNELS.get(k)
+        if rec:
+            # no SubKernel handle was retained for this id — kill the proc
+            # directly (constructing a throwaway SubKernel would spin up a
+            # reader thread and block draining a ready-frame for nothing)
+            try:
+                if rec["proc"].poll() is None:
+                    rec["proc"].kill()
+            except Exception:
+                pass
+            _SUBKERNELS.pop(k, None)
+    _write_subkernel_registry()
+
+
+def close_all_subkernels(include_permanent=True):
+    """Kill sub-kernels. Non-permanent ones are always killed (that is their
+    contract). Permanent ones are killed too when include_permanent=True
+    (server shutdown); otherwise they are preserved and stay registered."""
+    for kid, rec in list(_SUBKERNELS.items()):
+        proc = rec["proc"]
+        try:
+            if proc.poll() is None:
+                if include_permanent or not rec["permanent"]:
+                    proc.kill()
+        except Exception:
+            pass
+    # drop ephemeral entries; keep permanents when include_permanent is False
+    if include_permanent:
+        _SUBKERNELS.clear()
+    else:
+        for kid in [k for k, v in list(_SUBKERNELS.items()) if not v["permanent"]]:
+            _SUBKERNELS.pop(kid, None)
+    _write_subkernel_registry()
+
+
+def _write_subkernel_registry():
+    """Persist permanent sub-kernel PIDs so the server can adopt/reap orphans."""
+    try:
+        perm = {k: {"name": v["name"], "pid": int(v["proc"].pid),
+                    "permanent": True, "created": v["created"],
+                    "cwd": v.get("cwd", os.getcwd())}
+                for k, v in _SUBKERNELS.items() if v["permanent"]}
+        # KILN_STATE_DIR may not exist yet; without this the write raises and
+        # the `except: pass` below turns it into a silent no-op.
+        os.makedirs(os.path.dirname(os.path.abspath(_SUBKERNEL_REGISTRY)) or ".", exist_ok=True)
+        tmp = _SUBKERNEL_REGISTRY + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            _json.dump(perm, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _SUBKERNEL_REGISTRY)
+    except Exception:
+        pass
+
+# preload the sub-kernel helpers so the model can call them without import
+prompt_dict.update({
+    "spawn_kernel": spawn_kernel,
+    "list_subkernels": list_subkernels,
+    "close_subkernel": close_subkernel,
+    "close_all_subkernels": close_all_subkernels,
+    "SubKernel": SubKernel,
+})
+# sync into the live namespace (was snapshotted earlier)
+_ns.update(prompt_dict)
+
+# preload the extra utility helpers as well
+prompt_dict.update({
+    "get_env": get_env,
+    "which": which,
+    "read_json": read_json,
+    "write_json": write_json,
+    "download": download,
+    "sha256": sha256,
+    "md5": md5,
+    "copy": copy,
+    "move": move,
+    "head": head,
+    "tail": tail,
+    "grep": grep,
+    "tree": tree,
+    "http": http,
+    "re_find": re_find,
+    "re_sub": re_sub,
+    "file_info": file_info,
+    "read_csv": read_csv,
+    "write_csv": write_csv,
+    "read_yaml": read_yaml,
+    "write_yaml": write_yaml,
+    "read_toml": read_toml,
+    "base64e": base64e,
+    "base64d": base64d,
+    "zip_dir": zip_dir,
+    "unzip": unzip,
+    "jq": jq,
+    "search_files": search_files,
+    "disk_usage": disk_usage,
+    "parse_xml": parse_xml,
+    "process_list": process_list,
+    "cell_timeout": cell_timeout,
+    "set_cwd": set_cwd,
+    "get_cwd": get_cwd,
+})
+_ns.update(prompt_dict)
+
+
+
+def _tag_error(error):
+    """Prefix an error with a stable category tag so the model can react to the
+    KIND of failure instead of re-reading a raw traceback every time."""
+    low = (error or "").lower()
+    if "filenotfounderror" in low or "no such file" in low or "is a directory" in low:
+        tag = "NOT_FOUND"
+    elif "permissionerror" in low or "access denied" in low:
+        tag = "PERMISSION"
+    elif "timeout" in low or "timed out" in low:
+        tag = "TIMEOUT"
+    elif "syntaxerror" in low or "indentationerror" in low:
+        tag = "SYNTAX"
+    elif ("connection" in low or "network" in low or "urlopen" in low
+          or "http" in low or "socket" in low):
+        tag = "NETWORK"
+    elif "keyerror" in low or "indexerror" in low or "attributeerror" in low:
+        tag = "LOOKUP"
+    elif "typeerror" in low or "valueerror" in low:
+        tag = "TYPE"
+    else:
+        tag = "RUNTIME"
+    return f"[ERROR:{tag}] " + error
+
+
+def _format_exc(e):
+    """Format an exception with Kiln's own frames stripped out. The model has
+    to read this to decide what to fix, so it should see its cell and nothing
+    of the harness that ran it."""
+    here = os.path.abspath(__file__)
+
+    def _ours(fn):
+        return os.path.abspath(fn) == here or os.path.basename(fn) == "ast.py"
+
+    entries = [(f, ln) for f, ln in traceback.walk_tb(e.__traceback__)
+               if not _ours(f.f_code.co_filename)]
+    lines = ["Traceback (most recent call last):\n"] if entries else []
+    if entries:
+        lines += traceback.StackSummary.extract(iter(entries)).format()
+    lines += traceback.format_exception_only(type(e), e)
+    return "".join(lines)
+
+
+def _run_cell(code):
+    out_buf = io.StringIO()
+    err_buf = io.StringIO()
+    error = None
+    try:
+        with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+            # compile first so a SyntaxError is reported as such rather than
+            # blamed on whatever ran before it
+            exec(_compile_cell(code), _ns)
+    except BaseException as e:
+        error = _format_exc(e)
+    out = out_buf.getvalue()
+    err = err_buf.getvalue()
+    if err:
+        if out and not out.endswith('\n'):
+            out += '\n'
+        out += err
+    if error:
+        error = _tag_error(error)
+    return out, error
+
+
+# ─────────────────────────────────────────────────────────────
+# Kernel state (context lives in Python variables)
+#
+# The namespace is the agent's real memory: every variable, import, and
+# helper the model defines stays alive for the whole run. These helpers
+# serialize that namespace (per-variable, dill, best-effort) so a NEW run in
+# the same conversation can restore it — the model's context survives across
+# runs instead of being rebuilt from scratch. Mirrors prime-agent's
+# kernel/state-snapshot.ts.
+# ─────────────────────────────────────────────────────────────
+
+_SNAPSHOT_MARKER = "__KILN_KERNEL_STATE__"
+_STATE_ALWAYS_SKIP = {"rlm", "asyncio", "exit", "quit", "open"}
+_SNAPSHOT_MAX_BYTES = 256 * 1024 * 1024
+
+
+def _ns_for_state():
+    return _ns
+
+
+def _user_state_names():
+    """User-defined top-level names (skips internals and the preloaded helper
+    set — the model wants its OWN state, not the built-ins that are
+    re-injected on every start)."""
+    ns = _ns_for_state()
+    hidden = set()
+    preloaded = set(prompt_dict) | _STATE_ALWAYS_SKIP
+    names = []
+    for name in list(ns.keys()):
+        if name.startswith("_"):
+            continue
+        if name in hidden or name in preloaded:
+            continue
+        names.append(name)
+    return sorted(names)
+
+
+def _short_repr(v, n=60):
+    try:
+        r = repr(v)
+    except Exception:
+        r = object.__repr__(v)
+    r = r.replace("\n", " ")
+    return r if len(r) <= n else r[: n - 1] + "…"
+
+
+def _obj_summary(v):
+    """Compact 'type · size · preview' for one object — never dumps it."""
+    t = type(v).__name__
+    try:
+        mod = (type(v).__module__ or "").split(".")[0]
+        if mod == "pandas" and hasattr(v, "shape"):
+            return "%s %s" % (t, tuple(v.shape))
+        if mod == "numpy" and hasattr(v, "shape"):
+            return "ndarray %s %s" % (tuple(v.shape), getattr(v, "dtype", ""))
+        if isinstance(v, (str, bytes)):
+            return "%s len=%s · %s" % (t, format(len(v), ","), _short_repr(v[:80]))
+        if isinstance(v, dict):
+            return "dict keys=%s" % format(len(v), ",")
+        if isinstance(v, (list, tuple, set, frozenset)):
+            return "%s len=%s" % (t, format(len(v), ","))
+        if callable(v):
+            return "%s (callable)" % t
+        return "%s · %s" % (t, _short_repr(v))
+    except Exception:
+        return t
+
+
+def kernel_vars(detail=True):
+    """Your working memory — the variables living in the kernel across turns
+    (NOT in the chat). detail=True (default) lists each name WITH its type and
+    size, so you can see what you already have and slice it instead of
+    reprinting it; detail=False returns just the list of names. Check here
+    before redefining something — if it's already here, reuse it."""
+    names = _user_state_names()
+    if not detail:
+        return names
+    if not names:
+        return "(no user variables yet — nothing saved in the kernel)"
+    ns = _ns_for_state()
+    width = min(24, max((len(n) for n in names), default=8) + 1)
+    lines = ["%-*s %s" % (width, n, _obj_summary(ns.get(n))) for n in names]
+    return ("live kernel variables (persist across turns; slice them, don't "
+            "reprint them):\n" + "\n".join(lines))
+
+
+def peek(x, rows=5):
+    """Inspect a large value WITHOUT dumping it into the chat. Pass the value or
+    its variable NAME. DataFrame → shape + dtypes + head; dict → key sample with
+    value types; list/tuple → len + first items; str/bytes → len + head; ndarray
+    → shape/dtype + sample. Everything is bounded, so it is safe on huge data."""
+    name = ""
+    if isinstance(x, str) and x in _ns:
+        name, x = x, _ns[x]
+    out = ["%s%s" % (name + ": " if name else "", type(x).__name__)]
+    try:
+        mod = (type(x).__module__ or "").split(".")[0]
+        if mod == "pandas" and hasattr(x, "shape"):
+            out.append("shape = %s" % (tuple(x.shape),))
+            if hasattr(x, "dtypes"):
+                items = list(x.dtypes.items())[:40]
+                out.append("dtypes:\n" + "\n".join("  %s: %s" % (c, d) for c, d in items))
+            if hasattr(x, "head"):
+                out.append("head:\n" + str(x.head(rows)))
+        elif mod == "numpy" and hasattr(x, "shape"):
+            out.append("shape = %s, dtype = %s" % (tuple(x.shape), x.dtype))
+            try:
+                out.append("sample: " + str(x.ravel()[:12]))
+            except Exception:
+                pass
+        elif isinstance(x, dict):
+            out.append("%s keys" % format(len(x), ","))
+            for k in list(x)[:25]:
+                out.append("  %r: %s = %s" % (k, type(x[k]).__name__, _short_repr(x[k], 60)))
+            if len(x) > 25:
+                out.append("  … %s more keys" % format(len(x) - 25, ","))
+        elif isinstance(x, (list, tuple, set, frozenset)):
+            out.append("len = %s" % format(len(x), ","))
+            for i, item in enumerate(list(x)[:rows]):
+                out.append("  [%d] %s: %s" % (i, type(item).__name__, _short_repr(item, 90)))
+            if len(x) > rows:
+                out.append("  … %s more" % format(len(x) - rows, ","))
+        elif isinstance(x, (str, bytes)):
+            out.append("len = %s" % format(len(x), ","))
+            seg = x[:800]
+            out.append("head:\n" + (seg if isinstance(x, str) else seg.decode("latin-1", "replace")))
+        else:
+            out.append(_short_repr(x, 800))
+            attrs = [a for a in dir(x) if not a.startswith("_")][:20]
+            if attrs:
+                out.append("attrs: " + ", ".join(attrs))
+    except Exception as e:
+        out.append("(peek error: %s)" % e)
+    return "\n".join(out)
+
+
+def snapshot_kernel_state(path, manifest_path, max_bytes=_SNAPSHOT_MAX_BYTES):
+    """Serialize the user namespace to `path` (dill, per-variable best effort).
+    Returns {"saved": [...], "skipped": [...], "bytes": n} or {"error": ...}.
+    Never raises."""
+    import datetime
+    try:
+        import dill
+    except Exception as e:
+        return {"error": "dill unavailable: %s" % e}
+    dill.settings["recurse"] = True
+    ns = _ns_for_state()
+    hidden = set()
+    payload = {}
+    skipped = []
+    total = 0
+    for name in _user_state_names():
+        if name in hidden:
+            continue
+        value = ns[name]
+        try:
+            blob = dill.dumps(value)
+        except Exception as e:
+            skipped.append({"name": name, "reason": "%s: %s" % (type(e).__name__, str(e)[:200])})
+            continue
+        if len(blob) > max_bytes or total + len(blob) > max_bytes:
+            skipped.append({"name": name, "reason": "exceeds snapshot size cap"})
+            continue
+        payload[name] = blob
+        total += len(blob)
+    tmp = None
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as fh:
+            dill.dump(payload, fh)
+        os.replace(tmp, path)
+    except Exception as e:
+        try:
+            if tmp:
+                os.remove(tmp)
+        except Exception:
+            pass
+        return {"error": "write failed: %s" % e}
+    manifest = {
+        "version": 1,
+        "savedNames": sorted(payload),
+        "skipped": skipped,
+        "bytes": os.path.getsize(path),
+        "pythonVersion": sys.version.split()[0],
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+    try:
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return {"saved": sorted(payload.keys()), "skipped": skipped, "bytes": manifest["bytes"]}
+
+
+def restore_kernel_state(path):
+    """Revive a snapshot into the user namespace. Returns
+    {"restored": [...], "failed": [...]} (+ optional "error"). Never raises."""
+    if not path or not os.path.exists(path):
+        return {"restored": [], "failed": []}
+    try:
+        import dill
+    except Exception as e:
+        return {"restored": [], "failed": [], "error": "dill unavailable: %s" % e}
+    try:
+        with open(path, "rb") as fh:
+            payload = dill.load(fh)
+    except Exception as e:
+        return {"restored": [], "failed": [], "error": "load failed: %s" % e}
+    if not isinstance(payload, dict):
+        return {"restored": [], "failed": [], "error": "corrupt snapshot: not a dict"}
+    ns = _ns_for_state()
+    restored, failed = [], []
+    for name, blob in payload.items():
+        try:
+            ns[name] = dill.loads(blob)
+            restored.append(name)
+        except Exception as e:
+            failed.append({"name": name, "reason": "%s: %s" % (type(e).__name__, str(e)[:200])})
+    return {"restored": sorted(restored), "failed": failed}
+
+
+# kernel_vars is defined after the prompt_dict build above; register it now so
+# the model can list its namespace without an import.
+prompt_dict["kernel_vars"] = kernel_vars
+_ns["kernel_vars"] = kernel_vars
+prompt_dict["peek"] = peek
+_ns["peek"] = peek
+
+
+_CELL_PREFIX = "\x00KILN_CELL\x00"
+_CTRL_PREFIX = "\x00KILN_CTRL\x00"
+_LAST_CELL_TIMEOUT_MS = [None]
+
+
+def _handle_ctrl(req):
+    """Dispatch a control request from the parent; returns the result dict."""
+    cmd = req.get("cmd") if isinstance(req, dict) else None
+    if cmd == "snapshot":
+        return snapshot_kernel_state(
+            req.get("path", ""), req.get("manifest", ""),
+            int(req.get("max_bytes") or 0) or _SNAPSHOT_MAX_BYTES)
+    if cmd == "restore":
+        return restore_kernel_state(req.get("path", ""))
+    if cmd == "list_names":
+        return {"names": _user_state_names()}
+    return {"error": "unknown kernel control command: %r" % cmd}
+
+def send_frame(obj):
+    sys.stdout.write(base64.b64encode(json.dumps(obj, ensure_ascii=False).encode('utf-8')).decode('ascii') + '\n')
+    sys.stdout.flush()
+
+send_frame({"ready": True, "engine": engine})
+
+while True:
+    line = sys.stdin.readline()
+    if line == "":
+        break
+    line = line.strip()
+    if line == "":
+        # main kernel shutting down: reap non-permanent sub-kernels now
+        close_all_subkernels(include_permanent=False)
+        break
+    try:
+        code = base64.b64decode(line).decode('utf-8')
+    except Exception as e:
+        send_frame({"out":"", "error":f"Protocol error: {e}"})
+        continue
+    cell_timeout_ms = None
+    if code.startswith(_CELL_PREFIX):
+        try:
+            envelope = json.loads(code[len(_CELL_PREFIX):])
+            code = envelope.get("code", "")
+            raw_timeout = envelope.get("timeoutMs")
+            if raw_timeout is not None:
+                cell_timeout_ms = int(raw_timeout)
+        except Exception as e:
+            send_frame({"out": "", "error": f"Cell envelope error: {e}"})
+            continue
+    if code.startswith(_CTRL_PREFIX):
+        # control channel (snapshot / restore / list_names) — never run as code
+        try:
+            req = json.loads(code[len(_CTRL_PREFIX):])
+            res = _handle_ctrl(req)
+        except Exception as e:
+            res = {"error": "control command failed: %s" % e}
+        send_frame({"out": _SNAPSHOT_MARKER + json.dumps(res, ensure_ascii=False), "error": None})
+        continue
+    _LAST_CELL_TIMEOUT_MS[0] = cell_timeout_ms
+    try:
+        os.chdir(_KERNEL_CWD)
+    except Exception:
+        pass
+    out, err = _run_cell(code)
+    send_frame({"out": out, "error": err})
