@@ -1,0 +1,203 @@
+/* Frame-wide visual effects: whale backdrop, focus button, nature lock. */
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Official DeepSeek whale drifting behind the chrome — deep, vivid blue. */
+.whale {
+  position: absolute;
+  right: -160px;
+  bottom: -90px;
+  color: #1d6bff;
+  opacity: 1;
+  pointer-events: none;
+  animation: ui-effects-drift 26s ease-in-out infinite;
+  filter: drop-shadow(0 24px 60px rgba(29, 107, 255, 0.4));
+}
+
+.whale svg {
+  display: block;
+  max-width: 84vw;
+  height: auto;
+}
+
+/* Static mode: centered in the viewport (the chat column's center area),
+   no drift, no rotation. */
+.whaleStatic {
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  animation: none;
+}
+
+/* Bottom-right focus pill. */
+.focusButton {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: #dfe9ff;
+  background: rgba(13, 25, 48, 0.72);
+  backdrop-filter: blur(12px);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.focusButton:hover {
+  background: rgba(20, 40, 76, 0.85);
+  transform: translateY(-1px);
+}
+
+.focusButtonIcon {
+  display: inline-flex;
+  color: #7fc4ff;
+}
+
+.focusButtonLabel {
+  text-transform: uppercase;
+}
+
+/* Full-screen focus lock. */
+.lock {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Real photographic nature scene. The photo URL rides the component's inline
+   background-image (layered over a translucent tone gradient); the dark color
+   below is the graceful offline/loading fallback. */
+.scene {
+  position: absolute;
+  inset: -6%;
+  background-color: #050d1a;
+  background-size: cover;
+  background-position: center;
+  animation: ui-effects-scene-zoom 30s ease-in-out infinite alternate;
+}
+
+.sceneLabel {
+  position: absolute;
+  left: 22px;
+  bottom: 18px;
+  color: rgba(235, 245, 255, 0.74);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  z-index: 2;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 42%, rgba(2, 5, 14, 0.78) 100%);
+}
+
+/* Passcode gate. */
+.gate {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  color: #e4eeff;
+  background: rgba(6, 12, 26, 0.62);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+}
+
+.gateShake {
+  animation: ui-effects-shake 420ms ease-in-out;
+}
+
+.gateTitle {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.gateHint {
+  font-size: 12px;
+  opacity: 0.62;
+}
+
+.codeInput {
+  width: 150px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  color: #eaf2ff;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 22px;
+  letter-spacing: 0.42em;
+  text-align: center;
+  outline: none;
+}
+
+.codeInput:focus {
+  border-color: rgba(120, 190, 255, 0.7);
+}
+
+.unlockButton {
+  pointer-events: auto;
+  padding: 9px 22px;
+  border: 0;
+  border-radius: 10px;
+  color: #061019;
+  background: #9fd0ff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.unlockButton:hover {
+  background: #c2e2ff;
+}
+
+@keyframes ui-effects-drift {
+  0% { transform: translate3d(0, 0, 0) rotate(-3deg); }
+  50% { transform: translate3d(-12vw, -6vh, 0) rotate(4deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(-3deg); }
+}
+
+@keyframes ui-effects-scene-zoom {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to { transform: scale(1.08) translate3d(1.2%, -1.4%, 0); }
+}
+
+@keyframes ui-effects-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-9px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whale, .scene {
+    animation: none !important;
+  }
+}

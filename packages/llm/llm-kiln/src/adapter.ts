@@ -139,14 +139,28 @@ export function renderToolCall(name: string, args: string): string {
  * @returns the `opts` dict the registry's adapters read.
  */
 export function requestOptions(options: GenerateOptions, account?: string): Record<string, unknown> {
+  // An auxiliary one-shot (compaction or session-title summary) must NOT thread
+  // onto the conversation's persistent DeepSeek chat. That chat holds the whole
+  // running transcript — for compaction it is often the very chat that just hit
+  // its length limit — so appending the summarization request to it overflows
+  // instantly, and the summarizer ends up "summarizing inside the full chat it
+  // is trying to shrink". Route these calls to their own throwaway chat (unique
+  // conv_id + `oneshot`, which ds_direct opens fresh and discards after) so the
+  // summary is primed only with the compacted region it was given.
+  const oneshot = options.purpose === 'compaction' || options.purpose === 'session-title'
+  const convId = oneshot
+    ? `${options.sessionId === undefined ? 'aux' : String(options.sessionId)}#${options.purpose}#${randomUUID()}`
+    : options.sessionId === undefined ? undefined : String(options.sessionId)
   return {
     ...options.temperature !== undefined ? { temperature: options.temperature } : {},
     ...options.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {},
     ...options.reasoningEffort !== undefined ? { reasoning_effort: String(options.reasoningEffort) } : {},
     // `conv_id` pins one DeepSeek web chat session per harness session, which is
     // what keeps ds_direct's server-side context aligned with ours instead of
-    // opening a fresh chat on every request.
-    ...options.sessionId !== undefined ? { conv_id: String(options.sessionId) } : {},
+    // opening a fresh chat on every request. Auxiliary one-shots get a unique id
+    // (see above) so they never share the conversation's chat.
+    ...convId !== undefined ? { conv_id: convId } : {},
+    ...oneshot ? { oneshot: true } : {},
     // Which LOGIN serves the request, as opposed to which chat. Absent, the
     // sidecar takes the next account in its ring, so two agents starting near
     // each other can land on the same one; naming it is what lets a subagent be
@@ -413,7 +427,7 @@ class ChunkEmitter {
   /** Record the registry's terminal metadata for {@link finish}. */
   observeMeta(
     finish: string | undefined,
-    usage: { input?: number; output?: number; reasoning?: number } | undefined,
+    usage: { input?: number; output?: number; reasoning?: number; cache_read?: number } | undefined,
     error?: string,
   ): void {
     if (finish !== undefined) this.finishHint = finish
@@ -422,6 +436,7 @@ class ChunkEmitter {
       this.usage = {
         inputTokens: usage.input ?? 0,
         outputTokens: usage.output ?? 0,
+        ...usage.cache_read !== undefined ? { cacheReadTokens: usage.cache_read } : {},
         ...usage.reasoning !== undefined ? { reasoningTokens: usage.reasoning } : {},
       }
     }

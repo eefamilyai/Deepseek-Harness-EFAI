@@ -26,6 +26,7 @@ import threading
 import time
 
 import config
+from token_usage import estimate_tokens
 
 try:
     import ds_waf
@@ -1385,6 +1386,54 @@ def _msg_text(msg):
     return str(c)
 
 
+def _common_prefix_len(a, b):
+    """Length of the common character prefix of two strings."""
+    n = min(len(a), len(b))
+    i = 0
+    while i < n and a[i] == b[i]:
+        i += 1
+    return i
+
+
+# DeepSeek prompt-cache engineering parameters: the cache stores prefixes in
+# 64-token blocks, and a prefix shorter than one full block (64 tokens) never
+# hits the cache. The remainder of a partial final block is billed as a miss.
+_CACHE_MIN_TOKENS = 64   # prefixes shorter than one block never read from cache
+_CACHE_BLOCK_TOKENS = 64  # cached prefix floored to 64-token blocks
+
+
+def _turn_usage(prev_prompt, prompt, output_text, reasoning_text):
+    """Manual ds_direct token accounting with a real-cache-engine model.
+
+    The common character prefix is converted to an estimated token count, then:
+      * below `_CACHE_MIN_TOKENS`, nothing is read from cache (all fresh input);
+      * at or above it, the cached read is floored to a `_CACHE_BLOCK_TOKENS`
+        boundary, and the un-floored remainder of the common prefix is billed as
+        fresh input together with the true suffix.
+    Output counts TOTAL generation (visible + thinking); `reasoning` keeps
+    the thinking-only subset for the harness's reasoningTokens field.
+    """
+    common = 0
+    if prev_prompt is not None:
+        common = _common_prefix_len(prev_prompt, prompt)
+    common_tokens = estimate_tokens(prompt[:common])
+    if common_tokens < _CACHE_MIN_TOKENS:
+        cache_read = 0
+    else:
+        cache_read = (common_tokens // _CACHE_BLOCK_TOKENS) * _CACHE_BLOCK_TOKENS
+    fresh_input = estimate_tokens(prompt[common:]) + max(0, common_tokens - cache_read)
+    # `output` is TOTAL generation (visible + thinking), matching the API
+    # convention where `completion_tokens` includes thinking and `reasoning` is a
+    # subset. Splitting them made reasoner turns look like "1.3k output" when the
+    # model had actually emitted tens of thousands of thinking tokens first.
+    return {
+        "input": fresh_input,
+        "cache_read": cache_read,
+        "output": estimate_tokens(output_text) + estimate_tokens(reasoning_text),
+        "reasoning": estimate_tokens(reasoning_text),
+    }
+
+
 def messages_to_prompt(messages):
     """Render the caller's turns as the single prompt string DeepSeek web takes.
 
@@ -1412,6 +1461,25 @@ def messages_to_prompt(messages):
     parts = list(sys_parts) + body_parts
     parts.append("Assistant:")
     return "\n\n".join(p for p in parts if p)
+
+
+def _full_conversation_prompt(messages):
+    """Reconstruct the full transcript this DeepSeek chat notionally holds.
+
+    `_prompt_for` sends only the per-turn DELTA because DeepSeek threads every
+    turn onto one server-side chat, so the server holds the whole flattened
+    conversation, not the delta. Prefix caching is decided against THAT full
+    prompt, so the cache counter diffs this reconstruction against the previous
+    turn's — never the wire delta. `kind == "env"` is excluded because the
+    volatile env tail is regenerated each turn and never enters the server-side
+    history; system and every other body message do.
+    """
+    if not messages:
+        return ""
+    sys_msgs = [m for m in messages if m.get("role") == "system"]
+    body = [m for m in messages
+            if m.get("role") != "system" and m.get("kind") != "env"]
+    return messages_to_prompt(sys_msgs + body)
 
 
 # Hard ceiling on what we hand DeepSeek in one prompt. DeepSeek rejects oversized
@@ -1670,7 +1738,7 @@ def _sleep_cancellable(secs, cancelled, step=0.5):
 
 
 def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: False,
-           conv_id=None, preempt=False, account=None):
+           conv_id=None, preempt=False, account=None, oneshot=False):
     """Yield {'type': 'reasoning'|'content'|'title', 'text': ...}. ONE persistent, threaded
     DeepSeek session per (kiln conversation, account) — a chat is always the same tab, and
     after the first turn we send only the new message.
@@ -1700,10 +1768,21 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     # `is_last=True` tells _stream_with there is nowhere to fail over to, so it
     # handles every condition in place rather than raising _RotateAccount.
     acct_id = _account_order(key, pinned=account)[0]
-    with _lease_client(acct_id) as client:
-        for ev in _stream_with(client, model_type, thinking, search, messages,
-                               cancelled, conv_id, preempt, is_last=True):
-            yield ev
+    try:
+        with _lease_client(acct_id) as client:
+            for ev in _stream_with(client, model_type, thinking, search, messages,
+                                   cancelled, conv_id, preempt, is_last=True):
+                yield ev
+    finally:
+        # A one-shot auxiliary call (compaction / session-title summary) opened a
+        # throwaway chat under a unique conv_id so it would not thread onto — or
+        # re-prime — the conversation's persistent chat (often the very chat that
+        # just hit its length limit). Drop that ephemeral session now so it does
+        # not accumulate in ds_sessions.json.
+        if oneshot:
+            with _session_lock:
+                if _sessions.pop(key, None) is not None:
+                    _save_sessions()
 
 
 def _stream_with(client, model_type, thinking, search, messages, cancelled, conv_id,
@@ -1717,10 +1796,13 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
     with _session_lock:
         st = _sessions.get(key) or {}
         prev_sent = int(st.get("sent") or 0)
+        prev_prompt = st.get("last_prompt")
+        prev_sid = st.get("sid")
         if st.pop("was_cancelled", False):
             need_preempt = True
             config.dbg("ds_direct: was_cancelled flag found for %s → need_preempt=True", key)
             _save_sessions()
+    full_prompt = _full_conversation_prompt(messages)
     # A transcript that SHRANK since we last threaded it was rewritten by the
     # harness — almost always a /compact (manual or the context-overflow retry
     # that follows a _ContextFull). The old DeepSeek chat's threaded history no
@@ -1820,6 +1902,7 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                           why="transcript was compacted — re-priming a fresh chat" if compacted else
                               "DeepSeek said the old session no longer exists" if force_new else "")
             force_new = False
+            fresh_chat = prev_sid is not None and st.get("sid") != prev_sid
         except _SessionStale:
             if heal < 1:                          # session truly gone (404) → new chat, once
                 _drop_session()
@@ -1848,6 +1931,8 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
         busy_kind = None                          # "rate" or "busy" — they retry differently
         length_full = None                        # chat is full → open a fresh one, once
         raw_sink = []
+        output_text = ""
+        reasoning_text = ""
         try:
             for kind, text in _parse(r, cancelled, raw_sink):
                 if kind == "__msgid__":
@@ -1878,6 +1963,10 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                 if kind == "refs":                    # web search sources (list of {i,url,title,site})
                     yield {"type": "refs", "refs": text}
                 else:
+                    if kind == "reasoning":
+                        reasoning_text += text
+                    elif kind == "content":
+                        output_text += text
                     yield {"type": kind, "text": text}
         finally:
             # Always release the streaming connection — cancelling mid-answer or
@@ -1965,6 +2054,8 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                       "\n  ".join(raw_sink[:25] or ["(no lines at all)"]),
                       file=_sys.stderr, flush=True)
             _persist_cookies(client)              # capture any WAF token DeepSeek just refreshed
+            if yielded:
+                usage = _turn_usage(None if fresh_chat else prev_prompt, full_prompt, output_text, reasoning_text)
             with _session_lock:
                 if new_parent is not None:        # thread the next turn onto this one
                     st["parent"] = new_parent
@@ -1983,7 +2074,10 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                                   if m.get("role") != "system"
                                   and m.get("kind") != "env"])
                     st["sent"] = body_n + 1
+                    st["last_prompt"] = full_prompt
                 _save_sessions()
+            if yielded:
+                yield {"type": "meta", "usage": usage}
             return
         # An empty response is usually a rejected parent_message_id or a blip — NOT a
         # dead chat. Reset the threading and retry in the SAME DeepSeek chat instead of

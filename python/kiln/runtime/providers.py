@@ -476,6 +476,11 @@ def _deepseek_stream(model, messages, opts, cancelled, cfg):
     kwargs = {"temperature": temperature, "cancelled": cancelled, "conv_id": conv_id}
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
+    # A one-shot auxiliary call (compaction / session-title summary) runs in its
+    # own throwaway chat instead of threading onto the conversation's persistent
+    # one; the adapter marks it and supplies a unique conv_id.
+    if opts.get("oneshot"):
+        kwargs["oneshot"] = True
     # An account-pinned route names its login here; omitted means the ring picks.
     account = opts.get("account")
     if account:
@@ -487,6 +492,11 @@ def _deepseek_stream(model, messages, opts, cancelled, cfg):
         t = ev.get("type")
         if t == "refs":
             yield {"type": "refs", "refs": ev.get("refs", [])}
+        elif t == "meta":
+            # ds_direct's manual token accounting (input / cache_read / output /
+            # reasoning) rides the same meta frame other providers use. Forward
+            # it verbatim; the final `finish: stop` below closes the stream.
+            yield ev
         elif t in ("content", "reasoning", "notice", "title"):
             yield {"type": t, "text": ev.get("text", "")}
     yield {"type": "meta", "finish": "stop"}

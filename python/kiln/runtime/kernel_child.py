@@ -45,6 +45,10 @@ def decode_bytes(data: bytes) -> str:
 # only changes when the model explicitly calls set_cwd().
 _STARTUP_CWD = os.path.abspath(os.getcwd())
 _KERNEL_CWD = _STARTUP_CWD
+# The workspace stamp carried by the most recent cell, so a chat switch can be
+# told from a run of cells in the same chat. Same stamp = same chat: a set_cwd()
+# the model made in between must survive. New stamp = another chat: reset to it.
+_LAST_STAMPED_CWD = None
 
 def sh(cmd, timeout=None, **kwargs):
     """Run a shell command and return its combined output.
@@ -1138,6 +1142,21 @@ def get_cwd():
     return _KERNEL_CWD
 
 
+def _pin_cwd_for_cell(path):
+    """Point the kernel at the owning chat's workspace for the coming cell.
+
+    One kernel process serves every chat, so the parent stamps each cell with
+    its chat's assigned cwd. That directory — not whatever the previous chat's
+    cell or a stale set_cwd() left in the global — is authoritative for this
+    cell, so it becomes the _KERNEL_CWD that the per-cell os.chdir() restores to.
+    A path that no longer exists is ignored here and surfaces when the cell that
+    needs it fails, exactly as set_cwd() leaves a bad target for the cell."""
+    global _KERNEL_CWD
+    target = os.path.abspath(os.path.expanduser(str(path)))
+    if os.path.isdir(target):
+        _KERNEL_CWD = target
+
+
 # engine setup
 prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
                    read_file=read_file, write_file=write_file, append_file=append_file,
@@ -1566,16 +1585,24 @@ def _format_exc(e):
 
 
 def _run_cell(code):
+    # Capture into THIS thread's buffers (routed by the _CaptureStream proxy)
+    # rather than swapping the process-global sys.stdout: a backgrounded cell and
+    # a new foreground cell run on different threads at the same time, and a
+    # global redirect would splice one cell's prints into the other's output.
     out_buf = io.StringIO()
     err_buf = io.StringIO()
+    _capture.out = out_buf
+    _capture.err = err_buf
     error = None
     try:
-        with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
-            # compile first so a SyntaxError is reported as such rather than
-            # blamed on whatever ran before it
-            exec(_compile_cell(code), _ns)
+        # compile first so a SyntaxError is reported as such rather than
+        # blamed on whatever ran before it
+        exec(_compile_cell(code), _ns)
     except BaseException as e:
         error = _format_exc(e)
+    finally:
+        _capture.out = None
+        _capture.err = None
     out = out_buf.getvalue()
     err = err_buf.getvalue()
     if err:
@@ -1817,6 +1844,147 @@ prompt_dict["peek"] = peek
 _ns["peek"] = peek
 
 
+# ─────────────────────────────────────────────────────────────
+# Two-tier cell execution (primary -> background, secondary -> stop)
+#
+# A cell runs in its own daemon thread so the read/dispatch loop stays free. If
+# it finishes within the PRIMARY budget its result is returned as usual; if it
+# overruns it is NOT killed and the namespace is NOT lost. Instead the cell is
+# moved to the BACKGROUND, the loop returns a notice so the model can keep
+# working, and a watchdog force-stops it only once the much-larger SECONDARY
+# budget passes. Background cells run concurrently with new foreground cells, so
+# a long-running job never blocks the next command.
+#
+# Output is captured PER THREAD (thread-local buffers routed by the proxy below)
+# so a backgrounded cell and a foreground cell never cross streams. When a
+# background cell finishes or is stopped, its output is surfaced on the next
+# frame the loop sends.
+# ─────────────────────────────────────────────────────────────
+import ctypes as _ctypes
+
+_REAL_STDOUT = sys.stdout
+_REAL_STDERR = sys.stderr
+_capture = _threading.local()
+
+
+class _CaptureStream:
+    """Route writes to the running cell's thread-local buffer, or to the real
+    stream on any thread not executing a captured cell — so the loop's own
+    protocol writes (send_frame) pass straight through to the real stdout."""
+
+    def __init__(self, real, attr):
+        object.__setattr__(self, "_real", real)
+        object.__setattr__(self, "_attr", attr)
+
+    def write(self, s):
+        buf = getattr(_capture, self._attr, None)
+        return buf.write(s) if buf is not None else self._real.write(s)
+
+    def flush(self):
+        buf = getattr(_capture, self._attr, None)
+        if buf is None:
+            self._real.flush()
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_real"), name)
+
+
+sys.stdout = _CaptureStream(_REAL_STDOUT, "out")
+sys.stderr = _CaptureStream(_REAL_STDERR, "err")
+
+_DEFAULT_PRIMARY_MS = 180_000        # background a cell still running after this
+_SECONDARY_FACTOR = 5                # secondary budget = this x primary when unset
+_MIN_SECONDARY_MS = 600_000          # ...but never less generous than 10 minutes
+
+_bg_lock = _threading.Lock()
+_bg_runners = {}                     # bg_id -> _CellRunner still running in background
+_bg_results = []                     # finished/stopped background output awaiting a frame
+_bg_counter = [0]
+
+
+class _CellRunner(_threading.Thread):
+    """One cell, executed off the dispatch loop so it can outlive its primary
+    budget without blocking the next command."""
+
+    def __init__(self, code):
+        super().__init__(daemon=True)
+        self._code = code
+        self.out = ""
+        self.err = None
+        self.done = _threading.Event()
+        self.bg_id = None
+        self.deadline = None
+        self.stopped = False
+
+    def run(self):
+        try:
+            self.out, self.err = _run_cell(self._code)
+        except BaseException as e:          # never let a runner thread die silently
+            self.err = _tag_error(_format_exc(e))
+        finally:
+            self.done.set()
+
+
+def _stop_runner(runner):
+    """Best-effort hard stop: raise KeyboardInterrupt inside the runner thread.
+    It fires at a Python bytecode boundary; a thread deep in an uninterruptible
+    C call may not stop, but it never blocks the loop or a foreground cell."""
+    tid = runner.ident
+    if tid is None:
+        return
+    _ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        _ctypes.c_long(tid), _ctypes.py_object(KeyboardInterrupt))
+
+
+def _bg_body(runner):
+    body = runner.out or ""
+    if runner.err:
+        if body and not body.endswith("\n"):
+            body += "\n"
+        body += runner.err
+    return body.rstrip("\n")
+
+
+def _flush_bg():
+    """Collect background cells that finished since the last frame, drop them
+    from the registry, and return their output to prepend to the next result."""
+    with _bg_lock:
+        for bid, runner in [(b, r) for b, r in _bg_runners.items() if r.done.is_set()]:
+            status = "stopped after its background timeout" if runner.stopped else "finished"
+            _bg_results.append("[bg#%d %s]\n%s" % (bid, status, _bg_body(runner)))
+            del _bg_runners[bid]
+        if not _bg_results:
+            return ""
+        chunk = "\n".join(_bg_results) + "\n"
+        _bg_results.clear()
+        return chunk
+
+
+def _bg_watchdog():
+    """Force-stop any background cell that passes its (generous) secondary
+    deadline. Runs forever on its own daemon thread."""
+    while True:
+        time.sleep(0.5)
+        now = time.monotonic()
+        with _bg_lock:
+            due = [r for r in _bg_runners.values()
+                   if not r.done.is_set() and r.deadline is not None and now >= r.deadline]
+        for runner in due:
+            runner.stopped = True
+            _stop_runner(runner)
+
+
+_threading.Thread(target=_bg_watchdog, daemon=True).start()
+
+
+def _secondary_ms(primary_ms, requested):
+    """The generous stop deadline for a backgrounded cell: the caller's value
+    when given (never below the primary), otherwise a multiple of the primary."""
+    if requested is not None:
+        return max(int(requested), int(primary_ms))
+    return max(int(primary_ms) * _SECONDARY_FACTOR, _MIN_SECONDARY_MS)
+
+
 _CELL_PREFIX = "\x00KILN_CELL\x00"
 _CTRL_PREFIX = "\x00KILN_CTRL\x00"
 _LAST_CELL_TIMEOUT_MS = [None]
@@ -1836,8 +2004,10 @@ def _handle_ctrl(req):
     return {"error": "unknown kernel control command: %r" % cmd}
 
 def send_frame(obj):
-    sys.stdout.write(base64.b64encode(json.dumps(obj, ensure_ascii=False).encode('utf-8')).decode('ascii') + '\n')
-    sys.stdout.flush()
+    # Straight to the real stdout, never the capture proxy: a frame is the
+    # protocol, not cell output, and must not land in some cell's buffer.
+    _REAL_STDOUT.write(base64.b64encode(json.dumps(obj, ensure_ascii=False).encode('utf-8')).decode('ascii') + '\n')
+    _REAL_STDOUT.flush()
 
 send_frame({"ready": True, "engine": engine})
 
@@ -1856,6 +2026,8 @@ while True:
         send_frame({"out":"", "error":f"Protocol error: {e}"})
         continue
     cell_timeout_ms = None
+    cell_secondary_ms = None
+    cell_cwd = None
     if code.startswith(_CELL_PREFIX):
         try:
             envelope = json.loads(code[len(_CELL_PREFIX):])
@@ -1863,6 +2035,12 @@ while True:
             raw_timeout = envelope.get("timeoutMs")
             if raw_timeout is not None:
                 cell_timeout_ms = int(raw_timeout)
+            raw_secondary = envelope.get("backgroundTimeoutMs")
+            if raw_secondary is not None:
+                cell_secondary_ms = int(raw_secondary)
+            raw_cwd = envelope.get("cwd")
+            if raw_cwd is not None and str(raw_cwd).strip() != "":
+                cell_cwd = str(raw_cwd)
         except Exception as e:
             send_frame({"out": "", "error": f"Cell envelope error: {e}"})
             continue
@@ -1876,9 +2054,39 @@ while True:
         send_frame({"out": _SNAPSHOT_MARKER + json.dumps(res, ensure_ascii=False), "error": None})
         continue
     _LAST_CELL_TIMEOUT_MS[0] = cell_timeout_ms
+    # Re-pin to the owning chat's cwd only when the stamp changes: a run of cells
+    # in one chat keeps any set_cwd() the model made, while a different chat's
+    # stamp resets to its own workspace instead of inheriting the last chat's.
+    if cell_cwd is not None and cell_cwd != _LAST_STAMPED_CWD:
+        _pin_cwd_for_cell(cell_cwd)
+        _LAST_STAMPED_CWD = cell_cwd
     try:
+        # chdir is process-global. A cell that backgrounds keeps the cwd it
+        # started in only until the next foreground cell re-chdirs; concurrent
+        # cells in different directories is a known limitation of one shared
+        # interpreter, and in practice background + foreground share a chat's cwd.
         os.chdir(_KERNEL_CWD)
     except Exception:
         pass
-    out, err = _run_cell(code)
-    send_frame({"out": out, "error": err})
+    primary_ms = cell_timeout_ms if cell_timeout_ms is not None else _DEFAULT_PRIMARY_MS
+    secondary_ms = _secondary_ms(primary_ms, cell_secondary_ms)
+    runner = _CellRunner(code)
+    runner.start()
+    if runner.done.wait(primary_ms / 1000.0):
+        # Finished within the primary budget: normal result, plus any background
+        # cell that completed since the last frame.
+        send_frame({"out": _flush_bg() + runner.out, "error": runner.err})
+    else:
+        # Overran the primary budget: DO NOT kill. Detach it to the background so
+        # the loop is free for the next command; the watchdog stops it at the
+        # secondary deadline. Its output arrives on a later frame via _flush_bg().
+        with _bg_lock:
+            _bg_counter[0] += 1
+            runner.bg_id = _bg_counter[0]
+            runner.deadline = time.monotonic() + secondary_ms / 1000.0
+            _bg_runners[runner.bg_id] = runner
+        notice = ("[cell still running after %ds - moved to the background as bg#%d. It keeps "
+                  "running while you work; its output arrives with a later result, and it is "
+                  "force-stopped if it passes %ds.]"
+                  % (round(primary_ms / 1000.0), runner.bg_id, round(secondary_ms / 1000.0)))
+        send_frame({"out": _flush_bg() + notice, "error": None, "backgrounded": True})

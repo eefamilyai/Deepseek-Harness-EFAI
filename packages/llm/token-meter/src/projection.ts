@@ -67,8 +67,20 @@ export interface ContextBreakdownProjection {
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Provider-reported usage accumulated across the complete durable log. */
+    /**
+     * Provider-reported usage since the last successful compaction. Zeroed
+     * when a `/compact` (manual or the context-overflow auto-retry) succeeds,
+     * so it reads as the billing accrued against the CURRENT compacted
+     * conversation — see {@link tokenUsageLifetime} for the session total.
+     */
     tokenUsage: TokenUsageProjection
+    /**
+     * Provider-reported usage accumulated across the WHOLE session, unaffected
+     * by compaction. Same four disjoint buckets as {@link tokenUsage}; the two
+     * differ only in that this one never resets, so it is the true lifetime
+     * total across every compaction.
+     */
+    tokenUsageLifetime: TokenUsageProjection
     /** Newest request pressure paired with the newest known route capacity. */
     contextPressure: ContextPressureProjection
     /** Heuristic system/tools/message composition of the next request. */

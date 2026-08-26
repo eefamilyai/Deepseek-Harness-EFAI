@@ -67,7 +67,7 @@ export interface KilnStreamEvent {
    * mistaken for a rate-limited request.
    */
   readonly error?: string
-  readonly usage?: { readonly input?: number; readonly output?: number; readonly reasoning?: number }
+  readonly usage?: { readonly input?: number; readonly output?: number; readonly reasoning?: number; readonly cache_read?: number }
 }
 
 /** One conversation turn as the registry expects it. */

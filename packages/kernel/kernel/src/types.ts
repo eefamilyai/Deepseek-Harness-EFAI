@@ -16,11 +16,27 @@ export interface KernelExecuteRequest {
   /** The Python source of the cell. Executed in the persistent namespace. */
   readonly code: string
   /**
-   * Wall-clock budget for this cell. On expiry the backend restarts the kernel
-   * and reports `timeout`: a cell that overran cannot be left running, because
-   * the namespace it is still mutating is the same one the next cell reads.
+   * PRIMARY budget for this cell. On expiry the cell is NOT killed: the kernel
+   * moves it to the background (the namespace survives) and returns a notice, so
+   * the model can keep working while the cell runs on. See
+   * {@link backgroundTimeoutMs} for the deadline that finally stops it.
    */
   readonly timeoutMs?: number
+  /**
+   * SECONDARY, much more generous budget: how long a backgrounded cell may keep
+   * running before the kernel force-stops it. Backgrounded cells run
+   * concurrently with new foreground cells, so a long job never blocks the next
+   * command. Omitted lets the kernel pick a multiple of {@link timeoutMs}.
+   */
+  readonly backgroundTimeoutMs?: number
+  /**
+   * Working directory for THIS cell — the owning chat's assigned workspace. One
+   * kernel process serves every chat (the namespace is per agent, but the
+   * process and its OS cwd are shared), so the directory travels with each cell
+   * rather than being fixed once at spawn. Omitted leaves the kernel wherever it
+   * currently is: the launch cwd, or where a prior cell's `set_cwd()` left it.
+   */
+  readonly cwd?: string
 }
 
 /**

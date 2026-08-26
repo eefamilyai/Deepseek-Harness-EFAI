@@ -30,15 +30,37 @@ const LOST_NOTICE = ' Variables in the namespace are gone; anything you saved wi
  */
 const FALLBACK_TIMEOUT_MS = 180_000
 
-/** The cell budget this request runs under. */
+/** The PRIMARY cell budget this request runs under (background on expiry). */
 function budgetOf(request: KernelExecuteRequest): number {
   return request.timeoutMs ?? FALLBACK_TIMEOUT_MS
+}
+
+/**
+ * The SECONDARY budget: how long a backgrounded cell may run before the kernel
+ * force-stops it. Defaults to a generous multiple of the primary, floored at 10
+ * minutes — the same rule the kernel applies, so the two sides agree on when a
+ * backgrounded cell should already be gone.
+ */
+function secondaryOf(request: KernelExecuteRequest): number {
+  return request.backgroundTimeoutMs ?? Math.max(budgetOf(request) * 5, 600_000)
+}
+
+/**
+ * The provider's LAST-RESORT kill deadline. The kernel owns both tiers and
+ * answers within the primary budget (a result, or a "backgrounded" notice), so
+ * this fires only when the kernel is genuinely hung or dead — well past the
+ * secondary budget it should have honoured itself. The margin keeps a slow but
+ * healthy kernel from being killed out from under a legitimate background cell.
+ */
+const SAFETY_MARGIN_MS = 60_000
+function safetyCeilingOf(request: KernelExecuteRequest): number {
+  return secondaryOf(request) + SAFETY_MARGIN_MS
 }
 
 /** How a restart-causing outcome is reported to the model. */
 const RESTART_NOTICE: Readonly<Record<Exclude<KernelOutcome, 'ok'>, (request: KernelExecuteRequest) => string>> = {
   cancelled: () => 'STOPPED: Interrupted by user. Kernel restarted; state was lost.',
-  timeout: request => `TIMEOUT: Cell exceeded ${Math.round(budgetOf(request) / 1000)}s. Kernel restarted; state was lost.`,
+  timeout: request => `TIMEOUT: The kernel went unresponsive for ${Math.round(safetyCeilingOf(request) / 1000)}s (past even the background budget). Kernel restarted; state was lost.`,
   crashed: () => 'ERROR: Kernel crashed mid-run; restarted. State lost.',
 }
 
@@ -91,7 +113,7 @@ export class KilnKernelProvider implements KernelProvider {
   async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult> {
     return this.serialize(async () => {
       const child = this.ensureChild()
-      child.send(request.code, request.timeoutMs)
+      child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs)
       const outcome = await this.awaitCell(child, request, signal)
       if (outcome.kind === 'ok') {
         return { output: outcome.output, outcome: 'ok' as const, restarted: false }
@@ -117,7 +139,11 @@ export class KilnKernelProvider implements KernelProvider {
     const budget = new AbortController()
     const onAbort = (): void => { budget.abort(new KernelAbortError('cancelled')) }
     signal?.addEventListener('abort', onAbort, { once: true })
-    const timer = setTimeout(() => { budget.abort(new KernelAbortError('timeout')) }, budgetOf(request))
+    // Not the primary budget: the kernel backgrounds at the primary and answers
+    // right away, so killing here at the primary would race that notice and
+    // destroy a namespace the cell is still legitimately using. Only a kernel
+    // that stays silent past the whole safety ceiling is treated as hung.
+    const timer = setTimeout(() => { budget.abort(new KernelAbortError('timeout')) }, safetyCeilingOf(request))
     timer.unref()
     try {
       const frame = await child.nextFrame(budget.signal)

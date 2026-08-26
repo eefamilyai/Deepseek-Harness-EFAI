@@ -1,9 +1,10 @@
 """token_usage.py — token accounting for Kiln-Kernel.
 
 The DeepSeek browser backend does not report token counts, so usage is
-estimated from text (CJK chars count ~1 token each, everything else ~4 chars
-per token) and, when a provider DOES report real usage (meta events with a
-`usage` field), the real numbers win. Per-model context limits let the UI show
+estimated from text using DeepSeek's engineering heuristics (CJK ~0.6 tokens
+per char, other text ~3 chars per token) and, when a provider DOES report real
+usage (meta events with a `usage` field), the real numbers win. Per-model
+context limits let the UI show
 "used / max" for the active chat.
 """
 
@@ -126,7 +127,7 @@ CATEGORIES = ("input", "output", "reasoning", "cache_read", "cache_write", "uplo
 
 
 def estimate_tokens(text):
-    """Rough token estimate: CJK chars ~1 token, other text ~4 chars/token."""
+    """DeepSeek token estimate: CJK ~0.6 tokens/char, other ~3 chars/token."""
     if not text:
         return 0
     n = 0
@@ -137,9 +138,10 @@ def estimate_tokens(text):
             cjk += 1
         else:
             n += 1
-    if n:
-        return cjk + max(1, n // 4)
-    return cjk
+    est = cjk * 0.6 + (n / 3.0 if n else 0.0)
+    if est <= 0:
+        return 0
+    return max(1, round(est))
 
 
 def new_usage():

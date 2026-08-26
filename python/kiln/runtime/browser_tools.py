@@ -8,13 +8,49 @@
 # Every page action persists a small state file (KILN_BROWSER_DIR/state.json)
 # plus screenshots, which the agent loop surfaces as a browser card in the UI.
 
+import concurrent.futures as _futures
 import json
 import locale
 import os
+import threading as _threading
 import time
 from html.parser import HTMLParser
 
 _BROWSER_DIR = os.environ.get("KILN_BROWSER_DIR", "")
+
+# ── one dedicated thread for ALL Playwright work ─────────────────────────────
+# Playwright's sync API binds its dispatcher to the thread that started it, and
+# refuses calls from any other thread ("cannot switch to a different thread").
+# The kernel now runs each cell on its own short-lived worker thread (two-tier
+# timeout / backgrounding), so a browser created in one cell's thread would be
+# unusable from the next. Marshalling every browser call onto a single
+# long-lived worker keeps the whole session on one consistent thread, no matter
+# which cell thread called in. Calls serialize (Playwright sync isn't
+# concurrent anyway); a call already on the worker thread runs inline so a
+# nested browser_use -> search -> browser_search can't deadlock the sole worker.
+_BROWSER_EXECUTOR = None
+_BROWSER_THREAD_ID = None
+
+
+def _browser_executor():
+    global _BROWSER_EXECUTOR
+    if _BROWSER_EXECUTOR is None:
+        _BROWSER_EXECUTOR = _futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="kiln-browser")
+    return _BROWSER_EXECUTOR
+
+
+def _on_browser_thread(fn, *args, **kwargs):
+    """Run fn on the single browser worker thread and wait for its result."""
+    if _BROWSER_THREAD_ID is not None and _threading.get_ident() == _BROWSER_THREAD_ID:
+        return fn(*args, **kwargs)  # already there — inline to avoid self-deadlock
+
+    def _wrapped():
+        global _BROWSER_THREAD_ID
+        _BROWSER_THREAD_ID = _threading.get_ident()
+        return fn(*args, **kwargs)
+
+    return _browser_executor().submit(_wrapped).result()
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
 
@@ -78,12 +114,22 @@ class KilnBrowser:
             return False, f"browser launch failed: {e}"
 
     def _state(self, **extra):
+        # vw/vh are the CSS viewport the screenshot covers, so the dock pane can
+        # scale a click on the image back to browser coordinates.
         st = {"ts": time.time(), "url": "", "title": "",
-              "screenshot": "", "text_preview": "", "links": []}
+              "screenshot": "", "text_preview": "", "links": [],
+              "vw": 1440, "vh": 900}
         try:
             if self.page is not None and not self.page.is_closed():
                 st["url"] = self.page.url
                 st["title"] = self.page.title()
+                try:
+                    vp = self.page.viewport_size
+                    if vp:
+                        st["vw"] = vp["width"]
+                        st["vh"] = vp["height"]
+                except Exception:
+                    pass
                 try:
                     st["text_preview"] = self.page.inner_text("body")[:4000]
                 except Exception:
@@ -116,12 +162,23 @@ class KilnBrowser:
         name = (os.path.basename(path) if path else "") or f"shot_{int(time.time() * 1000)}.png"
         if not name.endswith(".png"):
             name += ".png"
-        try:
-            self.page.screenshot(path=os.path.join(_BROWSER_DIR, name),
-                                 full_page=True)
-            return name
-        except Exception:
-            return ""
+        # Viewport-only (not full_page): the interactive dock pane maps a click
+        # on this image straight to viewport coordinates, which only holds when
+        # the image IS the viewport. Scrolling moves the viewport. A shot taken
+        # the instant a navigation settles can fail ("page is navigating"), so
+        # retry once after a brief settle before giving up.
+        for attempt in range(2):
+            try:
+                self.page.screenshot(path=os.path.join(_BROWSER_DIR, name),
+                                     full_page=False)
+                return name
+            except Exception:
+                if attempt == 0:
+                    try:
+                        self.page.wait_for_timeout(400)
+                    except Exception:
+                        pass
+        return ""
 
     # ── perception ─────────────────────────────────────────────
     def navigate(self, url):
@@ -133,7 +190,8 @@ class KilnBrowser:
             shot = self._shot()
             st = self._state(screenshot=shot)
             return (f"URL: {self.page.url}\nTITLE: {st['title']}\n\n"
-                    + st["text_preview"])
+                    + st["text_preview"]
+                    + "\n\n[call read_page() for the actionable [ref_N] tree, or get_text() for full text]")
         except Exception as e:
             self._state()
             return f"navigate error: {e}"
@@ -233,6 +291,15 @@ class KilnBrowser:
                   || role === 'img' || role === 'iframe' || role === 'video' || role === 'audio';
               }
 
+              // Actionable elements get a stable [ref_N] handle stamped onto the
+              // DOM (data-kiln-ref="N"), so the model reads the tree and acts by
+              // ref — click(ref="ref_5") — instead of inventing a CSS selector or
+              // guessing pixel coordinates. Clear any prior stamps first so refs
+              // always match THIS snapshot.
+              const ACTIONABLE = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA','SUMMARY','OPTION','LABEL']);
+              const ACTION_ROLE = /^(button|link|tab|menuitem|menuitemcheckbox|menuitemradio|checkbox|radio|textbox|combobox|option|switch|slider|searchbox|spinbutton)$/;
+              document.querySelectorAll('[data-kiln-ref]').forEach(e => e.removeAttribute('data-kiln-ref'));
+              let refN = 0;
               const lines = [];
               function walk(el, depth) {
                 if (el.nodeType !== 1 || IGNORED.has(el.tagName) || !vis(el)) return;
@@ -241,7 +308,15 @@ class KilnBrowser:
                 const name = accName(el);
                 const val = value(el);
                 if (meaningful && r !== 'generic') {
-                  let line = '  '.repeat(Math.min(depth, 12)) + '[' + r + ']';
+                  const roleAttr = (el.getAttribute && el.getAttribute('role')) || '';
+                  const actionable = ACTIONABLE.has(el.tagName) || ACTION_ROLE.test(r) || ACTION_ROLE.test(roleAttr);
+                  let prefix = '';
+                  if (actionable) {
+                    refN += 1;
+                    el.setAttribute('data-kiln-ref', String(refN));
+                    prefix = '[ref_' + refN + '] ';
+                  }
+                  let line = '  '.repeat(Math.min(depth, 12)) + prefix + '[' + r + ']';
                   if (name) line += ' ' + name.slice(0, 100);
                   if (val) line += ' = ' + String(val).slice(0, 60);
                   lines.push(line);
@@ -285,7 +360,7 @@ class KilnBrowser:
         if not ok:
             return f"coords needs Playwright ({err})"
         try:
-            box = self.page.locator(selector).first.bounding_box()
+            box = self.page.locator(self._as_selector(selector)).first.bounding_box()
             if not box:
                 return f"coords: no element matches {selector!r}"
             cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
@@ -295,10 +370,115 @@ class KilnBrowser:
         except Exception as e:
             return f"coords error: {e}"
 
+    def find(self, query, limit=30):
+        """Search the current page's actionable tree for elements whose role,
+        name, or value matches `query` (case-insensitive), returning the [ref_N]
+        lines so the model can act on the hit directly without reading the whole
+        page."""
+        ok, err = self._ensure()
+        if not ok:
+            return f"find needs Playwright ({err})"
+        tree = self.snapshot()
+        q = (query or "").strip().lower()
+        if not q:
+            return tree
+        hits = [ln for ln in tree.splitlines() if "[ref_" in ln and q in ln.lower()]
+        if not hits:
+            return f"find: nothing matches {query!r} among the page's actionable elements"
+        return "\n".join(hits[:int(limit) or 30])
+
+    def get_text(self, selector="body", max_chars=20000):
+        """Readable text of the page (or one element) — clean body/article text
+        without the tree structure, for reading rather than acting."""
+        ok, err = self._ensure()
+        if not ok:
+            return _http_fetch_text(self.page.url) if self.page else f"get_text needs Playwright ({err})"
+        try:
+            txt = self.page.locator(self._as_selector(selector)).first.inner_text(timeout=10000)
+        except Exception:
+            try:
+                txt = self.page.inner_text("body")
+            except Exception as e:
+                return f"get_text error: {e}"
+        self._state()
+        return (txt or "").strip()[:int(max_chars) or 20000] or "(no text)"
+
+    def back(self):
+        ok, err = self._ensure()
+        if not ok:
+            return f"back needs Playwright ({err})"
+        try:
+            self.page.go_back(timeout=30000, wait_until="domcontentloaded")
+            st = self._state(screenshot=self._shot())
+            return f"URL: {self.page.url}\nTITLE: {st['title']}"
+        except Exception as e:
+            return f"back error: {e}"
+
+    def forward(self):
+        ok, err = self._ensure()
+        if not ok:
+            return f"forward needs Playwright ({err})"
+        try:
+            self.page.go_forward(timeout=30000, wait_until="domcontentloaded")
+            st = self._state(screenshot=self._shot())
+            return f"URL: {self.page.url}\nTITLE: {st['title']}"
+        except Exception as e:
+            return f"forward error: {e}"
+
+    def wait(self, selector=None, text=None, ms=None):
+        """Wait for an element to appear, for page text to render, or a fixed
+        delay — for content that arrives after load (SPAs, async results)."""
+        ok, err = self._ensure()
+        if not ok:
+            return f"wait needs Playwright ({err})"
+        try:
+            if selector:
+                self.page.locator(self._as_selector(selector)).first.wait_for(timeout=int(ms or 15000))
+                return f"element {selector!r} appeared"
+            if text:
+                self.page.get_by_text(str(text)).first.wait_for(timeout=int(ms or 15000))
+                return f"text {text!r} appeared"
+            self.page.wait_for_timeout(int(ms or 1000))
+            return f"waited {int(ms or 1000)}ms"
+        except Exception as e:
+            return f"wait error: {e}"
+
+    def select_option(self, selector, value):
+        ok, err = self._ensure()
+        if not ok:
+            return f"select_option needs Playwright ({err})"
+        try:
+            loc = self.page.locator(self._as_selector(selector)).first
+            try:
+                loc.select_option(str(value), timeout=10000)          # by value
+            except Exception:
+                loc.select_option(label=str(value), timeout=10000)    # ...or label
+            self._state()
+            return f"selected {value!r} in {selector!r}"
+        except Exception as e:
+            return f"select_option error: {e}"
+
     # ── input (virtual mouse / keyboard) ──────────────────────
     @staticmethod
+    def _as_selector(target):
+        """Map a snapshot ref handle to its stamped selector; pass a CSS selector
+        or 'x,y' coordinates through unchanged. Accepts 'ref_5', 'ref-5', 'ref5',
+        and a bare '5' — but never an 'x,y' pair, which stays coordinates. This is
+        what lets the model act by the [ref_N] it read in the page tree instead of
+        inventing a selector."""
+        if isinstance(target, str):
+            t = target.strip()
+            if not re_full(r"^\s*\d+[\s,]+-?\d+\s*$", t):
+                m = re_match(r"^(?:ref[_-]?)(\d+)$", t) or re_match(r"^(\d+)$", t)
+                if m:
+                    return '[data-kiln-ref="%s"]' % m.group(1)
+        return target
+
+    @staticmethod
     def _target(page, target):
-        """target is a CSS selector or 'x,y' coordinates -> (x, y, sel)."""
+        """target is a ref handle (ref_N / bare N from the last snapshot), a CSS
+        selector, or 'x,y' coordinates -> (x, y, sel)."""
+        target = KilnBrowser._as_selector(target)
         if isinstance(target, str) and re_full(r"^\s*\d+[\s,]+-?\d+\s*$", target):
             x, y = (int(v) for v in re_split(r"[\s,]+", target.strip()))
             return x, y, None
@@ -379,14 +559,21 @@ class KilnBrowser:
         except Exception as e:
             return f"drag error: {e}"
 
-    def type(self, selector, text):
+    def type(self, selector, text, submit=False):
         ok, err = self._ensure()
         if not ok:
             return f"type needs Playwright ({err})"
         try:
-            self.page.locator(selector).first.fill(str(text), timeout=10000)
+            sel = self._as_selector(selector)
+            loc = self.page.locator(sel).first
+            loc.fill(str(text), timeout=10000)
+            # `submit=True` presses Enter in the field — the common "type a query
+            # then search" flow in one call instead of a type + key round-trip.
+            if submit:
+                loc.press("Enter")
+                self.page.wait_for_load_state("domcontentloaded", timeout=15000)
             self._state()
-            return f"typed {len(text)} chars into {selector!r}"
+            return f"typed {len(text)} chars into {selector!r}" + (" and pressed Enter" if submit else "")
         except Exception as e:
             return f"type error: {e}"
 
@@ -396,17 +583,33 @@ class KilnBrowser:
             return f"key needs Playwright ({err})"
         try:
             self.page.keyboard.press(str(combo))
-            self._state()
+            shot = self._shot()
+            self._state(screenshot=shot)
             return f"pressed {combo!r}"
         except Exception as e:
             return f"key error: {e}"
+
+    def type_text(self, text):
+        """Type text into whatever is focused in the page (page.keyboard.type),
+        for interactive typing where there is no ref — the dock pane sends the
+        keys the user presses after clicking into a field."""
+        ok, err = self._ensure()
+        if not ok:
+            return f"type_text needs Playwright ({err})"
+        try:
+            self.page.keyboard.type(str(text))
+            shot = self._shot()
+            self._state(screenshot=shot)
+            return f"typed {len(str(text))} chars"
+        except Exception as e:
+            return f"type_text error: {e}"
 
     def clear(self, selector):
         ok, err = self._ensure()
         if not ok:
             return f"clear needs Playwright ({err})"
         try:
-            self.page.locator(selector).first.fill("", timeout=10000)
+            self.page.locator(self._as_selector(selector)).first.fill("", timeout=10000)
             self._state()
             return f"cleared {selector!r}"
         except Exception as e:
@@ -421,7 +624,8 @@ class KilnBrowser:
                 dy = {"up": -amount, "down": amount, "left": -amount,
                       "right": amount}.get((direction or "down"), amount)
             self.page.mouse.wheel(int(dx or 0), int(dy or 0))
-            self._state()
+            shot = self._shot()
+            self._state(screenshot=shot)
             return f"scrolled dx={dx} dy={dy}"
         except Exception as e:
             return f"scroll error: {e}"
@@ -725,6 +929,10 @@ BROWSER = KilnBrowser()
 def browser_search(query, limit=8):
     """Browser-backed web search. Returns [{title,url,snippet}], or None when the
     headless browser is unavailable so the caller can fall back to a scrape."""
+    return _on_browser_thread(_browser_search_impl, query, limit)
+
+
+def _browser_search_impl(query, limit=8):
     try:
         return BROWSER.search(query, limit=limit)
     except Exception:
@@ -732,14 +940,29 @@ def browser_search(query, limit=8):
 
 
 def browser_use(action="navigate", **kw):
+    """One entry point for every browser action. Never raises. Runs on the
+    dedicated browser worker thread so Playwright always sees one thread."""
+    return _on_browser_thread(_browser_use_impl, action, **kw)
+
+
+def _browser_use_impl(action="navigate", **kw):
     """One entry point for every browser action. Never raises.
 
+    Non-visual, ref-driven: call read_page() to get the page as a tree of
+    [ref_N] handles, then act by ref — click(ref='ref_5'), type(ref='ref_2',
+    text='...', submit=True), select(ref='ref_9', value='...'). No screenshots
+    or pixel coordinates are needed (though click also accepts a CSS selector or
+    'x,y'). Every action reports the outcome as text.
+
     Actions:
-      perception: navigate(url), screenshot(path?), snapshot(), dom(selector?),
-                  coords(selector)
-      input:      move(x,y), click(target), dblclick(target), hover(target),
-                  drag(src,dst), type(selector,text), key(combo), clear(selector),
-                  scroll(dx?,dy?,amount?,direction?), zoom(factor)
+      read:       navigate(url), read_page()/snapshot() -> [ref_N] tree,
+                  find(query) -> matching [ref_N] lines, get_text(selector?),
+                  dom(selector?), coords(selector), screenshot(path?),
+                  back(), forward(), wait(selector?|text?|ms?)
+      act:        click(target|ref), dblclick(...), hover(...), drag(src,dst),
+                  type(selector|ref, text, submit?), type_text(text), key(combo), clear(...),
+                  select(selector|ref, value), scroll(dx?,dy?,amount?,direction?),
+                  move(x,y), zoom(factor)
       session:    save_state(path?), load_state(path), new_tab(url?),
                   switch_tab(index), close_tab(), tabs()
       network:    network(limit?), console(limit?), clear_network()
@@ -755,25 +978,43 @@ def browser_use(action="navigate", **kw):
             return b.navigate(kw.get("url") or kw.get("to") or "")
         if a == "screenshot":
             return b.screenshot(kw.get("path"))
-        if a == "snapshot":
+        if a in ("snapshot", "read_page", "read"):
             return b.snapshot()
+        if a == "find":
+            return b.find(kw.get("query") or kw.get("text") or "", int(kw.get("limit", 30) or 30))
+        if a in ("get_text", "text", "read_text"):
+            return b.get_text(kw.get("selector") or kw.get("ref") or "body",
+                              int(kw.get("max_chars", 20000) or 20000))
         if a == "dom":
             return b.dom(kw.get("selector") or "body")
         if a == "coords":
-            return b.coords(kw.get("selector") or kw.get("sel") or "")
+            return b.coords(kw.get("selector") or kw.get("sel") or kw.get("ref") or "")
+        if a in ("back", "go_back"):
+            return b.back()
+        if a in ("forward", "go_forward"):
+            return b.forward()
+        if a == "wait":
+            return b.wait(kw.get("selector") or kw.get("ref"), kw.get("text"), kw.get("ms") or kw.get("timeout"))
+        if a in ("select", "select_option"):
+            return b.select_option(kw.get("selector") or kw.get("ref") or kw.get("sel") or "",
+                                   kw.get("value") or kw.get("option") or "")
         if a == "move":
             return b.move(kw.get("x", 0), kw.get("y", 0))
         if a == "click":
-            return b.click(kw.get("target") or kw.get("selector") or "")
+            return b.click(kw.get("target") or kw.get("selector") or kw.get("ref") or "")
         if a == "dblclick":
-            return b.dblclick(kw.get("target") or kw.get("selector") or "")
+            return b.dblclick(kw.get("target") or kw.get("selector") or kw.get("ref") or "")
         if a == "hover":
-            return b.hover(kw.get("target") or kw.get("selector") or "")
+            return b.hover(kw.get("target") or kw.get("selector") or kw.get("ref") or "")
         if a == "drag":
             return b.drag(kw.get("from") or kw.get("src") or "",
                           kw.get("to") or kw.get("dst") or "")
         if a == "type":
-            return b.type(kw.get("selector") or kw.get("sel") or "", kw.get("text") or "")
+            return b.type(kw.get("selector") or kw.get("sel") or kw.get("ref") or "",
+                          kw.get("text") or "",
+                          bool(kw.get("submit") or kw.get("enter")))
+        if a in ("type_text", "insert_text", "keys"):
+            return b.type_text(kw.get("text") or "")
         if a == "key":
             return b.key(kw.get("key") or kw.get("combo") or "")
         if a == "clear":
@@ -805,12 +1046,17 @@ def browser_use(action="navigate", **kw):
             from kernel_child import search  # local import to avoid cycles
             return search(kw.get("query") or kw.get("text") or "",
                           limit=int(kw.get("limit", 8) or 8))
-        return (f"browser_use: unknown action {action!r}. Known: navigate, screenshot, "
-                f"snapshot, dom, coords, move, click, dblclick, hover, drag, type, key, "
-                f"clear, scroll, zoom, save_state, load_state, new_tab, switch_tab, "
-                f"close_tab, tabs, network, console, clear_network, search")
+        return (f"browser_use: unknown action {action!r}. Known: navigate, read_page, "
+                f"find, get_text, snapshot, dom, coords, screenshot, back, forward, wait, "
+                f"move, click, dblclick, hover, drag, type, key, clear, select, scroll, "
+                f"zoom, save_state, load_state, new_tab, switch_tab, close_tab, tabs, "
+                f"network, console, clear_network, search")
     except Exception as e:
         return f"browser_use error: {e}"
+
+
+# Keep the full action reference discoverable on the public entry point.
+browser_use.__doc__ = _browser_use_impl.__doc__
 
 
 def _decode_bytes(data):
@@ -921,3 +1167,8 @@ def re_full(pattern, s):
 def re_split(pattern, s):
     import re
     return re.split(pattern, s)
+
+
+def re_match(pattern, s):
+    import re
+    return re.match(pattern, s)

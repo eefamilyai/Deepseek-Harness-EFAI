@@ -112,6 +112,12 @@ export class KernelRuntime extends Service {
     return provider.execute({
       code: request.code,
       timeoutMs: request.timeoutMs ?? this.defaultTimeoutMs,
+      // Secondary budget is only forwarded when the caller set one; an absent
+      // value lets the backend pick its own generous multiple of the primary.
+      ...request.backgroundTimeoutMs !== undefined ? { backgroundTimeoutMs: request.backgroundTimeoutMs } : {},
+      // The caller's cwd is the owning chat's workspace; the seam only forwards
+      // it, never defaults it — an absent cwd means "wherever the kernel is".
+      ...request.cwd !== undefined ? { cwd: request.cwd } : {},
     }, signal)
   }
 

@@ -331,6 +331,9 @@
     - id: command-feedback
       name: '@deepseek-ai/dsh-command-feedback'
 
+    - id: command-session-info
+      name: '@deepseek-ai/dsh-command-session-info'
+
     - id: goal
       name: '@deepseek-ai/dsh-goal'
 

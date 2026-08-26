@@ -131,6 +131,20 @@ export function defaultBridgeDir(): string {
 }
 
 /**
+ * The interpreter inside the uv-managed bundle under `python/kiln/runtime/.venv`,
+ * once `uv sync` has provisioned it. Preferring it keeps the DeepSeek `ds_direct`
+ * bridge on the same bundled Python (with `curl_cffi`) as the kernel, even for a
+ * direct `dsh web` that never set `$DSH_KERNEL_PYTHON`. Undefined until provisioned.
+ */
+export function bundledVenvPython(): string | undefined {
+  const runtime = join(defaultBridgeDir(), 'runtime')
+  const venv = process.platform === 'win32'
+    ? join(runtime, '.venv', 'Scripts', 'python.exe')
+    : join(runtime, '.venv', 'bin', 'python')
+  return existsSync(venv) ? venv : undefined
+}
+
+/**
  * The route name binding one Kiln provider to one of its pooled logins.
  *
  * `@` separates them because it cannot occur in a Kiln provider id, so the
@@ -362,7 +376,8 @@ export async function resolveBridgePython(configured?: string): Promise<string> 
   const explicit = configured ?? process.env.DSH_KERNEL_PYTHON
   const candidates = explicit !== undefined && explicit.length > 0
     ? [explicit]
-    : process.platform === 'win32' ? ['py', 'python', 'python3'] : ['python3', 'python']
+    : [bundledVenvPython(), ...(process.platform === 'win32' ? ['py', 'python', 'python3'] : ['python3', 'python'])]
+      .filter((candidate): candidate is string => candidate !== undefined)
   for (const candidate of candidates) {
     try {
       const stdout = execFileSync(candidate, ['-c', 'print("ok")'], {

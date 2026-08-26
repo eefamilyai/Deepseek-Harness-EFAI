@@ -1219,7 +1219,7 @@ describe('default one-shot summarizer', () => {
     expect(instruction?.type === 'text' ? instruction.text : '').toContain('## Primary Request and Intent')
   })
 
-  it('replays the conversation prefix and appends the instruction as the final message', async () => {
+  it('replays the conversation prefix, overrides the system prompt, withholds tools, and appends the instruction as the final message', async () => {
     const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
     const tools = [{ name: 'do_thing', description: 'd', parameters: { type: 'object' } }]
     const prefix: Message = createUserMessage({
@@ -1244,8 +1244,15 @@ describe('default one-shot summarizer', () => {
       messages: [prefix],
     }, agent(conversation(1), MODEL))
 
-    expect(adapter.lastOptions?.system).toBe('REPLAYED SYSTEM')
-    expect(adapter.lastOptions?.tools).toEqual(tools)
+    // The conversation's own agent system prompt is replaced with a dedicated
+    // summarizer system prompt: continuing the replayed agent role is what made
+    // the model emit a tool call instead of summarizing.
+    expect(adapter.lastOptions?.system).not.toBe('REPLAYED SYSTEM')
+    expect(adapter.lastOptions?.system ?? '').toContain('summarization engine')
+    // Tools are deliberately withheld from the summarization call so the model
+    // cannot answer the compaction request with a tool call instead of prose
+    // (which yields zero text and "produced no text summary content").
+    expect(adapter.lastOptions?.tools).toBeUndefined()
     const messages = adapter.lastOptions?.messages ?? []
     expect(messages[0]).toEqual(prefix)
     const last = messages.at(-1)?.content[0]
@@ -1253,6 +1260,33 @@ describe('default one-shot summarizer', () => {
     expect(lastText).toContain('Write concise English engineering prose.')
     expect(lastText).toContain('numeric values, function signatures, and syntax fragments.')
     expect(lastText).toContain('## Primary Request and Intent')
+  })
+
+  it('strips leaked tool-call markup a tools-withheld summary passed through as text', async () => {
+    // With tools withheld, the DSML translator cannot recognise a tool-call
+    // block and forwards it as literal text; summaryText() must excise it so the
+    // raw markup never lands inside the checkpoint.
+    const { compact } = await summarizerHarness([{
+      type: 'text',
+      text: 'Before.\n<tool_calls>\n<invoke name="run_code">\n<parameter name="code">os.walk(".")</parameter>\n</invoke>\n</tool_calls>\nAfter.',
+    }])
+    const output = await compact.runSummarize(promptInput('t'), agent(conversation(1), MODEL))
+    const text = output.summary.map(block => (block.type === 'text' ? block.text : '')).join('')
+    expect(text).not.toContain('<tool_calls>')
+    expect(text).not.toContain('<invoke')
+    expect(text).toContain('Before.')
+    expect(text).toContain('After.')
+  })
+
+  it('fails closed when a summary is nothing but a leaked tool call', async () => {
+    // A reply that is ONLY a tool call strips to empty; the call must fail rather
+    // than land an empty checkpoint, leaving the conversation unchanged.
+    const { compact } = await summarizerHarness([{
+      type: 'text',
+      text: '<tool_calls><invoke name="run_code"><parameter name="code">1</parameter></invoke></tool_calls>',
+    }])
+    await expect(compact.runSummarize(promptInput('t'), agent(conversation(1), MODEL)))
+      .rejects.toThrow('produced no text summary content')
   })
 
   it('applies the routed model policy without changing the replayed prefix', async () => {
@@ -1293,8 +1327,10 @@ describe('default one-shot summarizer', () => {
       provider: 'policy-summary',
       model: 'policy-summary',
       maxTokens: 222,
-      system: 'WARM SYSTEM',
     })
+    // The dedicated summarizer system prompt replaces the replayed conversation
+    // system prompt regardless of which routed policy selected the model.
+    expect(policyAdapter.lastOptions?.system).not.toBe('WARM SYSTEM')
     expect(policyAdapter.lastOptions?.messages[0]).toEqual(prefix)
   })
 

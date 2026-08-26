@@ -19,6 +19,7 @@
  */
 
 import { existsSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -85,6 +86,23 @@ export function defaultRuntimeDir(): string {
 }
 
 /**
+ * The interpreter inside the uv-managed bundle, once provisioned.
+ *
+ * `start.cmd`/`start.sh` run `uv sync` against `python/kiln/runtime/pyproject.toml`,
+ * which downloads a standalone CPython and the runtime's dependencies into this
+ * `.venv`. Preferring it means even a direct `dsh web` — no launcher, so
+ * `$DSH_KERNEL_PYTHON` is unset — finds the bundled Python (with `curl_cffi`,
+ * `playwright`, …) instead of a bare system interpreter that lacks them.
+ * Returns undefined when the bundle has not been provisioned.
+ */
+export function bundledVenvPython(): string | undefined {
+  const venv = process.platform === 'win32'
+    ? join(defaultRuntimeDir(), '.venv', 'Scripts', 'python.exe')
+    : join(defaultRuntimeDir(), '.venv', 'bin', 'python')
+  return existsSync(venv) ? venv : undefined
+}
+
+/**
  * Find an interpreter that actually runs. A name on PATH is not enough — the
  * Windows Store shim is on PATH and answers `--version` with an advertisement —
  * so each candidate is executed and only a clean exit counts.
@@ -96,7 +114,8 @@ export async function resolvePython(configured?: string): Promise<string | undef
   const explicit = configured ?? process.env.DSH_KERNEL_PYTHON
   const candidates = explicit !== undefined && explicit.length > 0
     ? [explicit]
-    : PYTHON_CANDIDATES[process.platform === 'win32' ? 'win32' : 'other']
+    : [bundledVenvPython(), ...PYTHON_CANDIDATES[process.platform === 'win32' ? 'win32' : 'other']]
+      .filter((candidate): candidate is string => candidate !== undefined)
   for (const candidate of candidates) {
     try {
       const stdout = execFileSync(candidate, ['-c', 'print("ok")'], {
@@ -154,6 +173,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       // Keeps `subkernels.json` and the ds_direct session pin out of the
       // vendored (read-only, reinstallable) runtime tree.
       KILN_STATE_DIR: stateDir,
+      // Where browser_tools writes its live state.json + screenshots. The
+      // sidebar browser pane reads this SAME directory over HTTP, so the model
+      // and the user share one view of one browser. A global default (not the
+      // per-cwd state dir) matches the browser being one process-wide singleton;
+      // an explicit KILN_BROWSER_DIR still wins.
+      KILN_BROWSER_DIR: process.env.KILN_BROWSER_DIR ?? join(homedir(), '.dsh', 'browser'),
       // The runtime's own modules resolve relative to the script, but a cell
       // that imports one of them needs the directory on the path too.
       PYTHONPATH: [dirname(script), process.env.PYTHONPATH].filter(part => part !== undefined && part.length > 0).join(process.platform === 'win32' ? ';' : ':'),

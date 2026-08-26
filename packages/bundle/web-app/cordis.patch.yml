@@ -119,6 +119,13 @@
         host: !!js ctx.webStartup.host ?? '127.0.0.1'
         port: !!js ctx.webStartup.port ?? 3080
 
+    # Sidebar panels' host surface: a dedicated user PTY at ws /kiln/terminal and
+    # the agent's shared browser at /kiln/browser (live state.json + screenshots
+    # + drive-by-action). Self-contained over the webserver carrier; browserDir
+    # defaults to the same KILN_BROWSER_DIR the kernel hands the Python runtime.
+    - id: sidebar-bridge
+      name: '@deepseek-ai/dsh-host-sidebar-bridge'
+
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
@@ -173,6 +180,12 @@
 
     - id: ui-theme
       name: '@deepseek-ai/dsh-client-ui-theme'
+
+    - id: ui-effects
+      name: '@deepseek-ai/dsh-client-ui-effects'
+
+    - id: ui-dock
+      name: '@deepseek-ai/dsh-client-ui-dock'
 
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'

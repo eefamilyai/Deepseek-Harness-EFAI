@@ -37,6 +37,18 @@ export interface ModelSelectionRef {
  * @returns Disposer for both scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
+  // Declaring an accessor twice on one scope is a hard cordis error, and a
+  // resume or reconnect can re-enter setup on the SAME agent context before the
+  // previous attempt's fiber has unwound its accessor — which crashed the whole
+  // resume with `property "modelSelection" is already declared as accessor`. A
+  // scope that already exposes `modelSelection` is already wired (accessor and
+  // both listeners came in together and unwind together), so adopt it rather
+  // than redeclare. The check reads the same per-scope prop table `accessor`
+  // writes to, so it is true only for a genuine same-scope re-entry.
+  if ('modelSelection' in agentCtx) return () => {}
+  agentCtx.accessor('modelSelection', {
+    get: () => selection.current,
+  })
   const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
     const selected = selection.current
     const assembled = await next()
@@ -71,5 +83,18 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
   return () => {
     disposeAssembly()
     disposeRequest()
+  }
+}
+
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /**
+     * Live provider/model selection for the Agent owning this scoped context,
+     * resolved through the entry point's precedence (picker switch, logged
+     * request header, deployment default). Absent when no selection is
+     * installed for this scope.
+     */
+    modelSelection?: ModelSelection | undefined
   }
 }

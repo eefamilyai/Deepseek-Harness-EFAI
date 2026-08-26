@@ -62,7 +62,7 @@ def calculate_context_tokens(usage):
 
 
 def estimate_message_tokens(msg):
-    """Chars/4 heuristic for one message (CJK-aware, via token_usage)."""
+    """DeepSeek token heuristic (~3 chars/token, CJK 0.6/char) for one message."""
     content = msg.get("content", "") if isinstance(msg, dict) else ""
     if not content:
         return 8

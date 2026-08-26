@@ -14,9 +14,10 @@
   font-size: 12px;
   line-height: 20px;
   color: var(--dsw-alias-label-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wrap instead of eliding: the token readout (and every other group) stays
+     fully visible instead of clipping the trailing figures into an ellipsis. */
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .sep {

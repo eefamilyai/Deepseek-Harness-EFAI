@@ -65,6 +65,13 @@ export interface KernelFrame {
   readonly out?: string
   /** A formatted traceback, or null when the cell succeeded. */
   readonly error?: string | null
+  /**
+   * Set when the cell overran its primary budget and was moved to the
+   * background rather than finishing. The namespace is intact and the process is
+   * healthy, so the provider treats this as a normal (non-restart) result whose
+   * `out` is the "still running in the background" notice.
+   */
+  readonly backgrounded?: boolean
 }
 
 /** How to launch the child. */
@@ -193,12 +200,27 @@ export class KernelChild {
 
   /**
    * Send a cell for execution.
+   *
+   * A bare-code frame is the common case; the envelope form is used only when a
+   * cell carries metadata — a per-cell timeout, or the owning chat's `cwd`. The
+   * cwd travels per cell because one process serves every chat, so the frame,
+   * not the spawn, is where "run this in that chat's directory" is expressed.
    * @param code - the Python source.
+   * @param timeoutMs - optional primary budget (background on expiry).
+   * @param cwd - optional working directory for this cell (the chat's workspace).
+   * @param backgroundTimeoutMs - optional secondary budget (force-stop a backgrounded cell).
    */
-  send(code: string, timeoutMs?: number): void {
-    const payload = timeoutMs === undefined
+  send(code: string, timeoutMs?: number, cwd?: string, backgroundTimeoutMs?: number): void {
+    const hasCwd = cwd !== undefined && cwd.length > 0
+    const bare = timeoutMs === undefined && backgroundTimeoutMs === undefined && !hasCwd
+    const payload = bare
       ? code
-      : CELL_CTRL_PREFIX + JSON.stringify({ code, timeoutMs })
+      : CELL_CTRL_PREFIX + JSON.stringify({
+        code,
+        ...timeoutMs === undefined ? {} : { timeoutMs },
+        ...backgroundTimeoutMs === undefined ? {} : { backgroundTimeoutMs },
+        ...hasCwd ? { cwd } : {},
+      })
     this.write(Buffer.from(payload, 'utf8').toString('base64'))
   }
 

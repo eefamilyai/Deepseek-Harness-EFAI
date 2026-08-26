@@ -223,6 +223,39 @@ describe('tokenUsage session projection', () => {
     })
   })
 
+  it('resets cumulative billing when a compaction ends successfully', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
+
+    session.append('compaction/start', { compactionId: CompactionId('reset-compact'), turn: null })
+    session.append('compaction/end', { compactionId: CompactionId('reset-compact'), turn: null })
+
+    expect(projected(ctx, session)).toEqual(ZERO)
+  })
+
+  it('does not reset cumulative billing when a compaction fails', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
+
+    session.append('compaction/start', { compactionId: CompactionId('failed-compact'), turn: null })
+    session.append('compaction/end', {
+      compactionId: CompactionId('failed-compact'),
+      turn: null,
+      error: 'provider failed',
+    })
+
+    expect(projected(ctx, session)).toEqual({
+      uncachedInputTokens: 12,
+      outputTokens: 3,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+  })
+
   it('unregisters with the token-meter fiber and restores from a JSON checkpoint', async () => {
     const { ctx, session, meterFiber } = await harness()
     startStep(session, 1, 1)
@@ -236,6 +269,123 @@ describe('tokenUsage session projection', () => {
 
     await ctx.plugin(TokenMeter)
     expect(ctx.sessionProjections.viewCheckpoint(checkpoint).tokenUsage).toEqual({
+      uncachedInputTokens: 8,
+      outputTokens: 2,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 0,
+    })
+  })
+})
+
+const projectedLifetime = (ctx: Context, session: Session): TokenUsageProjection => {
+  const value = ctx.sessionProjections.snapshot(session).values.tokenUsageLifetime
+  if (value === undefined) throw new Error('tokenUsageLifetime projection is not registered')
+  return value
+}
+
+describe('tokenUsageLifetime session projection', () => {
+  it('serves zero buckets for an empty log', async () => {
+    const { ctx, session } = await harness()
+    expect(projectedLifetime(ctx, session)).toEqual(ZERO)
+  })
+
+  it('keeps accumulating across a successful compaction while tokenUsage resets', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
+
+    session.append('compaction/start', { compactionId: CompactionId('lifetime-compact'), turn: null })
+    session.append('compaction/end', { compactionId: CompactionId('lifetime-compact'), turn: null })
+
+    // The since-compact counter is back to zero; the lifetime total is not.
+    expect(projected(ctx, session)).toEqual(ZERO)
+    expect(projectedLifetime(ctx, session)).toEqual({
+      uncachedInputTokens: 12,
+      outputTokens: 3,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 0,
+    })
+
+    // A turn after the compaction adds to both counters.
+    startStep(session, 2, 1)
+    const next = usageChunk(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
+    finalUsage(session, { inputTokens: 8, outputTokens: 2 }, 2, 1, [next])
+    expect(projected(ctx, session)).toEqual({
+      uncachedInputTokens: 8,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+    expect(projectedLifetime(ctx, session)).toEqual({
+      uncachedInputTokens: 20,
+      outputTokens: 5,
+      cacheReadTokens: 5,
+      cacheWriteTokens: 0,
+    })
+  })
+
+  it('adds a repeated turn/step after a compaction instead of replacing the pre-compaction sample', async () => {
+    // Compaction can restart turn/step numbering. The lifetime fold must clear
+    // its same-step dedup memory at the compaction boundary, or the first
+    // post-compaction sample would be mistaken for a replacement of the last
+    // pre-compaction step and wrongly subtract it.
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const first = usageChunk(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
+    finalUsage(session, { inputTokens: 10, outputTokens: 2 }, 1, 1, [first])
+
+    session.append('compaction/start', { compactionId: CompactionId('renumber-compact'), turn: null })
+    session.append('compaction/end', { compactionId: CompactionId('renumber-compact'), turn: null })
+
+    // Same turn/step as before the compaction, different buckets.
+    startStep(session, 1, 1)
+    const second = usageChunk(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
+    finalUsage(session, { inputTokens: 7, outputTokens: 4 }, 1, 1, [second])
+
+    expect(projectedLifetime(ctx, session)).toEqual({
+      uncachedInputTokens: 17,
+      outputTokens: 6,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+  })
+
+  it('does not reset when a compaction fails', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
+
+    session.append('compaction/start', { compactionId: CompactionId('failed-lifetime'), turn: null })
+    session.append('compaction/end', {
+      compactionId: CompactionId('failed-lifetime'),
+      turn: null,
+      error: 'provider failed',
+    })
+
+    expect(projectedLifetime(ctx, session)).toEqual({
+      uncachedInputTokens: 12,
+      outputTokens: 3,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+  })
+
+  it('restores from a JSON checkpoint at stateVersion 1', async () => {
+    const { ctx, session, meterFiber } = await harness()
+    startStep(session, 1, 1)
+    usageChunk(session, { inputTokens: 8, outputTokens: 2, cacheReadTokens: 5 }, 1, 1)
+    const checkpoint = JSON.parse(JSON.stringify(
+      ctx.sessionProjections.checkpoint(session),
+    )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
+    expect(checkpoint.tokenUsageLifetime?.ver).toBe(1)
+
+    await meterFiber.dispose()
+    expect(ctx.sessionProjections.snapshot(session).values).not.toHaveProperty('tokenUsageLifetime')
+
+    await ctx.plugin(TokenMeter)
+    expect(ctx.sessionProjections.viewCheckpoint(checkpoint).tokenUsageLifetime).toEqual({
       uncachedInputTokens: 8,
       outputTokens: 2,
       cacheReadTokens: 5,

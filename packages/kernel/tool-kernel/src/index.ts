@@ -46,21 +46,32 @@ export const TOOL_TIMEOUT_GRACE_MS = 15_000
 export const DEFAULT_MAX_OUTPUT_CHARS = 200_000
 /** Upper bound on an AI-chosen per-cell timeout (ms). */
 export const DEFAULT_MAX_TIMEOUT_MS = 600_000
+/**
+ * Default SECONDARY budget (ms): how long a cell that overran its primary budget
+ * may keep running in the background before the kernel force-stops it. Much more
+ * generous than the primary — the point of backgrounding is to let a long job
+ * finish while the model works on, so the stop deadline is measured in tens of
+ * minutes, not the primary's few.
+ */
+export const DEFAULT_BACKGROUND_TIMEOUT_MS = 1_800_000
 
 /** Plugin config: the per-cell budget and the output cap. */
 export interface Config {
-  /** Cooperative timeout budget (ms) for one cell. Defaults to 180000. */
+  /** PRIMARY cooperative budget (ms) for one cell; on expiry the cell backgrounds. Defaults to 180000. */
   timeoutMs?: number
   /** Cap on returned output characters for one cell. Defaults to 200000. */
   maxOutputChars?: number
-  /** Upper bound on a model-chosen per-cell timeout (ms). Defaults to 600000. */
+  /** Upper bound on a model-chosen per-cell (primary) timeout (ms). Defaults to 600000. */
   maxTimeoutMs?: number
+  /** SECONDARY budget (ms): when a backgrounded cell is force-stopped. Defaults to 1800000. */
+  backgroundTimeoutMs?: number
 }
 
 export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1).default(DEFAULT_KERNEL_TIMEOUT_MS),
   maxOutputChars: z.number().step(1).min(1).default(DEFAULT_MAX_OUTPUT_CHARS),
   maxTimeoutMs: z.number().step(1).min(1).default(DEFAULT_MAX_TIMEOUT_MS),
+  backgroundTimeoutMs: z.number().step(1).min(1).default(DEFAULT_BACKGROUND_TIMEOUT_MS),
 })
 
 /** Complete config after schemastery applies every field default. */
@@ -184,12 +195,15 @@ export function apply(ctx: Context, config: Config): void {
       '`edit_file` / `append_file` / `delete_file`, `list_dir` / `find` / `glob`,',
       '`remember` / `recall` / `forget` for storage that survives a kernel restart, and',
       '`peek(x)` for a compact look at a large object. Call `dir()` on the namespace if you',
-      'are unsure what else is available. Pass an optional `timeoutMs` argument when a cell',
-      'needs longer than the default time budget.',
+      'are unsure what else is available. Pass an optional `timeoutMs` argument to raise a',
+      'cell\'s primary budget before it backgrounds.',
       '',
       'A cell that raises returns its traceback rather than failing the call: read it and',
-      'fix the code. A cell that overruns its time budget, or that you cancel, restarts the',
-      'kernel and empties the namespace — anything saved with `remember()` survives that.',
+      'fix the code. A cell that overruns its time budget is NOT killed — it moves to the',
+      'background and keeps running while you work; its output comes back with a later cell,',
+      'and it is force-stopped only if it passes a much larger secondary budget. The',
+      'namespace survives all of that. Cancelling a cell, though, restarts the kernel and',
+      'empties the namespace — anything saved with `remember()` survives even that.',
     ].join('\n'),
   })
 
@@ -220,8 +234,16 @@ export function apply(ctx: Context, config: Config): void {
       const input = parseKernelArgs(args)
       const cellTimeoutMs = input.timeoutMs ?? resolved.timeoutMs
       const boundedTimeoutMs = Math.min(cellTimeoutMs, resolved.maxTimeoutMs)
+      // The kernel process is shared across chats, so the cell must name the
+      // directory it runs in: the calling agent's own session workspace. A call
+      // with no agent (a direct or synthetic dispatch) sends no cwd and runs
+      // wherever the kernel already is.
+      const cwd = exec.agent?.session.header.cwd
+      // Secondary budget never below the primary: a cell backgrounds at the
+      // primary and is force-stopped at this generous deadline.
+      const backgroundTimeoutMs = Math.max(resolved.backgroundTimeoutMs, boundedTimeoutMs)
       const result = await ctx.kernel.execute(
-        { code: input.code, timeoutMs: boundedTimeoutMs },
+        { code: input.code, timeoutMs: boundedTimeoutMs, backgroundTimeoutMs, ...cwd !== undefined ? { cwd } : {} },
         exec.signal,
       )
       return {

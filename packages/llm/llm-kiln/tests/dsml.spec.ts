@@ -10,8 +10,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { ToolSchema } from '@deepseek-ai/dsh-llm'
-import { DsmlTranslator, invokeArguments, isRateLimit, KilnAdapter, RATE_LIMIT_RETRY_MS } from '@deepseek-ai/dsh-llm-kiln'
+import type { GenerateOptions, ToolSchema } from '@deepseek-ai/dsh-llm'
+import { DsmlTranslator, invokeArguments, isRateLimit, KilnAdapter, RATE_LIMIT_RETRY_MS, requestOptions } from '@deepseek-ai/dsh-llm-kiln'
 import { accountRoute, buildTurns, mintCallId, rebuildRoutes, renderToolCall, toolIndex } from '@deepseek-ai/dsh-llm-kiln'
 import { coerceParameter, toolProtocolPrompt } from '@deepseek-ai/dsh-llm-kiln'
 import type { KilnBridge, KilnProvider, KilnStreamEvent } from '@deepseek-ai/dsh-llm-kiln'
@@ -126,6 +126,17 @@ describe('DsmlTranslator', () => {
     expect(prose(chunks)).toBe('<tool_calls>\n<invoke name="kernel">\n<parameter name="code">rm -rf /tmp/x\n')
   })
 
+  it('dispatches a complete invoke whose <tool_calls> wrapper the model never closed', () => {
+    // The reported leak: the inner call is WHOLE — only the outer </tool_calls>
+    // never arrived (dropped, or written as a native token that strips). The
+    // call must run, not reach the user as the raw markup of a call that looks
+    // done and never happened. The truncation test above still holds the line:
+    // a call missing its own </invoke> stays text.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n</invoke>']
+    expect(calls(chunks)).toEqual([['kernel', { code: '1+1' }]])
+    expect(prose(chunks)).toBe('')
+  })
+
   it('treats a fenced code block as prose', () => {
     const chunks = ['Here is the plan:\n```python\nprint(1)\n```\nShall I?\n']
     expect(calls(chunks)).toEqual([])
@@ -225,6 +236,158 @@ describe('native tool-call dialects', () => {
   it('still reads the taught <tool_calls> format unchanged', () => {
     expect(calls(['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n'
       + '</invoke>\n</tool_calls>\n'], NATIVE)).toEqual([['kernel', { code: '1+1' }]])
+  })
+
+  it('strips the native `_calls` frame wrapper instead of leaking it as prose', () => {
+    // DeepSeek wraps its native call in `<｜｜DSML｜｜_calls>…</｜｜DSML｜｜_calls>`,
+    // the pipe-token equivalent of `<tool_calls>`. The wrapper carries no tool
+    // and must not surface as visible text around a call that ran.
+    const chunks = [`<${P}${P}DSML${P}${P}_calls>\n`
+      + `${dsml(' name="run_code"')}\n<parameter name="code">1+1</parameter>\n${dsmlEnd}\n`
+      + `</${P}${P}DSML${P}${P}_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['run_code', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('strips a bare `_calls` frame token pair even with no inner call', () => {
+    // The exact reported symptom: an empty `<｜｜DSML｜｜_calls>` / `</｜｜DSML｜｜_calls>`
+    // pair must not reach the user as visible tags.
+    const chunks = [`<${P}${P}DSML${P}${P}_calls>\n</${P}${P}DSML${P}${P}_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('reads a native opener that carries the taught `invoke` word inside the token', () => {
+    // DeepSeek sometimes writes `<｜｜DSML｜｜invoke name="run_code">`, tag name and
+    // all, inside the token; the old rebuild doubled it to `<invokeinvoke …>`,
+    // which then leaked as prose instead of dispatching.
+    const chunks = [`${dsml('invoke name="run_code"')}\n`
+      + '<parameter name="code" string="true">1+1</parameter>\n'
+      + `</${P}${P}DSML${P}${P}invoke>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['run_code', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE)).not.toContain('invokeinvoke')
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('reads the invoke-in-token opener closed by the plain `</｜｜DSML｜｜>` token', () => {
+    const chunks = [`${dsml('invoke name="run_code"')}\n<parameter name="code">2+2</parameter>\n${dsmlEnd}\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['run_code', { code: '2+2' }]])
+  })
+
+  it('recovers a taught <tool_calls> the model closed with a native `_calls` token', () => {
+    // A mixed envelope: the taught opener, then DeepSeek's native
+    // `</｜｜DSML｜｜_calls>` as the closer, which normalizeNative strips — leaving
+    // the <tool_calls> block without a taught closer. The complete inner call
+    // still dispatches at end of stream instead of leaking as visible markup.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n</invoke>\n'
+      + `</${P}${P}DSML${P}${P}_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('drops an orphan </tool_calls> the model left after a native opener', () => {
+    // The reverse mix: a native `<｜｜DSML｜｜_calls>` opener (stripped) paired with
+    // a taught </tool_calls> closer. The inner bare <invoke> dispatches on its
+    // own, and the leftover </tool_calls> must not surface as a stray tag.
+    const chunks = [`<${P}${P}DSML${P}${P}_calls>\n`
+      + '<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+    expect(prose(chunks, NATIVE)).not.toContain('</tool_calls>')
+  })
+
+  it('recovers the merged ｜｜DSML｜｜tool_calls wrapper with a self-closing invoke', () => {
+    // The exact reported leak: the model fused DeepSeek's native token with the
+    // taught `tool_calls`/`invoke` words and rode the argument on the tag, closed
+    // only by the wrapper — no `</invoke>`. Every piece used to fall through to
+    // prose; the call must run and the raw tokens must never reach the user.
+    const chunks = [`<${P}${P}DSML${P}${P}tool_calls> `
+      + `<${P}${P}DSML${P}${P}invoke name="kernel" code=""> `
+      + `</${P}${P}DSML${P}${P}tool_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: '' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('reads a merged tool_calls wrapper whose invoke carries its code as an attribute', () => {
+    const chunks = [`<${P}${P}DSML${P}${P}tool_calls>\n`
+      + `<${P}${P}DSML${P}${P}invoke name="run_code" code="1+1">\n`
+      + `</${P}${P}DSML${P}${P}tool_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['run_code', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('dispatches a self-closing <invoke> whose argument rides the tag', () => {
+    // Attribute-only invoke with no `</invoke>`, closed by the wrapper. The
+    // schema declares `path`, so the attribute is honoured.
+    const chunks = ['<tool_calls>\n<invoke name="read_file" path="./p.json" />\n</tool_calls>\n']
+    expect(calls(chunks, NATIVE)).toEqual([['read_file', { path: './p.json' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('reads a bodied invoke inside the merged ｜｜DSML｜｜tool_calls wrapper', () => {
+    const chunks = [`<${P}${P}DSML${P}${P}tool_calls>\n`
+      + '<invoke name="kernel">\n<parameter name="code">6*7</parameter>\n</invoke>\n'
+      + `</${P}${P}DSML${P}${P}tool_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: '6*7' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('leaves a truncated invoke inside the merged wrapper as text', () => {
+    // A body was started (a `<parameter>`) and cut off. The wrapper makes the
+    // block look bounded, but the call itself is unfinished, so its end must not
+    // be invented — the same line the taught-format truncation test holds.
+    const chunks = [`<${P}${P}DSML${P}${P}tool_calls>\n`
+      + `<${P}${P}DSML${P}${P}invoke name="run_code">\n<parameter name="code">rm -rf /tmp/x`]
+    expect(calls(chunks, NATIVE)).toEqual([])
+    expect(prose(chunks, NATIVE)).toContain('rm -rf /tmp/x')
+  })
+})
+
+describe('system_reminder suppression', () => {
+  const P = '｜'
+
+  it('drops a system_reminder span but keeps the prose around it', () => {
+    const chunks = ['Sure.\n<system_reminder>\nYou are an AI agent in a sandbox.\n</system_reminder>\nHere is the answer.\n']
+    expect(prose(chunks)).toBe('Sure.\nHere is the answer.\n')
+    expect(prose(chunks)).not.toContain('system_reminder')
+    expect(prose(chunks)).not.toContain('sandbox')
+  })
+
+  it('drops a multi-line recited prompt and dispatches nothing from it', () => {
+    const chunks = [
+      '<system_reminder>\n', 'You are an AI agent in a fully enclosed sandbox.\n',
+      '# Calling tools\nWrite a <tool_calls> block.\n', '</system_reminder>\n', 'done\n',
+    ]
+    expect(prose(chunks)).toBe('done\n')
+    expect(calls(chunks)).toEqual([])
+  })
+
+  it('does NOT dispatch a tool_calls example recited inside the framing', () => {
+    // The recited prompt teaches the tool format, so the echo contains a literal
+    // <tool_calls> block. Suppressing before the scanner is what keeps it from
+    // running as a real call.
+    const chunks = ['<system_reminder>\nExample: <tool_calls>\n<invoke name="kernel">\n'
+      + '<parameter name="code">1+1</parameter>\n</invoke>\n</tool_calls>\n</system_reminder>\nhi\n']
+    expect(calls(chunks)).toEqual([])
+    expect(prose(chunks)).toBe('hi\n')
+  })
+
+  it('suppresses to the end of the turn when the span is never closed', () => {
+    const chunks = ['<system_reminder>\nYou are an AI agent...\nblah blah the whole prompt\n']
+    expect(prose(chunks)).toBe('')
+    expect(calls(chunks)).toEqual([])
+  })
+
+  it('strips a pipe-wrapped native system_reminder token', () => {
+    const chunks = [`<${P}system_reminder${P}>\nrecited prompt\n</${P}system_reminder${P}>\nanswer\n`]
+    expect(prose(chunks)).toBe('answer\n')
+    expect(prose(chunks)).not.toContain('recited')
+  })
+
+  it('still dispatches a real tool call after a closed system_reminder', () => {
+    const chunks = ['<system_reminder>\nrecited\n</system_reminder>\n'
+      + '<tool_calls>\n<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: '1+1' }]])
   })
 })
 
@@ -684,5 +847,36 @@ describe('account-pinned routes', () => {
   it('still routes a pinned route to the same underlying provider', async () => {
     // Pinning changes the login, never the provider the request is dispatched to.
     expect(await optsFor('kiln-deepseek@main@x.com')).toMatchObject({ account: 'main@x.com' })
+  })
+})
+
+describe('requestOptions session isolation', () => {
+  const SESSION = 'conv-123' as NonNullable<GenerateOptions['sessionId']>
+  const base = { provider: 'deepseek', model: 'deepseek-chat', messages: [] } as unknown as GenerateOptions
+
+  it('pins an ordinary request to the conversation chat with no oneshot flag', () => {
+    const opts = requestOptions({ ...base, sessionId: SESSION })
+    expect(opts.conv_id).toBe('conv-123')
+    expect(opts.oneshot).toBeUndefined()
+  })
+
+  it('routes a compaction summary to its own throwaway chat', () => {
+    const opts = requestOptions({ ...base, sessionId: SESSION, purpose: 'compaction' })
+    expect(opts.oneshot).toBe(true)
+    // It must NOT reuse the conversation chat (the full, possibly-overflowed one).
+    expect(opts.conv_id).not.toBe('conv-123')
+    expect(String(opts.conv_id)).toContain('conv-123#compaction#')
+  })
+
+  it('gives two compaction calls distinct chats so they never thread together', () => {
+    const a = requestOptions({ ...base, sessionId: SESSION, purpose: 'compaction' })
+    const b = requestOptions({ ...base, sessionId: SESSION, purpose: 'compaction' })
+    expect(a.conv_id).not.toBe(b.conv_id)
+  })
+
+  it('also isolates the session-title summary', () => {
+    const opts = requestOptions({ ...base, sessionId: SESSION, purpose: 'session-title' })
+    expect(opts.oneshot).toBe(true)
+    expect(String(opts.conv_id)).toContain('conv-123#session-title#')
   })
 })

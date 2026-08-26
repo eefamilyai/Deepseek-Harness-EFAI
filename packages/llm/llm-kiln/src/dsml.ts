@@ -42,6 +42,17 @@ const INVOKE = new RegExp(`<invoke\\s+(${ATTRIBUTE_RUN})>([\\s\\S]*?)</invoke>`,
 /** Matches one `<parameter …>…</parameter>`, capturing the attribute run and the body. */
 const PARAMETER = new RegExp(`<parameter\\s+(${ATTRIBUTE_RUN})>([\\s\\S]*?)</parameter>`, 'gi')
 
+/**
+ * One `<invoke …>` opener on its own — self-closing (`<invoke …/>`) or an
+ * attribute-only tag whose closer is an OUTER wrapper, not its own `</invoke>`.
+ *
+ * {@link DsmlTranslator.parseCalls} uses this to recover the shape DeepSeek's
+ * `｜｜DSML｜｜` tool_calls wrapper produces: the arguments ride the `<invoke>` tag
+ * and the wrapper's close is the only close, so there is no `</invoke>` for the
+ * bodied {@link INVOKE} to match.
+ */
+const INVOKE_OPEN = new RegExp(`<invoke\\s+(${ATTRIBUTE_RUN})/?>`, 'gi')
+
 /** Matches one `key="value"`, `key='value'`, or bare `key=value` attribute. */
 const ATTRIBUTE = /([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g
 
@@ -50,12 +61,35 @@ const TOOL_CALLS_OPEN = '<tool_calls>'
 const TOOL_CALLS_CLOSE = '</tool_calls>'
 
 /**
+ * A taught envelope CLOSER — `</tool_calls>` or `</invoke>` — reaching the prose
+ * path with no open block to close. It is structure, not content: the model
+ * paired a native opener (which {@link DsmlTranslator.normalizeNative} strips)
+ * with a taught closer, or split one call across the two dialects. Left in place
+ * it surfaces as a stray tag around a call that already ran; stripped, only when
+ * no block is open to consume it as a real closer, it never reaches the user.
+ */
+const ORPHAN_CLOSE = /<\/(?:tool_calls|invoke)\s*>/gi
+
+/**
  * A run of the vertical-line character DeepSeek wraps its own special tokens in
  * — the fullwidth U+FF5C the web session shows as `｜`, or an ASCII `|`. The
  * model's trained tool-call head emits these; our taught format never does, so
  * a tag built out of them is an unambiguous native call, not prose.
  */
 const PIPES = '[|\\uFF5C]'
+
+/**
+ * DeepSeek's `system_reminder` framing, echoed back into visible output.
+ *
+ * The free-web model recites the system prompt it was handed, wrapped in a
+ * `system_reminder` token — plain `<system_reminder>`, or pipe-wrapped like its
+ * other native tokens (`<｜system_reminder｜>`), underscore or hyphen. That span
+ * is system→model framing, never the model's answer, so the reader suppresses
+ * the whole thing: the opener, the recited prompt inside (tool-protocol examples
+ * and all), and the closer. Matching either an opener or a closer here; a `/` in
+ * the matched token marks the closer.
+ */
+const SYSTEM_REMINDER_TAG = new RegExp(`<${PIPES}*/?${PIPES}*\\s*system[_-]?reminder\\s*${PIPES}*/?${PIPES}*>`, 'gi')
 
 /**
  * DeepSeek's native tool-call opener, e.g. `<｜｜DSML｜｜ name="run_code">`.
@@ -68,11 +102,13 @@ const PIPES = '[|\\uFF5C]'
 const DSML_OPEN = new RegExp(`<${PIPES}+\\s*DSML${PIPES}*((?:"[^"]*"|'[^']*'|[^>"'])*)>`, 'gi')
 
 /**
- * The matching end token: `</｜｜DSML｜｜>` or `<｜｜DSML｜｜/>`. A real pipe is
- * required on the DSML-adjacent side, which is what keeps this from swallowing
- * the pipeless bare `</DSML>` that {@link DSML_WRAP} is meant to strip.
+ * The matching end token: `</｜｜DSML｜｜>` or `<｜｜DSML｜｜/>`, and the variants that
+ * carry the taught tag name inside the token — `</｜｜DSML｜｜invoke>` — which pair
+ * with the {@link DSML_OPEN} form that does the same. A real pipe is required on
+ * the DSML-adjacent side, which is what keeps this from swallowing the pipeless
+ * bare `</DSML>` that {@link DSML_WRAP} is meant to strip.
  */
-const DSML_CLOSE = new RegExp(`<${PIPES}*/${PIPES}*DSML${PIPES}+>|<${PIPES}+DSML${PIPES}*/${PIPES}*>`, 'gi')
+const DSML_CLOSE = new RegExp(`<${PIPES}*/${PIPES}*DSML${PIPES}+(?:invoke)?>|<${PIPES}+DSML${PIPES}*(?:invoke)?${PIPES}*/${PIPES}*>`, 'gi')
 
 /**
  * A bare `<DSML>` wrapper with no pipes and no attributes — the other way the
@@ -82,6 +118,38 @@ const DSML_CLOSE = new RegExp(`<${PIPES}*/${PIPES}*DSML${PIPES}+>|<${PIPES}+DSML
  * requires the pipe run, so the two forms never collide.
  */
 const DSML_WRAP = /<\/?DSML\s*\/?>/gi
+
+/**
+ * DeepSeek's native tool-call FRAME tokens: the pipe-wrapped equivalents of
+ * `<tool_calls>`/`</tool_calls>` and the per-call and separator markers —
+ * `<｜｜DSML｜｜_calls>`, `</｜｜DSML｜｜_calls>`, `<｜｜DSML｜｜_call>`,
+ * `<｜｜DSML｜｜_sep>`, and their `_begin`/`_end` suffixes. Unlike {@link DSML_OPEN}
+ * these carry no `name="…"`, so they frame the real call rather than being it.
+ * Left in place they surface verbatim as visible `<｜｜DSML｜｜_calls>` tags around
+ * a call that ran; stripped — exactly like {@link DSML_WRAP} — the inner
+ * `<｜｜DSML｜｜ name="…">` opener still normalizes and dispatches.
+ *
+ * The `[_▁]` right after the pipe run is the discriminator: a real opener
+ * has a space then `name=`, and the plain close is `>` immediately, so neither
+ * can match here. `[^>]*` absorbs any `_begin`/`_end` suffix on the token.
+ */
+const DSML_FRAME = new RegExp(`<${PIPES}*/?${PIPES}*DSML${PIPES}*[_\\u2581](?:calls?|sep)[^>]*>`, 'gi')
+
+/**
+ * The TAUGHT `tool_calls` wrapper keyword worn inside the native token —
+ * `<｜｜DSML｜｜tool_calls>` / `</｜｜DSML｜｜tool_calls>` (and the singular
+ * `tool_call`). The model merges the pipe-token its tool head was trained on
+ * with the `tool_calls` word THIS format teaches, so it matches neither
+ * {@link DSML_FRAME} (which expects the native `_calls` suffix, no `tool`) nor
+ * {@link TOOL_CALLS_OPEN} (which expects the bare taught tag). It is rewritten
+ * to the taught `<tool_calls>`/`</tool_calls>` rather than stripped like a
+ * frame: the call inside is often a self-closing `<invoke …>` whose only closer
+ * is this wrapper, so the block needs a real, bounded closer to buffer against —
+ * stripping the wrapper would leave that invoke as an unbounded bare block that
+ * swallows the rest of the stream. The capture is the optional `/` that tells
+ * an opener from a closer.
+ */
+const DSML_WRAP_CALLS = new RegExp(`<${PIPES}*(/)?${PIPES}*DSML${PIPES}*tool[_\\u2581]calls?[^>]*>`, 'gi')
 
 /** Escape a tool name for embedding in a `RegExp`. Names are identifiers, but a stray metachar must never widen the match. */
 function escapeRegExp(value: string): string {
@@ -210,6 +278,8 @@ function firstOpener(rest: string): { readonly index: number; readonly closer: s
 export class DsmlTranslator {
   private partial = ''
   private block: OpenBlock | undefined
+  /** True while inside an echoed `<system_reminder>` span whose text is dropped. */
+  private suppressing = false
   private readonly tools: ReadonlyMap<string, ToolSchema>
   /** `<toolname …>` for every KNOWN tool, or undefined when none look like tags. */
   private readonly namedOpen: RegExp | undefined
@@ -253,9 +323,14 @@ export class DsmlTranslator {
   /**
    * Flush the trailing partial line and any block the model never closed.
    *
-   * An unterminated block is emitted as TEXT, not as a call: the harness would
-   * have to invent the missing closing tag to read it as one, and inventing
-   * the end of a truncated tool call is how a half-written command gets run.
+   * A wrapper left open is recovered only as far as it is whole: a COMPLETE
+   * `<invoke>…</invoke>` inside a `<tool_calls>` whose closing tag never arrived
+   * — dropped, or written as a native token {@link normalizeNative} stripped —
+   * is the call the model meant, and it dispatches. A TRUNCATED block, where the
+   * `<invoke>` itself has no closing tag, matches nothing and is emitted as
+   * TEXT: inventing the end of a half-written command is how that command
+   * wrongly runs. The distinction is exactly "is the call itself finished",
+   * which is what `parseCalls` finding an invoke answers.
    */
   end(): DsmlEvent[] {
     const events: DsmlEvent[] = []
@@ -266,7 +341,10 @@ export class DsmlTranslator {
     const open = this.block
     if (open !== undefined) {
       this.block = undefined
-      events.push({ kind: 'text', text: `${open.lines.join('\n')}\n` })
+      const raw = open.lines.join('\n')
+      const { produced } = this.parseCalls(raw)
+      if (produced.length > 0) events.push(...produced)
+      else events.push({ kind: 'text', text: `${raw}\n` })
     }
     return events
   }
@@ -283,12 +361,30 @@ export class DsmlTranslator {
    */
   private normalizeNative(line: string): string {
     let out = line
+    // Structural frame tokens first: `<｜｜DSML｜｜_calls>` and friends wrap the
+    // real `<｜｜DSML｜｜ name="…">` opener and carry no tool, so they are removed
+    // outright. Doing this before DSML_OPEN keeps that matcher from seeing a
+    // nameless opener it would only pass through as visible text.
+    out = out.replace(DSML_FRAME, '')
+    // The taught `tool_calls` wrapper worn inside the native token. Rewrite it to
+    // the taught tag (not strip) so the block bounds on a real `</tool_calls>`:
+    // the invoke inside is frequently self-closing, with this wrapper as its only
+    // closer. Runs before DSML_OPEN, which would otherwise pass the nameless
+    // `<｜｜DSML｜｜tool_calls>` opener straight through as visible text.
+    out = out.replace(DSML_WRAP_CALLS, (_whole, slash: string | undefined) => (slash ? TOOL_CALLS_CLOSE : TOOL_CALLS_OPEN))
     // DeepSeek's special-token envelope. The captured run already holds
     // `name="…"` and any other attributes, correctly quoted, so re-emitting it
     // on an `<invoke>` keeps every one of them.
     out = out.replace(DSML_OPEN, (whole, run: string) => {
-      const name = attributes(run).get('name')?.trim() ?? ''
-      return name.length > 0 && this.tools.has(name) ? `<invoke${run}>` : whole
+      // DeepSeek writes two shapes after the token: a bare attribute run
+      // (`<｜｜DSML｜｜ name="run_code">`) and one that carries the taught tag name
+      // inside the token (`<｜｜DSML｜｜invoke name="run_code">`). The second left
+      // `run` already starting with `invoke`, so the old `<invoke${run}>` doubled
+      // it to `<invokeinvoke …>` — a tag the scanner read as neither a call nor
+      // clean prose. Drop a leading `invoke` and rebuild exactly one opener.
+      const attrs = run.replace(/^\s*invoke\b/i, '').trim()
+      const name = attributes(attrs).get('name')?.trim() ?? ''
+      return name.length > 0 && this.tools.has(name) ? `<invoke ${attrs}>` : whole
     })
     out = out.replace(DSML_CLOSE, '</invoke>')
     // A bare `<DSML>`/`</DSML>` wrapper carries nothing; the inner tool tag
@@ -321,15 +417,56 @@ export class DsmlTranslator {
    * returned nothing. Everything before the opening tag and after the closing
    * one is prose, exactly as written.
    */
+  /**
+   * Remove any `<system_reminder>` span from one line, tracking an open span
+   * across lines. Text before an opener and after a closer survives; everything
+   * inside — and a stray opener that never closes, which suppresses to the end
+   * of the turn — is dropped. Runs BEFORE tool-call scanning so a recited
+   * `<tool_calls>` example inside the framing never reaches {@link firstOpener}.
+   */
+  private stripSuppressed(line: string): string {
+    SYSTEM_REMINDER_TAG.lastIndex = 0
+    let out = ''
+    let idx = 0
+    let match: RegExpExecArray | null
+    while ((match = SYSTEM_REMINDER_TAG.exec(line)) !== null) {
+      const isClose = match[0].includes('/')
+      if (this.suppressing) {
+        // Inside the span: drop text up to here; only a closer ends it, and a
+        // nested opener is left suppressed.
+        if (isClose) {
+          this.suppressing = false
+          idx = SYSTEM_REMINDER_TAG.lastIndex
+        }
+      } else if (isClose) {
+        // A closer with no open span is a leftover token: drop it, keep the text.
+        out += line.slice(idx, match.index)
+        idx = SYSTEM_REMINDER_TAG.lastIndex
+      } else {
+        // An opener: keep the text before it, then suppress until the closer.
+        out += line.slice(idx, match.index)
+        this.suppressing = true
+        idx = SYSTEM_REMINDER_TAG.lastIndex
+      }
+    }
+    if (!this.suppressing) out += line.slice(idx)
+    return out
+  }
+
   private consumeLine(rawLine: string, events: DsmlEvent[]): void {
-    let rest = this.normalizeNative(rawLine)
+    const visible = this.stripSuppressed(rawLine)
+    // A line wholly inside a suppressed span yields no visible text; emit
+    // nothing rather than a blank line. A genuinely blank prose line (empty
+    // input) still falls through below, so paragraph breaks in real prose live.
+    if (visible.length === 0 && rawLine.length > 0) return
+    let rest = this.normalizeNative(visible)
     let split = false
     while (rest.length > 0) {
       const block = this.block
       if (block === undefined) {
         const opener = firstOpener(rest)
         if (opener === undefined) break
-        if (opener.index > 0) events.push({ kind: 'text', text: rest.slice(0, opener.index) })
+        if (opener.index > 0) events.push({ kind: 'text', text: rest.slice(0, opener.index).replace(ORPHAN_CLOSE, '') })
         this.block = { lines: [], closer: opener.closer }
         rest = rest.slice(opener.index)
         split = true
@@ -353,8 +490,68 @@ export class DsmlTranslator {
     }
     // A line the tags never touched keeps its newline even when blank, so
     // paragraph breaks in prose survive. A remainder AFTER a block on the same
-    // line is only worth emitting when it carries something.
-    if (!split || rest.length > 0) events.push({ kind: 'text', text: `${rest}\n` })
+    // line is only worth emitting when it carries something. A stray taught
+    // closer here belongs to no open block, so it is structure to drop, not text.
+    if (!split || rest.length > 0) events.push({ kind: 'text', text: `${rest.replace(ORPHAN_CLOSE, '')}\n` })
+  }
+
+  /**
+   * Parse a complete block's raw text into the calls it names.
+   *
+   * One routine serves both a properly closed block and a wrapper the model
+   * left open at end of stream: each hands over raw text whose complete
+   * `<invoke>…</invoke>` elements are the calls. A `<invoke>` with no closing
+   * tag matches nothing here, so a truncated call contributes no dispatch — the
+   * caller decides whether the leftover text is shown. `named` records whether
+   * any invoke carried a readable `name=` at all, so a caller can tell "named a
+   * tool that does not exist" from "wrote a tag with no name".
+   */
+  private parseCalls(raw: string): { readonly produced: DsmlEvent[]; readonly named: boolean } {
+    const calls: { readonly index: number; readonly event: DsmlEvent }[] = []
+    let named = false
+    // Bodied `<invoke>…</invoke>` first, remembering each span so the
+    // self-closing pass below never reads an opener that already dispatched.
+    const consumed: (readonly [number, number])[] = []
+    for (const match of raw.matchAll(INVOKE)) {
+      const start = match.index ?? 0
+      consumed.push([start, start + match[0].length])
+      const tagged = attributes(match[1] ?? '')
+      const name = (tagged.get('name') ?? '').trim()
+      if (name.length === 0) continue
+      named = true
+      const tool = this.tools.get(name)
+      if (tool === undefined) continue
+      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, match[2] ?? '', tagged) } })
+    }
+    // Self-closing / attribute-only invokes: a complete opener carrying its
+    // arguments on the tag, closed by an outer wrapper rather than its own
+    // `</invoke>` (the `｜｜DSML｜｜` tool_calls shape). Two guards keep the
+    // truncation rule intact — a call is dispatched only when it is WHOLE:
+    //   * a `<parameter>` before the next invoke means the model was writing a
+    //     body that got cut off, so the end must not be invented; and
+    //   * an opener with no declared attribute for a tool that requires one is
+    //     that same unfinished call — a bare `<invoke name="kernel">` about to
+    //     grow parameters — not an empty request to run.
+    for (const match of raw.matchAll(INVOKE_OPEN)) {
+      const start = match.index ?? 0
+      if (consumed.some(([from, to]) => start >= from && start < to)) continue
+      const tagged = attributes(match[1] ?? '')
+      const name = (tagged.get('name') ?? '').trim()
+      if (name.length === 0) continue
+      named = true
+      const tool = this.tools.get(name)
+      if (tool === undefined) continue
+      const after = raw.slice(start + match[0].length)
+      const nextInvoke = after.search(/<invoke\b/i)
+      const region = nextInvoke === -1 ? after : after.slice(0, nextInvoke)
+      if (/<parameter\b/i.test(region)) continue
+      const declared = new Set(parameterNames(tool))
+      const hasArg = [...tagged].some(([key]) => key !== 'name' && declared.has(key))
+      if (!hasArg && requiredNames(tool).length > 0) continue
+      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, '', tagged) } })
+    }
+    calls.sort((left, right) => left.index - right.index)
+    return { produced: calls.map(entry => entry.event), named }
   }
 
   /** Parse a complete block into calls, or pass it through when it names nothing real. */
@@ -363,17 +560,7 @@ export class DsmlTranslator {
     this.block = undefined
     if (block === undefined) return
     const raw = block.lines.join('\n')
-    const produced: DsmlEvent[] = []
-    let named = false
-    for (const match of raw.matchAll(INVOKE)) {
-      const tagged = attributes(match[1] ?? '')
-      const name = (tagged.get('name') ?? '').trim()
-      if (name.length === 0) continue
-      named = true
-      const tool = this.tools.get(name)
-      if (tool === undefined) continue
-      produced.push({ kind: 'tool-call', name, arguments: invokeArguments(tool, match[2] ?? '', tagged) })
-    }
+    const { produced, named } = this.parseCalls(raw)
     // Nothing callable came out: show the block. A model that named a tool it
     // does not have needs to SEE that it did — the next turn's transcript is
     // the only correction channel this transport has, and a dropped block

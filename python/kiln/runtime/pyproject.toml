@@ -1,0 +1,37 @@
+# uv-managed environment for the vendored Kiln runtime.
+#
+# The harness ships a bundled Python interpreter so a fresh machine needs no
+# system Python: `start.cmd` / `start.sh` run `uv sync` against this file, which
+# downloads a pinned standalone CPython AND these dependencies into a local
+# `.venv`, then point $DSH_KERNEL_PYTHON at it. Both Python-backed rows (the
+# kernel and the DeepSeek `ds_direct` bridge) read that one variable.
+#
+# `package = false` marks this a VIRTUAL project: the runtime is a set of loose
+# scripts (kernel_child.py, ds_direct.py, …), not an installable package, so uv
+# provisions the environment without trying to build anything here.
+#
+# Every dependency below is imported lazily and feature-gated in the runtime, so
+# a partial install still boots the kernel — a missing package disables one
+# feature with a clear message rather than failing startup.
+[project]
+name = "dsh-kiln-runtime"
+version = "0.0.0"
+description = "Bundled Python environment for the DeepSeek Harness Kiln runtime"
+requires-python = ">=3.11"
+dependencies = [
+  "curl-cffi>=0.7",   # ds_direct: drives chat.deepseek.com (the primary backend)
+  "playwright>=1.40", # browser_tools: full sandboxed browser toolset
+  "dill>=0.3.8",      # kernel_child: namespace snapshot / restore
+  "psutil>=5.9",      # kernel_child: process/resource introspection
+  "pyyaml>=6.0",      # config + cell helpers: YAML read/write
+  "requests>=2.31",   # provider fallbacks that do not go through curl_cffi
+]
+
+[tool.uv]
+package = false
+# Never borrow whatever Python happens to be on the target machine: fetch and
+# use ONLY a uv-managed standalone CPython. That is what makes the interpreter
+# "bundled" — a fresh computer with no Python (or a broken/Store-shim Python)
+# still gets an identical, self-contained runtime. The exact version is pinned
+# in `.python-version` next to this file.
+python-preference = "only-managed"
