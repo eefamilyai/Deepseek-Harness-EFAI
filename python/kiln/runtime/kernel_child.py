@@ -1961,17 +1961,102 @@ def write_yaml(path, obj):
 
 
 def read_toml(path):
-
     """Read a TOML file (Python 3.11+ tomllib)."""
+    try:
+        import tomllib
+    except ImportError:
+        return {"error": "tomllib unavailable (Python < 3.11)"}
+    if not os.path.exists(path):
+        return {"error": "No such file: %s" % path}
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except Exception as e:
+        return {"error": "read_toml failed: %s" % e}
 
-    import tomllib
 
-    with open(path, "rb") as f:
-
-        return tomllib.load(f)
-
+def bash(cmd, timeout=None, **kwargs):
+    """Run a shell command and return its combined output (alias of sh)."""
+    return sh(cmd, timeout=timeout, **kwargs)
 
 
+def write(path, content):
+    """Alias of write_file -- write text to a file (creates folders)."""
+    return write_file(path, content)
+
+
+def read(path, max_chars=_READ_CAP):
+    """Read a file as text, falling back to read_nontext for binary/non-text."""
+    import mimetypes
+    if path.lower().endswith((".ipynb", ".png", ".jpg", ".jpeg", ".gif",
+                              ".pdf", ".webp", ".bmp", ".ico", ".zip")):
+        return read_nontext(path)
+    mime, _ = mimetypes.guess_type(path)
+    if mime and not (mime.startswith("text/") or mime in (
+            "application/json", "application/xml", "application/x-yaml",
+            "application/x-toml", "application/x-ndjson")):
+        return read_nontext(path)
+    try:
+        with open(path, "rb") as f:
+            head = f.read(4096)
+        if b"\x00" in head:
+            return read_nontext(path)
+    except Exception:
+        pass
+    return read_file(path, max_chars=max_chars)
+
+
+def read_nontext(path, max_bytes=2_000_000):
+    """Read a non-text file; returns text when decodable, else base64+metadata.
+
+    Notebooks are parsed to their cell source when possible. Images, PDFs and
+    other binary types are returned as base64 when no decoder is installed.
+    """
+    import mimetypes
+    try:
+        st = os.stat(path)
+    except Exception as e:
+        return {"error": "read_nontext error: %s" % e}
+    mime, _ = mimetypes.guess_type(path)
+    mime = mime or "application/octet-stream"
+    try:
+        with open(path, "rb") as f:
+            data = f.read(max_bytes + 1)
+    except Exception as e:
+        return {"error": "read_nontext error: %s" % e}
+    truncated = len(data) > max_bytes
+    if truncated:
+        data = data[:max_bytes]
+    if path.lower().endswith(".ipynb"):
+        try:
+            nb = json.loads(data.decode("utf-8"))
+            cells = []
+            for c in nb.get("cells", []):
+                src = c.get("source", "")
+                if isinstance(src, list):
+                    src = "".join(src)
+                cells.append({"cell_type": c.get("cell_type", "code"),
+                              "source": src})
+            return {"path": path, "mime": "application/x-ipynb+json",
+                    "size": st.st_size, "format": "jupyter-notebook",
+                    "cells": cells}
+        except Exception as e:
+            return {"error": "read_nontext could not parse notebook: %s" % e}
+    try:
+        if data.startswith(b"\xff\xfe") or data.startswith(b"\xfe\xff"):
+            text = data.decode("utf-16")
+        else:
+            text = data.decode("utf-8")
+        sample = text[:4096]
+        if sample and all(ord(c) >= 32 or c in "\r\n\t" for c in sample):
+            return {"path": path, "mime": mime, "size": st.st_size,
+                    "truncated": truncated, "text": text[: _READ_CAP]}
+    except Exception:
+        pass
+    return {"path": path, "mime": mime, "size": st.st_size,
+            "truncated": truncated, "encoding": "base64",
+            "base64": base64.b64encode(data).decode("ascii"),
+            "note": "No decoder is installed for this MIME type; raw base64 returned."}
 
 
 def base64e(data):
@@ -4026,179 +4111,18 @@ def send_frame(obj):
 
 
 
-send_frame({"ready": True, "engine": engine})
 
+def _get_state_dir():
+    """Base directory for kernel-owned persistent state."""
+    return os.environ.get("KILN_STATE_DIR") or os.path.dirname(os.path.abspath(__file__))
 
+def _get_memory_file():
+    """JSON file backing memory_store/memory_recall/memory_list."""
+    return os.path.join(_get_state_dir(), "kernel_memory.json")
 
-while True:
-
-    line = sys.stdin.readline()
-
-    if line == "":
-
-        break
-
-    line = line.strip()
-
-    if line == "":
-
-        # main kernel shutting down: reap non-permanent sub-kernels now
-
-        close_all_subkernels(include_permanent=False)
-
-        break
-
-    try:
-
-        code = base64.b64decode(line).decode('utf-8')
-
-    except Exception as e:
-
-        send_frame({"out":"", "error":f"Protocol error: {e}"})
-
-        continue
-
-    cell_timeout_ms = None
-
-    cell_secondary_ms = None
-
-    cell_cwd = None
-
-    if code.startswith(_CELL_PREFIX):
-
-        try:
-
-            envelope = json.loads(code[len(_CELL_PREFIX):])
-
-            code = envelope.get("code", "")
-
-            raw_timeout = envelope.get("timeoutMs")
-
-            if raw_timeout is not None:
-
-                cell_timeout_ms = int(raw_timeout)
-
-            raw_secondary = envelope.get("backgroundTimeoutMs")
-
-            if raw_secondary is not None:
-
-                cell_secondary_ms = int(raw_secondary)
-
-            raw_cwd = envelope.get("cwd")
-
-            if raw_cwd is not None and str(raw_cwd).strip() != "":
-
-                cell_cwd = str(raw_cwd)
-
-        except Exception as e:
-
-            send_frame({"out": "", "error": f"Cell envelope error: {e}"})
-
-            continue
-
-    if code.startswith(_CTRL_PREFIX):
-
-        # control channel (snapshot / restore / list_names) — never run as code
-
-        try:
-
-            req = json.loads(code[len(_CTRL_PREFIX):])
-
-            res = _handle_ctrl(req)
-
-        except Exception as e:
-
-            res = {"error": "control command failed: %s" % e}
-
-        send_frame({"out": _SNAPSHOT_MARKER + json.dumps(res, ensure_ascii=False), "error": None})
-
-        continue
-
-    _LAST_CELL_TIMEOUT_MS[0] = cell_timeout_ms
-
-    # Re-pin to the owning chat's cwd only when the stamp changes: a run of cells
-
-    # in one chat keeps any set_cwd() the model made, while a different chat's
-
-    # stamp resets to its own workspace instead of inheriting the last chat's.
-
-    if cell_cwd is not None and cell_cwd != _LAST_STAMPED_CWD:
-
-        _pin_cwd_for_cell(cell_cwd)
-
-        _LAST_STAMPED_CWD = cell_cwd
-
-    try:
-
-        # chdir is process-global. A cell that backgrounds keeps the cwd it
-
-        # started in only until the next foreground cell re-chdirs; concurrent
-
-        # cells in different directories is a known limitation of one shared
-
-        # interpreter, and in practice background + foreground share a chat's cwd.
-
-        os.chdir(_KERNEL_CWD)
-
-    except Exception:
-
-        pass
-
-    primary_ms = cell_timeout_ms if cell_timeout_ms is not None else _DEFAULT_PRIMARY_MS
-
-    secondary_ms = _secondary_ms(primary_ms, cell_secondary_ms)
-
-    runner = _CellRunner(code)
-
-    runner.start()
-
-    if runner.done.wait(primary_ms / 1000.0):
-
-        # Finished within the primary budget: normal result, plus any background
-
-        # cell that completed since the last frame.
-
-        send_frame({"out": _flush_bg() + runner.out, "error": runner.err})
-
-    else:
-
-        # Overran the primary budget: DO NOT kill. Detach it to the background so
-
-        # the loop is free for the next command; the watchdog stops it at the
-
-        # secondary deadline. Its output arrives on a later frame via _flush_bg().
-
-        with _bg_lock:
-
-            _bg_counter[0] += 1
-
-            runner.bg_id = _bg_counter[0]
-
-            runner.deadline = time.monotonic() + secondary_ms / 1000.0
-
-            _bg_runners[runner.bg_id] = runner
-
-        notice = ("[cell still running after %ds - moved to the background as bg#%d. It keeps "
-
-                  "running while you work; its output arrives with a later result, and it is "
-
-                  "force-stopped if it passes %ds.]"
-
-                  % (round(primary_ms / 1000.0), runner.bg_id, round(secondary_ms / 1000.0)))
-
-        send_frame({"out": _flush_bg() + notice, "error": None, "backgrounded": True})
-
-
-
-
-
-# ============================================================
-
-# New tools: notebook_edit, checkpoints, schedule, memory, etc.
-
-# ============================================================
-
-
+def _get_checkpoint_dir():
+    """Directory holding kernel checkpoints."""
+    return os.path.join(_get_state_dir(), "checkpoints")
 
 def notebook_edit(filepath, cell_index=None, new_source=None, cell_type=None,
 
@@ -4357,106 +4281,6 @@ def notebook_edit(filepath, cell_index=None, new_source=None, cell_type=None,
     else:
 
         return {'success': False, 'message': 'No changes made'}
-
-
-
-
-
-def list_checkpoints():
-
-    """List all saved checkpoints with metadata.
-
-
-
-    Returns:
-
-        List of checkpoint dicts with name, timestamp, size, variables.
-
-    """
-
-    ckpt_dir = _get_checkpoint_dir()
-
-    meta_file = os.path.join(ckpt_dir, 'checkpoints.json')
-
-    if not os.path.exists(meta_file):
-
-        return []
-
-    try:
-
-        with open(meta_file, 'r', encoding='utf-8') as f:
-
-            meta = json.load(f)
-
-        return meta
-
-    except:
-
-        return []
-
-
-
-
-
-def delete_checkpoint(name):
-
-    """Delete a checkpoint by name.
-
-
-
-    Args:
-
-        name: Name of checkpoint to delete.
-
-
-
-    Returns:
-
-        Dict with success status.
-
-    """
-
-    ckpt_dir = _get_checkpoint_dir()
-
-    ckpt_file = os.path.join(ckpt_dir, f'{name}.pkl')
-
-    ckpt_gz = ckpt_file + '.gz'
-
-    deleted = []
-
-    if os.path.exists(ckpt_file):
-
-        os.remove(ckpt_file)
-
-        deleted.append(ckpt_file)
-
-    if os.path.exists(ckpt_gz):
-
-        os.remove(ckpt_gz)
-
-        deleted.append(ckpt_gz)
-
-    if not deleted:
-
-        return {'error': f'Checkpoint "{name}" not found'}
-
-    # Update metadata
-
-    meta_file = os.path.join(ckpt_dir, 'checkpoints.json')
-
-    if os.path.exists(meta_file):
-
-        with open(meta_file, 'r', encoding='utf-8') as f:
-
-            meta = json.load(f)
-
-        meta = [c for c in meta if c['name'] != name]
-
-        with open(meta_file, 'w', encoding='utf-8') as f:
-
-            json.dump(meta, f, indent=2)
-
-    return {'success': True, 'deleted': deleted}
 
 
 
@@ -4794,198 +4618,6 @@ def routine(name, steps):
 
     return {'name': name, 'steps': results, 'success': overall_success}
 
-def checkpoint(name):
-
-    """Create a checkpoint of the current kernel state.
-
-
-
-    Args:
-
-        name: Unique name for the checkpoint.
-
-
-
-    Returns:
-
-        Dict with success status and metadata.
-
-    """
-
-    if 'snapshot_kernel_state' in globals() and callable(globals()['snapshot_kernel_state']):
-
-        return snapshot_kernel_state(name)
-
-    else:
-
-        import pickle
-
-        import gzip
-
-        import os
-
-        import time
-
-        try:
-
-            import dill
-
-            pickle_module = dill
-
-        except ImportError:
-
-            pickle_module = pickle
-
-        ckpt_dir = _get_checkpoint_dir()
-
-        os.makedirs(ckpt_dir, exist_ok=True)
-
-        ns = globals().copy()
-
-        keys_to_remove = []
-
-        for k, v in ns.items():
-
-            if k.startswith('__') or k.endswith('__'):
-
-                keys_to_remove.append(k)
-
-            elif isinstance(v, type(os)):
-
-                keys_to_remove.append(k)
-
-        for k in keys_to_remove:
-
-            ns.pop(k, None)
-
-        ckpt_file = os.path.join(ckpt_dir, f'{name}.pkl')
-
-        try:
-
-            with open(ckpt_file, 'wb') as f:
-
-                pickle_module.dump(ns, f)
-
-            with open(ckpt_file, 'rb') as f_in:
-
-                with gzip.open(ckpt_file + '.gz', 'wb') as f_out:
-
-                    f_out.write(f_in.read())
-
-        except Exception as e:
-
-            return {'error': str(e)}
-
-        meta_file = os.path.join(ckpt_dir, 'checkpoints.json')
-
-        meta = []
-
-        if os.path.exists(meta_file):
-
-            try:
-
-                with open(meta_file, 'r') as f:
-
-                    meta = json.load(f)
-
-            except:
-
-                pass
-
-        meta.append({
-
-            'name': name,
-
-            'timestamp': time.time(),
-
-            'size': os.path.getsize(ckpt_file),
-
-            'compressed': os.path.exists(ckpt_file + '.gz')
-
-        })
-
-        with open(meta_file, 'w') as f:
-
-            json.dump(meta, f, indent=2)
-
-        return {'success': True, 'name': name, 'size': os.path.getsize(ckpt_file)}
-
-def rewind(name):
-
-    """Restore a checkpoint by name.
-
-
-
-    Args:
-
-        name: Name of checkpoint to restore.
-
-
-
-    Returns:
-
-        Dict with success status.
-
-    """
-
-    if 'restore_kernel_state' in globals() and callable(globals()['restore_kernel_state']):
-
-        return restore_kernel_state(name)
-
-    else:
-
-        import pickle
-
-        import gzip
-
-        import os
-
-        try:
-
-            import dill
-
-            pickle_module = dill
-
-        except ImportError:
-
-            pickle_module = pickle
-
-        ckpt_dir = _get_checkpoint_dir()
-
-        ckpt_file = os.path.join(ckpt_dir, f'{name}.pkl')
-
-        if not os.path.exists(ckpt_file):
-
-            if os.path.exists(ckpt_file + '.gz'):
-
-                with gzip.open(ckpt_file + '.gz', 'rb') as f:
-
-                    ns = pickle_module.load(f)
-
-            else:
-
-                return {'error': f'Checkpoint "{name}" not found'}
-
-        else:
-
-            with open(ckpt_file, 'rb') as f:
-
-                ns = pickle_module.load(f)
-
-        for k, v in ns.items():
-
-            if k.startswith('__') and k.endswith('__'):
-
-                continue
-
-            if isinstance(v, type(os)):
-
-                continue
-
-            globals()[k] = v
-
-        return {'success': True, 'name': name, 'restored': list(ns.keys())}
-
 def memory_store(key, value, ttl=None, append=False):
 
     """Store a value persistently with TTL and append support.
@@ -5267,71 +4899,304 @@ def stop_agent(agent_id):
 
 
 def tool_help(tool_name=None):
-
-    """Display comprehensive help for all tools or a specific tool.
-
-
-
-    Args:
-
-        tool_name: If provided, show detailed help for that tool.
-
-
-
-    Returns:
-
-        String with help information.
-
-    """
-
-    tools = {
-
-        'notebook_edit': notebook_edit.__doc__,
-
-        'list_checkpoints': list_checkpoints.__doc__,
-
-        'delete_checkpoint': delete_checkpoint.__doc__,
-
-        'monitor': monitor.__doc__,
-
-        'schedule': schedule.__doc__,
-
-        'routine': routine.__doc__,
-
-        'checkpoint': checkpoint.__doc__,
-
-        'rewind': rewind.__doc__,
-
-        'memory_store': memory_store.__doc__,
-
-        'memory_recall': memory_recall.__doc__,
-
-        'memory_list': memory_list.__doc__,
-
-        'enter_worktree': enter_worktree.__doc__,
-
-        'stop_agent': stop_agent.__doc__,
-
-    }
-
-    if tool_name:
-
-        doc = tools.get(tool_name)
-
+    """Display comprehensive help for all tools or a specific tool."""
+    import inspect
+    tools = {}
+    for name, obj in globals().items():
+        if name.startswith("_"):
+            continue
+        if not (inspect.isfunction(obj) or inspect.isbuiltin(obj)):
+            continue
+        doc = inspect.getdoc(obj)
         if doc:
+            tools[name] = doc
+    if tool_name:
+        doc = tools.get(tool_name)
+        if doc:
+            return "%s:\n%s" % (tool_name, doc)
+        return "No help found for %s" % tool_name
+    lines = ["Available tools:", ""]
+    for name in sorted(tools):
+        first = tools[name].splitlines()[0] if tools[name] else ""
+        lines.append("  %s -- %s" % (name, first))
+    return "\n".join(lines)
 
-            return f"{tool_name}:\n{doc}"
 
-        else:
+def _ckpt_paths(name):
+    """Return (data_path, manifest_path) for a sanitized checkpoint name."""
+    safe = str(name).replace("\\", "_").replace("/", "_").replace("..", "_")
+    data = os.path.join(_get_checkpoint_dir(), safe + ".pkl")
+    manifest = os.path.join(_get_checkpoint_dir(), safe + ".json")
+    return data, manifest
 
-            return f"No help found for {tool_name}"
+
+def _ckpt_index_path():
+    return os.path.join(_get_checkpoint_dir(), "index.json")
+
+
+def _ckpt_read_index():
+    ip = _ckpt_index_path()
+    if not os.path.exists(ip):
+        return []
+    try:
+        with open(ip, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _ckpt_write_index(entries):
+    ip = _ckpt_index_path()
+    os.makedirs(os.path.dirname(ip), exist_ok=True)
+    with open(ip, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=2)
+
+
+def list_checkpoints():
+    """List saved checkpoints with metadata."""
+    return _ckpt_read_index()
+
+
+def delete_checkpoint(name):
+    """Delete a checkpoint by name."""
+    data_path, manifest_path = _ckpt_paths(name)
+    removed = []
+    for path in (data_path, manifest_path):
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+                removed.append(os.path.basename(path))
+            except Exception as e:
+                return {"error": "delete failed: %s" % e}
+    if not removed:
+        return {"error": 'Checkpoint "%s" not found' % name}
+    entries = [e for e in _ckpt_read_index() if e.get("name") != name]
+    _ckpt_write_index(entries)
+    return {"success": True, "name": name, "deleted": removed}
+
+
+def checkpoint(name):
+    """Snapshot the user namespace into a named checkpoint."""
+    data_path, manifest_path = _ckpt_paths(name)
+    os.makedirs(os.path.dirname(data_path), exist_ok=True)
+    result = snapshot_kernel_state(data_path, manifest_path)
+    if result.get("error"):
+        return result
+    entries = [e for e in _ckpt_read_index() if e.get("name") != name]
+    entries.append({
+        "name": name,
+        "timestamp": time.time(),
+        "bytes": result.get("bytes", 0),
+        "saved": result.get("saved", []),
+    })
+    _ckpt_write_index(entries)
+    return {"success": True, "name": name, "saved": result.get("saved", []), "bytes": result.get("bytes", 0)}
+
+
+def rewind(name):
+    """Restore a named checkpoint into the user namespace."""
+    data_path, _ = _ckpt_paths(name)
+    if not os.path.exists(data_path):
+        return {"error": 'Checkpoint "%s" not found' % name}
+    result = restore_kernel_state(data_path)
+    result["name"] = name
+    return result
+
+
+# Register the post-loop tool functions into the model namespace.
+prompt_dict.update({
+    "notebook_edit": notebook_edit,
+    "list_checkpoints": list_checkpoints,
+    "delete_checkpoint": delete_checkpoint,
+    "monitor": monitor,
+    "schedule": schedule,
+    "routine": routine,
+    "checkpoint": checkpoint,
+    "rewind": rewind,
+    "memory_store": memory_store,
+    "memory_recall": memory_recall,
+    "memory_list": memory_list,
+    "enter_worktree": enter_worktree,
+    "stop_agent": stop_agent,
+    "bash": bash,
+    "read": read,
+    "write": write,
+    "read_nontext": read_nontext,
+    "snapshot_kernel_state": snapshot_kernel_state,
+    "restore_kernel_state": restore_kernel_state,
+    "tool_help": tool_help,
+})
+_ns.update(prompt_dict)
+
+send_frame({"ready": True, "engine": engine})
+
+
+
+while True:
+
+    line = sys.stdin.readline()
+
+    if line == "":
+
+        break
+
+    line = line.strip()
+
+    if line == "":
+
+        # main kernel shutting down: reap non-permanent sub-kernels now
+
+        close_all_subkernels(include_permanent=False)
+
+        break
+
+    try:
+
+        code = base64.b64decode(line).decode('utf-8')
+
+    except Exception as e:
+
+        send_frame({"out":"", "error":f"Protocol error: {e}"})
+
+        continue
+
+    cell_timeout_ms = None
+
+    cell_secondary_ms = None
+
+    cell_cwd = None
+
+    if code.startswith(_CELL_PREFIX):
+
+        try:
+
+            envelope = json.loads(code[len(_CELL_PREFIX):])
+
+            code = envelope.get("code", "")
+
+            raw_timeout = envelope.get("timeoutMs")
+
+            if raw_timeout is not None:
+
+                cell_timeout_ms = int(raw_timeout)
+
+            raw_secondary = envelope.get("backgroundTimeoutMs")
+
+            if raw_secondary is not None:
+
+                cell_secondary_ms = int(raw_secondary)
+
+            raw_cwd = envelope.get("cwd")
+
+            if raw_cwd is not None and str(raw_cwd).strip() != "":
+
+                cell_cwd = str(raw_cwd)
+
+        except Exception as e:
+
+            send_frame({"out": "", "error": f"Cell envelope error: {e}"})
+
+            continue
+
+    if code.startswith(_CTRL_PREFIX):
+
+        # control channel (snapshot / restore / list_names) — never run as code
+
+        try:
+
+            req = json.loads(code[len(_CTRL_PREFIX):])
+
+            res = _handle_ctrl(req)
+
+        except Exception as e:
+
+            res = {"error": "control command failed: %s" % e}
+
+        send_frame({"out": _SNAPSHOT_MARKER + json.dumps(res, ensure_ascii=False), "error": None})
+
+        continue
+
+    _LAST_CELL_TIMEOUT_MS[0] = cell_timeout_ms
+
+    # Re-pin to the owning chat's cwd only when the stamp changes: a run of cells
+
+    # in one chat keeps any set_cwd() the model made, while a different chat's
+
+    # stamp resets to its own workspace instead of inheriting the last chat's.
+
+    if cell_cwd is not None and cell_cwd != _LAST_STAMPED_CWD:
+
+        _pin_cwd_for_cell(cell_cwd)
+
+        _LAST_STAMPED_CWD = cell_cwd
+
+    try:
+
+        # chdir is process-global. A cell that backgrounds keeps the cwd it
+
+        # started in only until the next foreground cell re-chdirs; concurrent
+
+        # cells in different directories is a known limitation of one shared
+
+        # interpreter, and in practice background + foreground share a chat's cwd.
+
+        os.chdir(_KERNEL_CWD)
+
+    except Exception:
+
+        pass
+
+    primary_ms = cell_timeout_ms if cell_timeout_ms is not None else _DEFAULT_PRIMARY_MS
+
+    secondary_ms = _secondary_ms(primary_ms, cell_secondary_ms)
+
+    runner = _CellRunner(code)
+
+    runner.start()
+
+    if runner.done.wait(primary_ms / 1000.0):
+
+        # Finished within the primary budget: normal result, plus any background
+
+        # cell that completed since the last frame.
+
+        send_frame({"out": _flush_bg() + runner.out, "error": runner.err})
 
     else:
 
-        lines = ["Available tools:", ""]
+        # Overran the primary budget: DO NOT kill. Detach it to the background so
 
-        for name, doc in tools.items():
+        # the loop is free for the next command; the watchdog stops it at the
 
-            lines.append(f"  {name}")
+        # secondary deadline. Its output arrives on a later frame via _flush_bg().
 
-        return "\n".join(lines)
+        with _bg_lock:
+
+            _bg_counter[0] += 1
+
+            runner.bg_id = _bg_counter[0]
+
+            runner.deadline = time.monotonic() + secondary_ms / 1000.0
+
+            _bg_runners[runner.bg_id] = runner
+
+        notice = ("[cell still running after %ds - moved to the background as bg#%d. It keeps "
+
+                  "running while you work; its output arrives with a later result, and it is "
+
+                  "force-stopped if it passes %ds.]"
+
+                  % (round(primary_ms / 1000.0), runner.bg_id, round(secondary_ms / 1000.0)))
+
+        send_frame({"out": _flush_bg() + notice, "error": None, "backgrounded": True})
+
+
+
+
+
+# ============================================================
+
+# New tools: notebook_edit, checkpoints, schedule, memory, etc.
+
+# ============================================================
