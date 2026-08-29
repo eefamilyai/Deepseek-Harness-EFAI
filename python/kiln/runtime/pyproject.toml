@@ -24,6 +24,8 @@ dependencies = [
   "dill>=0.3.8",      # kernel_child: namespace snapshot / restore
   "psutil>=5.9",      # kernel_child: process/resource introspection
   "pyyaml>=6.0",      # config + cell helpers: YAML read/write
+  "python-dotenv>=1.0", # config: .env loading (config.py)
+  "cryptography>=41.0",  # ds_waf: TLS fingerprint / request signing
   "requests>=2.31",   # provider fallbacks that do not go through curl_cffi
 ]
 

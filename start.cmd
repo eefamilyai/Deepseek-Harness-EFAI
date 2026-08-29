@@ -79,6 +79,23 @@ rem BOTH backend rows (kernel-python and llm-kiln) use the exact same Python.
 if exist "%VENV_PY%" (
   set "DSH_KERNEL_PYTHON=%VENV_PY%"
   echo [start] Using bundled Python: %VENV_PY%
+  rem ── Dependency verification with the bundled interpreter ─────────────
+  rem uv sync normally provisions everything; this is a cheap idempotent
+  rem safety net: check the pinned requirements with the SAME interpreter
+  rem (a small helper does the distribution-to-module name mapping), then
+  rem reinstall only what is actually missing. Never fails startup.
+  set "REQ_FILE=%RUNTIME_DIR%\requirements.txt"
+  set "CHECK_DEPS=%RUNTIME_DIR%\_check_deps.py"
+  if exist "%REQ_FILE%" if exist "%CHECK_DEPS%" (
+    "%VENV_PY%" "%CHECK_DEPS%" "%REQ_FILE%" >nul 2>&1
+    if errorlevel 1 (
+      echo [start] Installing missing runtime dependencies with the bundled Python...
+      "%VENV_PY%" -m pip install --disable-pip-version-check -r "%REQ_FILE%" >nul 2>&1
+      if errorlevel 1 (
+        echo [start] WARNING: pip install failed; the kernel will still start and disabled features will report themselves.
+      )
+    )
+  )
   goto py_done
 )
 

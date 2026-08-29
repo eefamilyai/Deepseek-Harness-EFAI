@@ -62,6 +62,20 @@ fi
 if [ -x "$VENV_PY" ]; then
   export DSH_KERNEL_PYTHON="$VENV_PY"
   echo "[start] Using bundled Python: $VENV_PY"
+  # Dependency verification with the bundled interpreter: uv sync normally
+  # provisions everything; this is an idempotent safety net that checks the
+  # pinned requirements with the SAME interpreter via a small helper that
+  # handles the distribution-to-module name mapping. Never fails startup.
+  REQ_FILE="$RUNTIME_DIR/requirements.txt"
+  CHECK_DEPS="$RUNTIME_DIR/_check_deps.py"
+  if [ -f "$REQ_FILE" ] && [ -f "$CHECK_DEPS" ]; then
+    if ! "$VENV_PY" "$CHECK_DEPS" "$REQ_FILE" >/dev/null 2>&1; then
+      echo "[start] Installing missing runtime dependencies with the bundled Python..."
+      if ! "$VENV_PY" -m pip install --disable-pip-version-check -r "$REQ_FILE" >/dev/null 2>&1; then
+        echo "[start] WARNING: pip install failed; the kernel will still start and disabled features will report themselves."
+      fi
+    fi
+  fi
 elif command -v python3 >/dev/null 2>&1; then
   export DSH_KERNEL_PYTHON="$(command -v python3)"
 else

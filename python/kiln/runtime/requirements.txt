@@ -1,0 +1,13 @@
+# Dependencies actually imported by the Kiln runtime scripts,
+# derived from a static import scan of python/kiln/runtime/*.py.
+# Kept in sync with python/kiln/runtime/pyproject.toml; `uv sync` is the
+# primary provisioning path, while start.cmd/start.sh use this file as a
+# fallback check with the bundled interpreter.
+curl-cffi>=0.7
+playwright>=1.40
+dill>=0.3.8
+psutil>=5.9
+PyYAML>=6.0
+python-dotenv>=1.0
+cryptography>=41.0
+requests>=2.31
