@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { DsmlTranslator, invokeArguments, isRateLimit, KilnAdapter, RATE_LIMIT_RETRY_MS, requestOptions } from '@deepseek-ai/dsh-llm-kiln'
+import { DsmlTranslator, invokeArguments, isRateLimit, KilnAdapter, RATE_LIMIT_RETRY_MS, requestOptions, trailingReasoningCalls } from '@deepseek-ai/dsh-llm-kiln'
 import { accountRoute, buildTurns, mintCallId, rebuildRoutes, renderToolCall, toolIndex } from '@deepseek-ai/dsh-llm-kiln'
 import { coerceParameter, toolProtocolPrompt } from '@deepseek-ai/dsh-llm-kiln'
 import type { KilnBridge, KilnProvider, KilnStreamEvent } from '@deepseek-ai/dsh-llm-kiln'
@@ -735,6 +735,105 @@ describe('rate limiting', () => {
       { type: 'content', text: 'Rate limits are usually enforced per account.' },
       { type: 'meta', finish: 'error', error: 'the provider bridge exited' },
     ])).toMatchObject({ failure: { code: 'TRANSPORT' } })
+  })
+})
+
+describe('a call the model left in its reasoning channel', () => {
+  const CORDIS: ToolSchema = {
+    name: 'cordis_inspect_list',
+    description: 'List Cordis providers.',
+    parameters: { type: 'object', properties: { platform: { type: 'string' } }, required: ['platform'] },
+  }
+
+  /** Collect every chunk of one stream, tools declared so DSML knows the names. */
+  async function streamChunks(events: readonly KilnStreamEvent[], tools: readonly ToolSchema[]) {
+    const adapter = new KilnAdapter({
+      bridge: { async *stream() { for (const event of events) yield event } } as unknown as KilnBridge,
+      routes: () => new Map(),
+      kilnId: route => route,
+    })
+    const chunks = []
+    for await (const chunk of adapter.stream({
+      provider: 'kiln-deepseek', model: 'deepseek-expert', messages: [USER_GO], tools: [...tools],
+    })) chunks.push(chunk)
+    return chunks
+  }
+
+  /** The tool calls a stream produced, as `[name, parsed arguments]`. */
+  async function streamCalls(events: readonly KilnStreamEvent[], tools: readonly ToolSchema[] = [KERNEL, CORDIS]) {
+    return (await streamChunks(events, tools))
+      .filter((chunk): chunk is Extract<typeof chunk, { type: 'block-end' }> => chunk.type === 'block-end')
+      .map(chunk => chunk.block)
+      .filter((block): block is Extract<typeof block, { type: 'tool-call' }> => block.type === 'tool-call')
+      .map(block => [block.name, JSON.parse(block.arguments) as unknown] as const)
+  }
+
+  /** The finish reason a stream ended on. */
+  async function streamFinish(events: readonly KilnStreamEvent[], tools: readonly ToolSchema[] = [KERNEL, CORDIS]) {
+    const finish = (await streamChunks(events, tools)).find(chunk => chunk.type === 'finish')
+    return finish?.type === 'finish' ? finish.reason : undefined
+  }
+
+  // The failure this fixes: the model thinks out loud and ends the thought with
+  // the call it means to make — but inside `<think>`, which the content scanner
+  // never sees, so the turn used to end having run nothing.
+  const REASONED_CALL = 'We need the provider list. Let me call it and display the output.\n\n'
+    + '<tool_calls>\n<invoke name="cordis_inspect_list">\n<parameter name="platform">host</parameter>\n</invoke>\n</tool_calls>'
+
+  it('recovers a complete call at the tail of the reasoning', async () => {
+    expect(await streamCalls([
+      { type: 'reasoning', text: REASONED_CALL },
+      { type: 'meta', finish: 'stop' },
+    ])).toEqual([['cordis_inspect_list', { platform: 'host' }]])
+  })
+
+  it('reports that turn as a tool-calls turn so the loop runs the call', async () => {
+    expect(await streamFinish([
+      { type: 'reasoning', text: REASONED_CALL },
+      { type: 'meta', finish: 'stop' },
+    ])).toEqual({ kind: 'tool-calls' })
+  })
+
+  it('unit: trailingReasoningCalls reads the same tail', () => {
+    expect(trailingReasoningCalls(REASONED_CALL, toolIndex([CORDIS]))).toEqual([
+      { name: 'cordis_inspect_list', arguments: JSON.stringify({ platform: 'host' }) },
+    ])
+  })
+
+  it('leaves a call quoted mid-thought alone', () => {
+    // Prose after the block means the model was discussing an example, not
+    // ending on the call — recovering it would run something it never asked for.
+    const midThought = 'We could run <tool_calls><invoke name="kernel"><parameter name="code">1</parameter>'
+      + '</invoke></tool_calls> but first let me read the file.'
+    expect(trailingReasoningCalls(midThought, toolIndex([KERNEL]))).toBeUndefined()
+  })
+
+  it('leaves a truncated tail block alone (never invents the end of a command)', () => {
+    const truncated = 'Let me run this:\n<tool_calls>\n<invoke name="kernel">\n<parameter name="code">import os\nprint(os'
+    expect(trailingReasoningCalls(truncated, toolIndex([KERNEL]))).toBeUndefined()
+  })
+
+  it('leaves an unknown tool in the reasoning alone', () => {
+    const unknown = 'Let me try.\n<tool_calls>\n<invoke name="not_a_tool">\n<parameter name="x">1</parameter>\n</invoke>\n</tool_calls>'
+    expect(trailingReasoningCalls(unknown, toolIndex([KERNEL]))).toBeUndefined()
+  })
+
+  it('does not double-dispatch when a content-channel call already ran', async () => {
+    // A real call in the visible channel wins; the reasoning tail is not also
+    // promoted, so the tool runs exactly once.
+    expect(await streamCalls([
+      { type: 'content', text: '<tool_calls><invoke name="kernel"><parameter name="code">1+1</parameter></invoke></tool_calls>\n' },
+      { type: 'reasoning', text: REASONED_CALL },
+      { type: 'meta', finish: 'stop' },
+    ])).toEqual([['kernel', { code: '1+1' }]])
+  })
+
+  it('recovers nothing from reasoning that names no call', async () => {
+    expect(await streamFinish([
+      { type: 'reasoning', text: 'I have enough to answer; no tool needed.' },
+      { type: 'content', text: 'Here is the answer.' },
+      { type: 'meta', finish: 'stop' },
+    ])).toEqual({ kind: 'stop' })
   })
 })
 

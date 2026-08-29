@@ -35,7 +35,7 @@ import type {
   TokenUsage,
   ToolSchema,
 } from '@deepseek-ai/dsh-llm'
-import { DsmlTranslator } from './dsml.ts'
+import { DsmlTranslator, trailingReasoningCalls } from './dsml.ts'
 import { DSML_CLOSE, DSML_OPEN, escapeXml, renderParameter, toolProtocolPrompt } from './protocol.ts'
 import type { KilnBridge, KilnMessage, KilnProvider } from './bridge.ts'
 
@@ -348,12 +348,14 @@ class ChunkEmitter {
   private open: 'text' | 'reasoning' | undefined
   private buffer = ''
   private readonly dsml: DsmlTranslator
+  private readonly tools: ReadonlyMap<string, ToolSchema>
   private calls = 0
   private usage: TokenUsage | undefined
   private finishHint: string | undefined
   private errorText: string | undefined
 
   constructor(tools: ReadonlyMap<string, ToolSchema>) {
+    this.tools = tools
     this.dsml = new DsmlTranslator(tools)
   }
 
@@ -442,11 +444,30 @@ class ChunkEmitter {
     }
   }
 
+  /**
+   * Recover a call the model left in its reasoning channel.
+   *
+   * When the turn produced no call and its last open block is reasoning, a
+   * complete `<tool_calls>` block at the tail of that reasoning is the action the
+   * model meant to take but wrote in the wrong channel — the content scanner
+   * never saw it, so the turn would otherwise end having run nothing. Emit it as
+   * a real call ({@link call} closes the reasoning block first, so the thought
+   * still survives verbatim ahead of the call it ended on). Does nothing for a
+   * truncated or mid-thought block, or when a content-channel call already ran.
+   */
+  private *recoverReasoningCall(): Generator<StreamChunk> {
+    if (this.open !== 'reasoning' || this.calls > 0) return
+    const recovered = trailingReasoningCalls(this.buffer, this.tools)
+    if (recovered === undefined) return
+    for (const recoveredCall of recovered) yield* this.call(recoveredCall.name, recoveredCall.arguments)
+  }
+
   /** Flush the translator, close the last block, and finish the stream. */
   *finish(): Generator<StreamChunk> {
     for (const event of this.dsml.end()) {
       yield* this.emit(event)
     }
+    yield* this.recoverReasoningCall()
     yield* this.close()
     if (this.usage !== undefined) yield { type: 'usage', usage: this.usage }
     yield { type: 'finish', reason: this.reason() }

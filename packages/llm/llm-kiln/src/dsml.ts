@@ -156,6 +156,54 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** The index of the LAST place `pattern` matches in `text`, or -1. */
+function lastMatchIndex(text: string, pattern: RegExp): number {
+  let at = -1
+  for (const match of text.matchAll(pattern)) at = match.index ?? at
+  return at
+}
+
+/**
+ * Recover a tool call the model left at the TAIL of its reasoning channel.
+ *
+ * The taught reader only scans visible CONTENT, so a `<tool_calls>` block the
+ * model writes inside its `<think>` stream — which the free-web model does when
+ * its context is thick with tool-call examples — is never seen as a call, and
+ * the turn ends having run nothing. This recovers exactly that shape and nothing
+ * looser: a COMPLETE `<tool_calls>`/`<invoke>` block for a DECLARED tool sitting
+ * at the very end of the reasoning, with only whitespace after it. A block in
+ * the middle of a longer thought (the model quoting an example) is not at the
+ * tail and is refused; a truncated block parses to nothing and is refused.
+ *
+ * @param reasoning - the full reasoning-block text.
+ * @param tools - the request's declared tool schemas.
+ * @returns the recovered call(s), or undefined when the tail is not a whole call.
+ */
+export function trailingReasoningCalls(
+  reasoning: string,
+  tools: ReadonlyMap<string, ToolSchema>,
+): readonly { readonly name: string; readonly arguments: string }[] | undefined {
+  // Anchor on the taught wrapper if the tail has one, so a multi-invoke block is
+  // taken whole; otherwise on a bare invoke. An earlier quoted example sits
+  // before this anchor and is excluded from the candidate.
+  const wrapper = lastMatchIndex(reasoning, /<tool_calls>/gi)
+  const at = wrapper >= 0 ? wrapper : lastMatchIndex(reasoning, /<invoke\b/gi)
+  if (at < 0) return undefined
+  const candidate = reasoning.slice(at)
+  const translator = new DsmlTranslator(tools)
+  const events = [...translator.push(candidate.endsWith('\n') ? candidate : `${candidate}\n`), ...translator.end()]
+  const calls: { name: string; arguments: string }[] = []
+  let trailing = ''
+  for (const event of events) {
+    if (event.kind === 'tool-call') calls.push({ name: event.name, arguments: event.arguments })
+    else trailing += event.text
+  }
+  // The tail must be JUST the call: real prose after it means this was a mention
+  // mid-thought, not the model's closing action.
+  if (calls.length === 0 || trailing.trim().length > 0) return undefined
+  return calls
+}
+
 /**
  * Parse a tag's attribute run into its key/value pairs.
  *

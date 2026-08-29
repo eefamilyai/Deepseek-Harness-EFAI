@@ -50,7 +50,7 @@ export { KilnAdapter, buildTurns, flattenMessage, isRateLimit, mintCallId, RATE_
 export type { KilnAdapterOptions } from './adapter.ts'
 export { KilnBridge } from './bridge.ts'
 export type { KilnBridgeOptions, KilnMessage, KilnModel, KilnProvider, KilnStreamEvent, KilnStreamRequest } from './bridge.ts'
-export { DsmlTranslator, invokeArguments } from './dsml.ts'
+export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from './dsml.ts'
 export type { DsmlEvent } from './dsml.ts'
 export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requiredNames, toolProtocolPrompt, unescapeXml } from './protocol.ts'
 
