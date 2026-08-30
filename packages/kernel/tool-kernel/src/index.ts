@@ -18,7 +18,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { GenericCallView, TerminalResultView, ToolResult } from '@deepseek-ai/dsh-tools'
+import type { GenericCallView, GenericResultView, ToolResult } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-kernel'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
@@ -148,17 +148,20 @@ export function presentKernelCall(args: { code: string }): GenericCallView {
 }
 
 /**
- * Completed-call presentation: a terminal card carrying the captured output.
+ * Completed-call presentation: a generic card carrying the captured cell
+ * output. The output is Python interpreter text, not a shell command, so it
+ * must not declare the terminal render intent (a command-less terminal card
+ * would draw an empty `$` prompt and mislabel the cell as a shell run).
  * @param result - the final model-facing tool result.
- * @returns the terminal result view, or undefined (generic card) on failure.
+ * @returns the generic result view, or undefined (raw result) on failure.
  */
-export function presentKernelResult(result: ToolResult): TerminalResultView | undefined {
+export function presentKernelResult(result: ToolResult): GenericResultView | undefined {
   if (result.isError) return undefined
   const text = result.content
     .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
     .map(block => block.text)
     .join('\n')
-  return { card: 'terminal', output: text }
+  return { card: 'generic', content: [{ type: 'text', text }] }
 }
 
 /**
