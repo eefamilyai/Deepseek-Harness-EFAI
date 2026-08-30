@@ -1516,6 +1516,11 @@ def list_skills():
 
     """List saved skills as [{name, description}]."""
 
+    _seam = _seam_request("skills.list", {}, timeout=15.0)
+    if _seam is not None and _seam.get("ok") and not _seam.get("unavailable"):
+        skills = _seam.get("value")
+        if isinstance(skills, list):
+            return skills or "(no skills available in this scope)"
     d = _skills_dir()
 
     out = []
@@ -1552,6 +1557,15 @@ def use_skill(name):
 
     """Return a skill's instructions so the model can apply them."""
 
+    _seam = _seam_request("skills.get", {"name": name}, timeout=15.0)
+    if _seam is not None and _seam.get("ok") and not _seam.get("unavailable"):
+        _skill = _seam.get("value")
+        if isinstance(_skill, dict) and _skill.get("content"):
+            _parts = [f"SKILL: {_skill.get('name')}"]
+            if _skill.get("description"):
+                _parts.append("DESCRIPTION: " + _skill["description"])
+            _parts.append("INSTRUCTIONS:\n" + _skill["content"])
+            return "\n\n".join(_parts)
     safe = re.sub(r"[^A-Za-z0-9 _-]", "", name or "").strip()[:64]
 
     path = os.path.join(_skills_dir(), safe + ".json")

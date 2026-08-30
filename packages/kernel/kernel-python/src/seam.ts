@@ -242,6 +242,24 @@ function projectSessionHeader(header: SessionHeaderShape): SessionHeaderShape {
   }
 }
 
+/** Skill shapes the kernel consumes, mirrored from `packages/skill/skill/src/index.ts`. */
+interface SkillSummaryShape { readonly name: string; readonly description: string; readonly whenToUse?: string }
+interface SkillDefinitionShape extends SkillSummaryShape {
+  readonly content: string
+  readonly path?: string
+}
+interface SkillLookupShape { readonly cwd?: string; readonly signal?: AbortSignal }
+interface SkillsSeamShape {
+  list(options?: SkillLookupShape): Promise<SkillSummaryShape[]>
+  get(name: string, options?: SkillLookupShape): Promise<SkillDefinitionShape | undefined>
+}
+
+function skillsOf(ctx: Context | undefined): SkillsSeamShape | undefined {
+  if (ctx === undefined) return undefined
+  const c = (ctx as Context & { skills?: unknown }).skills
+  return c === undefined || c === null ? undefined : c as SkillsSeamShape
+}
+
 /** Dispatch one seam request against the current cell's agent-scoped ctx. */
 export async function dispatchSeam(
   agentCtx: Context | undefined,
@@ -255,6 +273,7 @@ export async function dispatchSeam(
   if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, request, signal)
   if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, request)
   if (request.op.startsWith('sessions.')) return dispatchSessions(agentCtx, request)
+  if (request.op.startsWith('skills.')) return dispatchSkills(agentCtx, request, signal)
   return unavailable(request.id, `unknown seam operation: ${request.op}`)
 }
 
@@ -525,6 +544,38 @@ function dispatchSessions(agentCtx: Context | undefined, request: SeamRequest): 
       const session = sessions.get(id)
       if (session === undefined) return ok(request.id, null)
       return ok(request.id, { id: session.id, header: projectSessionHeader(session.header) })
+    }
+    return unavailable(request.id, `unknown seam operation: ${request.op}`)
+  } catch (error) {
+    return failed(request.id, error)
+  }
+}
+
+async function dispatchSkills(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
+  const skills = skillsOf(agentCtx)
+  if (skills === undefined) return unavailable(request.id, 'ctx.skills is not mounted for this agent')
+  const args = asArgs(request.args)
+  const options: SkillLookupShape = signal !== undefined ? { signal } : {}
+  try {
+    if (request.op === 'skills.list') {
+      const summaries = await skills.list(options)
+      return ok(request.id, summaries.map(s => ({ name: s.name, description: s.description })))
+    }
+    if (request.op === 'skills.get') {
+      const name = typeof args.name === 'string' ? args.name : undefined
+      if (name === undefined) return failed(request.id, new Error('skills.get requires a string "name" argument'))
+      const definition = await skills.get(name, options)
+      if (definition === undefined) return ok(request.id, null)
+      return ok(request.id, {
+        name: definition.name,
+        description: definition.description,
+        content: definition.content,
+        ...definition.path !== undefined ? { path: definition.path } : {},
+      })
     }
     return unavailable(request.id, `unknown seam operation: ${request.op}`)
   } catch (error) {
