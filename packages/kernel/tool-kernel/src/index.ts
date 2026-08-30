@@ -178,32 +178,9 @@ export function apply(ctx: Context, config: Config): void {
     order: 100,
     text: [
       'You have one tool for acting on this machine: `kernel`, which runs Python in a',
-      'persistent namespace. Everything else you might reach for — reading and editing',
-      'files, searching the disk, running shell commands, driving a browser — is a',
-      'function call inside that namespace, not a separate tool.',
-      '',
-      'The namespace persists across calls: variables, imports, and functions you define',
-      'in one cell are still bound in the next. Build on that instead of re-deriving',
-      'state. `kernel_vars()` lists what is currently bound.',
-      '',
-      'You get back exactly what the cell captured: printed text, plus the value of every',
-      'top-level bare expression on its own line. A value assigned to a variable shows',
-      'nothing until you print it. Nothing is synthesized — if the output is empty, the',
-      'cell really did produce none, and you must never describe a result you did not see.',
-      '',
-      'Preloaded helpers include `sh(cmd)` for shell commands, `read_file` / `write_file` /',
-      '`edit_file` / `append_file` / `delete_file`, `list_dir` / `find` / `glob`,',
-      '`remember` / `recall` / `forget` for storage that survives a kernel restart, and',
-      '`peek(x)` for a compact look at a large object. Call `dir()` on the namespace if you',
-      'are unsure what else is available. Pass an optional `timeoutMs` argument to raise a',
-      'cell\'s primary budget before it backgrounds.',
-      '',
-      'A cell that raises returns its traceback rather than failing the call: read it and',
-      'fix the code. A cell that overruns its time budget is NOT killed — it moves to the',
-      'background and keeps running while you work; its output comes back with a later cell,',
-      'and it is force-stopped only if it passes a much larger secondary budget. The',
-      'namespace survives all of that. Cancelling a cell, though, restarts the kernel and',
-      'empties the namespace — anything saved with `remember()` survives even that.',
+      'persistent namespace. To learn every preloaded helper and how each one behaves,',
+      'call `tool_help()` — with no argument it lists every tool and a one-line summary;',
+      'pass a name to get its full documentation.',
     ].join('\n'),
   })
 
@@ -243,7 +220,13 @@ export function apply(ctx: Context, config: Config): void {
       // primary and is force-stopped at this generous deadline.
       const backgroundTimeoutMs = Math.max(resolved.backgroundTimeoutMs, boundedTimeoutMs)
       const result = await ctx.kernel.execute(
-        { code: input.code, timeoutMs: boundedTimeoutMs, backgroundTimeoutMs, ...cwd !== undefined ? { cwd } : {} },
+        {
+          code: input.code,
+          timeoutMs: boundedTimeoutMs,
+          backgroundTimeoutMs,
+          ...cwd !== undefined ? { cwd } : {},
+          ...exec.agent !== undefined ? { agentCtx: exec.agent.ctx } : {},
+        },
         exec.signal,
       )
       return {

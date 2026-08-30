@@ -6,6 +6,8 @@ import base64
 
 import contextlib
 
+import fnmatch
+
 import io
 
 import json
@@ -102,41 +104,47 @@ _LAST_STAMPED_CWD = None
 
 
 
-def sh(cmd, timeout=None, **kwargs):
-
+def sh(cmd, timeout=None, result=False, check=False, **kwargs):
     """Run a shell command and return its combined output.
 
+    The default return is stdout+stderr concatenated as text, so existing
+    one-shot idioms keep working. Pass ``result=True`` for a structured dict
+    ``{ok, code, stdout, stderr, output}`` so the model can tell a failed
+    command from one that printed nothing. ``check=True`` raises RuntimeError
+    on a non-zero exit instead of returning it quietly.
 
-
-    Extra keyword arguments are accepted and ignored so that idioms the model
-
-    picks up from other harnesses (``capture=True``, ``check=True``, ``text``,
-
-    ``shell=``) never crash the call — this helper ALWAYS captures output and
-
-    returns it as text, which is what those kwargs would request anyway.
-
+    Extra keyword arguments are accepted and ignored so idioms the model picks
+    up from other harnesses (``capture=``, ``check=``, ``text=``, ``shell=``)
+    never crash the call -- this helper ALWAYS captures output.
     """
-
-    # a list command is fine too — subprocess joins it per-platform with
-
-    # shell=True (spaces on POSIX, list2cmdline on Windows)
-
     try:
-
         r = subprocess.run(cmd, shell=True, capture_output=True, timeout=timeout)
-
-        return decode_bytes(r.stdout) + decode_bytes(r.stderr)
-
     except subprocess.TimeoutExpired:
-
-        return f"Command timed out after {timeout}s"
-
+        msg = "Command timed out after %ss" % timeout
+        if result:
+            return {"ok": False, "code": None, "stdout": "", "stderr": "",
+                    "output": msg, "timeout": True, "error": msg}
+        if check:
+            raise RuntimeError(msg)
+        return msg
     except Exception as e:
-
-        return f"Error running command: {e}"
-
-
+        msg = "Error running command: %s" % e
+        if result:
+            return {"ok": False, "code": None, "stdout": "", "stderr": "",
+                    "output": msg, "error": msg}
+        if check:
+            raise RuntimeError(msg)
+        return msg
+    stdout = decode_bytes(r.stdout)
+    stderr = decode_bytes(r.stderr)
+    output = stdout + stderr
+    ok = r.returncode == 0
+    if check and not ok:
+        raise RuntimeError("Command exited with code %s: %s" % (r.returncode, output))
+    if result:
+        return {"ok": ok, "code": r.returncode, "stdout": stdout,
+                "stderr": stderr, "output": output}
+    return output
 
 def fetch(url, timeout=30):
 
@@ -404,33 +412,35 @@ def _record_change(op, path, backup, had_original, diff=None):
 
 
 
-def read_file(path, max_chars=_READ_CAP):
+def read_file(path, max_chars=_READ_CAP, meta=False):
+    """Return a file's text (head+tail if huge).
 
-    """Return a file's text (head+tail if huge)."""
-
+    ``meta=True`` returns a structured dict instead of the text itself:
+    ``{ok, path, size, total_chars, returned_chars, truncated, text}`` on
+    success or ``{ok: False, path, error}`` on failure. The default string form
+    is unchanged, so existing one-shot ``read_file(x)`` calls keep working.
+    """
     try:
-
+        st = os.stat(path)
         with open(path, "r", encoding="utf-8", errors="replace") as f:
-
             data = f.read()
-
     except Exception as e:
-
-        return f"read_file error: {e}"
-
-    if len(data) > max_chars:
-
-        return (data[: max_chars // 2]
-
-                + f"\n…[{len(data) - max_chars} chars omitted — read a slice]…\n"
-
-                + data[-max_chars // 2:])
-
-    return data
-
-
-
-
+        msg = "read_file error: %s" % e
+        if meta:
+            return {"ok": False, "path": path, "error": msg}
+        return msg
+    truncated = len(data) > max_chars
+    shown = data
+    if truncated:
+        shown = (data[: max_chars // 2]
+                 + "\n…[%d chars omitted -- read a slice]…\n"
+                   % (len(data) - max_chars)
+                 + data[-max_chars // 2:])
+    if meta:
+        return {"ok": True, "path": path, "size": st.st_size,
+                "total_chars": len(data), "returned_chars": len(shown),
+                "truncated": truncated, "text": shown}
+    return shown
 
 def _detect_newline(path, default="\n"):
 
@@ -1195,6 +1205,120 @@ def glob(pattern, path=".", max_results=100):
 
 
 # ── Task list (the model maintains a visible to-do list per conversation) ───
+
+def task_add(subject, status="pending"):
+    """Add one item to this conversation's task list.
+
+    ``status`` is ``"pending"``, ``"in_progress"``, or ``"completed"``. Returns
+    the full resulting list (not the text the UI shows), or an error dict when
+    the task history directory is unavailable.
+    """
+    import json as _json
+    hdir = os.environ.get("KILN_HISTORY_DIR") or ""
+    if not hdir:
+        return {"ok": False, "error": "KILN_HISTORY_DIR not set"}
+    path = os.path.join(hdir, "todos.json")
+    items = []
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                payload = _json.load(f)
+            items = list(payload.get("items") or [])
+    except Exception:
+        items = []
+    items = [it for it in items if it.get("subject") != subject]
+    items.append({"subject": subject, "status": status})
+    try:
+        os.makedirs(hdir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump({"conv": os.environ.get("KILN_CONV_ID", ""),
+                        "ts": time.time(), "items": items}, f)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": "task_add failed: %s" % e}
+
+
+def task_done(subject):
+    """Mark one task completed by subject. Returns the full resulting list."""
+    import json as _json
+    hdir = os.environ.get("KILN_HISTORY_DIR") or ""
+    if not hdir:
+        return {"ok": False, "error": "KILN_HISTORY_DIR not set"}
+    path = os.path.join(hdir, "todos.json")
+    items = []
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                items = list(_json.load(f).get("items") or [])
+    except Exception:
+        items = []
+    found = False
+    for it in items:
+        if it.get("subject") == subject:
+            it["status"] = "completed"
+            found = True
+            break
+    try:
+        os.makedirs(hdir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump({"conv": os.environ.get("KILN_CONV_ID", ""),
+                        "ts": time.time(), "items": items}, f)
+        return {"ok": True, "found": found, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": "task_done failed: %s" % e}
+
+
+def run_cell(code, timeoutMs=None):
+    """Run one Python statement in the kernel namespace and return its result.
+
+    This is the same namespace the model's own cells already share, but the
+    return value is an explicit object: ``{"ok": True, "value": ...}``,
+    ``{"ok": True, "value": None}``, or ``{"ok": False, "traceback": ...}``.
+    Use it when a helper needs to chain: compute in the namespace and read the
+    answer in one call instead of guessing from printed output.
+    """
+    if not isinstance(code, str) or not code.strip():
+        return {"ok": False, "error": "code must be a non-empty string"}
+    try:
+        value = eval(compile(code, "<run_cell>", "eval"), dict(_ns))
+    except SyntaxError:
+        exec(compile(code, "<run_cell>", "exec"), dict(_ns))
+        return {"ok": True, "value": None}
+    except Exception:
+        import traceback as _tb
+        return {"ok": False, "traceback": _tb.format_exc()}
+    return {"ok": True, "value": value}
+
+
+def git_status(path="."):
+    """Summarize git state in ``path`` if it is inside a git work tree.
+
+    Returns a dict with ``in_git``, ``branch``, ``porcelain`` entries, and a
+    compact per-file ``changes`` list, or an error dict when git is unavailable.
+    """
+    try:
+        r = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"],
+                           cwd=path, capture_output=True, timeout=15)
+    except FileNotFoundError:
+        return {"ok": False, "error": "git executable not found"}
+    except Exception as e:
+        return {"ok": False, "error": "git_status failed: %s" % e}
+    if r.returncode != 0:
+        return {"ok": True, "in_git": False}
+    try:
+        branch = subprocess.run(["git", "branch", "--show-current"], cwd=path,
+                                capture_output=True, text=True, timeout=15).stdout.strip()
+        porcelain = subprocess.run(["git", "status", "--porcelain"], cwd=path,
+                                   capture_output=True, text=True, timeout=15).stdout
+    except Exception as e:
+        return {"ok": False, "error": "git_status failed: %s" % e}
+    lines = [ln for ln in porcelain.splitlines() if ln.strip()]
+    return {"ok": True, "in_git": True, "branch": branch or None,
+            "porcelain": lines,
+            "summary": {"total": len(lines),
+                        "staged": sum(1 for l in lines if l[:2].strip()),
+                        "untracked": sum(1 for l in lines if l.startswith("??"))}}
+
 
 def update_todos(items):
 
@@ -1981,11 +2105,28 @@ def bash(cmd, timeout=None, **kwargs):
 
 
 def write(path, content):
-    """Alias of write_file -- write text to a file (creates folders)."""
-    return write_file(path, content)
+    """Write text to a file; returns a structured result dict.
+
+    Returns ``{"ok": True, "path": ..., "bytes": ...}`` on success or
+    ``{"ok": False, "path": ..., "error": ...}`` on failure, so the model can
+    tell a successful write from an error string. (The older ``write_file``
+    string form is unchanged.)
+    """
+    try:
+        result = write_file(path, content)
+    except Exception as e:
+        return {"ok": False, "path": path, "error": "write error: %s" % e}
+    if isinstance(result, str) and result.startswith("write_file error:"):
+        return {"ok": False, "path": path, "error": result}
+    try:
+        bytes_on_disk = os.path.getsize(path)
+    except OSError:
+        bytes_on_disk = None
+    return {"ok": True, "path": path, "bytes": bytes_on_disk,
+            "reported": result}
 
 
-def read(path, max_chars=_READ_CAP):
+def read(path, max_chars=_READ_CAP, meta=False):
     """Read a file as text, falling back to read_nontext for binary/non-text."""
     import mimetypes
     if path.lower().endswith((".ipynb", ".png", ".jpg", ".jpeg", ".gif",
@@ -2003,7 +2144,7 @@ def read(path, max_chars=_READ_CAP):
             return read_nontext(path)
     except Exception:
         pass
-    return read_file(path, max_chars=max_chars)
+    return read_file(path, max_chars=max_chars, meta=meta)
 
 
 def read_nontext(path, max_bytes=2_000_000):
@@ -3823,6 +3964,19 @@ _REAL_STDERR = sys.stderr
 
 _capture = _threading.local()
 
+# ── deep-bridge seam transport (Kiln → harness) ──────────────────────────
+# The harness passes a dedicated seam-response pipe on fd 3. Only the
+# foreground cell thread may attempt a seam round-trip; a backgrounded cell
+# falls back to its local implementation (a response can never race the
+# main stdin loop, and two threads never contend for fd 3).
+_SEAM_FD = None
+try:
+    _SEAM_FD = os.fdopen(3, 'rb')
+except Exception:
+    _SEAM_FD = None
+_seam_fg_thread = None
+_seam_lock = _threading.Lock()
+
 
 
 
@@ -4097,6 +4251,35 @@ def _handle_ctrl(req):
 
     return {"error": "unknown kernel control command: %r" % cmd}
 
+
+
+def _seam_request(op, args, timeout=30.0):
+    """Ask the harness for one seam operation; return its response dict, or
+    None when the transport is absent, the caller is a backgrounded cell, or
+    the round-trip timed out — every None means the caller must use its own
+    local implementation instead."""
+    if _threading.current_thread() is not _seam_fg_thread:
+        return None
+    if _SEAM_FD is None:
+        return None
+    with _seam_lock:
+        req_id = uuid.uuid4().hex
+        try:
+            send_frame({"seam": {"id": req_id, "op": op, "args": args}})
+        except Exception:
+            return None
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                line = _SEAM_FD.readline()
+                if not line:
+                    return None
+                obj = json.loads(base64.b64decode(line.strip()).decode('utf-8'))
+            except Exception:
+                continue
+            if obj.get('id') == req_id:
+                return obj
+    return None
 
 
 def send_frame(obj):
@@ -4898,8 +5081,8 @@ def stop_agent(agent_id):
 
 
 
-def tool_help(tool_name=None):
-    """Display comprehensive help for all tools or a specific tool."""
+def tool_help(tool_name=None, pattern=None):
+    """Display help for all tools, one tool, or a glob/substring pattern."""
     import inspect
     tools = {}
     for name, obj in globals().items():
@@ -4915,12 +5098,17 @@ def tool_help(tool_name=None):
         if doc:
             return "%s:\n%s" % (tool_name, doc)
         return "No help found for %s" % tool_name
+    names = sorted(tools)
+    if pattern:
+        names = [n for n in names
+                 if fnmatch.fnmatch(n, pattern) or pattern in n]
     lines = ["Available tools:", ""]
-    for name in sorted(tools):
+    if not names:
+        lines.append("  (no tools matched %r)" % pattern)
+    for name in names:
         first = tools[name].splitlines()[0] if tools[name] else ""
         lines.append("  %s -- %s" % (name, first))
     return "\n".join(lines)
-
 
 def _ckpt_paths(name):
     """Return (data_path, manifest_path) for a sanitized checkpoint name."""
@@ -5025,6 +5213,10 @@ prompt_dict.update({
     "read_nontext": read_nontext,
     "snapshot_kernel_state": snapshot_kernel_state,
     "restore_kernel_state": restore_kernel_state,
+    "git_status": git_status,
+    "task_add": task_add,
+    "task_done": task_done,
+    "run_cell": run_cell,
     "tool_help": tool_help,
 })
 _ns.update(prompt_dict)
