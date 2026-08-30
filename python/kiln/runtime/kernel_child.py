@@ -116,7 +116,25 @@ def sh(cmd, timeout=None, result=False, check=False, **kwargs):
     Extra keyword arguments are accepted and ignored so idioms the model picks
     up from other harnesses (``capture=``, ``check=``, ``text=``, ``shell=``)
     never crash the call -- this helper ALWAYS captures output.
+
+    Prefers the harness shell seam (policy, sandbox, timeout); falls back to the
+    local subprocess run when the seam or the foreground RPC is unavailable.
     """
+    if isinstance(cmd, (list, tuple)):
+        cmd = subprocess.list2cmdline(cmd)
+    _seam = _seam_request("shell.run", {"command": cmd, "timeoutMs": timeout * 1000 if isinstance(timeout, (int, float)) else None})
+    if _seam is not None and _seam.get("ok"):
+        _v = _seam.get("value") or {}
+        _code = _v.get("exitCode")
+        _ok = _code == 0
+        _out = (str(_v.get("stdout") or "") + str(_v.get("stderr") or ""))
+        if check and not _ok:
+            raise RuntimeError("Command exited with code %s: %s" % (_code, _out))
+        if result:
+            return {"ok": _ok, "code": _code, "stdout": _v.get("stdout") or "",
+                    "stderr": _v.get("stderr") or "", "output": _out,
+                    "timed_out": bool(_v.get("timedOut")), "harness": True}
+        return _out
     try:
         r = subprocess.run(cmd, shell=True, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:

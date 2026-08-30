@@ -36,7 +36,7 @@ export interface SeamResponse {
   readonly unavailable?: boolean
 }
 
-/** The filesystem shapes the kernel consumes, mirrored from `packages/fs/fs/src/types.ts`. */
+/** Filesystem shapes the kernel consumes, mirrored from `packages/fs/fs/src/types.ts`. */
 interface FsTarget { readonly targetKey: unknown; readonly displayPath: string }
 interface FsEditRequest { readonly oldString: string; readonly newString: string; readonly replaceAll: boolean }
 interface FileSystemSeam {
@@ -47,10 +47,43 @@ interface FileSystemSeam {
   listDir(target: FsTarget, signal?: AbortSignal): Promise<readonly unknown[]>
 }
 
+/** Shell shapes the kernel consumes, mirrored from `packages/shell/shell/src/types.ts`. */
+interface ShellExecRequest {
+  command: string
+  workdir?: string | undefined
+  timeoutMs?: number | undefined
+  signal?: AbortSignal | undefined
+}
+interface CollectedOutputShape {
+  text: string
+  truncated: boolean
+  spillPath?: string
+}
+interface ShellRunSpec { command: string }
+interface ShellRunResultShape {
+  exitCode: number | null
+  signal: NodeJS.Signals | null
+  timedOut: boolean
+  aborted: boolean
+  timeoutMs: number
+  stdout: CollectedOutputShape
+  stderr: CollectedOutputShape
+}
+interface ShellExecutorSeam {
+  resolve(request: ShellExecRequest): ShellRunSpec
+  run(spec: ShellRunSpec): Promise<ShellRunResultShape>
+}
+
 function fsOf(ctx: Context | undefined): FileSystemSeam | undefined {
   if (ctx === undefined) return undefined
   const c = (ctx as Context & { fs?: unknown }).fs
   return c === undefined || c === null ? undefined : c as FileSystemSeam
+}
+
+function shellOf(ctx: Context | undefined): ShellExecutorSeam | undefined {
+  if (ctx === undefined) return undefined
+  const c = (ctx as Context & { shell?: unknown }).shell
+  return c === undefined || c === null ? undefined : c as ShellExecutorSeam
 }
 
 function toValue(value: unknown): unknown {
@@ -58,7 +91,9 @@ function toValue(value: unknown): unknown {
   try { return JSON.parse(JSON.stringify(value)) } catch { return JSON.stringify(value) }
 }
 
-function ok(id: string, value: unknown): SeamResponse { return { id, ok: true, value: toValue(value) } }
+function ok(id: string, value: unknown): SeamResponse {
+  return { id, ok: true, value: toValue(value) }
+}
 function unavailable(id: string, reason: string): SeamResponse {
   return { id, ok: false, unavailable: true, error: reason }
 }
@@ -66,15 +101,29 @@ function failed(id: string, error: unknown): SeamResponse {
   return { id, ok: false, error: error instanceof Error ? error.message : String(error) }
 }
 
-/** Dispatch one seam request against the current cell's agent-scoped ctx (Phase 1: fs.*). */
+function asArgs(args: unknown): Record<string, unknown> {
+  return (args ?? {}) as Record<string, unknown>
+}
+
+/** Dispatch one seam request against the current cell's agent-scoped ctx. */
 export async function dispatchSeam(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
+  if (request.op.startsWith('fs.')) return dispatchFs(agentCtx, request, signal)
+  if (request.op === 'shell.run') return dispatchShell(agentCtx, request, signal)
+  return unavailable(request.id, `unknown seam operation: ${request.op}`)
+}
+
+async function dispatchFs(
   agentCtx: Context | undefined,
   request: SeamRequest,
   signal?: AbortSignal,
 ): Promise<SeamResponse> {
   const fs = fsOf(agentCtx)
   if (fs === undefined) return unavailable(request.id, 'ctx.fs is not mounted for this agent')
-  const args = (request.args ?? {}) as Record<string, unknown>
+  const args = asArgs(request.args)
   const path = typeof args.path === 'string' ? args.path : undefined
   if (path === undefined) return failed(request.id, new Error(`fs.${request.op} requires a string "path" argument`))
   try {
@@ -97,6 +146,39 @@ export async function dispatchSeam(
       default:
         return unavailable(request.id, `unknown seam operation: ${request.op}`)
     }
+  } catch (error) {
+    return failed(request.id, error)
+  }
+}
+
+async function dispatchShell(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
+  const shell = shellOf(agentCtx)
+  if (shell === undefined) return unavailable(request.id, 'ctx.shell is not mounted for this agent')
+  const args = asArgs(request.args)
+  const command = typeof args.command === 'string' ? args.command : undefined
+  if (command === undefined) return failed(request.id, new Error('shell.run requires a string "command" argument'))
+  const timeoutMs = typeof args.timeoutMs === 'number' ? args.timeoutMs : undefined
+  try {
+    const spec = shell.resolve({
+      command,
+      ...timeoutMs !== undefined ? { timeoutMs } : {},
+      ...signal !== undefined ? { signal } : {},
+    })
+    const result = await shell.run(spec)
+    return ok(request.id, {
+      exitCode: result.exitCode,
+      signal: result.signal,
+      timedOut: result.timedOut,
+      aborted: result.aborted,
+      timeoutMs: result.timeoutMs,
+      stdout: result.stdout.text,
+      stderr: result.stderr.text,
+      truncated: result.stdout.truncated || result.stderr.truncated,
+    })
   } catch (error) {
     return failed(request.id, error)
   }
