@@ -2851,6 +2851,57 @@ def get_session(session_id, timeout=15.0):
     return seam.get("value")
 
 
+def run_process(argv, cwd=None, input=None, env=None, max_bytes=1048576, grace_ms=10000, timeout_ms=None, timeout=30.0):
+    """Run one executable through the harness `ctx.subprocess` seam (argv form).
+
+    This is the raw no-shell process primitive: `argv` is the exact program and
+    arguments, never shell-interpreted. stdout and stderr are collected in
+    collect mode and returned as plain text, so this covers the "subprocess"
+    half of the shell/subprocess pair without allocating a PTY.
+
+    Args:
+        argv: Non-empty list of strings; argv[0] is the executable.
+        cwd: Working directory for the child (defaults to the kernel cwd).
+        input: Optional stdin bytes/text written and closed before reading.
+        env: Optional explicit environment entries merged over the scrubbed base.
+        max_bytes: In-memory cap per collected stream (tail kept beyond it).
+        grace_ms: SIGTERM→SIGKILL escalation window used by the seam.
+        timeout_ms: Optional whole-run deadline; the seam aborts the tree on fire.
+        timeout: How long (seconds) to wait for the seam RPC round-trip.
+
+    Returns a dict with exitCode, signal, stdout, stderr, and truncation flags.
+    """
+    _cwd = cwd if cwd is not None else get_cwd()
+    _seam = _seam_request("subprocess.run", {
+        "argv": argv,
+        "cwd": _cwd,
+        "input": input,
+        "env": env,
+        "maxBytes": max_bytes,
+        "graceMs": grace_ms,
+        "timeoutMs": timeout_ms,
+    }, timeout=timeout)
+    if _seam is None:
+        return {"error": "subprocess seam unavailable (no harness or backgrounded cell)"}
+    if _seam.get("unavailable") or not _seam.get("ok"):
+        return {"error": _seam.get("error") or "subprocess seam rejected the request"}
+    return _seam.get("value")
+
+
+def resolve_executable(command, env=None, timeout=15.0):
+    """Resolve an executable in the harness's execution world via `ctx.subprocess`.
+
+    Absolute paths are verified; bare names use the provider's scrubbed PATH
+    plus explicit environment overrides. Returns the canonical path string.
+    """
+    _seam = _seam_request("subprocess.resolve", {"command": command, "env": env}, timeout=timeout)
+    if _seam is None:
+        return {"error": "subprocess seam unavailable (no harness or backgrounded cell)"}
+    if _seam.get("unavailable") or not _seam.get("ok"):
+        return {"error": _seam.get("error") or "subprocess seam rejected the request"}
+    return _seam.get("value")
+
+
 # engine setup
 
 prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
@@ -2889,7 +2940,9 @@ prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
 
                    list_tools=list_tools, tool_schema=tool_schema,
 
-                   list_sessions=list_sessions, get_session=get_session)
+                   list_sessions=list_sessions, get_session=get_session,
+
+                   run_process=run_process, resolve_executable=resolve_executable)
 
 # ── expression echo ───────────────────────────────────────────────────────────
 

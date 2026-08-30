@@ -260,6 +260,41 @@ function skillsOf(ctx: Context | undefined): SkillsSeamShape | undefined {
   return c === undefined || c === null ? undefined : c as SkillsSeamShape
 }
 
+/** Subprocess shapes the kernel consumes, mirrored from `packages/subprocess/subprocess/src/types.ts`. */
+interface SubprocessCollectShape { readonly maxBytes: number }
+interface SubprocessReaderShape {
+  readFrom(fromByte: number): { readonly text: string; readonly lossy: boolean; readonly spillPath?: string }
+}
+interface SubprocessHandleShape {
+  readonly done: Promise<{ readonly exitCode: number | null; readonly signal: string | null }>
+  readonly collected: {
+    readonly stdout?: SubprocessReaderShape
+    readonly stderr?: SubprocessReaderShape
+  }
+}
+interface SubprocessSpawnSpecShape {
+  readonly argv: readonly string[]
+  readonly cwd: string
+  readonly stdio: {
+    readonly stdin: 'ignore' | { readonly data: string }
+    readonly stdout: SubprocessCollectShape
+    readonly stderr: SubprocessCollectShape
+  }
+  readonly graceMs: number
+  readonly signal: AbortSignal
+  readonly env?: Readonly<Record<string, string>>
+}
+interface SubprocessSeamShape {
+  resolveExecutable(command: string, env?: Readonly<Record<string, string>>, signal?: AbortSignal): Promise<string>
+  spawn(spec: SubprocessSpawnSpecShape): SubprocessHandleShape
+}
+
+function subprocessOf(ctx: Context | undefined): SubprocessSeamShape | undefined {
+  if (ctx === undefined) return undefined
+  const c = (ctx as Context & { subprocess?: unknown }).subprocess
+  return c === undefined || c === null ? undefined : c as SubprocessSeamShape
+}
+
 /** Dispatch one seam request against the current cell's agent-scoped ctx. */
 export async function dispatchSeam(
   agentCtx: Context | undefined,
@@ -274,6 +309,7 @@ export async function dispatchSeam(
   if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, request)
   if (request.op.startsWith('sessions.')) return dispatchSessions(agentCtx, request)
   if (request.op.startsWith('skills.')) return dispatchSkills(agentCtx, request, signal)
+  if (request.op.startsWith('subprocess.')) return dispatchSubprocess(agentCtx, request, signal)
   return unavailable(request.id, `unknown seam operation: ${request.op}`)
 }
 
@@ -580,5 +616,76 @@ async function dispatchSkills(
     return unavailable(request.id, `unknown seam operation: ${request.op}`)
   } catch (error) {
     return failed(request.id, error)
+  }
+}
+
+async function dispatchSubprocess(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
+  const subprocess = subprocessOf(agentCtx)
+  if (subprocess === undefined) return unavailable(request.id, 'ctx.subprocess is not mounted for this agent')
+  const args = asArgs(request.args)
+
+  if (request.op === 'subprocess.resolve') {
+    const command = typeof args.command === 'string' ? args.command : undefined
+    if (command === undefined) return failed(request.id, new Error('subprocess.resolve requires a string "command"'))
+    const env = typeof args.env === 'object' && args.env !== null ? args.env as Record<string, string> : undefined
+    try {
+      return ok(request.id, await subprocess.resolveExecutable(command, env, signal))
+    } catch (error) {
+      return failed(request.id, error)
+    }
+  }
+
+  if (request.op !== 'subprocess.run') return unavailable(request.id, `unknown seam operation: ${request.op}`)
+  const argv = Array.isArray(args.argv) ? args.argv.filter((v): v is string => typeof v === 'string') : undefined
+  if (argv === undefined || argv.length === 0) {
+    return failed(request.id, new Error('subprocess.run requires a non-empty string[] "argv"'))
+  }
+  const cwd = typeof args.cwd === 'string' ? args.cwd : undefined
+  if (cwd === undefined) return failed(request.id, new Error('subprocess.run requires a string "cwd"'))
+  const input = typeof args.input === 'string' ? args.input : undefined
+  const maxBytes = typeof args.maxBytes === 'number' && args.maxBytes > 0 ? args.maxBytes : 1024 * 1024
+  const graceMs = typeof args.graceMs === 'number' && args.graceMs > 0 ? args.graceMs : 10000
+  const env = typeof args.env === 'object' && args.env !== null ? args.env as Record<string, string> : undefined
+  const timeoutMs = typeof args.timeoutMs === 'number' && args.timeoutMs > 0 ? args.timeoutMs : undefined
+
+  const controller = new AbortController()
+  const onAbort = (): void => { controller.abort() }
+  signal?.addEventListener('abort', onAbort, { once: true })
+  const timer = timeoutMs !== undefined ? setTimeout(() => { controller.abort() }, timeoutMs) : undefined
+  try {
+    const handle = subprocess.spawn({
+      argv,
+      cwd,
+      stdio: {
+        stdin: input !== undefined ? { data: input } : 'ignore',
+        stdout: { maxBytes },
+        stderr: { maxBytes },
+      },
+      graceMs,
+      signal: controller.signal,
+      ...env !== undefined ? { env } : {},
+    })
+    const outcome = await handle.done
+    const stdout = handle.collected.stdout?.readFrom(0)
+    const stderr = handle.collected.stderr?.readFrom(0)
+    return ok(request.id, {
+      exitCode: outcome.exitCode,
+      signal: outcome.signal,
+      stdout: stdout?.text ?? '',
+      stderr: stderr?.text ?? '',
+      stdoutTruncated: stdout?.lossy ?? false,
+      stderrTruncated: stderr?.lossy ?? false,
+      ...stdout?.spillPath !== undefined ? { stdoutSpillPath: stdout.spillPath } : {},
+      ...stderr?.spillPath !== undefined ? { stderrSpillPath: stderr.spillPath } : {},
+    })
+  } catch (error) {
+    return failed(request.id, error)
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
   }
 }
