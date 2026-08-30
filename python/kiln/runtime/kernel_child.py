@@ -419,7 +419,17 @@ def read_file(path, max_chars=_READ_CAP, meta=False):
     ``{ok, path, size, total_chars, returned_chars, truncated, text}`` on
     success or ``{ok: False, path, error}`` on failure. The default string form
     is unchanged, so existing one-shot ``read_file(x)`` calls keep working.
+
+    Prefers the harness filesystem seam (policy, sandbox, observation); falls
+    back to the local read when the seam or the foreground RPC is unavailable.
     """
+    _seam = _seam_request("fs.readText", {"path": path})
+    if _seam is not None and _seam.get("ok"):
+        text = _seam.get("value") or ""
+        if len(text) > max_chars:
+            text = text[: max_chars // 2] + f"\n…[{len(text) - max_chars} chars omitted — read a slice]…\n" + text[-max_chars // 2:]
+        return {"ok": True, "path": path, "size": len(text), "total_chars": len(text),
+                "returned_chars": len(text), "truncated": False, "text": text} if meta else text
     try:
         st = os.stat(path)
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -518,8 +528,18 @@ def _written(path, verb, chars):
 
 def write_file(path, content):
 
-    """Write text to a file (creates folders). Returns a confirmation."""
+    """Write text to a file (creates folders). Returns a confirmation.
 
+    Prefers the harness filesystem seam; falls back to the local write when the
+    seam or the foreground RPC is unavailable.
+    """
+
+    _seam = _seam_request("fs.writeText", {"path": path, "content": content})
+    if _seam is not None and _seam.get("ok"):
+        _out = _seam.get("value")
+        if isinstance(_out, dict) and _out.get("operation"):
+            return f"wrote {path} (via harness fs; operation={_out.get('operation')})"
+        return f"wrote {path} (via harness fs)"
     try:
 
         folder = os.path.dirname(os.path.abspath(path))
@@ -1026,10 +1046,34 @@ def delete_file(path):
 
 def list_dir(path=".", depth=1, max_entries=200):
 
-    """Pretty directory tree, skipping noise folders."""
+    """Pretty directory tree, skipping noise folders.
+
+    Prefers the harness filesystem seam; falls back to the local tree when the
+    seam or the foreground RPC is unavailable.
+    """
 
     _SKIP = {".git", "__pycache__", "node_modules", ".venv", "venv", ".idea", ".vscode"}
 
+    _seam = _seam_request("fs.listDir", {"path": path})
+    if _seam is not None and _seam.get("ok"):
+        _entries = _seam.get("value")
+        if isinstance(_entries, list):
+            _lines = []
+            for _e in _entries:
+                if not isinstance(_e, dict):
+                    continue
+                _name = _e.get("name")
+                _typ = _e.get("type")
+                _size = _e.get("size")
+                if _typ == "directory":
+                    _lines.append(f"{_name}/")
+                elif _size is not None:
+                    _lines.append(f"{_name}  ({_size}b)")
+                else:
+                    _lines.append(f"{_name}")
+                if len(_lines) >= max_entries:
+                    break
+            return "\n".join(_lines)
     try:
 
         root = os.path.abspath(path)
@@ -5345,6 +5389,11 @@ while True:
 
     runner = _CellRunner(code)
 
+    # The foreground window (while this loop is blocked in done.wait) is the
+    # only time a cell may attempt a harness seam round-trip; a backgrounded
+    # cell falls back to its local implementation.
+    _seam_fg_thread = runner
+
     runner.start()
 
     if runner.done.wait(primary_ms / 1000.0):
@@ -5353,10 +5402,12 @@ while True:
 
         # cell that completed since the last frame.
 
+        _seam_fg_thread = None
         send_frame({"out": _flush_bg() + runner.out, "error": runner.err})
 
     else:
 
+        _seam_fg_thread = None
         # Overran the primary budget: DO NOT kill. Detach it to the background so
 
         # the loop is free for the next command; the watchdog stops it at the

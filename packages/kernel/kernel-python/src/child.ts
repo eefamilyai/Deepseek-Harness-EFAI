@@ -14,9 +14,11 @@
 
 import { spawn } from 'node:child_process'
 import type { ChildProcessByStdio } from 'node:child_process'
-import type { Readable, Writable } from 'node:stream'
+import { Writable } from 'node:stream'
+import type { Readable } from 'node:stream'
 import { KernelError } from '@deepseek-ai/dsh-kernel'
 import { scrubChildEnv } from './env.ts'
+import type { SeamRequest, SeamResponse } from './seam.ts'
 
 /**
  * Why a wait for a kernel frame was abandoned.
@@ -72,6 +74,8 @@ export interface KernelFrame {
    * `out` is the "still running in the background" notice.
    */
   readonly backgrounded?: boolean
+  /** A Python→TS seam request; never a cell result. Routed to the seam handler. */
+  readonly seam?: SeamRequest
 }
 
 /** How to launch the child. */
@@ -95,6 +99,10 @@ export interface KernelChildOptions {
  */
 export class KernelChild {
   private readonly proc: ChildProcessByStdio<Writable, Readable, null>
+  /** The dedicated fd-3 pipe carrying TS→Python seam responses (null if fd 3 unavailable). */
+  private readonly seamOut: Writable | null
+  /** Set by the provider to dispatch seam requests against the current agent ctx. */
+  seamHandler: ((request: SeamRequest) => void) | undefined = undefined
   /** Frames decoded but not yet claimed by a waiter. */
   private readonly pending: KernelFrame[] = []
   /** Waiters queued ahead of the frames that will satisfy them. */
@@ -111,8 +119,12 @@ export class KernelChild {
         // stderr is discarded: the child already folds captured stderr into the
         // cell's `out`, so anything left on the real handle is interpreter
         // noise that would otherwise interleave with nothing at all.
-        stdio: ['pipe', 'pipe', 'ignore'],
-      })
+        // The 4th stdio entry (the seam-response pipe) makes the untyped spawn
+        // overload return plain ChildProcess; the first three entries still
+        // match the ChildProcessByStdio contract exactly, so the assertion only
+        // restores that known shape.
+        stdio: ['pipe', 'pipe', 'ignore', 'pipe'],
+      }) as unknown as ChildProcessByStdio<Writable, Readable, null>
     } catch (cause) {
       throw new KernelError(
         `failed to start the Python kernel with "${options.python}": ${String(cause)}`,
@@ -121,6 +133,10 @@ export class KernelChild {
     }
     this.proc.stdout.setEncoding('ascii')
     this.proc.stdout.on('data', (chunk: string) => { this.onData(chunk) })
+    const fd3 = this.proc.stdio[3]
+    this.seamOut = fd3 !== null && fd3 !== undefined && 'write' in fd3 ? fd3 : null
+    this.seamOut?.setDefaultEncoding('ascii')
+    this.seamOut?.on('error', () => {})
     const end = (): void => {
       this.exited = true
       // Release every waiter so a caller blocked on a dead child fails fast
@@ -146,7 +162,11 @@ export class KernelChild {
     while (index !== -1) {
       const line = this.buffer.slice(0, index).trim()
       this.buffer = this.buffer.slice(index + 1)
-      if (line.length > 0) this.deliver(decodeFrame(line))
+      if (line.length > 0) {
+        const frame = decodeFrame(line)
+        if (frame.seam !== undefined) this.onSeamFrame(frame.seam)
+        else this.deliver(frame)
+      }
       index = this.buffer.indexOf('\n')
     }
   }
@@ -155,6 +175,21 @@ export class KernelChild {
     const waiter = this.waiters.shift()
     if (waiter !== undefined) waiter(frame)
     else this.pending.push(frame)
+  }
+
+  /** Dispatch a decoded seam frame to the provider's handler. */
+  private onSeamFrame(request: SeamRequest): void {
+    this.seamHandler?.(request)
+  }
+
+  /**
+   * Write one seam response onto the fd-3 pipe as a base64 JSON line, matching
+   * the framing Python's seam reader expects.
+   */
+  sendSeamResponse(response: SeamResponse): void {
+    if (this.seamOut === null) return
+    const line = Buffer.from(JSON.stringify(response), 'utf8').toString('base64')
+    this.seamOut.write(`${line}\n`)
   }
 
   /**

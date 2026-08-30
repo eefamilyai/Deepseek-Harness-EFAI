@@ -6,6 +6,8 @@
 
 import type { KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider } from '@deepseek-ai/dsh-kernel'
 import { KernelAbortError, KernelChild, parseControlResult } from './child.ts'
+import type { SeamRequest } from './seam.ts'
+import { dispatchSeam } from './seam.ts'
 import type { KernelChildOptions } from './child.ts'
 
 /**
@@ -114,7 +116,7 @@ export class KilnKernelProvider implements KernelProvider {
     return this.serialize(async () => {
       const child = this.ensureChild()
       child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs)
-      const outcome = await this.awaitCell(child, request, signal)
+      const outcome = await this.awaitCell(child, request, signal, request.agentCtx)
       if (outcome.kind === 'ok') {
         return { output: outcome.output, outcome: 'ok' as const, restarted: false }
       }
@@ -135,7 +137,19 @@ export class KilnKernelProvider implements KernelProvider {
     child: KernelChild,
     request: KernelExecuteRequest,
     signal?: AbortSignal,
+    agentCtx?: KernelExecuteRequest['agentCtx'],
   ): Promise<{ kind: 'ok'; output: string } | { kind: Exclude<KernelOutcome, 'ok'> }> {
+    const prevHandler = child.seamHandler
+    child.seamHandler = (seam: SeamRequest): void => {
+      void dispatchSeam(agentCtx, seam, signal).then(
+        (response) => { if (!child.dead) child.sendSeamResponse(response) },
+        (reason: unknown) => {
+          if (!child.dead) {
+            child.sendSeamResponse({ id: seam.id, ok: false, error: reason instanceof Error ? reason.message : String(reason) })
+          }
+        },
+      )
+    }
     const budget = new AbortController()
     const onAbort = (): void => { budget.abort(new KernelAbortError('cancelled')) }
     signal?.addEventListener('abort', onAbort, { once: true })
@@ -157,6 +171,7 @@ export class KilnKernelProvider implements KernelProvider {
     } finally {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
+      child.seamHandler = prevHandler
     }
   }
 

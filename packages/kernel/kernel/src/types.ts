@@ -9,6 +9,7 @@
  * @module @deepseek-ai/dsh-kernel/types
  */
 
+import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 /** One cell submitted to the kernel. */
@@ -37,6 +38,13 @@ export interface KernelExecuteRequest {
    * currently is: the launch cwd, or where a prior cell's `set_cwd()` left it.
    */
   readonly cwd?: string
+  /**
+   * The calling agent's scoped Cordis context, threaded through so a Kiln
+   * backend can reach the harness's real capability seams
+   * (`ctx.fs`, `ctx.shell`, …) that live on it. Absent for a direct or
+   * synthetic dispatch with no owning agent.
+   */
+  readonly agentCtx?: Context
 }
 
 /**
