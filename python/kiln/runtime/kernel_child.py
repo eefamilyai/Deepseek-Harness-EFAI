@@ -2689,6 +2689,100 @@ def list_subagent_descendants(timeout=15.0):
     return seam.get("value")
 
 
+def goal_get(timeout=15.0):
+    """Return this agent's current goal view from the harness `ctx.goals` seam.
+
+    Returns None when no goal exists, or a dict with id, revision, objective,
+    phase, maxGoalRounds, roundsStarted, and activation. The view is the
+    harness's live projection, not a local copy.
+    """
+    seam = _seam_request("goals.get", {}, timeout=timeout)
+    if seam is None:
+        return {"error": "goals seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "goals seam rejected the request"}
+    return seam.get("value")
+
+
+def goal_create(objective, max_goal_rounds=None, timeout=15.0):
+    """Create a goal for this agent through the harness `ctx.goals` seam.
+
+    Args:
+        objective: Non-empty completion objective text.
+        max_goal_rounds: Optional positive safe-integer round cap; the seam's
+            configured default applies when omitted.
+
+    Returns the new goal view (id, revision, objective, phase, maxGoalRounds).
+    """
+    seam = _seam_request("goals.create", {
+        "objective": objective,
+        "maxGoalRounds": max_goal_rounds,
+    }, timeout=timeout)
+    if seam is None:
+        return {"error": "goals seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "goals seam rejected the request"}
+    return seam.get("value")
+
+
+def _goal_mutation(op, **kwargs):
+    """Shared CAS mutation helper for the goals seam. kwargs may carry the
+    goal `id`/`revision` ref plus operation-specific fields."""
+    timeout = kwargs.pop("timeout", 15.0)
+    seam = _seam_request(op, kwargs, timeout=timeout)
+    if seam is None:
+        return {"error": "goals seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "goals seam rejected the request"}
+    return seam.get("value")
+
+
+def goal_edit(goal_id, revision, objective=None, max_goal_rounds=None, timeout=15.0):
+    """Edit this agent's goal objective and/or round cap via the goals seam."""
+    kwargs = {"id": goal_id, "revision": revision, "timeout": timeout}
+    if objective is not None:
+        kwargs["objective"] = objective
+    if max_goal_rounds is not None:
+        kwargs["maxGoalRounds"] = max_goal_rounds
+    return _goal_mutation("goals.edit", **kwargs)
+
+
+def goal_pause(goal_id, revision, timeout=15.0):
+    """Pause this agent's goal via the goals seam."""
+    return _goal_mutation("goals.pause", id=goal_id, revision=revision, timeout=timeout)
+
+
+def goal_resume(goal_id, revision, timeout=15.0):
+    """Resume this agent's goal via the goals seam."""
+    return _goal_mutation("goals.resume", id=goal_id, revision=revision, timeout=timeout)
+
+
+def goal_complete(goal_id, revision, timeout=15.0):
+    """Mark this agent's goal complete via the goals seam."""
+    return _goal_mutation("goals.complete", id=goal_id, revision=revision, timeout=timeout)
+
+
+def goal_block(goal_id, revision, code, message, timeout=15.0):
+    """Block this agent's goal with a stable kebab-case code and message."""
+    return _goal_mutation("goals.block", id=goal_id, revision=revision,
+                          code=code, message=message, timeout=timeout)
+
+
+def goal_clear(goal_id, revision, timeout=15.0):
+    """Clear this agent's goal via the goals seam; returns the cleared ref."""
+    return _goal_mutation("goals.clear", id=goal_id, revision=revision, timeout=timeout)
+
+
+def goal_disarm(timeout=15.0):
+    """Disarm this agent's automatic goal continuation via the goals seam."""
+    seam = _seam_request("goals.disarm", {}, timeout=timeout)
+    if seam is None:
+        return {"error": "goals seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "goals seam rejected the request"}
+    return seam.get("value")
+
+
 # engine setup
 
 prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
@@ -2717,7 +2811,13 @@ prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
 
                    subagent=subagent, list_subagents=list_subagents,
                    list_subagent_children=list_subagent_children,
-                   list_subagent_descendants=list_subagent_descendants)
+                   list_subagent_descendants=list_subagent_descendants,
+
+                   goal_get=goal_get, goal_create=goal_create,
+                   goal_edit=goal_edit, goal_pause=goal_pause,
+                   goal_resume=goal_resume, goal_complete=goal_complete,
+                   goal_block=goal_block, goal_clear=goal_clear,
+                   goal_disarm=goal_disarm)
 
 # ── expression echo ───────────────────────────────────────────────────────────
 

@@ -163,6 +163,42 @@ function subagentsOf(ctx: Context | undefined): SubagentRuntimeSeamShape | undef
   return c === undefined || c === null ? undefined : c as SubagentRuntimeSeamShape
 }
 
+/** Goal shapes the kernel consumes, mirrored from `packages/goal/goal/src/types.ts`. */
+interface GoalRefShape { readonly id: unknown; readonly revision: number }
+interface GoalViewShape {
+  readonly id: unknown
+  readonly revision: number
+  readonly objective: string
+  readonly phase: string
+  readonly blockedReason?: { readonly code: string; readonly message: string }
+  readonly maxGoalRounds: number
+  readonly roundsStarted: number
+  readonly createdAt: number
+  readonly updatedAt: number
+  readonly activation: string
+}
+interface GoalsSeamShape {
+  get(agent: unknown): GoalViewShape | undefined
+  disarm(agent: unknown): GoalViewShape | undefined
+  create(agent: unknown, request: { objective: string; maxGoalRounds?: number }): GoalViewShape
+  edit(agent: unknown, ref: GoalRefShape, request: { objective?: string; maxGoalRounds?: number }): GoalViewShape
+  pause(agent: unknown, ref: GoalRefShape): GoalViewShape
+  resume(agent: unknown, ref: GoalRefShape): GoalViewShape
+  complete(agent: unknown, ref: GoalRefShape): GoalViewShape
+  block(agent: unknown, ref: GoalRefShape, reason: { code: string; message: string }): GoalViewShape
+  clear(agent: unknown, ref: GoalRefShape): GoalRefShape
+}
+
+function goalsOf(ctx: Context | undefined): GoalsSeamShape | undefined {
+  if (ctx === undefined) return undefined
+  const c = (ctx as Context & { goals?: unknown }).goals
+  return c === undefined || c === null ? undefined : c as GoalsSeamShape
+}
+
+function currentAgent(ctx: Context | undefined): unknown {
+  return (ctx as Context & { agent?: unknown }).agent
+}
+
 /** Dispatch one seam request against the current cell's agent-scoped ctx. */
 export async function dispatchSeam(
   agentCtx: Context | undefined,
@@ -173,6 +209,7 @@ export async function dispatchSeam(
   if (request.op === 'shell.run') return dispatchShell(agentCtx, request, signal)
   if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)
   if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, request, signal)
+  if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, request, signal)
   return unavailable(request.id, `unknown seam operation: ${request.op}`)
 }
 
@@ -325,6 +362,75 @@ async function dispatchSubagents(
       return ok(request.id, { id: run.id, stopReason: result.stopReason, text, structured: result.structured })
     } finally {
       await run.dispose()
+    }
+  } catch (error) {
+    return failed(request.id, error)
+  }
+}
+
+function dispatchGoals(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): SeamResponse {
+  void signal
+  const goals = goalsOf(agentCtx)
+  if (goals === undefined) return unavailable(request.id, 'ctx.goals is not mounted for this agent')
+  const agent = currentAgent(agentCtx)
+  if (agent === undefined || agent === null) return unavailable(request.id, 'ctx.agent is not available for this agent')
+  const args = asArgs(request.args)
+
+  if (request.op === 'goals.get' || request.op === 'goals.disarm') {
+    const view = request.op === 'goals.get' ? goals.get(agent) : goals.disarm(agent)
+    return ok(request.id, view ?? null)
+  }
+
+  if (request.op === 'goals.create') {
+    const objective = typeof args.objective === 'string' ? args.objective : undefined
+    if (objective === undefined) return failed(request.id, new Error('goals.create requires a string "objective" argument'))
+    try {
+      return ok(request.id, goals.create(agent, {
+        objective,
+        ...typeof args.maxGoalRounds === 'number' ? { maxGoalRounds: args.maxGoalRounds } : {},
+      }))
+    } catch (error) {
+      return failed(request.id, error)
+    }
+  }
+
+  const id = (args as { id?: unknown }).id
+  const revision = typeof (args as { revision?: unknown }).revision === 'number' ? (args as { revision?: number }).revision : undefined
+  if (id === undefined || revision === undefined) {
+    return failed(request.id, new Error(`${request.op} requires "id" and "revision" arguments`))
+  }
+  const ref: GoalRefShape = { id, revision }
+
+  try {
+    switch (request.op) {
+      case 'goals.edit': {
+        const edit: { objective?: string; maxGoalRounds?: number } = {}
+        if (typeof args.objective === 'string') edit.objective = args.objective
+        if (typeof args.maxGoalRounds === 'number') edit.maxGoalRounds = args.maxGoalRounds
+        return ok(request.id, goals.edit(agent, ref, edit))
+      }
+      case 'goals.pause':
+        return ok(request.id, goals.pause(agent, ref))
+      case 'goals.resume':
+        return ok(request.id, goals.resume(agent, ref))
+      case 'goals.complete':
+        return ok(request.id, goals.complete(agent, ref))
+      case 'goals.block': {
+        const code = typeof args.code === 'string' ? args.code : undefined
+        const message = typeof args.message === 'string' ? args.message : undefined
+        if (code === undefined || message === undefined) {
+          return failed(request.id, new Error('goals.block requires "code" and "message" string arguments'))
+        }
+        return ok(request.id, goals.block(agent, ref, { code, message }))
+      }
+      case 'goals.clear':
+        return ok(request.id, goals.clear(agent, ref))
+      default:
+        return unavailable(request.id, `unknown seam operation: ${request.op}`)
     }
   } catch (error) {
     return failed(request.id, error)
