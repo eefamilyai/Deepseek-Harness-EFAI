@@ -199,6 +199,19 @@ function currentAgent(ctx: Context | undefined): unknown {
   return (ctx as Context & { agent?: unknown }).agent
 }
 
+/** Tool registry shapes the kernel consumes, mirrored from `packages/core/tools/src/index.ts`. */
+interface ToolSchemaShape { readonly name: string; readonly description: string; readonly parameters: Record<string, unknown> }
+interface ToolsSeamShape {
+  schemas(scope?: unknown): ToolSchemaShape[]
+  get(name: string, scope?: unknown): ToolSchemaShape | undefined
+}
+
+function toolsOf(ctx: Context | undefined): ToolsSeamShape | undefined {
+  if (ctx === undefined) return undefined
+  const c = (ctx as Context & { tools?: unknown }).tools
+  return c === undefined || c === null ? undefined : c as ToolsSeamShape
+}
+
 /** Dispatch one seam request against the current cell's agent-scoped ctx. */
 export async function dispatchSeam(
   agentCtx: Context | undefined,
@@ -210,6 +223,7 @@ export async function dispatchSeam(
   if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)
   if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, request, signal)
   if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, request, signal)
+  if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, request)
   return unavailable(request.id, `unknown seam operation: ${request.op}`)
 }
 
@@ -435,4 +449,33 @@ function dispatchGoals(
   } catch (error) {
     return failed(request.id, error)
   }
+}
+
+function dispatchTools(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
+  const tools = toolsOf(agentCtx)
+  if (tools === undefined) return unavailable(request.id, 'ctx.tools is not mounted for this agent')
+  const args = asArgs(request.args)
+
+  if (request.op === 'tools.schemas') {
+    try {
+      const schemas = tools.schemas(typeof args.scope === 'string' ? args.scope : undefined)
+      return ok(request.id, schemas.map(({ name, description, parameters }) => ({ name, description, parameters })))
+    } catch (error) {
+      return failed(request.id, error)
+    }
+  }
+
+  if (request.op === 'tools.get') {
+    const name = typeof args.name === 'string' ? args.name : undefined
+    if (name === undefined) return failed(request.id, new Error('tools.get requires a string "name" argument'))
+    try {
+      const definition = tools.get(name, typeof args.scope === 'string' ? args.scope : undefined)
+      if (definition === undefined) return ok(request.id, null)
+      return ok(request.id, { name: definition.name, description: definition.description, parameters: definition.parameters })
+    } catch (error) {
+      return failed(request.id, error)
+    }
+  }
+
+  return unavailable(request.id, `unknown seam operation: ${request.op}`)
 }

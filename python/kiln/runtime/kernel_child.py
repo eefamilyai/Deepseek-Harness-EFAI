@@ -2783,6 +2783,35 @@ def goal_disarm(timeout=15.0):
     return seam.get("value")
 
 
+def list_tools(scope=None, timeout=15.0):
+    """List this agent's visible tool schemas through the harness `ctx.tools` seam.
+
+    Returns a list of dicts, each with `name`, `description`, and `parameters`.
+    This is the model-facing, policy-filtered surface — not the raw registry.
+    `scope` may name a scoped tool layer when one is active.
+    """
+    seam = _seam_request("tools.schemas", {"scope": scope}, timeout=timeout)
+    if seam is None:
+        return {"error": "tools seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "tools seam rejected the request"}
+    return seam.get("value")
+
+
+def tool_schema(name, scope=None, timeout=15.0):
+    """Return one visible tool's schema through the harness `ctx.tools` seam.
+
+    Returns a dict with `name`, `description`, and `parameters`, or None when
+    the tool is not visible in this agent's scope.
+    """
+    seam = _seam_request("tools.get", {"name": name, "scope": scope}, timeout=timeout)
+    if seam is None:
+        return {"error": "tools seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "tools seam rejected the request"}
+    return seam.get("value")
+
+
 # engine setup
 
 prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
@@ -2817,7 +2846,9 @@ prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
                    goal_edit=goal_edit, goal_pause=goal_pause,
                    goal_resume=goal_resume, goal_complete=goal_complete,
                    goal_block=goal_block, goal_clear=goal_clear,
-                   goal_disarm=goal_disarm)
+                   goal_disarm=goal_disarm,
+
+                   list_tools=list_tools, tool_schema=tool_schema)
 
 # ── expression echo ───────────────────────────────────────────────────────────
 
