@@ -2626,6 +2626,69 @@ def _pin_cwd_for_cell(path):
 
 
 
+def subagent(prompt, provider=None, label=None, max_depth=None, timeout=300.0):
+    """Run a one-shot subagent through the harness's real `ctx.subagents` seam.
+
+    The subagent is a separate agent spawned by THIS agent's owning Agent, so
+    lineage, depth, workspace and policy all resolve through the harness rather
+    than being re-implemented locally. When the seam is absent (e.g. a
+    standalone kernel with no harness mounted) this returns a clear
+    unavailable marker instead of pretending to run a child agent.
+
+    Args:
+        prompt: The task text delivered as the child's single user message.
+        provider: Optional registered provider name; defaults to the first
+            registered provider when omitted.
+        label: Optional short display label persisted with a session-backed child.
+        max_depth: Optional absolute delegation-depth cap forwarded to the seam.
+        timeout: How long (seconds) to wait for the seam round-trip.
+
+    Returns:
+        A dict with `id`, `stopReason`, and `text` (joined assistant output).
+    """
+    seam = _seam_request("subagents.start", {
+        "prompt": prompt,
+        "provider": provider,
+        "label": label,
+        "maxDepth": max_depth,
+    }, timeout=timeout)
+    if seam is None:
+        return {"error": "subagents seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "subagents seam rejected the request"}
+    return seam.get("value")
+
+
+def list_subagents(timeout=15.0):
+    """List the registered subagent provider names through the harness seam."""
+    seam = _seam_request("subagents.list", {}, timeout=timeout)
+    if seam is None:
+        return {"error": "subagents seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "subagents seam rejected the request"}
+    return seam.get("value")
+
+
+def list_subagent_children(timeout=15.0):
+    """List this agent's direct session-backed subagents through the harness seam."""
+    seam = _seam_request("subagents.children", {}, timeout=timeout)
+    if seam is None:
+        return {"error": "subagents seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "subagents seam rejected the request"}
+    return seam.get("value")
+
+
+def list_subagent_descendants(timeout=15.0):
+    """List this agent's complete subagent tree through the harness seam."""
+    seam = _seam_request("subagents.descendants", {}, timeout=timeout)
+    if seam is None:
+        return {"error": "subagents seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "subagents seam rejected the request"}
+    return seam.get("value")
+
+
 # engine setup
 
 prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
@@ -2650,7 +2713,11 @@ prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
 
                    index_context=index_context, search_context=search_context,
 
-                   context_stats=context_stats)
+                   context_stats=context_stats,
+
+                   subagent=subagent, list_subagents=list_subagents,
+                   list_subagent_children=list_subagent_children,
+                   list_subagent_descendants=list_subagent_descendants)
 
 # ── expression echo ───────────────────────────────────────────────────────────
 
