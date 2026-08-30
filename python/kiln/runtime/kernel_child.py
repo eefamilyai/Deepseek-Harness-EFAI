@@ -2812,6 +2812,31 @@ def tool_schema(name, scope=None, timeout=15.0):
     return seam.get("value")
 
 
+def list_sessions(timeout=15.0):
+    """List live sessions known to the harness `ctx.sessions` registry.
+
+    Returns a list of dicts, each `{id, header}` where header carries the
+    session's createdAt, cwd, parentSession, and origin when present. This is
+    the live in-process registry, not persisted session history.
+    """
+    seam = _seam_request("sessions.list", {}, timeout=timeout)
+    if seam is None:
+        return {"error": "sessions seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "sessions seam rejected the request"}
+    return seam.get("value")
+
+
+def get_session(session_id, timeout=15.0):
+    """Return one live session's `{id, header}` from `ctx.sessions`, or None."""
+    seam = _seam_request("sessions.get", {"id": session_id}, timeout=timeout)
+    if seam is None:
+        return {"error": "sessions seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "sessions seam rejected the request"}
+    return seam.get("value")
+
+
 # engine setup
 
 prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
@@ -2848,7 +2873,9 @@ prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
                    goal_block=goal_block, goal_clear=goal_clear,
                    goal_disarm=goal_disarm,
 
-                   list_tools=list_tools, tool_schema=tool_schema)
+                   list_tools=list_tools, tool_schema=tool_schema,
+
+                   list_sessions=list_sessions, get_session=get_session)
 
 # ── expression echo ───────────────────────────────────────────────────────────
 
