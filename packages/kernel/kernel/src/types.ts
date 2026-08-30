@@ -39,10 +39,10 @@ export interface KernelExecuteRequest {
    */
   readonly cwd?: string
   /**
-   * The calling agent's scoped Cordis context, threaded through so a Kiln
-   * backend can reach the harness's real capability seams
-   * (`ctx.fs`, `ctx.shell`, …) that live on it. Absent for a direct or
-   * synthetic dispatch with no owning agent.
+   * The calling agent's scoped Cordis context, threaded through so a backend
+   * can reach the harness's real capability seams (`ctx.fs`, `ctx.shell`, …)
+   * that live on the agent scope. Absent for a direct or synthetic dispatch
+   * with no owning agent.
    */
   readonly agentCtx?: Context
 }

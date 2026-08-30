@@ -118,6 +118,9 @@ export class KernelRuntime extends Service {
       // The caller's cwd is the owning chat's workspace; the seam only forwards
       // it, never defaults it — an absent cwd means "wherever the kernel is".
       ...request.cwd !== undefined ? { cwd: request.cwd } : {},
+      // The calling agent's scoped context reaches capability-aware backends
+      // (fs/shell/web/…) through the same request the tool layer already fills.
+      ...request.agentCtx !== undefined ? { agentCtx: request.agentCtx } : {},
     }, signal)
   }
 
