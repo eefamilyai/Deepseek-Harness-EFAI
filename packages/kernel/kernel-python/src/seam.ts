@@ -86,6 +86,30 @@ function shellOf(ctx: Context | undefined): ShellExecutorSeam | undefined {
   return c === undefined || c === null ? undefined : c as ShellExecutorSeam
 }
 
+/** Web shapes the kernel consumes, mirrored from `packages/web/web/src/types.ts`. */
+interface WebSearchSourceShape { readonly url: string; readonly title?: string; readonly snippet?: string }
+interface WebSearchResultShape {
+  readonly content?: string
+  readonly sources: readonly WebSearchSourceShape[]
+  readonly truncated: boolean
+}
+interface WebFetchResultShape {
+  readonly url: string
+  readonly statusCode: number
+  readonly body: { readonly kind: 'html' | 'text'; readonly content: string }
+  readonly truncated: boolean
+}
+interface WebRuntimeSeam {
+  search(request: { query: string; maxResults?: number }, signal?: AbortSignal): Promise<WebSearchResultShape>
+  fetch(request: { url: string }, signal?: AbortSignal): Promise<WebFetchResultShape>
+}
+
+function webOf(ctx: Context | undefined): WebRuntimeSeam | undefined {
+  if (ctx === undefined) return undefined
+  const c = (ctx as Context & { web?: unknown }).web
+  return c === undefined || c === null ? undefined : c as WebRuntimeSeam
+}
+
 function toValue(value: unknown): unknown {
   if (value === undefined || value === null) return null
   try { return JSON.parse(JSON.stringify(value)) } catch { return JSON.stringify(value) }
@@ -113,6 +137,7 @@ export async function dispatchSeam(
 ): Promise<SeamResponse> {
   if (request.op.startsWith('fs.')) return dispatchFs(agentCtx, request, signal)
   if (request.op === 'shell.run') return dispatchShell(agentCtx, request, signal)
+  if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)
   return unavailable(request.id, `unknown seam operation: ${request.op}`)
 }
 
@@ -146,6 +171,31 @@ async function dispatchFs(
       default:
         return unavailable(request.id, `unknown seam operation: ${request.op}`)
     }
+  } catch (error) {
+    return failed(request.id, error)
+  }
+}
+
+async function dispatchWeb(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
+  const web = webOf(agentCtx)
+  if (web === undefined) return unavailable(request.id, 'ctx.web is not mounted for this agent')
+  const args = asArgs(request.args)
+  try {
+    if (request.op === 'web.search') {
+      const query = typeof args.query === 'string' ? args.query : undefined
+      if (query === undefined) return failed(request.id, new Error('web.search requires a string "query" argument'))
+      const maxResults = typeof args.limit === 'number' ? args.limit : undefined
+      const result = await web.search({ query, ...maxResults !== undefined ? { maxResults } : {} }, signal)
+      return ok(request.id, { sources: result.sources, content: result.content, truncated: result.truncated })
+    }
+    const url = typeof args.url === 'string' ? args.url : undefined
+    if (url === undefined) return failed(request.id, new Error('web.fetch requires a string "url" argument'))
+    const result = await web.fetch({ url }, signal)
+    return ok(request.id, { url: result.url, statusCode: result.statusCode, body: result.body, truncated: result.truncated })
   } catch (error) {
     return failed(request.id, error)
   }

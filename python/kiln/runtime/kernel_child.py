@@ -182,6 +182,17 @@ def fetch(url, timeout=30):
 
            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')
 
+    _seam = _seam_request("web.fetch", {"url": url})
+    if _seam is not None and _seam.get("ok"):
+        _v = _seam.get("value") or {}
+        _body = _v.get("body") or {}
+        _content = _body.get("content")
+        if isinstance(_content, str) and _content:
+            return _content
+        _code = _v.get("statusCode")
+        if _code is not None and _code >= 400:
+            return "Fetch error: HTTP %s" % _code
+
     last = None
 
     for attempt in range(3):
@@ -317,6 +328,17 @@ def search(query, limit=8):
     finds nothing.
 
     """
+
+    _seam = _seam_request("web.search", {"query": query, "limit": limit})
+    if _seam is not None and _seam.get("ok"):
+        _srcs = (_seam.get("value") or {}).get("sources") or []
+        _out = []
+        for _s in _srcs:
+            if isinstance(_s, dict):
+                _out.append({"title": _s.get("title") or "", "url": _s.get("url") or "",
+                             "snippet": _s.get("snippet") or ""})
+        if _out:
+            return _out
 
     try:
 
