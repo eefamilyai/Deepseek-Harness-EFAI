@@ -264,7 +264,7 @@ export function ToolRow({
                       <>
                         {variant === 'code' && body !== null && (
                           <div className={css.bodyScroll}>
-                            <CodeBlock code={body} lang="typescript" copyLabel={t('copy')} copiedLabel={t('copied')} className={css.codeBody} />
+                            <CodeBlock code={body} lang={toolName === 'kernel' ? 'python' : 'typescript'} copyLabel={t('copy')} copiedLabel={t('copied')} className={css.codeBody} />
                           </div>
                         )}
                         {(cardBody !== null || outputText !== null) && (
