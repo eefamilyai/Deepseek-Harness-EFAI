@@ -10,6 +10,7 @@
  * @module @deepseek-ai/dsh-web-app
  */
 
+import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -91,6 +92,39 @@ export function resolveLanTrust(bindHost: string, extra: readonly string[]): Web
   return { lanAddresses, trustedHosts: [...lanAddresses, ...extra] }
 }
 
+/** Git identity of this checkout, resolved once at boot for the /version route. */
+export interface VersionInfo {
+  /** Full commit hash of the checkout HEAD (40 hex chars), or 'unknown' outside a git tree. */
+  commit: string
+  /** Seven-character commit prefix for humans. */
+  short: string
+  /** Whether the working tree carries uncommitted changes relative to HEAD. */
+  dirty: boolean
+}
+
+/**
+ * Read this checkout's HEAD and dirty state without blocking the request path.
+ * A packed or vendored install has no `.git`, so every field falls back to a
+ * stable 'unknown' rather than failing the Web row.
+ * @returns the boot-time version snapshot.
+ */
+function resolveCommitVersion(): VersionInfo {
+  const unknown: VersionInfo = { commit: 'unknown', short: 'unknown', dirty: false }
+  try {
+    const commit = execFileSync('git', ['-C', SOURCE_ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    if (!/^[0-9a-f]{40}$/.test(commit)) return unknown
+    let dirty = false
+    try {
+      dirty = execFileSync('git', ['-C', SOURCE_ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim() !== ''
+    } catch {
+      // Unreadable status is not a version failure; report clean rather than losing the hash.
+    }
+    return { commit, short: commit.slice(0, 7), dirty }
+  } catch {
+    return unknown
+  }
+}
+
 /** Model-visible orientation and acceptance boundary for sessions created through `dsh web`. */
 function webSurfacePrompt(webUrl: string): string {
   const updateContract = 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
@@ -128,7 +162,7 @@ export const internals: { resolveDistIndex: () => string } = { resolveDistIndex 
 
 /**
  * Mount the Web runtime: dist serving, surface prompt, the bash runtime
- * variable, and the URL line.
+ * variable, the URL line, and a /version diagnostics route.
  * @param ctx - plugin context carrying the webServer service.
  * @param config - validated {@link Config}.
  */
@@ -137,6 +171,18 @@ export function apply(ctx: Context, config: Config): void {
   // Release dependent rows only after bind-dependent trust has been sampled once.
   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
+  // Diagnostics route: a cheap, static answer so operators and agents can
+  // confirm which commit the running Web host was built from without poking
+  // the filesystem or process table.
+  const version = resolveCommitVersion()
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: '/version',
+    handler: (_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(version))
+    },
+  }), 'web-app: /version route')
   if (config.surfaceContext) {
     ctx.inject(['systemPrompt'], (promptCtx) => {
       addHarnessSourceSection(promptCtx, SOURCE_ROOT)

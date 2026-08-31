@@ -44,8 +44,9 @@ function stageDist(): string {
 }
 
 /** A fake webServer capturing the fallback seat and index taps. */
-function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown } {
+function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown; routes: () => unknown[] } {
   let fallback: unknown
+  const routes: unknown[] = []
   const server = {
     host,
     port: 4567,
@@ -53,9 +54,16 @@ function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: 
       fallback = handler
       return () => { fallback = undefined }
     },
+    register: (route: unknown) => {
+      routes.push(route)
+      return () => {
+        const index = routes.indexOf(route)
+        if (index !== -1) routes.splice(index, 1)
+      }
+    },
     applyIndexTaps: (html: string) => html,
   } as unknown as WebServer
-  return { server, seat: () => fallback }
+  return { server, seat: () => fallback, routes: () => routes }
 }
 
 /** A fake Loader whose settlement the test controls (the URL line waits on it). */
@@ -214,6 +222,48 @@ describe('web-app runtime glue', () => {
     await ctx.plugin(SystemPrompt, { persona: '' })
     await new Promise(resolve => setTimeout(resolve, 0))
     await expect(ctx.systemPrompt.assemble()).rejects.toThrow('webServer service missing')
+    await ctx.fiber.dispose()
+  })
+
+  it('registers a /version route answering with the boot-time commit snapshot', async () => {
+    stageDist()
+    const ctx = new Context()
+    const { server, routes } = fakeHttpServer()
+    ctx.provide('webServer', server)
+    apply(ctx, new Config({ printUrl: false, surfaceContext: false, trustedHosts: [] }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const route = routes().find(entry => (entry as { path: string }).path === '/version')
+    expect(route).toBeDefined()
+    const captured = route as {
+      kind: string
+      handler: (req: unknown, res: {
+        writeHead: (code: number, headers: Record<string, string>) => void
+        end: (body: string) => void
+      }) => void
+    }
+    expect(captured.kind).toBe('exact')
+
+    let statusCode = 0
+    let headers: Record<string, string> = {}
+    let body = ''
+    captured.handler({}, {
+      writeHead: (code, h) => { statusCode = code; headers = h },
+      end: (chunk) => { body = chunk },
+    })
+    expect(statusCode).toBe(200)
+    expect(headers['content-type']).toBe('application/json')
+    const payload = JSON.parse(body) as { commit: string; short: string; dirty: boolean }
+    // A real checkout reports a 40-hex commit; a dist-less vendored install
+    // falls back to a stable 'unknown' with the same shape.
+    if (payload.commit === 'unknown') {
+      expect(payload.short).toBe('unknown')
+      expect(payload.dirty).toBe(false)
+    } else {
+      expect(payload.commit).toMatch(/^[0-9a-f]{40}$/)
+      expect(payload.short).toBe(payload.commit.slice(0, 7))
+      expect(typeof payload.dirty).toBe('boolean')
+    }
     await ctx.fiber.dispose()
   })
 
