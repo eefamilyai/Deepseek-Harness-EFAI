@@ -18,6 +18,20 @@ rem build output is missing, so a fresh checkout starts with one command.
 
 cd /d "%~dp0"
 
+rem ── Version banner ──────────────────────────────────────────────────────
+rem Show which commit this launcher is about to run (full + short hash) so the
+rem operator can confirm the checkout matches the running build. Best-effort:
+rem a missing git binary or a vendored install with no .git prints `unknown`
+rem and never blocks startup.
+set "DSH_GIT_COMMIT=unknown"
+set "DSH_GIT_SHORT=unknown"
+git -C "%~dp0" rev-parse HEAD >nul 2>&1
+if not errorlevel 1 (
+  for /f "delims=" %%V in ('git -C "%~dp0" rev-parse HEAD') do set "DSH_GIT_COMMIT=%%V"
+  for /f "delims=" %%V in ('git -C "%~dp0" rev-parse --short HEAD') do set "DSH_GIT_SHORT=%%V"
+)
+echo [start] version: %DSH_GIT_COMMIT% ^(short: %DSH_GIT_SHORT%^)
+
 set "FORCE_BUILD="
 set "DSH_ARGS="
 :parse
