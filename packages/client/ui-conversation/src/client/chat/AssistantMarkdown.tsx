@@ -12,7 +12,7 @@
 import { memo, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { JsonBlock, MarkdownText, requestRunInTerminal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ImageGallery, type ImageLoader } from '@deepseek-ai/dsh-client-ui-attachment'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
@@ -41,6 +41,14 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
   const codeLabels = useMemo(() => ({ copyLabel: t('copy'), copiedLabel: t('copied') }), [t])
+  // Run/download affordances for settled fences: Run forwards the code to the
+  // dock terminal via a window event; Download is a client-side Blob save.
+  // A stable object per locale revision keeps MarkdownText's render cache.
+  const codeActions = useMemo(() => ({
+    runLabel: t('run'),
+    downloadLabel: t('download'),
+    onRun: requestRunInTerminal,
+  }), [t])
   const last = blocks.length - 1
   // Tool-call heads render as tool rows in the chat view's grouping pass, so
   // a node that is only those heads (or empty) would paint an empty root
@@ -61,6 +69,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             text={block.text}
             streaming={streaming}
             codeLabels={codeLabels}
+            codeActions={codeActions}
             fileMentions={mentions}
           />,
         )

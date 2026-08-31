@@ -21,7 +21,21 @@ const MAX_BUFFER = 200_000
  * The terminal pane for one chat. `active` focuses the input when shown; `cwd`
  * is the chat's workspace, so each chat's terminal opens where its files are.
  */
-export function Terminal({ active, cwd }: { active: boolean; cwd: string }): JSX.Element {
+export interface TerminalInject {
+  /** The exact multi-line command block to run, line by line. */
+  code: string
+  /** Bumped by the dock per injection so the same code can be re-run. */
+  nonce: number
+}
+
+export function Terminal({ active, cwd, inject, onInjected }: {
+  active: boolean
+  cwd: string
+  /** A pending run-in-terminal injection; submitted once the socket is open. */
+  inject?: TerminalInject | undefined
+  /** Called after the injection has been submitted (dock clears its pending state). */
+  onInjected?: () => void
+}): JSX.Element {
   const [buffer, setBuffer] = useState('')
   const [status, setStatus] = useState<'connecting' | 'open' | 'closed'>('connecting')
   const [input, setInput] = useState('')
@@ -66,6 +80,21 @@ export function Terminal({ active, cwd }: { active: boolean; cwd: string }): JSX
   }, [buffer, input])
 
   useEffect(() => { if (active && status === 'open') inputRef.current?.focus() }, [active, status])
+
+  // Run a code block injected from a chat fence: line-by-line into the piped
+  // shell once the socket is open. Heredocs/TUIs are outside the line-based
+  // shell's scope (same limitation as typing), and empty lines are skipped.
+  useEffect(() => {
+    if (inject === undefined || status !== 'open') return
+    const ws = wsRef.current
+    if (ws === null || ws.readyState !== WebSocket.OPEN) return
+    for (const line of inject.code.split(/\r?\n/)) {
+      if (line.trim() === '') continue
+      ws.send(`${line}\r\n`)
+    }
+    onInjected?.()
+    // `nonce` is the re-run signal; `status` gates the retry after a reconnect.
+  }, [inject?.nonce, status, inject, onInjected])
 
   const send = useCallback((data: string): boolean => {
     const ws = wsRef.current

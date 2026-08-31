@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Browser } from './Browser.tsx'
 import { Terminal } from './Terminal.tsx'
+import type { TerminalInject } from './Terminal.tsx'
 import css from './dock.module.css'
 
 type Tab = 'browser' | 'terminal'
@@ -57,6 +58,11 @@ export function Dock({ activeChat }: { activeChat: ActiveChat }): JSX.Element {
   const [mounted, setMounted] = useState(initialOpen)
   const [width, setWidth] = useState(initialWidth)
   const [resizing, setResizing] = useState(false)
+  // A code block the user asked to run in this chat's terminal. Held here
+  // (not in Terminal) so the dock can open and mount the pane first.
+  const [pendingInject, setPendingInject] = useState<TerminalInject | null>(null)
+  // Re-run signal: bump per injection so running the SAME block twice works.
+  const [injectNonce, setInjectNonce] = useState(0)
   // One terminal per chat we have opened, id -> its captured cwd. Each stays
   // mounted (socket + shell alive) so switching chats preserves every chat's
   // own terminal; a chat's Reset button restarts only that shell.
@@ -70,6 +76,25 @@ export function Dock({ activeChat }: { activeChat: ActiveChat }): JSX.Element {
   // the terminal socket is not torn down every time the drawer is collapsed.
   useEffect(() => { if (open) setMounted(true) }, [open])
 
+  // A chat code block's Run button asks this dock to execute it: open the
+  // drawer, switch to the terminal tab, ensure the current chat's shell is
+  // mounted, and hand the block to that terminal (it waits for the socket).
+  useEffect(() => {
+    const onRun = (event: Event): void => {
+      if (chat.id === '') return // no active chat — nowhere to run
+      const code = (event as CustomEvent<string>).detail
+      if (typeof code !== 'string' || code.trim() === '') return
+      setOpen(true)
+      setTab('terminal')
+      // The mount effect below creates the terminal on the next render; the
+      // injection then submits once its socket opens.
+      setInjectNonce(n => n + 1)
+      setPendingInject({ code, nonce: injectNonce + 1 })
+    }
+    window.addEventListener('dsh:run-in-terminal', onRun)
+    return () => { window.removeEventListener('dsh:run-in-terminal', onRun) }
+  }, [chat.id, injectNonce])
+
   // Open a terminal for the current chat the first time its tab is viewed, and
   // capture its cwd ONCE. A blank id is the "no chat / still loading" state —
   // never spawn a shell for it. The cwd is never changed after mount: a live
@@ -81,6 +106,10 @@ export function Dock({ activeChat }: { activeChat: ActiveChat }): JSX.Element {
   }, [open, tab, chat.id, chat.cwd])
 
   const close = useCallback(() => setOpen(false), [])
+
+  // The terminal has consumed the injection; clear it so the same block can
+  // be run again later (nonce already makes each injection distinct).
+  const onInjected = useCallback(() => { setPendingInject(null) }, [])
 
   // Drag the left edge to resize. The drawer is right-anchored, so the width is
   // the distance from the pointer to the right edge; window listeners keep the
@@ -143,7 +172,7 @@ export function Dock({ activeChat }: { activeChat: ActiveChat }): JSX.Element {
               <div className={css.pane} data-active={tab === 'terminal' || undefined}>
                 {Object.entries(terminals).map(([id, cwd]) => (
                   <div key={id} className={css.termHost} data-active={id === chat.id || undefined}>
-                    <Terminal active={open && tab === 'terminal' && id === chat.id} cwd={cwd} />
+                    <Terminal active={open && tab === 'terminal' && id === chat.id} cwd={cwd} inject={pendingInject ?? undefined} onInjected={onInjected} />
                   </div>
                 ))}
                 {terminals[chat.id] === undefined && (

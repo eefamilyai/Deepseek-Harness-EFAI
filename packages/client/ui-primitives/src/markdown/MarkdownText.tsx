@@ -19,17 +19,18 @@ import {
   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
   wrapBlockChildren,
 } from './render.tsx'
-import type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownRenderContext, ReferenceTargets } from './render.tsx'
+import type { MarkdownCodeActions, MarkdownCodeLabels, MarkdownFileMentions, MarkdownRenderContext, ReferenceTargets } from './render.tsx'
 import 'katex/dist/katex.min.css'
 import css from './MarkdownText.module.css'
 
-export type { MarkdownCodeLabels, MarkdownFileMentions } from './render.tsx'
+export type { MarkdownCodeActions, MarkdownCodeLabels, MarkdownFileMentions } from './render.tsx'
 
 /** One settled full render: parse with math, resolve references, append the footnote section. */
 function renderSettled(
   text: string,
   codeLabels: MarkdownCodeLabels | undefined,
   fileMentions: MarkdownFileMentions | undefined,
+  codeActions: MarkdownCodeActions | undefined,
 ): ReactNode[] {
   const root = parseGfmWithMath(text)
   const targets = createReferenceTargets()
@@ -37,6 +38,7 @@ function renderSettled(
   const context: MarkdownRenderContext = {
     streaming: false,
     codeLabels,
+    codeActions,
     fileMentions,
     targets,
     footnoteOrder: [],
@@ -101,6 +103,7 @@ class StreamingRenderer {
       const frozenContext: MarkdownRenderContext = {
         streaming: true,
         codeLabels: this.codeLabels,
+        codeActions: undefined,
         fileMentions: undefined,
         targets: frameTargets,
         footnoteOrder: this.frozenFootnoteOrder,
@@ -119,6 +122,7 @@ class StreamingRenderer {
     const tailContext: MarkdownRenderContext = {
       streaming: true,
       codeLabels: this.codeLabels,
+      codeActions: undefined,
       fileMentions: undefined,
       targets: frameTargets,
       footnoteOrder: [...this.frozenFootnoteOrder],
@@ -153,10 +157,11 @@ class StreamingRenderer {
  * relative links, and unsafe protocols are disabled, while absolute HTTP(S)
  * images render directly.
  */
-export const MarkdownText = memo(function MarkdownText({ text, streaming = false, codeLabels, fileMentions }: {
+export const MarkdownText = memo(function MarkdownText({ text, streaming = false, codeLabels, codeActions, fileMentions }: {
   text: string
   streaming?: boolean
   codeLabels?: MarkdownCodeLabels | undefined
+  codeActions?: MarkdownCodeActions | undefined
   fileMentions?: MarkdownFileMentions | undefined
 }) {
   const streamRef = useRef<StreamingRenderer | null>(null)
@@ -164,13 +169,13 @@ export const MarkdownText = memo(function MarkdownText({ text, streaming = false
   const children = useMemo(() => {
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, codeLabels, fileMentions)
+      return renderSettled(text, codeLabels, fileMentions, codeActions)
     }
     if (streamRef.current === null || streamLabelsRef.current !== codeLabels) {
       streamRef.current = new StreamingRenderer(codeLabels)
       streamLabelsRef.current = codeLabels
     }
     return streamRef.current.render(text)
-  }, [text, streaming, codeLabels, fileMentions])
+  }, [text, streaming, codeLabels, codeActions, fileMentions])
   return <div className={css.markdown}>{children}</div>
 })

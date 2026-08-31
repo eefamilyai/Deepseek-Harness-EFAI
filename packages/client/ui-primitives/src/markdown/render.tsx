@@ -34,6 +34,16 @@ export interface MarkdownCodeLabels {
   copiedLabel?: string | undefined
 }
 
+/** Run/download affordances for fence CodeBlocks. Absent = copy-only fences. */
+export interface MarkdownCodeActions {
+  /** Run-button label; also gates the Run button together with `onRun`. */
+  runLabel?: string | undefined
+  /** Download-button label; also gates the Download button. */
+  downloadLabel?: string | undefined
+  /** Invoked with a fence's trimmed code on Run. */
+  onRun?: (code: string) => void | undefined
+}
+
 function sanitizeUrl(url: string): string {
   try {
     switch (new URL(url).protocol) {
@@ -123,6 +133,8 @@ export interface MarkdownRenderContext {
   readonly streaming: boolean
   /** Localized fence copy-button labels. */
   readonly codeLabels: MarkdownCodeLabels | undefined
+  /** Localized fence run/download affordances; absent = copy-only fences. */
+  readonly codeActions: MarkdownCodeActions | undefined
   /** Inline-code file mentions; absent wherever no opener vocabulary exists. */
   readonly fileMentions: MarkdownFileMentions | undefined
   /** Inside an anchor's children: interactive mentions must not nest there. */
@@ -325,6 +337,9 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
       lang={context.streaming ? undefined : lang}
       copyLabel={context.codeLabels?.copyLabel}
       copiedLabel={context.codeLabels?.copiedLabel}
+      runLabel={context.codeActions?.runLabel}
+      downloadLabel={context.codeActions?.downloadLabel}
+      onRun={context.codeActions?.onRun}
     />
   )
 }
