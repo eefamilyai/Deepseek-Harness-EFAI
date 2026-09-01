@@ -41,6 +41,7 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+| `@deepseek-ai/dsh-tool-kernel` | `kernel` | `ctx.tools`、`ctx.kernel`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | kernel 在一个跨调用持续存在的命名空间中运行单个 cell，因此它以独占方式注册（没有 `isConcurrencySafe`）：两个重叠的 cell 会交错各自的赋值与捕获输出。它是否被挂载由 `kernel.enabled` 设置决定，该设置在启动时读取一次。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -1876,3 +1877,30 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
+
+<a id="deepseek-aidsh-tool-kernel"></a>
+
+## `@deepseek-ai/dsh-tool-kernel`
+
+### `kernel`
+
+在持久的 kernel 命名空间中运行 Python。返回该 cell 的捕获输出：打印的文本，加上每个顶层裸表达式的值。变量与导入跨调用持续存在。Shell 命令通过 sh("...") 运行；文件读写使用预加载的辅助函数。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "The Python source to execute in the persistent namespace."
+    }
+  },
+  "required": [
+    "code"
+  ]
+}
+```
+
+来源：[`packages/kernel/tool-kernel/src/index.ts`](../packages/kernel/tool-kernel/src/index.ts)
+
+kernel 在一个跨调用持续存在的命名空间中运行单个 cell，因此它以独占方式注册（没有 `isConcurrencySafe`）：两个重叠的 cell 会交错各自的赋值与捕获输出。它是否被挂载由 `kernel.enabled` 设置决定，该设置在启动时读取一次。

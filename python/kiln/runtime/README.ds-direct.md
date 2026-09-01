@@ -1,5 +1,7 @@
 # DeepSeek Direct (`ds_direct.py`)
 
+English | [中文](README.ds-direct.zh.md)
+
 Talk to **chat.deepseek.com directly** — no proxy, no third-party API server.
 
 `ds_direct` is the connector that lets the harness use a **free** DeepSeek web
