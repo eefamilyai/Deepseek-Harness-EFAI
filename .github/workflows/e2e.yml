@@ -69,7 +69,7 @@ jobs:
       || !(github.event.pull_request.head.repo.fork || github.event.pull_request.user.login == 'dependabot[bot]')
     timeout-minutes: 5
     outputs:
-      key-present: ${{ steps.detect.outputs.key-present }}
+      key_present: ${{ steps.detect.outputs.key_present }}
     steps:
       # The suites self-skip without a key, so an absent secret would otherwise
       # pass as "all skipped" with nothing saying so. Record the outcome in the
@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-            echo 'key-present=false' >> "$GITHUB_OUTPUT"
+            echo 'key_present=false' >> "$GITHUB_OUTPUT"
             echo "::notice::DEEPSEEK_API_KEY_EXTERNAL is not configured — the real-API e2e suite did not run."
             {
               echo '### E2E skipped'
@@ -94,14 +94,14 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          echo 'key-present=true' >> "$GITHUB_OUTPUT"
+          echo 'key_present=true' >> "$GITHUB_OUTPUT"
           echo "DEEPSEEK_API_KEY present."
 
   e2e:
     needs: preflight
     # An untrusted PR skips `preflight` entirely, leaving the output empty, so
     # the same condition covers both the keyless and the untrusted case.
-    if: needs.preflight.outputs.key-present == 'true'
+    if: needs.preflight.outputs.key_present == 'true'
     runs-on: ubuntu-latest
     name: e2e
     # Bounded file parallelism (DSH_E2E_MAX_WORKERS), 120s/test, retry 2. 45m
