@@ -12,7 +12,7 @@ The default gate ([.github/workflows/ci.yml](../../../../.github/workflows/ci.ym
 
 ## Decision
 
-A dedicated workflow, [.github/workflows/e2e.yml](../../../../.github/workflows/e2e.yml), separate from ci.yml, runs only `pnpm run test:e2e` against the external API using a repo secret, on trusted events, with a preflight that converts a missing secret into a loud failure instead of a false green. The keyless workflow remains separate so forkable quality gates and secret-consuming real-API gates keep different trigger and credential policies.
+A dedicated workflow, [.github/workflows/e2e.yml](../../../../.github/workflows/e2e.yml), separate from ci.yml, runs only `pnpm run test:e2e` against the external API using a repo secret, on trusted events, with a preflight that decides whether the secret is present so a missing one never reads as a false green ([the preflight's current form](2026-09-01-e2e-skips-without-key.md)). The keyless workflow remains separate so forkable quality gates and secret-consuming real-API gates keep different trigger and credential policies.
 
 ### A separate workflow, not a job in ci.yml
 
@@ -41,7 +41,9 @@ The gate is a *clean-skip nicety*, not the secret's security boundary (see § Se
 
 ### Preflight: fail loud, never false-green
 
-Because the job only runs on trusted events where the secret is expected, the preflight is an unconditional presence check: empty key → `exit 1` with a `::error::` annotation naming the secret to configure. This is the crux that makes a self-skipping suite safe to gate on. Without it, a deleted/renamed/misconfigured secret would make `test:e2e` skip every real suite and report all-green — a silent regression of the entire safety net. The guard turns "secret missing" from an invisible false pass into a visible failure. (Its correctness was verified live: the run before the secret existed failed at exactly this step.)
+The preflight was an unconditional presence check: empty key → `exit 1` with a `::error::` annotation naming the secret to configure, because the job only runs on trusted events where the secret is expected. Without it, a deleted/renamed/misconfigured secret would make `test:e2e` skip every real suite and report all-green — a silent regression of the entire safety net, and the reason a self-skipping suite is otherwise unsafe to gate on. (Its correctness was verified live: the run before the secret existed failed at exactly this step.)
+
+The workflow no longer fails that way: a missing secret now skips the `e2e` job and announces it in the run summary, so a repository that does not hold the secret is not permanently red. [The superseding Agent Note](2026-09-01-e2e-skips-without-key.md) owns that decision and what the weaker guard costs; the rationale above is why it is a real cost rather than a free simplification.
 
 ### Secret mapping and hygiene
 

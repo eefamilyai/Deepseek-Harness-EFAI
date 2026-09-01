@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-一个与 ci.yml 分离的专用工作流 [.github/workflows/e2e.yml](../../../../.github/workflows/e2e.yml) 使用 repo secret 对外部 API 运行且仅运行 `pnpm run test:e2e`，仅在可信事件上触发，并带有一个 preflight 检查：将缺失的 secret 转化为明确的失败而非虚假的绿色。无密钥工作流保持独立，使可 fork 的质量门禁与消费 secret 的真实 API 门禁各自拥有不同的触发和凭证策略。
+一个与 ci.yml 分离的专用工作流 [.github/workflows/e2e.yml](../../../../.github/workflows/e2e.yml) 使用 repo secret 对外部 API 运行且仅运行 `pnpm run test:e2e`，仅在可信事件上触发，并带有一个 preflight 检查判定 secret 是否存在，使缺失的 secret 绝不读作虚假的绿色（[preflight 的当前形态](2026-09-01-e2e-skips-without-key.md)）。无密钥工作流保持独立，使可 fork 的质量门禁与消费 secret 的真实 API 门禁各自拥有不同的触发和凭证策略。
 
 ### 独立工作流，而非 ci.yml 中的一个 job
 
@@ -41,7 +41,9 @@ Dependabot 子句基于 PR **作者**（`pull_request.user.login`）而非 `gith
 
 ### Preflight：明确失败，绝不虚假报绿
 
-由于 job 仅在 secret 应当存在的可信事件上运行，preflight 是一个无条件的存在性检查：密钥为空→`exit 1` 并附带 `::error::` 注解指明需要配置的 secret 名称。这是让自跳过套件可以安全地作为门禁的关键。没有它，被删除/重命名/错误配置的 secret 会让 `test:e2e` 跳过所有真实套件并报告全绿——整个安全网的静默退化。该守卫将「secret 缺失」从不可见的虚假通过转化为可见的失败。（其正确性已在实际中验证：secret 存在之前的运行恰好在此步骤失败。）
+preflight 曾是一个无条件的存在性检查：密钥为空→`exit 1` 并附带 `::error::` 注解指明需要配置的 secret 名称，因为该 job 仅在 secret 应当存在的可信事件上运行。没有它，被删除/重命名/错误配置的 secret 会让 `test:e2e` 跳过所有真实套件并报告全绿——整个安全网的静默退化，也正是自跳过套件在其他情况下不适合作为门禁的原因。（其正确性已在实际中验证：secret 存在之前的运行恰好在此步骤失败。）
+
+该工作流不再以此方式失败：缺失的 secret 现在会跳过 `e2e` job 并在运行摘要中予以说明，因此不持有该 secret 的仓库不会长期飘红。[取代它的 Agent Note](2026-09-01-e2e-skips-without-key.md) 拥有该决策以及更弱守卫的代价；上文的理由说明了为何那是一项真实代价而非免费的简化。
 
 ### Secret 映射与卫生
 

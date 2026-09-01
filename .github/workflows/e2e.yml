@@ -1,6 +1,6 @@
 name: E2E (real DeepSeek API)
 
-# Real-API end-to-end suite (`pnpm run test:e2e`). Unlike ci.yml this job
+# Real-API end-to-end suite (`pnpm run test:e2e`). Unlike ci.yml the `e2e` job
 # consumes the DEEPSEEK_API_KEY_EXTERNAL secret (mapped to the env var
 # DEEPSEEK_API_KEY the tests read) and hits the external API at
 # https://api.deepseek.com (DEEPSEEK_BASE_URL is pinned to it explicitly so a
@@ -8,14 +8,18 @@ name: E2E (real DeepSeek API)
 #
 # pull_request IS a trigger, but GitHub withholds repo secrets from BOTH forked
 # PRs and Dependabot PRs (the latter are same-repo, fork==false, but still
-# keyless). The job-level `if:` below skips the whole job for those untrusted
-# PRs. The Dependabot test keys on the PR AUTHOR (pull_request.user.login), not
+# keyless). The job-level `if:` on `preflight` skips those untrusted PRs. The
+# Dependabot test keys on the PR AUTHOR (pull_request.user.login), not
 # github.actor (the run trigger) — a maintainer reopening a Dependabot PR would
-# make github.actor human while the PR is still keyless. When the job runs, the
-# secret is expected, so the preflight hard-fails if it's missing (a missing
-# secret would otherwise make the self-skipping suite report a false green). A
-# job skipped by a job-level `if:` reports as a SUCCESSFUL check, so this
-# workflow is safe to use as a required status check if desired.
+# make github.actor human while the PR is still keyless. A job skipped by a
+# job-level `if:` reports as a SUCCESSFUL check, so this workflow is safe to
+# use as a required status check if desired.
+#
+# `preflight` decides whether the secret exists and `e2e` runs only if it does,
+# so a repository without the secret gets a skipped job and a run-summary notice
+# rather than a standing red. The cost of that trade is that a secret which
+# disappears reads as a pass; the notice is the only signal that no real-API
+# test ran, so a repository relying on this job for coverage should watch for it.
 #
 # SECURITY — NEVER change this trigger to `pull_request_target`. `pull_request`
 # checks out and runs the PR's HEAD code WITHOUT secrets for forks, which is what
@@ -52,14 +56,54 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
-  e2e:
+  # Answer "is there a key?" before any setup runs, in a job that checks out no
+  # code: a job-level `if:` cannot read `secrets`, so the answer has to reach
+  # the e2e job as a declared output.
+  preflight:
     runs-on: ubuntu-latest
-    name: e2e
+    name: preflight
     # Run on every trusted event. Skip untrusted PRs (forks + Dependabot) where
-    # the secret is withheld — they would otherwise hard-fail the preflight.
+    # the secret is withheld — they are keyless by construction.
     if: >-
       github.event_name != 'pull_request'
       || !(github.event.pull_request.head.repo.fork || github.event.pull_request.user.login == 'dependabot[bot]')
+    timeout-minutes: 5
+    outputs:
+      key-present: ${{ steps.detect.outputs.key-present }}
+    steps:
+      # The suites self-skip without a key, so an absent secret would otherwise
+      # pass as "all skipped" with nothing saying so. Record the outcome in the
+      # run summary, where a reader looking for real-API coverage will find it.
+      - name: Detect DEEPSEEK_API_KEY
+        id: detect
+        env:
+          # Repo secret DEEPSEEK_API_KEY_EXTERNAL holds the external-API key;
+          # the tests read process.env.DEEPSEEK_API_KEY, so map it across here.
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+            echo 'key-present=false' >> "$GITHUB_OUTPUT"
+            echo "::notice::DEEPSEEK_API_KEY_EXTERNAL is not configured — the real-API e2e suite did not run."
+            {
+              echo '### E2E skipped'
+              echo
+              echo 'The repository secret `DEEPSEEK_API_KEY_EXTERNAL` is not configured, so no'
+              echo 'real-API test ran. Configure it under Settings → Secrets and variables →'
+              echo 'Actions to get real coverage from this job.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo 'key-present=true' >> "$GITHUB_OUTPUT"
+          echo "DEEPSEEK_API_KEY present."
+
+  e2e:
+    needs: preflight
+    # An untrusted PR skips `preflight` entirely, leaving the output empty, so
+    # the same condition covers both the keyless and the untrusted case.
+    if: needs.preflight.outputs.key-present == 'true'
+    runs-on: ubuntu-latest
+    name: e2e
     # Bounded file parallelism (DSH_E2E_MAX_WORKERS), 120s/test, retry 2. 45m
     # still bounds retry storms against a slow API while the happy path fans out.
     timeout-minutes: 45
@@ -86,24 +130,6 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 \
             || echo "apparmor userns knob absent — the functional probe decides"
 
-      # Guard against a false green: the e2e suites self-skip when the key is
-      # absent, so a missing/misconfigured secret would otherwise pass as
-      # "all skipped". This job only runs on trusted events (the `if:` above
-      # excludes keyless PRs), so the secret MUST be present — fail loudly if not.
-      - name: Preflight (require DEEPSEEK_API_KEY)
-        env:
-          # Repo secret DEEPSEEK_API_KEY_EXTERNAL holds the external-API key;
-          # the tests read process.env.DEEPSEEK_API_KEY, so map it across here.
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-            echo "::error::DEEPSEEK_API_KEY is empty. The e2e suite would self-skip and"
-            echo "::error::report a false green. Configure the repo secret DEEPSEEK_API_KEY_EXTERNAL."
-            exit 1
-          fi
-          echo "DEEPSEEK_API_KEY present."
-
       # The e2e suites boot the example bins in `lib` mode (DSH_EXAMPLE_MODE=lib):
       # the built artifact under plain Node, resolving plugins through real package
       # exports — the shape a real consumer runs. That requires a prior build.
@@ -113,7 +139,7 @@ jobs:
       # Real-API end-to-end tests only. The keyless gates (lint/typecheck/
       # coverage/snapshot/etc.) already run in ci.yml on every push/PR.
       # DEEPSEEK_BASE_URL is pinned to the external API; the secret is scoped to
-      # this step (and preflight) only — never exposed to checkout/setup/install.
+      # this step only — never exposed to checkout/setup/install.
       - name: E2E tests (real DeepSeek API)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
