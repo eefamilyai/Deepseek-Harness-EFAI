@@ -74,6 +74,10 @@ The handle every plugin programs against:
 
 `running` describes a driver-wide drain interval, not proof that a turn is still open; it can cover turn close, the durability checkpoint, and consecutive queued turns. Only a caller that owns a complete interval may summarize it as a run result ([decision](../../../.agents/notes/implemented/architecture/2026-07-30-followup-enqueue-and-owned-runs.md)).
 
+### Agent-scoped model selection (`ctx.modelSelection`)
+
+`installModelSelection(agentCtx, ref)` declares `ctx.modelSelection` on one Agent's scoped context: a read accessor over the caller's mutable `ModelSelectionRef`, holding the provider, model, and optional reasoning effort that scope currently resolves to, or `undefined` when the entry point installed none. It is a scoped value, not a service — the entry point owns the selection and its precedence (picker switch, logged request header, deployment default). The same install couples that ref to `system-prompt/assemble` and `agent/request`, so prompt assembly snapshots the selection and the request applies the snapshot; a switch that lands mid-turn therefore takes effect on a later step instead of splitting the two surfaces, and an absent effort clears any inherited one. Re-entering setup on a scope that already exposes the key adopts the existing wiring, because declaring an accessor twice on one scope is a hard cordis error that would otherwise crash a resume.
+
 ### Extension points
 
 - Agent creation: `AgentLoop.create()` is the concrete config-path implementation (in `dsh-agent-loop`), while programmatic consumers create/resume owned agents through `ctx.agents.create()` / `ctx.agents.resume()`. Replace the loop by implementing `Agent` and registering via `ctx.agents.register()`.

@@ -74,6 +74,10 @@ inbox 的实时通知刻意采用逐消息的最小载荷：`agent/inbox/inserte
 
 `running` 描述驱动器范围的 drain 区间，而不是轮次仍打开的证明；它可以覆盖轮次关闭、持久性检查点和连续的排队轮次。只有拥有完整区间的调用方才能将其概括为一次运行的结果（[决策](../../../.agents/notes/implemented/architecture/2026-07-30-followup-enqueue-and-owned-runs.md)）。
 
+### Agent 范围的模型选择（`ctx.modelSelection`）
+
+`installModelSelection(agentCtx, ref)` 在单个 Agent 的 scoped context 上声明 `ctx.modelSelection`：它是调用方可变 `ModelSelectionRef` 之上的只读 accessor，持有该 scope 当前解析到的 provider、模型和可选推理力度；若入口点未安装任何选择，则为 `undefined`。它是 scoped 值而非 service——选择及其优先级（选择器切换、已记录的请求头、部署默认值）由入口点拥有。同一次安装还会把该 ref 挂到 `system-prompt/assemble` 与 `agent/request` 上，因此 prompt 组装会对选择拍快照，而请求应用该快照；轮次中途落地的切换因而在后续 step 生效，而不会让两个界面各说各话，缺席的力度则会清除任何继承而来的力度。在已经暴露该键的 scope 上重新进入 setup 会沿用既有接线，因为在同一 scope 上重复声明 accessor 是 cordis 的硬错误，否则会让 resume 崩溃。
+
 ### 扩展点
 
 - Agent 创建：`AgentLoop.create()` 是具体配置路径实现（位于 `dsh-agent-loop`），程序化消费方则通过 `ctx.agents.create()`/`ctx.agents.resume()` 创建或恢复有所有权的 agent。替换循环时，应实现 `Agent` 并通过 `ctx.agents.register()` 注册。
