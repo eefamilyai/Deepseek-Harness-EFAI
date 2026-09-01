@@ -114,14 +114,12 @@ import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-
 const DEFAULT_MAX_MESSAGES = 50
 
 /**
- * Non-model settings namespaces intentionally served to the Web client. The
+ * Non-model settings namespaces this package names for the Web client. The
  * plugin-owned entries (`agent-loop`, `bash`, `web-search-deepseek`) are the
- * host-plane sections the plugin configuration page edits; a namespace absent
- * here answers `settings-not-exposed` even when its owner registered it, so
- * adding a section to that page is a decision made here rather than by the
- * registering plugin. Moving that declaration to `settings.register()`, so a
- * plugin can expose its own configuration without a change in this package,
- * is deferred work.
+ * host-plane sections the plugin configuration page edits. The list is a
+ * floor, not the boundary: {@link exposedNamespaces} also serves whatever the
+ * running settings service reports, so these entries only matter for a
+ * deployment whose service cannot enumerate itself.
  */
 const WEB_SETTINGS_NAMESPACES = [
   'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'ui-effects', 'web-search-deepseek',
@@ -1945,16 +1943,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   }
 
   /**
-   * The settings namespaces this proxy serves: configurable model providers
-   * plus the small explicit Web preference and product-owned allowlists. The
-   * settings seam remains general; a future registration does not become
-   * remotely readable or writable by default.
+   * The settings namespaces this proxy serves: every namespace the running
+   * settings service reports, plus configurable model providers and the
+   * static Web and product entries that cover a service which cannot
+   * enumerate itself. Registering a namespace is therefore what makes it
+   * remotely readable and writable — a user-facing setting cannot exist and
+   * stay invisible in the Web client, and a namespace a plugin means to keep
+   * private must not be registered with this service. Reads redact
+   * `role('secret')` fields; writes are bounded by the owner's schema.
    */
   function exposedNamespaces(): Set<string> {
-    // Expose every namespace the running settings service actually registered.
-    // The previous whitelist was the reason a user-facing setting could exist
-    // but stay invisible/read-only in the Web client. Keep the static entries
-    // as a fallback for a deployment whose service cannot enumerate itself.
     const exposed = modelProviderNamespaces()
     for (const ns of WEB_SETTINGS_NAMESPACES) exposed.add(ns)
     for (const ns of PRODUCT_SETTINGS_NAMESPACES) exposed.add(ns)
