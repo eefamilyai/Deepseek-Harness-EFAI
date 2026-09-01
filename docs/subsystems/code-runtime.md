@@ -2,19 +2,9 @@
 
 English | [中文](code-runtime.zh.md)
 
-The code-execution seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) whose Service Definition ([dsh-code-runtime](../../packages/code-runtime/code-runtime), `ctx.codeRuntime`) runs one model-written program against host-provided async bindings and reports what it printed and returned. Code execution is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). Backends differ by execution substrate and source language, both readonly descriptors on the service; the worker-thread Service Provider and tool-registry Consumer are specified by the [Code Mode foundation](../../.agents/notes/implemented/feature/2026-06-15-code-mode.md) and [typed-return contract](../../.agents/notes/implemented/feature/2026-07-20-code-mode-typed-tool-returns.md).
+The code-execution seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) whose Service Definition ([dsh-code-runtime](../../packages/code-runtime/code-runtime), `ctx.codeRuntime`) runs one model-written program against host-provided async bindings and reports what it printed and returned. Code execution is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). Backends differ by execution substrate and source language, both readonly descriptors on the service; the worker-thread Service Provider and tool-registry Consumer are specified by the [PTC mode foundation](../../.agents/notes/implemented/feature/2026-06-15-ptc.md) and [typed-return contract](../../.agents/notes/implemented/feature/2026-07-20-ptc-typed-tool-returns.md).
 
 Source: [`packages/code-runtime/code-runtime/src/types.ts`](../../packages/code-runtime/code-runtime/src/types.ts)
-
-## The other execution seam: `ctx.kernel`
-
-A second capability seam lives on this page because it answers the same question — how does model-written code run — with the opposite answer about state.
-
-`ctx.codeRuntime` runs **one isolated program**: bindings in, value and logs out, nothing kept. [`dsh-kernel`](../../packages/kernel/kernel) (`ctx.kernel`) runs **one cell in a namespace that persists**, so a variable bound in one call is still bound in the next, and the process outlives the call. That difference decides everything else about the two seams. An isolated run can be retried, run in parallel with its siblings, and abandoned without consequence; a kernel cell cannot — cells serialize, because a shared mutable namespace makes two concurrent cells interleave their assignments, and a cancelled or overrunning cell costs the whole namespace, which the seam reports rather than hides (`restarted`, and an `outcome` of `timeout`/`cancelled`/`crashed`).
-
-The backend that ships is [`dsh-kernel-python`](../../packages/kernel/kernel-python), a Python child process over a framed stdio protocol; the model-facing tool is [`dsh-tool-kernel`](../../packages/kernel/tool-kernel). Whether the seam is mounted at all is a user setting rather than a fixed composition — see [`dsh-kernel-mode`](../../packages/kernel/kernel-mode), which gates the kernel rows and the tools the kernel replaces on one switch read at boot.
-
-Source: [`packages/kernel/kernel/src/types.ts`](../../packages/kernel/kernel/src/types.ts)
 
 ## The run: request in, result out
 
@@ -71,7 +61,7 @@ interface CodeRunResult {
 
 ## Bindings: host functions as program globals
 
-Each `CodeBindingNamespace` becomes one global object of async callables inside the program (the Code Mode consumer passes one: `tools`). Arguments and resolutions must be lossless JSON and cross without a seam-level byte cap; the runtime may bridge them through structured clone. A namespace may declare a program-visible error class without making the runtime know the consumer's names: the runtime injects the real constructor and turns rejected calls into its instances. A runtime also treats binding names as hostile input (`__proto__` is an ordinary own property, never a prototype collision):
+Each `CodeBindingNamespace` becomes one global object of async callables inside the program (the PTC mode consumer passes one: `tools`). Arguments and resolutions must be lossless JSON and cross without a seam-level byte cap; the runtime may bridge them through structured clone. A namespace may declare a program-visible error class without making the runtime know the consumer's names: the runtime injects the real constructor and turns rejected calls into its instances. A runtime also treats binding names as hostile input (`__proto__` is an ordinary own property, never a prototype collision):
 
 ```ts type-equiv
 /**
@@ -79,7 +69,7 @@ Each `CodeBindingNamespace` becomes one global object of async callables inside 
  * injects a real error constructor under `name`; rejected member calls become
  * its instances and expose the exact member name through
  * `memberNameProperty`. Both strings are runtime data rather than knowledge
- * of a particular consumer such as Code Mode.
+ * of a particular consumer such as PTC mode.
  */
 interface CodeBindingErrorClass {
   /** Constructor global and resulting `Error.name`; same portable identifier rule as {@link CodeBindingNamespace.global}. */
@@ -176,7 +166,7 @@ interface CodeRunFailure {
 
 ## Cordis API
 
-Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
 <a id="ctxcoderuntime--coderuntime-abstract-seam"></a>
 
@@ -197,7 +187,7 @@ Registers one `ctx.codeRuntime` implementation. Program, budget, abort, and subs
 abstract run(request: CodeRunRequest): Promise<CodeRunResult>
 ```
 
-Source: [`packages/code-runtime/code-runtime/src/index.ts:102`](../../packages/code-runtime/code-runtime/src/index.ts)
+Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
 
 <a id="ctxkernel--kernelruntime"></a>
 
@@ -248,5 +238,5 @@ async restart(): Promise<void>
 async names(): Promise<readonly string[]>
 ```
 
-Source: [`packages/kernel/kernel/src/index.ts:61`](../../packages/kernel/kernel/src/index.ts)
+Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)
 <!-- END GENERATED cordis-surface -->

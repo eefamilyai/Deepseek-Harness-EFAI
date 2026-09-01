@@ -3,7 +3,7 @@
  * and static placement.
  */
 import type { PropsLocale, PropsRuntime, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import styles from './EffectsSettingsRow.module.css'
 
 const css = (key: string): string => (styles as Record<string, string>)[key] ?? key

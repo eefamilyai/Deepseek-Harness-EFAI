@@ -22,7 +22,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { CallId, CONTEXT_WINDOW_EXCEEDED_CODE, isContextWindowExceededError, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { CONTEXT_WINDOW_EXCEEDED_CODE, isContextWindowExceededError, LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   FinishReason,
@@ -217,8 +217,8 @@ export function toolIndex(tools: readonly ToolSchema[] | undefined): Map<string,
  * @param name - the tool being called, kept in the id so it stays legible in a log.
  * @returns a session-unique call id.
  */
-export function mintCallId(name: string): CallId {
-  return CallId(`kiln-${name}-${randomUUID()}`)
+export function mintCallId(name: string): ToolCallId {
+  return ToolCallId(`kiln-${name}-${randomUUID()}`)
 }
 
 /** The Kiln registry as one harness adapter over many routes. */

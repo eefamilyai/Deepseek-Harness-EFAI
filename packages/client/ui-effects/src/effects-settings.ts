@@ -1,7 +1,7 @@
 /**
  * Durable ui-effects preference section shared by the Host schema and the
  * browser scope. This file stays client-safe: only @deepseek-ai/schemastery
- * (a vendored, inline-safe library) — the settingsNamespace import lives in
+ * (a vendored, inline-safe library) — the host registration lives in
  * the Host half only.
  */
 import z from '@deepseek-ai/schemastery'

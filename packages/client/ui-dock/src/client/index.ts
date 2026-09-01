@@ -7,7 +7,9 @@
  * @module @deepseek-ai/dsh-client-ui-dock/client
  */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: pulls the session plugin's Context merge (ctx.sessions).
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Dock } from './Dock.tsx'

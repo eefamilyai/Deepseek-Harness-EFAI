@@ -3,7 +3,7 @@
  * only host behavior is registering the durable settings section.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import { EFFECTS_SETTINGS_NAMESPACE, EffectsSettingsSchema } from './effects-settings.ts'
 
 export {
@@ -18,7 +18,7 @@ export {
 export function apply(ctx: Context): void {
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(
-      settingsNamespace(EFFECTS_SETTINGS_NAMESPACE),
+      EFFECTS_SETTINGS_NAMESPACE,
       EffectsSettingsSchema,
     )
   })

@@ -9,10 +9,16 @@
   ],
   "references": [
     {
+      "path": "../ui-renderer"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
-      "path": "../runtime"
+      "path": "../store"
+    },
+    {
+      "path": "../ui-settings"
     },
     {
       "path": "../ui-slots"

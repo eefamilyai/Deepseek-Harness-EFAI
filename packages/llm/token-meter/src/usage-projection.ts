@@ -4,25 +4,11 @@
 
 import { z } from 'zod'
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
+import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-// Type-only: the `compaction/*` SessionEventMap merges (reset the cumulative
-// counter when a compaction ends without an error).
-import type {} from '@deepseek-ai/dsh-compaction'
 import type { ContextPressureProjection, TokenUsageProjection } from './projection.ts'
 import { foldSurfaceProjection } from './surface-projection.ts'
-import type { ShadowPriceClaim } from './surface-projection.ts'
-
-interface UsageSample {
-  turn: number
-  step: number
-  buckets: TokenUsageProjection
-}
-
-interface TokenUsageState {
-  totals: TokenUsageProjection
-  last: UsageSample | null
-}
 
 const zeroBuckets = (): TokenUsageProjection => ({
   uncachedInputTokens: 0,
@@ -62,13 +48,30 @@ const projectionSchema = z.object({
   cacheWriteTokens: z.number().int().nonnegative(),
 }).strict()
 
-// Cast for the optional values: under exactOptionalPropertyTypes zod infers
-// `number | undefined` where the interface declares absent-or-number fields.
-const pressureSchema = z.object({
+/**
+ * The token-usage unit's state schema — the one definition of the state
+ * shape; the state type is inferred from it.
+ */
+const tokenUsageStateSchema = z.object({
+  totals: projectionSchema,
+  last: z.object({
+    turn: z.number().int().nonnegative(),
+    step: z.number().int().nonnegative(),
+    buckets: projectionSchema,
+  }).nullable(),
+}).strict()
+
+type TokenUsageState = z.infer<typeof tokenUsageStateSchema>
+
+const pressureSchema: z.ZodType<ContextPressureProjection> = z.object({
   pressureTokens: z.number().int().nonnegative().optional(),
   projectedTokens: z.number().int().nonnegative().optional(),
   contextWindow: z.number().int().positive().optional(),
-}).strict() as unknown as z.ZodType<ContextPressureProjection>
+}).strict().transform(({ pressureTokens, projectedTokens, contextWindow }) => ({
+  ...pressureTokens === undefined ? {} : { pressureTokens },
+  ...projectedTokens === undefined ? {} : { projectedTokens },
+  ...contextWindow === undefined ? {} : { contextWindow },
+}))
 
 /** Prompt-side pressure of one request: input plus cache traffic, no output. */
 const pressureFrom = (usage: TokenUsage): number =>
@@ -82,34 +85,48 @@ const usageOf = (event: SessionEvent): TokenUsage | undefined =>
       ? event.data.usage
       : undefined
 
-/**
- * Context-occupancy state: the two independent last-wins records plus the
- * O(1) running surface total needed to carry the newest sample forward.
- */
-interface ContextPressureState {
-  contextWindow?: number
-  pressureTokens?: number
-  /** Running heuristic total over the current surface ({@link foldSurfaceProjection}). */
-  surfaceTokens: number
-  /** {@link surfaceTokens} at the newest usage sample; absent until one lands. */
-  sampledSurfaceTokens?: number
-  /** Shadow price armed by the immediately preceding metering event. */
-  claim?: ShadowPriceClaim
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    tokenUsage: TokenUsageState
+    tokenUsageLifetime: TokenUsageState
+    contextPressure: ContextPressureState
+  }
 }
+
+/** The context-pressure state schema and source of its inferred type. */
+const contextPressureStateSchema = z.object({
+  contextWindow: z.number().int().positive().optional(),
+  pressureTokens: z.number().int().nonnegative().optional(),
+  surfaceTokens: z.number().int().nonnegative(),
+  sampledSurfaceTokens: z.number().int().nonnegative().optional(),
+  claim: z.object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+    tokens: z.number().int().nonnegative(),
+  }).optional(),
+}).strict()
+
+type ContextPressureState = z.infer<typeof contextPressureStateSchema>
 
 /**
  * Fold one usage-bearing event into the running totals (the part shared by
  * both usage projections).
  *
  * Usage chunks provide an early sample that survives a later request failure;
- * an assistant message provides the final sample for the same turn/step. A
- * repeated sample replaces that step's earlier value instead of double
- * counting it. The single `last` slot relies on the session-log invariant
- * that usage reports for one turn/step are adjacent: once a later step begins,
- * a legal log never reports usage for an earlier step again. An event that
- * reports no usage returns the same state reference (zero downstream work).
+ * an assistant message provides the final sample for the same attempt. A
+ * repeated sample replaces that attempt's earlier value instead of double
+ * counting it, while `llm/retry-started` closes the replacement slot so the
+ * retried attempt adds to the total. The single `last` slot relies on the
+ * session-log invariant that usage reports for one attempt are adjacent. An
+ * event that reports no usage returns the same state reference (zero
+ * downstream work).
  */
 const applyUsageSample = (state: TokenUsageState, event: SessionEvent): TokenUsageState => {
+  if (event.type === 'llm/retry-started') {
+    return state.last?.turn === event.data.turn && state.last.step === event.data.step
+      ? { ...state, last: null }
+      : state
+  }
   let turn: number
   let step: number
   let usage: TokenUsage
@@ -142,10 +159,10 @@ const applyUsageSample = (state: TokenUsageState, event: SessionEvent): TokenUsa
  * as the billing accrued against the current compacted conversation. For the
  * whole-session total see {@link tokenUsageLifetimeProjectionDefinition}.
  */
-export const tokenUsageProjectionDefinition:
-ProjectionDefinition<'tokenUsage', TokenUsageState> = {
+export const tokenUsageProjectionDefinition = {
   key: 'tokenUsage',
-  schema: projectionSchema,
+  stateVersion: 2,
+  stateSchema: tokenUsageStateSchema,
   init: () => ({ totals: zeroBuckets(), last: null }),
   apply: (state, event) => {
     // A compaction that ends with no `error` is a successful /compact (manual)
@@ -165,9 +182,8 @@ ProjectionDefinition<'tokenUsage', TokenUsageState> = {
     }
     return applyUsageSample(state, event)
   },
-  view: state => state.totals,
-  stateVersion: 1,
-}
+  wire: { viewSchema: projectionSchema, view: state => state.totals },
+} satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
 
 /**
  * Token-meter's LIFETIME usage projection unit: the same four disjoint buckets
@@ -175,17 +191,17 @@ ProjectionDefinition<'tokenUsage', TokenUsageState> = {
  * session and never zeroed by compaction. This is the "total token usage
  * across all compactions" the session report needs.
  *
- * A successful compaction keeps the totals but clears the same-step dedup
+ * A successful compaction keeps the totals but clears the same-attempt dedup
  * memory (`last`): compaction happens at a step boundary, and turn/step
  * numbering can repeat in the new epoch, so a carried-over `last` could make
  * the first post-compaction sample look like a replacement of the final
  * pre-compaction step and wrongly subtract it. A failed compaction reports no
  * usage and is a no-op, exactly like any other non-usage event.
  */
-export const tokenUsageLifetimeProjectionDefinition:
-ProjectionDefinition<'tokenUsageLifetime', TokenUsageState> = {
+export const tokenUsageLifetimeProjectionDefinition = {
   key: 'tokenUsageLifetime',
-  schema: projectionSchema,
+  stateVersion: 1,
+  stateSchema: tokenUsageStateSchema,
   init: () => ({ totals: zeroBuckets(), last: null }),
   apply: (state, event) => {
     if (event.type === 'compaction/end' && event.data.error === undefined) {
@@ -193,9 +209,8 @@ ProjectionDefinition<'tokenUsageLifetime', TokenUsageState> = {
     }
     return applyUsageSample(state, event)
   },
-  view: state => state.totals,
-  stateVersion: 1,
-}
+  wire: { viewSchema: projectionSchema, view: state => state.totals },
+} satisfies ProjectionDefinition<'tokenUsageLifetime', TokenUsageState>
 
 /**
  * Token-meter's context-occupancy projection unit.
@@ -218,10 +233,10 @@ ProjectionDefinition<'tokenUsageLifetime', TokenUsageState> = {
  * BEFORE the same event joins the surface, so an `assistant/message` anchors
  * against the surface its own request saw.
  */
-export const contextPressureProjectionDefinition:
-ProjectionDefinition<'contextPressure', ContextPressureState> = {
+export const contextPressureProjectionDefinition = {
   key: 'contextPressure',
-  schema: pressureSchema,
+  stateVersion: 4,
+  stateSchema: contextPressureStateSchema,
   init: () => ({ surfaceTokens: 0 }),
   apply: (state, event) => {
     const fold = foldSurfaceProjection(state.claim, event)
@@ -253,12 +268,14 @@ ProjectionDefinition<'contextPressure', ContextPressureState> = {
     const { claim: _expired, ...withoutClaim } = next
     return fold.claim === undefined ? withoutClaim : { ...withoutClaim, claim: fold.claim }
   },
-  view: ({ contextWindow, pressureTokens, surfaceTokens, sampledSurfaceTokens }) => ({
-    ...contextWindow === undefined ? {} : { contextWindow },
-    ...pressureTokens === undefined ? {} : { pressureTokens },
-    ...pressureTokens === undefined || sampledSurfaceTokens === undefined
-      ? {}
-      : { projectedTokens: Math.max(0, pressureTokens + surfaceTokens - sampledSurfaceTokens) },
-  }),
-  stateVersion: 4,
-}
+  wire: {
+    viewSchema: pressureSchema,
+    view: ({ contextWindow, pressureTokens, surfaceTokens, sampledSurfaceTokens }) => ({
+      ...contextWindow === undefined ? {} : { contextWindow },
+      ...pressureTokens === undefined ? {} : { pressureTokens },
+      ...pressureTokens === undefined || sampledSurfaceTokens === undefined
+        ? {}
+        : { projectedTokens: Math.max(0, pressureTokens + surfaceTokens - sampledSurfaceTokens) },
+    }),
+  },
+} satisfies ProjectionDefinition<'contextPressure', ContextPressureState>

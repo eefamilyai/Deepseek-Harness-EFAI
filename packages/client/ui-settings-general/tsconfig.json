@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../util/values"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -18,16 +21,22 @@
       "path": "../ui-primitives"
     },
     {
-      "path": "../runtime"
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-session"
+    },
+    {
+      "path": "../store"
     },
     {
       "path": "../ui-settings"
     },
     {
-      "path": "../web-react"
+      "path": "../locale"
     },
     {
-      "path": "../locale"
+      "path": "../connection/tsconfig.client.json"
     },
     {
       "path": "../../settings/settings"
