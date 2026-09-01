@@ -184,7 +184,7 @@ export function apply(ctx: ClientContext): void {
   }, GeneralSection))
 
   const advancedInjected = (): AdvancedSectionInjected => ({
-    api: connection.api,
+    settings: ctx.remote.settings,
   })
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',

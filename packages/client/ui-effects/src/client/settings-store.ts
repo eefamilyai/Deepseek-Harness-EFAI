@@ -3,9 +3,8 @@
  * opacity, and static placement, mirrored from the Host user-settings
  * document with process-local fallback when settings are unavailable.
  */
-import {
-  createSnapshotStore, type SettingsScope, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   DEFAULT_FOCUS_ENABLED, DEFAULT_WHALE_ENABLED, DEFAULT_WHALE_OPACITY, DEFAULT_WHALE_SIZE, DEFAULT_WHALE_STATIC,
   FOCUS_ENABLED_FIELD, WHALE_ENABLED_FIELD, WHALE_OPACITY_FIELD, WHALE_SIZE_FIELD, WHALE_STATIC_FIELD,

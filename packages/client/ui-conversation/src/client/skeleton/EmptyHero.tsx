@@ -152,11 +152,7 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
           <span className={css.headlineText}>
             {t('hero.headline')}
           </span>
-<<<<<<< HEAD
-          <span className={css.headlineText}>{t('hero.headline')}</span>
-=======
           <span className={css.previewBadge}>{t('hero.preview')}</span>
->>>>>>> upstream/master
         </div>
         <div className={css.body}>
           {/* The composer remains mounted outside this component. */}

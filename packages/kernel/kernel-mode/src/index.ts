@@ -33,14 +33,13 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-settings'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'kernel-mode'
 
 /** The settings namespace holding the switch. */
-export const KERNEL_SETTINGS_NAMESPACE = settingsNamespace('kernel')
+export const KERNEL_SETTINGS_NAMESPACE = 'kernel'
 
 /**
  * The document path compositions read through `dshSettingFlag`.

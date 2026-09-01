@@ -52,7 +52,6 @@
     { "path": "./packages/client/ui-primitives" },
     { "path": "./packages/client/ui-dock" },
     { "path": "./packages/client/ui-effects" },
-    { "path": "./packages/client/web-react" },
     { "path": "./packages/client/modules" },
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
     { "path": "./packages/client/hmr" },

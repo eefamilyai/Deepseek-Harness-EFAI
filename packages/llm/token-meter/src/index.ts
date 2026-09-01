@@ -99,7 +99,6 @@ export class TokenMeter extends Service {
     super(ctx, 'tokenMeter')
     validateConfigKeys(config)
 
-<<<<<<< HEAD
     // Projection registration is an optional child: compositions without the
     // generic registry keep the meter's standalone read shape.
     ctx.inject(['sessionProjections'], (projectionCtx) => {
@@ -108,11 +107,6 @@ export class TokenMeter extends Service {
       projectionCtx.sessionProjections.register(contextPressureProjectionDefinition)
       projectionCtx.sessionProjections.register(contextBreakdownProjectionDefinition)
     })
-=======
-    ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    ctx.sessionProjections.register(contextPressureProjectionDefinition)
-    ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
->>>>>>> upstream/master
 
     // Readers catch up independently, while eager observation bounds ordinary
     // read latency without creating state for sessions no consumer has read.

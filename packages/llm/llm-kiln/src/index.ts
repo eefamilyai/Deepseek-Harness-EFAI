@@ -40,7 +40,7 @@ import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { LlmError } from '@deepseek-ai/dsh-llm'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmAccountAdder } from '@deepseek-ai/dsh-llm'
 import { KilnAdapter } from './adapter.ts'
 import { KilnBridge } from './bridge.ts'
@@ -61,7 +61,7 @@ export const name = 'llm-kiln'
 export const inject = ['llm']
 
 /** Settings namespace for the Kiln adapter (deepseek-web credentials + routing knobs). */
-export const LLM_KILN_SETTINGS_NAMESPACE = settingsNamespace('llm-kiln')
+export const LLM_KILN_SETTINGS_NAMESPACE = 'llm-kiln'
 
 /** Default prefix keeping Kiln routes clear of every other adapter's names. */
 export const DEFAULT_ROUTE_PREFIX = 'kiln-'
@@ -248,27 +248,29 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     env: { KILN_STATE_DIR: stateDir },
   })
 
-  installSettingsSection(ctx, LLM_KILN_SETTINGS_NAMESPACE, Config, config, {
-    setSource: (source) => {
-      current = source
-    },
-    // Credentials are applied to the long-lived sidecar process; the route
-    // graph does not change for a token/cookie edit, so no re-registration
-    // is required here.
-    onChange: () => {
-      const next = current()
-      const ds = next.deepseek
-      if (ds !== undefined) {
-        void bridge.configure('deepseek', {
-          token: ds.token ?? '',
-          cookie: ds.cookie ?? '',
-          email: ds.email ?? '',
-          mobile: ds.mobile ?? '',
-          area_code: ds.areaCode ?? '',
-          password: ds.password ?? '',
-        })
-      }
-    },
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, LLM_KILN_SETTINGS_NAMESPACE, Config, config, {
+      setSource: (source) => {
+        current = source
+      },
+      // Credentials are applied to the long-lived sidecar process; the route
+      // graph does not change for a token/cookie edit, so no re-registration
+      // is required here.
+      onChange: () => {
+        const next = current()
+        const ds = next.deepseek
+        if (ds !== undefined) {
+          void bridge.configure('deepseek', {
+            token: ds.token ?? '',
+            cookie: ds.cookie ?? '',
+            email: ds.email ?? '',
+            mobile: ds.mobile ?? '',
+            area_code: ds.areaCode ?? '',
+            password: ds.password ?? '',
+          })
+        }
+      },
+    })
   })
   // Seed the sidecar with any stored credentials from launch/settings.
   {

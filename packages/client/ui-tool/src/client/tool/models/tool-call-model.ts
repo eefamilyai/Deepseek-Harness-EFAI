@@ -64,24 +64,14 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
 }
 
 /** Tool-owned titles that refine a generic row variant without replacing it. */
-<<<<<<< HEAD
-const TOOL_TITLES: Record<string, string> = {
-  kernel: 'Python',
-  cordis_package_inspect: 'Inspect',
-  cordis_runtime_inspect: 'Inspect',
-  cordis_run: 'Run Cordis Plugin',
-  cordis_stop: 'Stop Cordis Plugin',
-  cordis_undefine: 'Remove Cordis Plugin',
-  pwsh: 'Pwsh',
-=======
 const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
+  kernel: 'tool.title.kernel',
   cordis_package_inspect: 'tool.title.inspect',
   cordis_runtime_inspect: 'tool.title.inspect',
   cordis_run: 'tool.title.runCordis',
   cordis_stop: 'tool.title.stopCordis',
   cordis_undefine: 'tool.title.removeCordis',
   pwsh: 'tool.title.pwsh',
->>>>>>> upstream/master
 }
 
 /**

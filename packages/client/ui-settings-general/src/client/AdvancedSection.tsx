@@ -9,7 +9,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { Button, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ConnectionHandle, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 import css from './AdvancedSection.module.css'
 
@@ -36,7 +37,7 @@ const NAMESPACE_DESCRIPTIONS: Readonly<Record<string, string>> = {
 
 /** Minimal transport face this section needs. */
 export type AdvancedSectionInjected = {
-  api: ConnectionHandle['api']
+  settings: ClientRemote['settings']
 }
 
 export type AdvancedSectionProps = SettingsSectionOwnerProps & AdvancedSectionInjected
@@ -48,7 +49,7 @@ function describeNamespace(ns: string): string {
   return `Settings owned by the "${ns}" plugin.`
 }
 
-export function AdvancedSection({ api }: AdvancedSectionProps) {
+export function AdvancedSection({ settings }: AdvancedSectionProps) {
   const [views, setViews] = useState<SettingsNamespaceView[]>([])
   const [selectedNs, setSelectedNs] = useState<string>('')
   const [draft, setDraft] = useState('')
@@ -58,20 +59,20 @@ export function AdvancedSection({ api }: AdvancedSectionProps) {
 
   useEffect(() => {
     let alive = true
-    void api.settings.describe({}).then((response) => {
+    void Promise.resolve(settings.describe()).then((result) => {
       if (!alive) return
-      if (!response.result.ok) {
-        setError(response.result.error.message)
+      if (!result.ok) {
+        setError(result.error.message)
         return
       }
-      const namespaces = response.result.value.namespaces
+      const namespaces = result.value.namespaces
       setViews(namespaces)
       const first = namespaces[0]?.ns ?? ''
       setSelectedNs(first)
       setDraft(first === '' ? '' : JSON.stringify(namespaces[0]?.value ?? null, null, 2))
     })
     return () => { alive = false }
-  }, [api])
+  }, [settings])
 
   const selected = useMemo(
     () => views.find(view => view.ns === selectedNs),
@@ -106,16 +107,16 @@ export function AdvancedSection({ api }: AdvancedSectionProps) {
     setError(null)
     setNotice(null)
     try {
-      const response = await api.settings.replace({
-        ns: view.ns,
-        section,
-        expectedRevision: view.revision,
-      })
-      if (!response.result.ok) {
-        setError(response.result.error.message)
+      const result = await settings.replace(
+        view.ns,
+        section as Record<string, JsonValue>,
+        view.revision,
+      )
+      if (!result.ok) {
+        setError(result.error.message)
         return
       }
-      const updated = response.result.value
+      const updated = result.value
       setViews(prev => prev.map(existing => existing.ns === updated.ns ? updated : existing))
       setDraft(JSON.stringify(updated.value ?? null, null, 2))
       setNotice(`Saved ${updated.ns}.`)

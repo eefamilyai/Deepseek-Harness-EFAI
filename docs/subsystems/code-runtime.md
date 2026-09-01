@@ -188,4 +188,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
 ```
 
 Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
+
+<a id="ctxkernel--kernelruntime"></a>
+
+### `ctx.kernel` — `KernelRuntime`
+
+The persistent-kernel service, registered as `ctx.kernel` (one instance per context).
+
+Selection semantics (resolved at execution time, never order-dependent):
+
+- A configured id that is registered and `available()` → that backend.
+- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.
+- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.
+- No id configured, exactly one registered usable backend → that backend.
+- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.
+- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.
+
+```ts cordis-catalog
+/**
+ * Register a kernel backend. Throws {@link KernelError}
+ * `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a
+ * disposer; disposed with the calling fiber.
+ * @param provider - the backend; its `id` is the registry key.
+ * @returns the disposer that unregisters the backend.
+ */
+registerProvider(provider: KernelProvider): () => void
+
+/**
+ * Execute one cell in the persistent namespace. Resolves the backend at call
+ * time with the selection rules above; throws {@link KernelError} when the
+ * capability itself cannot run. A cell that raises is a *result* carrying the
+ * traceback, never a throw — the model is expected to read it and fix the code.
+ * @param request - the cell and its optional budget.
+ * @param signal - optional cancellation; an aborted cell restarts the kernel.
+ * @returns the captured output and how the cell ended.
+ */
+async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
+
+/**
+ * Discard the namespace and start a fresh kernel.
+ * @returns once the replacement kernel is ready.
+ */
+async restart(): Promise<void>
+
+/**
+ * List the names currently bound in the namespace.
+ * @returns the bound names, in the backend's order.
+ */
+async names(): Promise<readonly string[]>
+```
+
+Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)
 <!-- END GENERATED cordis-surface -->

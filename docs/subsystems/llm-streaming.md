@@ -864,7 +864,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
 
 ### `ctx.llm` — `LlmRuntime`
 
-The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
+The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.
 
 ```ts cordis-catalog
 /**
@@ -922,6 +922,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
  * @returns the advertised models, deduplicated in endpoint order.
  */
 async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
+
+/**
+ * Register the handler that tests and adds a login for one account-pooling
+ * provider route (`ds_direct` is the only one today). Mirrors
+ * {@link registerModelDiscovery}: one handler per route, released with the
+ * returned disposer. The handler owns making the new login selectable — it
+ * re-registers its own routes — so the runtime only routes the call.
+ * @param provider - the provider route that pools logins.
+ * @param add - tests a login and, on success, adds it.
+ * @returns a disposer that withdraws the handler.
+ */
+registerAccountProvider(provider: string, add: LlmAccountAdder): () => void
+
+/**
+ * The provider routes that accept account additions, for a surface to offer.
+ * @returns the registered account-provider routes, in registration order.
+ */
+listAccountProviders(): string[]
+
+/**
+ * Test a login for one account-pooling provider and, on success, make it a
+ * selectable route. The password is used only for the test and never stored
+ * or returned here — the reply is the account id and its route, or a reason.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login to test.
+ * @returns the added account and route, or the failure reason.
+ */
+async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
 
 /**
  * Remote adapter for one draft provider interrogation.

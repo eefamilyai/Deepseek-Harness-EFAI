@@ -350,6 +350,13 @@ export interface LlmAccountAddResult {
 /** Tests a login and, on success, makes it a selectable route for its provider. */
 export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>
 
+/**
+ * The `ctx.llm` service: the registry every model-facing capability resolves
+ * through. It holds the adapter registrations that turn a route into a live
+ * client, the configurable-provider directory a settings surface reads, the
+ * per-provider model discoveries, and the account adders that turn a tested
+ * login into a selectable route.
+ */
 export class LlmRuntime extends TypertRemoteService {
   private adapters = new Map<string, AdapterRegistration>()
   private directory = new Map<string, LlmConfigurableProvider>()
@@ -663,7 +670,10 @@ export class LlmRuntime extends TypertRemoteService {
     return () => void dispose()
   }
 
-  /** The provider routes that accept account additions, for a surface to offer. */
+  /**
+   * The provider routes that accept account additions, for a surface to offer.
+   * @returns the registered account-provider routes, in registration order.
+   */
   listAccountProviders(): string[] {
     return [...this.accountAdders.keys()]
   }

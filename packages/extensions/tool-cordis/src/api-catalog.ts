@@ -1127,8 +1127,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'llm',
-    summary: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
-    description: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
+    summary: 'The `ctx.llm` service: the registry every model-facing capability resolves through.',
+    description: 'The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.',
     methods: [
       {
         signature: 'registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle',
@@ -1165,6 +1165,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Interrogate one provider endpoint for the models it advertises. The request describes a draft, not a stored route, so nothing here reads or writes settings or credentials — the caller owns both, and the reply is candidate metadata a surface may offer for adoption.',
         parameters: [{ name: 'settingsNs', description: 'namespace whose registered discovery serves this draft.' }, { name: 'request', description: 'the endpoint, protocol, and one-shot credential to use.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'the advertised models, deduplicated in endpoint order.',
+      },
+      {
+        signature: 'registerAccountProvider(provider: string, add: LlmAccountAdder): () => void',
+        description: 'Register the handler that tests and adds a login for one account-pooling provider route (`ds_direct` is the only one today). Mirrors registerModelDiscovery: one handler per route, released with the returned disposer. The handler owns making the new login selectable — it re-registers its own routes — so the runtime only routes the call.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'add', description: 'tests a login and, on success, adds it.' }],
+        returns: 'a disposer that withdraws the handler.',
+      },
+      {
+        signature: 'listAccountProviders(): string[]',
+        description: 'The provider routes that accept account additions, for a surface to offer.',
+        parameters: [],
+        returns: 'the registered account-provider routes, in registration order.',
+      },
+      {
+        signature: 'async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>',
+        description: 'Test a login for one account-pooling provider and, on success, make it a selectable route. The password is used only for the test and never stored or returned here — the reply is the account id and its route, or a reason.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
+        returns: 'the added account and route, or the failure reason.',
       },
       {
         signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
@@ -4296,7 +4314,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KernelExecuteRequest',
-    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n}',
+    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n}',
   },
   {
     name: 'KernelExecuteResult',
@@ -4329,6 +4347,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'KvUnitDescriptor',
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n}',
+  },
+  {
+    name: 'LlmAccountAdder',
+    declaration: 'export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>;',
+  },
+  {
+    name: 'LlmAccountAddResult',
+    declaration: 'export interface LlmAccountAddResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly route?: string;\n    readonly message?: string;\n}',
+  },
+  {
+    name: 'LlmAccountDraft',
+    declaration: 'export interface LlmAccountDraft {\n    readonly email?: string;\n    readonly mobile?: string;\n    readonly area_code?: string;\n    readonly password: string;\n}',
   },
   {
     name: 'LlmAdapter',
@@ -4392,7 +4422,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortS /* …truncated — full shape in source */',
   },
   {
     name: 'LspHover',

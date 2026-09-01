@@ -3,11 +3,13 @@
  * hosting the whale backdrop, the bottom-right focus button, and the rotating
  * nature focus lock; plus the Visual-effects row in General settings.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the settings surface's Context merge (ctx.settingsScope) and slot types.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: pulls the renderer's Context merge (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { EFFECTS_SETTINGS_NAMESPACE, type EffectsSettings } from '../effects-settings.ts'

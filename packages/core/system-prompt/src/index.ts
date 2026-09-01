@@ -408,13 +408,8 @@ export class SystemPrompt extends Service {
     if (config.includeHarnessIdentity ?? true) {
       this.section({
         name: 'harness:identity',
-<<<<<<< HEAD
-        order: -100,
-        text: 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development.',
-=======
         order: this.getSectionOrder('HARNESS_IDENTITY'),
-        text: 'You are an AI agent powered by DeepSeek Harness.',
->>>>>>> upstream/master
+        text: 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development.',
       })
     }
     this.section({

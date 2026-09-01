@@ -173,9 +173,6 @@ export function apply(ctx: ClientContext): void {
           select: (selection: ModelSelection) => available
             ? directory.select(selection).then(() => true, () => false)
             : Promise.resolve(false),
-          addAccount: (provider, draft) => available
-            ? directory.addAccount(provider, draft)
-            : Promise.resolve({ ok: false, message: 'model selection is unavailable for this session' }),
         }
       },
     }, ModelSelect))

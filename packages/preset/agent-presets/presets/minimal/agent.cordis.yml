@@ -2,23 +2,18 @@
 #
 # The persona is the complete system prompt, so global identity, Web orientation,
 # tool guidance, and later assembly listeners cannot add prompt text. Runtime
-<<<<<<< HEAD:apps/cli/config/agent-presets/minimal/agent.cordis.yml
 # context snapshots are suppressed for this preset. Context compaction is absent.
 #
-# Which two tools depends on the `kernel.enabled` setting (see the standard
-# preset's header for the switch itself). ON: `kernel` alone. OFF: persistent
-# `bash` and `str_replace_editor`, exactly as this preset shipped.
+# Which two tools the model composes depends on the `kernel.enabled` setting
+# (see the standard preset's header for the switch itself). ON: `kernel` alone.
+# OFF: the persistent shell (`bash` on POSIX, `pwsh` on win32) and
+# `str_replace_editor`, exactly as this preset shipped.
 #
 # A complete persona suppresses the kernel's own prompt section along with every
 # other one, so under the switch the model gets the tool's description and
 # nothing more. That is this preset's whole point, and the description carries
 # what a caller must know: the namespace persists, and the output is only what
 # the cell captured.
-=======
-# context snapshots are suppressed for this preset, and the model composes only
-# the persistent shell (`bash` on POSIX, `pwsh` on win32) and
-# `str_replace_editor`. Context compaction is absent.
->>>>>>> upstream/master:packages/preset/agent-presets/presets/minimal/agent.cordis.yml
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
@@ -56,21 +51,13 @@
 
     - id: terminal-bash
       name: '@deepseek-ai/dsh-terminal-bash'
-<<<<<<< HEAD:apps/cli/config/agent-presets/minimal/agent.cordis.yml
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-=======
-      disabled: !!js process.platform === 'win32'
->>>>>>> upstream/master:packages/preset/agent-presets/presets/minimal/agent.cordis.yml
+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         timeoutMs: 300000
 
     - id: persistent-bash
       name: '@deepseek-ai/dsh-tool-bash-persistent'
-<<<<<<< HEAD:apps/cli/config/agent-presets/minimal/agent.cordis.yml
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-=======
-      disabled: !!js process.platform === 'win32'
->>>>>>> upstream/master:packages/preset/agent-presets/presets/minimal/agent.cordis.yml
+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         timeoutMs: 300000
         description: |-

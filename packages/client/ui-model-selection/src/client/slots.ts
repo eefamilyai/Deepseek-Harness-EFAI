@@ -22,16 +22,4 @@ export interface ModelSelectInjected {
    * @returns whether the host accepted the selection.
    */
   select: (selection: ModelSelection) => Promise<boolean>
-  /**
-   * Test and add a login for an account-pooling provider (DeepSeek web). On
-   * success the new account becomes a selectable route, and the directory
-   * reloads so the chips show it. The password is used only for the test.
-   * @param provider - the pooling provider route.
-   * @param draft - the login to test.
-   * @returns whether it was added, and the failure reason otherwise.
-   */
-  addAccount: (
-    provider: string,
-    draft: Readonly<{ email?: string; mobile?: string; areaCode?: string; password: string }>,
-  ) => Promise<{ ok: boolean; account?: string; message?: string }>
 }

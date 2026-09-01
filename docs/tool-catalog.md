@@ -2294,6 +2294,10 @@ Run Python in a persistent kernel namespace. Returns the cell's captured output:
     "code": {
       "type": "string",
       "description": "The Python source to execute in the persistent namespace."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "description": "Optional per-cell timeout in milliseconds. Defaults to the configured timeoutMs and is capped by maxTimeoutMs."
     }
   },
   "required": [

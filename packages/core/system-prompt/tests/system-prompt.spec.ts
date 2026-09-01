@@ -12,7 +12,7 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
  * their own sections; the built-ins' behavior is pinned by its own describe.
  */
 const BUILT_IN = ['harness:identity', 'deployment:persona']
-const IDENTITY = 'You are an AI agent powered by DeepSeek Harness.'
+const IDENTITY = 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development.'
 const SECTION_ORDER_NAMES = [
   'HARNESS_IDENTITY', 'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA',
   'PLAN_POLICY', 'TEAM_POLICY', 'PTC_ONLY', 'FILE_REFERENCE', 'TOOL_BASH',

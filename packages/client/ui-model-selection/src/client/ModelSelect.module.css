@@ -72,17 +72,12 @@
   z-index: 20;
   display: flex;
   flex-direction: column;
-<<<<<<< HEAD
-  width: min(360px, calc(100vw - 32px));
-  max-height: min(460px, calc(100vh - 96px));
-=======
   /* Let the visible pane's rows set the card width, but keep pathological ids
      and narrow screens inside a bounded card where ellipsis remains. */
   width: max-content;
   min-width: min(240px, calc(100vw - 32px));
   max-width: min(420px, calc(100vw - 32px));
   max-height: min(360px, calc(100vh - 96px));
->>>>>>> upstream/master
   overflow: hidden;
   padding: 4px;
   /* Surface tokens match the Menu primitive card (ui-primitives
@@ -140,8 +135,7 @@
   cursor: pointer;
 }
 
-.groups,
-.list {
+.groups {
   min-height: 0;
   overflow-y: auto;
 }
@@ -160,205 +154,6 @@
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
-}
-
-/* One collapsible provider: a header row that drills its own body open. */
-.provider + .provider {
-  border-top: 1px solid var(--dsw-alias-border-l1);
-}
-
-.providerHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  text-align: left;
-  cursor: pointer;
-}
-
-.providerHead:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.headChevron {
-  flex: 0 0 auto;
-  color: var(--dsw-alias-label-caption);
-}
-
-.providerName {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.providerMeta {
-  flex: 0 0 auto;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.providerBody {
-  padding: 2px 6px 8px 30px;
-}
-
-/* Account chips: one per pooled login, plus the add affordance. */
-.accounts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 2px 4px 6px;
-}
-
-.chip,
-.chipAdd {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-}
-
-.chip:hover,
-.chipAdd:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.chipOn {
-  border-color: var(--dsw-alias-border-brand);
-  background: var(--dsw-alias-interactive-bg-brand-weak);
-  color: var(--dsw-alias-label-brand);
-}
-
-.chipIcon {
-  flex: 0 0 auto;
-}
-
-.chipLabel {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Inline add-account form. */
-.addForm {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 4px 8px;
-  padding: 10px;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.input {
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  outline: none;
-  background: var(--dsw-specific-menu);
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-}
-
-.input:focus-visible {
-  border-color: var(--dsw-alias-border-brand);
-}
-
-.formMsg {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.formErr {
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.formOk {
-  color: var(--dsw-alias-state-success-label, var(--dsw-alias-label-brand));
-}
-
-.addActions {
-  display: flex;
-  gap: 8px;
-}
-
-.addTest {
-  flex: 1;
-  height: 34px;
-  border: 1px solid var(--dsw-alias-border-brand);
-  border-radius: 8px;
-  background: var(--dsw-alias-interactive-bg-brand-weak);
-  color: var(--dsw-alias-label-brand);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.addTest:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.addCancel {
-  height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-/* Reasoning-effort segmented control under the selected model. */
-.efforts {
-  display: flex;
-  gap: 6px;
-  margin: 2px 10px 6px 34px;
-}
-
-.effort {
-  flex: 1;
-  height: 28px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.effort:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.effortOn {
-  border-color: var(--dsw-alias-border-brand);
-  background: var(--dsw-alias-interactive-bg-brand-weak);
-  color: var(--dsw-alias-label-brand);
 }
 
 .option {
