@@ -12,6 +12,24 @@ DeepSeek Harness 目前处于 _开发者预览_ 阶段，正在快速迭代。**
 
 ## 运行
 
+### 一次安装，随处运行
+
+本 fork 未发布到 npm，`npx` 无法获取它。取而代之，一条命令即可完成安装并把 `dsh` 放到 PATH 上：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.sh | bash
+```
+
+在 Windows 上，于 PowerShell 中执行：
+
+```powershell
+irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.ps1 | iex
+```
+
+安装脚本会把仓库克隆到 `~/.deepseek-harness`，安装依赖、构建、置备内置的 Python 运行时，并把 `dsh` 启动器写入 `~/.local/bin`（Windows 上为 `%LOCALAPPDATA%\dsh\bin`）。完成之后，`dsh web` 可在任意目录运行，且 kernel 会在你启动它的那个目录中开始工作。
+
+运行 `dsh-update` 可拉取最新修订并重新构建，重新执行安装脚本效果相同。设置 `DSH_INSTALL_DIR` 或 `DSH_BIN_DIR` 可更改这两个位置；存放你的设置与预设的 `$DSH_HOME`（`~/.dsh`）在安装或更新时永不被触碰。
+
 ### 通过 `npm` 运行
 
 安装 `Node.js`，然后运行：

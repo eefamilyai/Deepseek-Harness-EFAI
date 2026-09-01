@@ -12,6 +12,24 @@ DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. *
 
 ## Run
 
+### Install once, run anywhere
+
+This fork is not published to npm, so `npx` cannot reach it. Instead, one command installs it and puts `dsh` on your PATH:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.sh | bash
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.ps1 | iex
+```
+
+The installer clones the repository to `~/.deepseek-harness`, installs dependencies, builds, provisions the bundled Python runtime, and writes a `dsh` launcher to `~/.local/bin` (`%LOCALAPPDATA%\dsh\bin` on Windows). After it finishes, `dsh web` works from any directory, and the kernel starts in whatever directory you launched it from.
+
+Run `dsh-update` to pull the latest revision and rebuild. Re-running the installer does the same thing. Set `DSH_INSTALL_DIR` or `DSH_BIN_DIR` to move either location; `$DSH_HOME` (`~/.dsh`), where your settings and presets live, is never touched by an install or an update.
+
 ### Run from `npm`
 
 Install `Node.js`, then run:
