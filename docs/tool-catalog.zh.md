@@ -1893,6 +1893,10 @@ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可�
     "code": {
       "type": "string",
       "description": "The Python source to execute in the persistent namespace."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "description": "Optional per-cell timeout in milliseconds. Defaults to the configured timeoutMs and is capped by maxTimeoutMs."
     }
   },
   "required": [

@@ -787,6 +787,31 @@ export interface Config {
 
 来源：[`packages/host/frontend-static/src/index.ts:28`](../packages/host/frontend-static/src/index.ts)
 
+<a id="deepseek-aidsh-host-sidebar-bridge"></a>
+
+## `@deepseek-ai/dsh-host-sidebar-bridge`
+
+需要：`webServer`
+
+```ts config-catalog
+/** Complete config after schemastery applies defaults. */
+type ResolvedConfig = Required<Config>
+
+/** Plugin config: where the browser writes, and which shell the terminal runs. */
+export interface Config {
+  /**
+   * Directory browser_tools writes its `state.json` + screenshots to — the same
+   * `KILN_BROWSER_DIR` the kernel passes to the Python runtime. Defaults to
+   * `$KILN_BROWSER_DIR`, then `~/.dsh/browser`.
+   */
+  browserDir?: string
+  /** Shell for the sidebar terminal. Empty = the platform default (COMSPEC / $SHELL). */
+  shell?: string
+}
+```
+
+来源：[`packages/host/sidebar-bridge/src/index.ts:79`](../packages/host/sidebar-bridge/src/index.ts)
+
 <a id="deepseek-aidsh-host-webserver"></a>
 
 ## `@deepseek-ai/dsh-host-webserver`
@@ -837,6 +862,67 @@ export interface Config {
 ```
 
 来源：[`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
+
+<a id="deepseek-aidsh-kernel"></a>
+
+## `@deepseek-ai/dsh-kernel`
+
+```ts config-catalog
+/**
+ * Config for the kernel seam. `provider` pins which backend wins; it is optional
+ * (a single registered usable backend auto-selects). An operational override
+ * must feed this same field rather than introduce a hidden priority chain.
+ */
+export interface KernelRuntimeConfig {
+  /** Explicit kernel provider id. Omitted = auto-select when exactly one usable. */
+  readonly provider?: string
+  /** Default wall-clock budget (ms) for a cell that does not carry its own. */
+  readonly defaultTimeoutMs?: number
+}
+```
+
+来源：[`packages/kernel/kernel/src/index.ts:39`](../packages/kernel/kernel/src/index.ts)
+
+<a id="deepseek-aidsh-kernel-mode"></a>
+
+## `@deepseek-ai/dsh-kernel-mode`
+
+```ts config-catalog
+/** Plugin config: the switch, and its composition-layer default. */
+export interface Config {
+  /**
+   * Whether the persistent Python kernel is the model's way of acting on this
+   * machine. On: the `kernel` tool, and no bash/filesystem/search/jobs tools —
+   * those are function calls inside the kernel namespace instead. Off: those
+   * tools, and no kernel. Takes effect on restart.
+   */
+  enabled?: boolean
+}
+```
+
+来源：[`packages/kernel/kernel-mode/src/index.ts:57`](../packages/kernel/kernel-mode/src/index.ts)
+
+<a id="deepseek-aidsh-kernel-python"></a>
+
+## `@deepseek-ai/dsh-kernel-python`
+
+需要：`kernel`
+
+```ts config-catalog
+/** Plugin config: interpreter, workspace, and where mutable kernel state lands. */
+export interface Config {
+  /** Interpreter to run. Omitted = `$DSH_KERNEL_PYTHON`, then the platform probe. */
+  python?: string
+  /** Kernel working directory. Omitted = the harness working directory. */
+  cwd?: string
+  /** Directory for `subkernels.json` and other durable kernel state. Omitted = `<cwd>/.kiln_kernel_state`. */
+  stateDir?: string
+  /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
+  runtimeDir?: string
+}
+```
+
+来源：[`packages/kernel/kernel-python/src/index.ts:57`](../packages/kernel/kernel-python/src/index.ts)
 
 <a id="deepseek-aidsh-llm-deepseek"></a>
 
@@ -892,6 +978,58 @@ export interface DeepSeekCatalogModel {
 依赖：[`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
 
 来源：[`packages/llm/llm-deepseek/src/index.ts:62`](../packages/llm/llm-deepseek/src/index.ts)
+
+<a id="deepseek-aidsh-llm-kiln"></a>
+
+## `@deepseek-ai/dsh-llm-kiln`
+
+需要：`llm`
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /** Prefix applied to every Kiln provider id to form the harness route name. */
+  routePrefix?: string
+  /**
+   * Register only routes the registry reports as usable — a key present, or a
+   * keyless local endpoint. Default false: an unconfigured route stays visible
+   * so it can be selected and configured, and fails per request with the
+   * registry's own message naming the variable to set.
+   */
+  onlyConfigured?: boolean
+  /** Interpreter for the sidecar. Omitted = `$DSH_KERNEL_PYTHON`, then a platform probe. */
+  python?: string
+  /** Working directory for the sidecar. Omitted = the harness working directory. */
+  cwd?: string
+  /** Directory for the sidecar's mutable state. Omitted = `<cwd>/.kiln_kernel_state`. */
+  stateDir?: string
+  /** The `python/kiln` directory. Omitted = the copy shipped with this repo. */
+  bridgeDir?: string
+  /**
+   * DeepSeek web (ds_direct) credentials, editable from the Models page.
+   *
+   * `token` + `cookie` are the live bearer/WAF pair. The optional login fields
+   * let ds_direct refresh those credentials itself when DeepSeek rotates them,
+   * so the bridge keeps working without a new copy-paste from devtools.
+   */
+  deepseek?: {
+    /** DeepSeek web bearer token. */
+    token?: string
+    /** DeepSeek web WAF cookie. */
+    cookie?: string
+    /** Login email for automatic token refresh. */
+    email?: string
+    /** Login mobile for automatic token refresh. */
+    mobile?: string
+    /** Login area code (for mobile). */
+    areaCode?: string
+    /** Login password for automatic token refresh. */
+    password?: string
+  }
+}
+```
+
+来源：[`packages/llm/llm-kiln/src/index.ts:70`](../packages/llm/llm-kiln/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -2481,6 +2619,28 @@ export type CompletionDelivery = 'quiet' | 'wakeup'
 
 来源：[`packages/jobs/tool-jobs/src/index.ts:32`](../packages/jobs/tool-jobs/src/index.ts)
 
+<a id="deepseek-aidsh-tool-kernel"></a>
+
+## `@deepseek-ai/dsh-tool-kernel`
+
+需要：`tools` · `kernel` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config: the per-cell budget and the output cap. */
+export interface Config {
+  /** PRIMARY cooperative budget (ms) for one cell; on expiry the cell backgrounds. Defaults to 180000. */
+  timeoutMs?: number
+  /** Cap on returned output characters for one cell. Defaults to 200000. */
+  maxOutputChars?: number
+  /** Upper bound on a model-chosen per-cell (primary) timeout (ms). Defaults to 600000. */
+  maxTimeoutMs?: number
+  /** SECONDARY budget (ms): when a backgrounded cell is force-stopped. Defaults to 1800000. */
+  backgroundTimeoutMs?: number
+}
+```
+
+来源：[`packages/kernel/tool-kernel/src/index.ts:59`](../packages/kernel/tool-kernel/src/index.ts)
+
 <a id="deepseek-aidsh-tool-lsp"></a>
 
 ## `@deepseek-ai/dsh-tool-lsp`
@@ -2891,6 +3051,34 @@ export interface Config {
 
 来源：[`packages/bundle/web-app/src/index.ts:38`](../packages/bundle/web-app/src/index.ts)
 
+<a id="deepseek-aidsh-web-browser"></a>
+
+## `@deepseek-ai/dsh-web-browser`
+
+需要：`tools` · `web` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config (all defaulted). */
+export interface Config {
+  /** Timeout for a page load (ms). */
+  navigationTimeoutMs?: number
+  /** Timeout for a click/type/press (ms). */
+  actionTimeoutMs?: number
+  /** Cap on the page text captured per snapshot (chars). */
+  maxTextChars?: number
+  /** Cap on the text returned for one tool call (chars). */
+  maxOutputChars?: number
+  /** Launch Chromium headless (true) or headed (false, for debugging). */
+  headless?: boolean
+  /** `User-Agent` presented to sites. */
+  userAgent?: string
+  /** Register the browser-rendered fetch provider with `ctx.web` when present (default true). */
+  fetchProvider?: boolean
+}
+```
+
+来源：[`packages/web/web-browser/src/index.ts:42`](../packages/web/web-browser/src/index.ts)
+
 <a id="deepseek-aidsh-web-fetch-http"></a>
 
 ## `@deepseek-ai/dsh-web-fetch-http`
@@ -3040,6 +3228,8 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-deliverables` — 需要 `systemPrompt`（[`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse`（[`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-directory-picker-native`（[`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-dock`（[`packages/client/ui-dock/src/index.ts`](../packages/client/ui-dock/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-effects`（[`packages/client/ui-effects/src/index.ts`](../packages/client/ui-effects/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-goal`（[`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-input-trigger`（[`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-jobs`（[`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts)）
@@ -3065,6 +3255,7 @@ export interface Config {
 - `@deepseek-ai/dsh-command-compact` — 需要 `commands` · `compact`（[`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts)）
 - `@deepseek-ai/dsh-command-feedback` — 需要 `commands`（[`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts)）
 - `@deepseek-ai/dsh-command-goal` — 需要 `commands` · `goals`（[`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts)）
+- `@deepseek-ai/dsh-command-session-info` — 需要 `commands` · `sessionProjections`（[`packages/session/command-session-info/src/index.ts`](../packages/session/command-session-info/src/index.ts)）
 - `@deepseek-ai/dsh-commands`（[`packages/interaction/commands/src/index.ts`](../packages/interaction/commands/src/index.ts)）
 - `@deepseek-ai/dsh-cordis-client-runner`（[`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts)）
 - `@deepseek-ai/dsh-fs-e2b` — 需要 `e2b`（[`packages/e2b/fs-e2b/src/index.ts`](../packages/e2b/fs-e2b/src/index.ts)）

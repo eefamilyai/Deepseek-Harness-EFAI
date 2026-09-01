@@ -1187,6 +1187,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-locale LanguageRow id \'language\'',
       'client-ui-agent-preset AgentPresetRow id \'agent-preset\'',
       'client-ui-conversation EnterBehaviorRow id \'composer-enter\'',
+      'client-ui-effects EffectsSettingsRow id \'visual-effects\'',
       'client-ui-permission-presets PermissionRow id \'permission\'',
       'client-ui-theme AppearanceRow id \'appearance\'',
     ],
@@ -1400,6 +1401,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-agent-preset AgentPresetSection id \'agent-presets\'',
       'client-ui-settings-general GeneralSection id \'general\'',
+      'client-ui-settings-general AdvancedSection id \'advanced\'',
       'client-ui-settings-models ModelsSection id \'models\'',
       'client-ui-settings-plugins PluginsSettingsSection id \'plugins\'',
     ],
