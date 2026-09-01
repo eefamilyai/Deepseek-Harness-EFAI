@@ -28,6 +28,7 @@ import css from './ModelSelect.module.css'
 /** One catalog model, as its provider group carries it. */
 type CatalogModel = ModelProviderGroup['models'][number]
 
+<<<<<<< HEAD
 /** One provider, its models, and the logins it pools (empty for keyed providers). */
 interface ProviderView {
   /** The base route id used for model requests and account additions. */
@@ -74,6 +75,13 @@ function groupProviders(groups: readonly ModelProviderGroup[]): ProviderView[] {
     }
   }
   return [...byBase.values()]
+=======
+/** One dynamic effort row; undefined means preserve the provider default. */
+interface EffortChoice {
+  key: string
+  effort: string | undefined
+  label: string
+>>>>>>> upstream/master
 }
 
 /**
@@ -102,6 +110,7 @@ export function ModelSelect(
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const id = useId()
 
+<<<<<<< HEAD
   const providers = useMemo(() => groupProviders(state.groups), [state.groups])
   const current = state.current
   const active = current === null ? null : splitRoute(current.provider)
@@ -113,10 +122,48 @@ export function ModelSelect(
     return provider?.models.find(model => model.id === current?.model)
   }, [providers, active, current])
   const effectiveEffort = current?.reasoningEffort ?? currentModel?.reasoning?.defaultEffort
+=======
+  const choices = useMemo(() => state.groups.flatMap(group =>
+    group.models.map(model => ({
+      group,
+      model,
+      selection: {
+        provider: group.id,
+        model: model.id,
+        ...model.reasoning?.defaultEffort === undefined
+          ? {}
+          : { reasoningEffort: model.reasoning.defaultEffort },
+      } satisfies ModelSelection,
+    }))), [state.groups])
+  const selectedIndex = state.current === null
+    ? -1
+    : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
+  const currentChoice = choices[selectedIndex]
+  const reasoning = currentChoice?.model.reasoning
+  const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
+  const effortLabel = reasoning === undefined
+    ? undefined
+    : effectiveEffort === undefined
+      ? t('effort.providerDefault')
+      : reasoning.efforts.find(level => level.id === effectiveEffort)?.name ?? effectiveEffort
+  const effortChoices = useMemo<readonly EffortChoice[]>(() => reasoning === undefined
+    ? []
+    : [
+      ...reasoning.defaultEffort === undefined
+        ? [{ key: 'provider-default', effort: undefined, label: t('effort.providerDefault') }]
+        : [],
+      ...reasoning.efforts.map((effort: ModelReasoningEffort) => ({
+        key: `effort:${effort.id}`,
+        effort: effort.id,
+        label: effort.name,
+      })),
+    ], [reasoning, t])
+>>>>>>> upstream/master
   const busy = state.status === 'selecting'
 
   const reload = (): void => { lastActionRef.current = 'load'; load() }
 
+<<<<<<< HEAD
   useEffect(() => {
     if (available) { lastActionRef.current = 'load'; load() }
   }, [available, load])
@@ -126,6 +173,8 @@ export function ModelSelect(
     if (active !== null) setExpanded(new Set([active.base]))
   }, [active?.base])
 
+=======
+>>>>>>> upstream/master
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: MouseEvent): void => {
@@ -195,6 +244,7 @@ export function ModelSelect(
     void select({ provider: route, model }).then(settle)
   }
 
+<<<<<<< HEAD
   const submitAccount = (view: ProviderView) => (event: FormEvent): void => {
     event.preventDefault()
     const email = form.email.trim()
@@ -210,6 +260,26 @@ export function ModelSelect(
         setFormMsg({ kind: 'error', text: result.message ?? t('account.failed') })
       }
     })
+=======
+  const waiting = state.current === null && state.status === 'loading'
+  const modelLabel = waiting
+    ? t('trigger.loading')
+    : currentChoice?.model.name
+      ?? (state.current === null ? t('trigger.fallback') : `${state.current.provider}/${state.current.model}`)
+  const triggerLabel = effortLabel === undefined ? modelLabel : `${modelLabel} · ${effortLabel}`
+  const triggerAria = waiting
+    ? t('trigger.loading')
+    : state.current === null
+      ? t('trigger.selectAria')
+      : effortLabel === undefined
+        ? t('trigger.aria', { model: modelLabel })
+        : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
+  itemRefs.current = []
+  let itemIndex = 0
+  const itemRef = () => {
+    const at = itemIndex++
+    return (node: HTMLButtonElement | null) => { itemRefs.current[at] = node }
+>>>>>>> upstream/master
   }
 
   const modelLabel = currentModel?.name ?? t('trigger.fallback')
@@ -244,11 +314,69 @@ export function ModelSelect(
           {state.status === 'loading' && providers.length === 0 && (
             <div className={css.status}>{t('status.loading')}</div>
           )}
+<<<<<<< HEAD
           {state.error !== null && lastActionRef.current === 'load' && (
             <div className={css.error}>
               <span>{t('error.action', { message: state.error })}</span>
               <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
             </div>
+=======
+
+          {pane === 'model' && (
+            <>
+              {state.status === 'loading' && (
+                <div className={css.status}>{t('status.loading')}</div>
+              )}
+              {state.error !== null && lastActionRef.current === 'load' && (
+                <div className={css.error}>
+                  <span>{t('error.action', { message: state.error })}</span>
+                  <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
+                </div>
+              )}
+              {state.failures.map(failure => (
+                <div className={css.warning} key={failure.id}>
+                  <span>{t('warning.groupLoad', { name: failure.name, message: failure.message })}</span>
+                  <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
+                </div>
+              ))}
+              <div className={clsx(css.groups, 'scrollable')}>
+                {state.groups.map((group) => {
+                  const headingId = `${id}-${group.id}`
+                  return (
+                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
+                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
+                      {group.models.map((model) => {
+                        const selected = state.current?.provider === group.id && state.current.model === model.id
+                        return (
+                          <button
+                            ref={itemRef()}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            className={clsx(css.option, selected && css.selected)}
+                            key={model.id}
+                            title={model.name}
+                            disabled={busy}
+                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                          >
+                            <span className={css.optionCopy}>
+                              <span className={css.modelName}>{model.name}</span>
+                            </span>
+                            <span className={css.check}>
+                              {selected ? <IconCheckOutline16 /> : null}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </section>
+                  )
+                })}
+              </div>
+              {state.status === 'ready' && choices.length === 0 && (
+                <div className={css.empty}>{t('empty.models')}</div>
+              )}
+            </>
+>>>>>>> upstream/master
           )}
           {state.failures.map(failure => (
             <div className={css.warning} key={failure.id}>
@@ -271,6 +399,7 @@ export function ModelSelect(
                     aria-controls={headingId}
                     onClick={() => { toggleProvider(view.base) }}
                   >
+<<<<<<< HEAD
                     {isOpen
                       ? <IconChevronDownOutline14 className={css.headChevron} />
                       : <IconChevronRightOutline14 className={css.headChevron} />}
@@ -281,6 +410,13 @@ export function ModelSelect(
                         : view.models.length > 0
                           ? t('provider.models', { count: view.models.length })
                           : t('provider.noModels')}
+=======
+                    <span className={css.optionCopy}>
+                      <span className={css.modelName}>{level.label}</span>
+                    </span>
+                    <span className={css.check}>
+                      {effectiveEffort === level.effort ? <IconCheckOutline16 /> : null}
+>>>>>>> upstream/master
                     </span>
                   </button>
 

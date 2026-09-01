@@ -2,19 +2,9 @@
 
 [English](code-runtime.md) | 中文
 
-代码执行 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md)：其 Service Definition（[dsh-code-runtime](../../packages/code-runtime/code-runtime)，`ctx.codeRuntime`）使用宿主提供的异步绑定运行一段模型编写的程序，并报告其打印内容与返回值。代码执行是**一项可选能力**，不属于 agent loop（智能体循环）主干，因此其词汇定义在此而非 [core.md](core.md) 中。各后端的执行基底与源语言不同，这两项均为服务上的只读描述符；worker-thread Service Provider 与工具注册表 Consumer 的约定见 [Code Mode 基础设计](../../.agents/notes/implemented/feature/2026-06-15-code-mode.md) 和[类型化返回约定](../../.agents/notes/implemented/feature/2026-07-20-code-mode-typed-tool-returns.md)。
+代码执行 seam 是一个[能力 seam](../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.zh.md)：其 Service Definition（[dsh-code-runtime](../../packages/code-runtime/code-runtime)，`ctx.codeRuntime`）使用宿主提供的异步绑定运行一段模型编写的程序，并报告其打印内容与返回值。代码执行是**一项可选能力**，不属于 agent loop（智能体循环）主干，因此其词汇定义在此而非 [core.md](core.zh.md) 中。各后端的执行基底与源语言不同，这两项均为服务上的只读描述符；worker-thread Service Provider 与工具注册表 Consumer 的约定见 [PTC mode 基础设计](../../.agents/notes/implemented/feature/2026-06-15-ptc.zh.md) 和[类型化返回约定](../../.agents/notes/implemented/feature/2026-07-20-ptc-typed-tool-returns.zh.md)。
 
 源码：[`packages/code-runtime/code-runtime/src/types.ts`](../../packages/code-runtime/code-runtime/src/types.ts)
-
-## 另一个执行 seam：`ctx.kernel`
-
-本页还收录了第二个能力 seam，因为它回答的是同一个问题——模型编写的代码如何运行——只是在“状态”这一点上给出了相反的答案。
-
-`ctx.codeRuntime` 运行的是**一段隔离的程序**：传入绑定，返回值与日志，不保留任何状态。[`dsh-kernel`](../../packages/kernel/kernel)（`ctx.kernel`）运行的是**一个 cell，且其命名空间会持续存在**：某次调用中绑定的变量在下次调用中依然存在，进程的生命周期长于单次调用。这一差异决定了两个 seam 的其余全部特性。隔离的运行可以重试、可以与同级并行、可以随意丢弃；kernel cell 不行——cell 之间串行执行，因为共享可变命名空间会让两个并发 cell 的赋值相互穿插；而一个被取消或超时的 cell 会葬送整个命名空间，seam 会如实上报而非隐瞒（`restarted`，以及取值为 `timeout`/`cancelled`/`crashed` 的 `outcome`）。
-
-随包提供的后端是 [`dsh-kernel-python`](../../packages/kernel/kernel-python)，即一个通过分帧 stdio 协议通信的 Python 子进程；面向模型的工具是 [`dsh-tool-kernel`](../../packages/kernel/tool-kernel)。该 seam 是否挂载并非固定的 composition，而是由用户设置决定——参见 [`dsh-kernel-mode`](../../packages/kernel/kernel-mode)：它以一个在启动时读取的开关，同时控制 kernel 各行以及被 kernel 取代的那些工具。
-
-源码：[`packages/kernel/kernel/src/types.ts`](../../packages/kernel/kernel/src/types.ts)
 
 ## 运行：请求进，结果出
 
@@ -71,7 +61,7 @@ interface CodeRunResult {
 
 ## 绑定：宿主函数作为程序全局变量
 
-每个 `CodeBindingNamespace` 在程序内成为一个由异步可调用函数组成的全局对象（Code Mode Consumer 传入一个：`tools`）。参数与返回值必须是无损 JSON，且跨越边界时不受 seam 层字节上限约束；运行时可以通过结构化克隆桥接它们。命名空间可以声明程序可见的错误类，而无需让运行时知道 Consumer 的名称：运行时会注入真实构造函数，并将被拒绝的调用转为该类的实例。运行时也将绑定名视为不可信输入（`__proto__` 是普通自有属性，绝不会发生原型碰撞）：
+每个 `CodeBindingNamespace` 在程序内成为一个由异步可调用函数组成的全局对象（PTC mode Consumer 传入一个：`tools`）。参数与返回值必须是无损 JSON，且跨越边界时不受 seam 层字节上限约束；运行时可以通过结构化克隆桥接它们。命名空间可以声明程序可见的错误类，而无需让运行时知道 Consumer 的名称：运行时会注入真实构造函数，并将被拒绝的调用转为该类的实例。运行时也将绑定名视为不可信输入（`__proto__` 是普通自有属性，绝不会发生原型碰撞）：
 
 ```ts type-equiv
 /**
@@ -79,7 +69,7 @@ interface CodeRunResult {
  * injects a real error constructor under `name`; rejected member calls become
  * its instances and expose the exact member name through
  * `memberNameProperty`. Both strings are runtime data rather than knowledge
- * of a particular consumer such as Code Mode.
+ * of a particular consumer such as PTC mode.
  */
 interface CodeBindingErrorClass {
   /** Constructor global and resulting `Error.name`; same portable identifier rule as {@link CodeBindingNamespace.global}. */
@@ -143,7 +133,7 @@ type CodeBindingFunction = (args: unknown) => Promise<CodeJsonValue>
 
 日志是按发出顺序排列的纯字符串。运行时捕获程序的 console 与流输出，但通道和 console 方法的元数据不属于 seam，因为 Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
 
-失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
+失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 
 ```ts type-equiv
 /**
@@ -176,7 +166,7 @@ interface CodeRunFailure {
 
 ## Cordis API
 
-Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — this section is byte-identical in both language sides of the page. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
 <a id="ctxcoderuntime--coderuntime-abstract-seam"></a>
 
@@ -197,56 +187,5 @@ Registers one `ctx.codeRuntime` implementation. Program, budget, abort, and subs
 abstract run(request: CodeRunRequest): Promise<CodeRunResult>
 ```
 
-Source: [`packages/code-runtime/code-runtime/src/index.ts:102`](../../packages/code-runtime/code-runtime/src/index.ts)
-
-<a id="ctxkernel--kernelruntime"></a>
-
-### `ctx.kernel` — `KernelRuntime`
-
-The persistent-kernel service, registered as `ctx.kernel` (one instance per context).
-
-Selection semantics (resolved at execution time, never order-dependent):
-
-- A configured id that is registered and `available()` → that backend.
-- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.
-- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.
-- No id configured, exactly one registered usable backend → that backend.
-- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.
-- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.
-
-```ts cordis-catalog
-/**
- * Register a kernel backend. Throws {@link KernelError}
- * `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a
- * disposer; disposed with the calling fiber.
- * @param provider - the backend; its `id` is the registry key.
- * @returns the disposer that unregisters the backend.
- */
-registerProvider(provider: KernelProvider): () => void
-
-/**
- * Execute one cell in the persistent namespace. Resolves the backend at call
- * time with the selection rules above; throws {@link KernelError} when the
- * capability itself cannot run. A cell that raises is a *result* carrying the
- * traceback, never a throw — the model is expected to read it and fix the code.
- * @param request - the cell and its optional budget.
- * @param signal - optional cancellation; an aborted cell restarts the kernel.
- * @returns the captured output and how the cell ended.
- */
-async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
-
-/**
- * Discard the namespace and start a fresh kernel.
- * @returns once the replacement kernel is ready.
- */
-async restart(): Promise<void>
-
-/**
- * List the names currently bound in the namespace.
- * @returns the bound names, in the backend's order.
- */
-async names(): Promise<readonly string[]>
-```
-
-Source: [`packages/kernel/kernel/src/index.ts:61`](../../packages/kernel/kernel/src/index.ts)
+Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
 <!-- END GENERATED cordis-surface -->

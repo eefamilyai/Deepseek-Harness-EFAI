@@ -1,0 +1,305 @@
+diff --git a/packages/client/connection/tests/fake-api.client.ts b/packages/client/connection/tests/fake-api.client.ts
+index bee4fc0ce0..4aa58af635 100644
+--- a/packages/client/connection/tests/fake-api.client.ts
++++ b/packages/client/connection/tests/fake-api.client.ts
+@@ -222,6 +222,7 @@ export class FakeApiClient implements IApiClient {
+     providers: payload => this.record('llm.providers', payload, Promise.resolve(ok({ providers: [] }))),
+     models: payload => this.record('llm.models', payload, Promise.resolve(ok({ groups: [], failures: [] }))),
+     discoverModels: payload => this.record('llm.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
++    addAccount: payload => this.record('llm.addAccount', payload, Promise.resolve(ok({ ok: true, account: 'account', route: 'route' }))),
+   }
+ 
+   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
+diff --git a/packages/client/runtime/tests/fake-api.client.ts b/packages/client/runtime/tests/fake-api.client.ts
+index 33a0efbbfd..65cea8d1be 100644
+--- a/packages/client/runtime/tests/fake-api.client.ts
++++ b/packages/client/runtime/tests/fake-api.client.ts
+@@ -275,6 +275,7 @@ export class FakeApiClient implements IApiClient {
+     providers: payload => this.record('llm.providers', payload, Promise.resolve(ok({ providers: [] }))),
+     models: payload => this.record('llm.models', payload, Promise.resolve(ok({ groups: [], failures: [] }))),
+     discoverModels: payload => this.record('llm.discoverModels', payload, Promise.resolve(ok({ models: [] }))),
++    addAccount: payload => this.record('llm.addAccount', payload, Promise.resolve(ok({ ok: true, account: 'account', route: 'route' }))),
+   }
+ 
+   /** When true, streams never fire onOpen (misbehaving-carrier material for the handshake timeout guard). */
+diff --git a/packages/host/apiproxy/src/api-proxy.ts b/packages/host/apiproxy/src/api-proxy.ts
+index bda99362b6..e595c84bab 100644
+--- a/packages/host/apiproxy/src/api-proxy.ts
++++ b/packages/host/apiproxy/src/api-proxy.ts
+@@ -124,7 +124,7 @@ const DEFAULT_MAX_MESSAGES = 50
+  * is deferred work.
+  */
+ const WEB_SETTINGS_NAMESPACES = [
+-  'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'web-search-deepseek',
++  'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'ui-effects', 'web-search-deepseek',
+ ] as const
+ 
+ /** Provider work budget: at most 100 calls and 2,000 inspected hits. */
+@@ -1951,9 +1951,19 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
+    * remotely readable or writable by default.
+    */
+   function exposedNamespaces(): Set<string> {
++    // Expose every namespace the running settings service actually registered.
++    // The previous whitelist was the reason a user-facing setting could exist
++    // but stay invisible/read-only in the Web client. Keep the static entries
++    // as a fallback for a deployment whose service cannot enumerate itself.
+     const exposed = modelProviderNamespaces()
+     for (const ns of WEB_SETTINGS_NAMESPACES) exposed.add(ns)
+     for (const ns of PRODUCT_SETTINGS_NAMESPACES) exposed.add(ns)
++    const settings = ctx.get('settings')
++    if (settings !== undefined) {
++      for (const descriptor of settings.describe({ redactSecrets: true })) {
++        exposed.add(String(descriptor.ns))
++      }
++    }
+     return exposed
+   }
+ 
+@@ -3424,6 +3434,34 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
+           })
+         }
+       },
++
++      async addAccount(request) {
++        const { provider, email, mobile, areaCode, apiKey } = request.payload
++        try {
++          // The transport calls the secret `apiKey` for one redaction path
++          // across the configuration plane; for a login it is the password.
++          const result = await ctx.llm.addAccount(provider, {
++            password: apiKey,
++            ...email === undefined ? {} : { email },
++            ...mobile === undefined ? {} : { mobile },
++            ...areaCode === undefined ? {} : { area_code: areaCode },
++          })
++          return ok(request, {
++            ok: result.ok,
++            ...result.account === undefined ? {} : { account: result.account },
++            ...result.route === undefined ? {} : { route: result.route },
++            ...result.message === undefined ? {} : { message: result.message },
++          })
++        } catch (error: unknown) {
++          // A misregistered provider or empty credential lands here; the message
++          // repeats only what the caller controls, never the password.
++          return err(request, {
++            code: 'add-account-failed',
++            message: error instanceof Error ? error.message : String(error),
++            details: { provider },
++          })
++        }
++      },
+     },
+ 
+     events: {
+diff --git a/packages/host/apiproxy/src/api/llm.schema.ts b/packages/host/apiproxy/src/api/llm.schema.ts
+index 7c8b0e6397..f36f3b9f5e 100644
+--- a/packages/host/apiproxy/src/api/llm.schema.ts
++++ b/packages/host/apiproxy/src/api/llm.schema.ts
+@@ -6,7 +6,7 @@
+ import { z } from 'zod'
+ import type { RequestPayload, ResponseValue } from './rpc-map.ts'
+ import type { Wire } from './rpc.schema.ts'
+-import type { ConfigurableProviderView, DiscoveredModelView } from './llm.ts'
++import type { AddAccountView, ConfigurableProviderView, DiscoveredModelView } from './llm.ts'
+ import { modelCatalogFailureSchema, modelProviderGroupSchema } from './sessions.schema.ts'
+ 
+ /** ConfigurableProviderView row of llm.providers. */
+@@ -62,3 +62,22 @@ export const llmDiscoverModelsRequestSchema = z.object({
+ export const llmDiscoverModelsValueSchema = z.object({
+   models: z.array(discoveredModelViewSchema),
+ }) satisfies z.ZodType<Wire<ResponseValue<'llm.discoverModels'>>>
++
++/** llm.addAccount request payload. */
++export const llmAddAccountRequestSchema = z.object({
++  provider: z.string().min(1),
++  email: z.string().min(1).optional(),
++  mobile: z.string().min(1).optional(),
++  areaCode: z.string().min(1).optional(),
++  // Write-only, exactly like discoverModels' apiKey: used for the one login
++  // test, never stored by the host and never returned.
++  apiKey: z.string().min(1),
++}) satisfies z.ZodType<Wire<RequestPayload<'llm.addAccount'>>>
++
++/** llm.addAccount response value. */
++export const llmAddAccountValueSchema = z.object({
++  ok: z.boolean(),
++  account: z.string().min(1).optional(),
++  route: z.string().min(1).optional(),
++  message: z.string().optional(),
++}) satisfies z.ZodType<Wire<AddAccountView>>
+diff --git a/packages/host/apiproxy/src/api/llm.ts b/packages/host/apiproxy/src/api/llm.ts
+index e9a5b52e72..a8c4369eeb 100644
+--- a/packages/host/apiproxy/src/api/llm.ts
++++ b/packages/host/apiproxy/src/api/llm.ts
+@@ -74,6 +74,38 @@ export interface LlmApi {
+     }>,
+     signal?: AbortSignal,
+   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
++
++  /**
++   * Test a login for an account-pooling provider (DeepSeek web) and, on
++   * success, add it so it becomes a selectable route immediately.
++   *
++   * `provider` is the route that pools logins. The password is write-only here:
++   * it drives the one login test and is never stored by the host or returned.
++   * A success carries the new account id and its route; a failure carries a
++   * plain reason (bad credentials, a blocked endpoint) with no secret in it.
++   */
++  addAccount(
++    request: RpcRequest<{
++      provider: string
++      email?: string
++      mobile?: string
++      areaCode?: string
++      apiKey: string
++    }>,
++    signal?: AbortSignal,
++  ): Promise<RpcResponse<AddAccountView>>
++}
++
++/** Wire result of llm.addAccount. */
++export interface AddAccountView {
++  /** Whether the login tested successfully and was added. */
++  ok: boolean
++  /** The added login id, on success. */
++  account?: string
++  /** The route now bound to that login, selectable immediately, on success. */
++  route?: string
++  /** A plain failure reason, on failure — never the credential. */
++  message?: string
+ }
+ 
+ /** Wire view of one model an interrogated endpoint advertises. */
+diff --git a/packages/host/apiproxy/src/api/rpc-map.ts b/packages/host/apiproxy/src/api/rpc-map.ts
+index 80dede1799..804663b40b 100644
+--- a/packages/host/apiproxy/src/api/rpc-map.ts
++++ b/packages/host/apiproxy/src/api/rpc-map.ts
+@@ -74,6 +74,7 @@ export interface RpcMethodMap {
+   'llm.providers': LlmApi['providers']
+   'llm.models': LlmApi['models']
+   'llm.discoverModels': LlmApi['discoverModels']
++  'llm.addAccount': LlmApi['addAccount']
+ }
+ 
+ /** Business request payload of method K (reaches through the RpcRequest narrow form to payload). */
+diff --git a/packages/host/apiproxy/src/api/rpc.schema.ts b/packages/host/apiproxy/src/api/rpc.schema.ts
+index 177f0ffd29..9ca7a95eb8 100644
+--- a/packages/host/apiproxy/src/api/rpc.schema.ts
++++ b/packages/host/apiproxy/src/api/rpc.schema.ts
+@@ -63,6 +63,7 @@ export const rpcErrorSchema: z.ZodType<RpcError> = z.discriminatedUnion('code',
+   z.object({ code: z.literal('settings-conflict'), message: z.string(), details: z.object({ ns: z.string(), expected: z.number(), actual: z.number() }) }),
+   z.object({ code: z.literal('credential-rejected'), message: z.string(), details: z.object({ ref: z.string() }) }),
+   z.object({ code: z.literal('model-discovery-failed'), message: z.string(), details: z.object({ settingsNs: z.string(), baseURL: z.string().optional() }) }),
++  z.object({ code: z.literal('add-account-failed'), message: z.string(), details: z.object({ provider: z.string() }) }),
+   z.object({ code: z.literal('title-invalid'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
+   z.object({ code: z.literal('fork-unavailable'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
+   z.object({ code: z.literal('subagent-parent-unavailable'), message: z.string(), details: z.object({ parentSessionId: z.string() }) }),
+diff --git a/packages/host/apiproxy/src/api/rpc.ts b/packages/host/apiproxy/src/api/rpc.ts
+index 134a39eba9..f236cd7ce3 100644
+--- a/packages/host/apiproxy/src/api/rpc.ts
++++ b/packages/host/apiproxy/src/api/rpc.ts
+@@ -86,6 +86,13 @@ export interface RpcErrorDetailsMap {
+    * details name the endpoint asked, never the credential offered.
+    */
+   'model-discovery-failed': { settingsNs: string; baseURL?: string }
++  /**
++   * Testing a login for an account-pooling provider failed before it could be
++   * added: no provider pools accounts under that route, the credential was
++   * empty, or the sign-in itself was refused. The message is the adapter's own
++   * text; the details name only the provider route, never the password.
++   */
++  'add-account-failed': { provider: string }
+   'title-invalid': { sessionId: SessionId }
+   'fork-unavailable': { sessionId: SessionId }
+   'subagent-parent-unavailable': { parentSessionId: SessionId }
+diff --git a/packages/host/apiproxy/src/fetch/client.ts b/packages/host/apiproxy/src/fetch/client.ts
+index 70e3ece58f..6e86feb709 100644
+--- a/packages/host/apiproxy/src/fetch/client.ts
++++ b/packages/host/apiproxy/src/fetch/client.ts
+@@ -60,7 +60,7 @@ import {
+ import {
+   credentialsDescribeValueSchema, credentialsSetValueSchema, credentialsUnsetValueSchema,
+ } from '../api/credentials.schema.ts'
+-import { llmDiscoverModelsValueSchema, llmModelsValueSchema, llmProvidersValueSchema } from '../api/llm.schema.ts'
++import { llmAddAccountValueSchema, llmDiscoverModelsValueSchema, llmModelsValueSchema, llmProvidersValueSchema } from '../api/llm.schema.ts'
+ import {
+   subagentHistoryValueSchema,
+   subagentInterruptValueSchema,
+@@ -160,6 +160,7 @@ export interface IApiClient {
+     providers(payload: RequestPayload<'llm.providers'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.providers'>>>
+     models(payload: RequestPayload<'llm.models'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.models'>>>
+     discoverModels(payload: RequestPayload<'llm.discoverModels'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.discoverModels'>>>
++    addAccount(payload: RequestPayload<'llm.addAccount'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'llm.addAccount'>>>
+   }
+   /** client-response passthrough (rpcId is a backfill of the server-request's id — never minted here). */
+   respond(message: ClientResponse, signal?: AbortSignal): Promise<RpcReceipt>
+@@ -222,6 +223,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
+   'llm.providers': llmProvidersValueSchema,
+   'llm.models': llmModelsValueSchema,
+   'llm.discoverModels': llmDiscoverModelsValueSchema,
++  'llm.addAccount': llmAddAccountValueSchema,
+ }
+ 
+ /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
+@@ -498,6 +500,7 @@ export abstract class AbstractApiClient implements IApiClient {
+     providers: (payload, signal) => this.callUnary('llm.providers', payload, signal),
+     models: (payload, signal) => this.callUnary('llm.models', payload, signal),
+     discoverModels: (payload, signal) => this.callUnary('llm.discoverModels', payload, signal),
++    addAccount: (payload, signal) => this.callUnary('llm.addAccount', payload, signal),
+   }
+ 
+   readonly events: IApiClient['events'] = {
+diff --git a/packages/host/apiproxy/src/fetch/handler.ts b/packages/host/apiproxy/src/fetch/handler.ts
+index 697171ec53..695573f8ae 100644
+--- a/packages/host/apiproxy/src/fetch/handler.ts
++++ b/packages/host/apiproxy/src/fetch/handler.ts
+@@ -63,7 +63,7 @@ import {
+ import {
+   credentialsDescribeRequestSchema, credentialsSetRequestSchema, credentialsUnsetRequestSchema,
+ } from '../api/credentials.schema.ts'
+-import { llmDiscoverModelsRequestSchema, llmModelsRequestSchema, llmProvidersRequestSchema } from '../api/llm.schema.ts'
++import { llmAddAccountRequestSchema, llmDiscoverModelsRequestSchema, llmModelsRequestSchema, llmProvidersRequestSchema } from '../api/llm.schema.ts'
+ import {
+   subagentHistoryRequestSchema,
+   subagentInterruptRequestSchema,
+@@ -140,6 +140,7 @@ const UNARY_ROUTES: UnaryRoutes = {
+   'llm.providers': { schema: llmProvidersRequestSchema, invoke: (api, r) => api.llm.providers(r) },
+   'llm.models': { schema: llmModelsRequestSchema, invoke: (api, r) => api.llm.models(r) },
+   'llm.discoverModels': { schema: llmDiscoverModelsRequestSchema, invoke: (api, r, signal) => api.llm.discoverModels(r, signal) },
++  'llm.addAccount': { schema: llmAddAccountRequestSchema, invoke: (api, r, signal) => api.llm.addAccount(r, signal) },
+ }
+ 
+ /** Route lookup that narrows an arbitrary path segment to a map key (single cast point for the string→key refinement). */
+diff --git a/packages/host/apiproxy/tests/client-handler.spec.ts b/packages/host/apiproxy/tests/client-handler.spec.ts
+index 4130d8f210..55b62d7168 100644
+--- a/packages/host/apiproxy/tests/client-handler.spec.ts
++++ b/packages/host/apiproxy/tests/client-handler.spec.ts
+@@ -126,6 +126,7 @@ function scriptedApi(overrides: {
+       providers: r => ok(r, { providers: [] }),
+       models: r => ok(r, { groups: [], failures: [] }),
+       discoverModels: err,
++      addAccount: err,
+       ...overrides.llm,
+     },
+     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
+@@ -753,6 +754,7 @@ describe('config unary surface', () => {
+         providers: record('llm.providers', r => ok(r, { providers: [providerRow] })),
+         models: record('llm.models', r => ok(r, { groups: [group], failures: [] })),
+         discoverModels: record('llm.discoverModels', r => ok(r, { models: [{ id: 'acme-large', contextWindow: 65536 }] })),
++        addAccount: record('llm.addAccount', r => ok(r, { ok: true, account: 'acct', route: 'route' })),
+       },
+     })
+     const c = client(api)
+diff --git a/packages/host/apiproxy/tests/fetch-carrier.spec.ts b/packages/host/apiproxy/tests/fetch-carrier.spec.ts
+index 2000f708ba..3febc606c4 100644
+--- a/packages/host/apiproxy/tests/fetch-carrier.spec.ts
++++ b/packages/host/apiproxy/tests/fetch-carrier.spec.ts
+@@ -281,6 +281,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
+       async discoverModels(request) {
+         return { rpcId: request.rpcId, result: { ok: true, value: { models: [] } } }
+       },
++      async addAccount(request) {
++        return { rpcId: request.rpcId, result: { ok: true, value: { ok: true, account: 'acct', route: 'route' } } }
++      },
+     },
+     events: {
+       mux: (_request, signal) => stream(muxFrames, signal),
