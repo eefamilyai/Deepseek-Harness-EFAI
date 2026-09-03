@@ -29,9 +29,17 @@ import type {} from '@deepseek-ai/dsh-api-remotes/types'
 // never — the owning package's client-safe, type-only subpath supplies the
 // cordis `Events` entry (and with it the branded `SettingsNamespace`).
 import type {} from '@deepseek-ai/dsh-settings/types'
-import type { SettingsSchemaService } from './schema.ts'
+import type { SchemaNode, SettingsSchemaService } from './schema.ts'
 import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from './settings-contract.ts'
 import { SettingsDescribeMirror, type SettingsDescribeFace } from './settings-mirror.ts'
+
+function sameRawSection(left: unknown, right: unknown): boolean {
+  // JSON-shaped settings sections: reference equality short-circuits the common
+  // case (stable Host view references), and a structural fallback catches carriers
+  // that rebuild equal values on every reload.
+  if (left === right) return true
+  return JSON.stringify(left) === JSON.stringify(right)
+}
 
 /**
  * One namespace's derived view over the shared describe mirror, plus that
@@ -51,6 +59,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
    * its fence from here first.
    */
   private pendingRevision: number | undefined
+  /** Last accepted decoded section, fenced by the raw wire value it decoded from. */
+  private lastDecodedRaw: unknown
+  private lastDecoded: T | undefined
+  /** Rehydrated namespace schema (runtime schema is stable per bound scope). */
+  private cachedSchema: SchemaNode | undefined
 
   /**
    * @param ctx - the providing plugin's context, whose `remote.settings`
@@ -187,7 +200,22 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
       })
       return
     }
-    const decoded = this.decode(view)
+    // Rehydrate and validate only when the raw section actually changed. One
+    // settings write bumps exactly one namespace; this keeps a change O(1)
+    // instead of re-running schema validation for every registered section on
+    // each full document reload (the main-thread work behind the settings
+    // freeze). The raw-value fence is transport-agnostic: a same-revision
+    // carrier with different bytes still re-decodes.
+    let decoded: T | undefined
+    if (this.lastDecoded !== undefined && sameRawSection(this.lastDecodedRaw, view.value)) {
+      decoded = this.lastDecoded
+    } else {
+      decoded = this.decode(view)
+      if (decoded !== undefined) {
+        this.lastDecodedRaw = view.value
+        this.lastDecoded = decoded
+      }
+    }
     this.store.update((draft) => {
       draft.revision = view.revision
       draft.base = view.base
@@ -206,7 +234,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
     if (typeof view.value !== 'object' || view.value === null || Array.isArray(view.value)) return undefined
     let failure: string | undefined
     try {
-      failure = this.schema.validate(this.schema.rehydrate(view.schema), view.value)
+      // A bound scope owns one namespace whose wire schema is stable for its
+      // lifetime; rehydrating it once avoids a synchronous Schemastery parse
+      // on every document reload (the main-thread freeze on settings changes).
+      this.cachedSchema ??= this.schema.rehydrate(view.schema)
+      failure = this.schema.validate(this.cachedSchema, view.value)
     } catch (_malformedSchemaEnvelope) {
       // A schema envelope this client cannot rehydrate vouches for no section;
       // the value is treated exactly like a schema-invalid one.

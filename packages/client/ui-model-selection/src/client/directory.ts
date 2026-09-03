@@ -46,6 +46,8 @@ export class ModelDirectory {
   private generation = 0
   private disposed = false
   private resolved = false
+  /** Last user-selected model; preferred over a lagging durable projection. */
+  private lastSelected: ModelSelection | null = null
   private readonly unsubscribeCatalog: () => void
   private readonly unsubscribeSelection: () => void
 
@@ -105,6 +107,11 @@ export class ModelDirectory {
       this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
       throw new Error(`session.selectModel failed: ${result.error.code}: ${result.error.message}`)
     }
+    // Remember the HOST-NORMALIZED selection (the exact value the durable
+    // projection will later report) so the directory never snaps back to the
+    // session's creation-time default while the `model/selection` event is
+    // still propagating through the projection.
+    this.lastSelected = result.value.selected
     this.store.update((s) => { s.status = 'ready'; s.error = null })
     this.syncInputs()
   }
@@ -159,7 +166,17 @@ export class ModelDirectory {
       })
       return
     }
-    const current = projected.next ?? catalog.value.default
+    const projectedNext = projected.next
+    if (this.lastSelected !== null && projectedNext !== null
+      && sameModelSelection(this.lastSelected, projectedNext)) {
+      // The durable projection has now caught up with the explicit pick; from
+      // here it is the single source of truth again.
+      this.lastSelected = null
+    }
+    // While the projection still lags behind an explicit pick (the session was
+    // created with a different model), prefer the pick so the UI never snaps
+    // back to the creation-time default.
+    const current = this.lastSelected ?? projectedNext ?? catalog.value.default
     this.resolved = true
     this.store.set({
       current,
@@ -172,6 +189,13 @@ export class ModelDirectory {
       error: null,
     })
   }
+}
+
+function sameModelSelection(left: ModelSelection | null, right: ModelSelection | null): boolean {
+  return left === right || (left !== null && right !== null
+    && left.provider === right.provider
+    && left.model === right.model
+    && left.reasoningEffort === right.reasoningEffort)
 }
 
 function modelSelectionProjection(value: unknown): ModelSelectionProjection | undefined {
