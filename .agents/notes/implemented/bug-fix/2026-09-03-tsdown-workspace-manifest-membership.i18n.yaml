@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-03-tsdown-workspace-manifest-membership.md
+2026-09-03-tsdown-workspace-manifest-membership.md: aeeaf09e1cc12e4fb5c5d1fdab47710b53d8b194
+2026-09-03-tsdown-workspace-manifest-membership.zh.md: 7e33413fb861c9922cce428a6f19d79655b573d9
