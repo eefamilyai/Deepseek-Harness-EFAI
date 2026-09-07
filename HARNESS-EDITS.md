@@ -18,15 +18,15 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 
 `wip/upstream-merge` is the current state of the work. `master` is stale by 11,947 upstream commits and should be replaced by it.
 
-Measured against `upstream/master`, the fork's surface is **212 files**: 151 added, 61 modified, 0 deleted.
+Measured against `upstream/master`, the fork's surface is **168 files**: 107 added, 61 modified, 0 deleted.
 
-Of the 151 added files, 149 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
+Of the 107 added files, 105 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
 
 The 61 modified files are the entire cost of every future update. Each one is a file two projects edit, and `git merge` has no way to know which side is intentional. Two further files live inside an upstream package directory and carry the same risk without ever showing a conflict.
 
 ## The consolidated inventory
 
-### Tier 1 — fork-owned (149 files, zero merge cost)
+### Tier 1 — fork-owned (105 files, zero merge cost)
 
 Paths upstream does not and will not use. Nothing here can conflict.
 
@@ -41,8 +41,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Session-info command | `packages/session/command-session-info` | 4 files |
 | Launchers | `start.cmd`, `start.sh` | 2 files |
 | Publish script | `upload_to_git.py` | 1 file |
-| Fork notes | `GAP_MATRIX.md`, `KILN_INTEGRATION_PROMPT.md`, `CLAUDE_CODE_REFERENCE.md`, `CLAUDE_CODE_TOOLS_DETAILED.md` | 4 files |
-| Vendored reference docs | `.claude_code_docs/**` | 42 files |
+| Fork notes | `GAP_MATRIX.md`, `KILN_INTEGRATION_PROMPT.md` | 2 files |
 | Merge record | `.merge-port/**` | 2 files |
 | Agent Notes | `.agents/notes/implemented/**` | 3 files |
 
@@ -150,7 +149,7 @@ Seven concrete failures, in order of cost.
 
 ### Rule 1 — Three tiers, and you must know which one you are in
 
-**Tier 1, fork-owned.** A path upstream does not use. New packages, `python/kiln/`, root fork docs, `.claude_code_docs/`, `.merge-port/`. No conflict is possible. **Put everything here that can go here.**
+**Tier 1, fork-owned.** A path upstream does not use. New packages, `python/kiln/`, root fork docs, `.merge-port/`. No conflict is possible. **Put everything here that can go here.**
 
 **Tier 2, seam.** An upstream file the fork must touch. Every one is listed in [the seam register](#the-seam-register) with a reason and an exit plan. Adding to this list is a decision, not a side effect.
 
