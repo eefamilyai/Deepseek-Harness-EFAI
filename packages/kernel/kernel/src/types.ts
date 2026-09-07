@@ -94,6 +94,12 @@ export interface KernelProvider {
   restart(): Promise<void>
   /** Names currently bound in the namespace, for context and diagnostics. */
   names(): Promise<readonly string[]>
+  /**
+   * Whether a cell is currently queued or running. Optional so providers that
+   * cannot cheaply report it simply leave it unset; callers gate re-entrant
+   * reads (e.g. an RLM context dump during an in-flight fan-out) on `false`.
+   */
+  busy?(): boolean
 }
 
 /** Error codes raised by the kernel seam. */

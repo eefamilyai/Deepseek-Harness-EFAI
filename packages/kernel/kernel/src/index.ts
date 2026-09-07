@@ -140,6 +140,20 @@ export class KernelRuntime extends Service {
     return this.resolve().names()
   }
 
+  /**
+   * Whether the resolved backend currently has a cell queued or running.
+   * Returns `false` when no backend is resolvable (no usable provider), which
+   * is the correct reading for a re-entrant guard: without a backend there is
+   * nothing to deadlock against.
+   */
+  busy(): boolean {
+    try {
+      return this.resolve().busy?.() ?? false
+    } catch {
+      return false
+    }
+  }
+
   /** Resolve the selected backend or throw the matching {@link KernelError}. */
   private resolve(): KernelProvider {
     const configuredId = this.providerId

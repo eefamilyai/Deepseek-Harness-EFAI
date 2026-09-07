@@ -45,6 +45,15 @@ class RlmContext:
         self._seam = seam_request
         self.answer = {"content": "", "ready": False}
         self._written = set()
+        # Names the model may NOT shadow with ctx_write: the namespace is the
+        # harness's live surface, and overwriting a helper (remember, recall,
+        # llm_batch, rlm_dump, ...) would silently break later capability.
+        # Snapshot the callables present at install time; the facet's own names
+        # are added by install() below.
+        self._reserved = {
+            key for key, value in ns.items()
+            if key.startswith("_") is False and callable(value)
+        }
 
     # -- terminal answer value ------------------------------------------------
     def set_answer(self, content, ready=True):
@@ -64,6 +73,13 @@ class RlmContext:
         key = str(name).strip()
         if not key:
             return "ctx_write: name must not be empty"
+        # Fix #5: a context bind is data, never a replacement for the harness
+        # surface. Refuse to shadow any pre-installed callable or this facet's
+        # own primitives; the model sees the conflict instead of silently
+        # losing a capability it may still need.
+        if key in self._reserved:
+            return ("ctx_write: %r is reserved (it is a harness/facet primitive);"
+                    " choose another name" % key)
         self._ns[key] = value
         self._written.add(key)
         try:
@@ -162,7 +178,14 @@ def install(ns, seam_request):
     ctx = RlmContext(ns, seam_request)
     ns["answer"] = ctx.answer
     for name in ("set_answer", "answer_ready", "answer_content",
-                 "ctx_write", "ctx_read", "ctx_list", "llm_batch"):
+                 "ctx_write", "ctx_read", "ctx_list", "llm_batch",
+                 "rlm_dump"):
         ns[name] = getattr(ctx, name)
-    ns["rlm_dump"] = ctx.rlm_dump
+    # Fix #5: mark this facet's own surface as non-shadowable as well. The
+    # constructor already snapshotted every pre-existing callable, so the union
+    # now covers both the core helpers and the facet primitives.
+    ctx._reserved.update({
+        "answer", "set_answer", "answer_ready", "answer_content",
+        "ctx_write", "ctx_read", "ctx_list", "llm_batch", "rlm_dump",
+    })
     return ctx

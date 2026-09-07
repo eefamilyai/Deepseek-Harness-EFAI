@@ -85,6 +85,8 @@ export class KilnKernelProvider implements KernelProvider {
   private child: KernelChild | undefined
   /** Tail of the serialization chain; each execute links onto it. */
   private queue: Promise<unknown> = Promise.resolve()
+  /** Non-zero while a cell is queued or running; incremented inside serialize. */
+  private pending = 0
   private disposed = false
 
   constructor(options: KilnKernelProviderOptions) {
@@ -96,6 +98,11 @@ export class KilnKernelProvider implements KernelProvider {
     return !this.disposed
   }
 
+  /** True while any cell is queued or running (serialization in flight). */
+  busy(): boolean {
+    return this.pending > 0
+  }
+
   /** The live child, started on first use and after every restart. */
   private ensureChild(): KernelChild {
     if (this.child === undefined || this.child.dead) this.child = new KernelChild(this.launch)
@@ -104,11 +111,16 @@ export class KilnKernelProvider implements KernelProvider {
 
   /** Run `task` after every previously queued one, whatever their outcome. */
   private serialize<T>(task: () => Promise<T>): Promise<T> {
+    this.pending += 1
+    const finish = (): void => { this.pending -= 1 }
     const run = this.queue.then(task, task)
     // Swallow on the chain only: the returned promise still rejects. Without
     // this a failed cell would mark the shared tail rejected and take the next
     // caller down with an error that was never theirs.
     this.queue = run.then(() => undefined, () => undefined)
+    // Decrement on BOTH completion paths so busy() returns to false even when
+    // the cell rejects; the queue tail already swallows the rejection separately.
+    void run.then(finish, finish)
     return run
   }
 

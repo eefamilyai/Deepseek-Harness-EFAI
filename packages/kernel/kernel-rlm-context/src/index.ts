@@ -13,9 +13,24 @@
  *     agent loop's EXISTING `renderContextSections()` path (agent.ts)
  *     consults kernel binds/answer without any core-file edit.
  *
+ * Hardening (see the RLM audit):
+ *   - #1 deadlock: the read-back is skipped while `ctx.kernel.busy()` reports a
+ *     queued/running cell, so a re-entrant `rlm_dump()` can never queue behind
+ *     an in-flight `llm_batch` fan-out on the serialized kernel.
+ *   - #2 clean-context leak: `ownerAgentId` pins the contribution to one agent,
+ *     so an in-process child (clean-context) agent does not inherit the parent
+ *     kernel binds. Omitted = broad (the legacy behavior, retained for
+ *     single-agent compositions).
+ *   - #3 terminal amplification: a READY `answer` is terminal — the agent
+ *     already received it via `llm_batch`'s return value — so the listener
+ *     contributes nothing for it. `sub_*` fan-out results are likewise filtered
+ *     from binds (the parent already consumed them).
+ *   - #6 duplicate section: the listener replaces any existing `kernel:rlm`
+ *     context instead of appending a same-named entry.
+ *
  * Update safety: this whole package is a new local file (does not exist
- * upstream), and it plugs into public seams (`ctx.kernel.execute`, the
- * `system-prompt/assemble` waterfall). Nothing under
+ * upstream), and it plugs into public seams (`ctx.kernel.execute`,
+ * `ctx.kernel.busy`, the `system-prompt/assemble` waterfall). Nothing under
  * `packages/core/agent-loop` or `packages/core/system-prompt` is modified.
  *
  * @module @deepseek-ai/dsh-kernel-rlm-context
@@ -24,8 +39,7 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-kernel'
-import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-system-prompt'
+import type { AssembleContext, PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import z from '@deepseek-ai/schemastery'
 
 /** Marker printed by `rlm_dump()`; must stay in sync with `rlm_context.py`. */
@@ -47,6 +61,12 @@ export const inject = ['kernel', 'systemPrompt']
 export interface Config {
   /** Skip the read-back and contribute nothing (defaults to false). */
   disabled?: boolean
+  /**
+   * When set, contribute ONLY for this agent id. Children (in-process
+   * subagents) have different ids and are therefore skipped, preserving their
+   * clean context. Omitted = contribute for every agent (legacy, single-agent).
+   */
+  ownerAgentId?: string
   /** Cap on rendered answer text, to keep the runtime snapshot bounded. */
   maxAnswerChars?: number
   /** Cap on rendered bind text per value. */
@@ -55,12 +75,18 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   disabled: z.boolean().default(false),
+  ownerAgentId: z.string(),
   maxAnswerChars: z.number().step(1).min(0).default(4000),
   maxBindChars: z.number().step(1).min(0).default(2000),
 })
 
 /** Fully-resolved config after schemastery defaults. */
-type ResolvedConfig = { disabled: boolean; maxAnswerChars: number; maxBindChars: number }
+export interface ResolvedConfig {
+  disabled: boolean
+  ownerAgentId: string | undefined
+  maxAnswerChars: number
+  maxBindChars: number
+}
 
 /** The parsed `rlm_dump()` payload. */
 export interface RlmSnapshot {
@@ -110,12 +136,30 @@ function stringifyBind(value: unknown, maxChars: number): string {
 }
 
 /**
+ * Terminal fan-out result keys are NOT live runtime state. `answer` is already
+ * rendered separately; `sub_*` results were already consumed by `llm_batch`'s
+ * return value. Neither may be re-injected across turns (fix #3).
+ */
+function isTerminalKey(key: string): boolean {
+  return key === 'answer' || key.startsWith('sub_')
+}
+
+/**
  * Renders one RLM snapshot into the model-facing runtime-context prose.
- * Returns `''` when there is nothing to contribute (no binds and no answer).
+ *
+ * This is a PURE formatter: it always renders live binds plus the answer, in
+ * the stable diagnostic shape tests assert against. Terminal suppression
+ * (skipping a READY answer, which the agent already received via `llm_batch`)
+ * is the LISTENER's policy, applied before this formatter is called — see
+ * {@link apply}. `sub_*` fan-out keys are filtered from binds here because they
+ * are never live variables.
+ *
+ * Returns `''` when there is nothing to contribute.
  */
 export function renderRlmContext(snapshot: RlmSnapshot, config: ResolvedConfig): string {
   const parts: string[] = []
   for (const [key, value] of Object.entries(snapshot.binds).sort(([a], [b]) => a.localeCompare(b))) {
+    if (isTerminalKey(key)) continue
     parts.push(`${key} = ${stringifyBind(value, config.maxBindChars)}`)
   }
   const hasAnswer = snapshot.answer.content.length > 0 || snapshot.answer.ready
@@ -125,6 +169,21 @@ export function renderRlmContext(snapshot: RlmSnapshot, config: ResolvedConfig):
   }
   if (parts.length === 0) return ''
   return `Kernel RLM context variables. These are live program values, not transcript.\n${parts.join('\n')}`
+}
+
+/**
+ * Minimal structural view of the agent carried on `AssembleContext.agent`.
+ *
+ * The full `agent?: Agent` augmentation lives in `@deepseek-ai/dsh-agent`; this
+ * package deliberately does NOT depend on that package, so it reads only the
+ * `id` it needs through a local structural cast. A branded `SessionId` is a
+ * subtype of `string`, so the assignment is compatible whenever the
+ * augmentation is loaded, and the cast is a safe no-op when it is not.
+ */
+interface AssemblyAgentLike { readonly id: string }
+
+function assemblyAgent(context: AssembleContext): AssemblyAgentLike | undefined {
+  return (context as AssembleContext & { agent?: AssemblyAgentLike }).agent
 }
 
 /**
@@ -141,18 +200,34 @@ export class KernelContextService extends Service<Config> {
 
   private readonly config: ResolvedConfig
 
-  /** True when the read-back is enabled and a kernel is registered. */
+  /** True when the read-back is enabled. */
   enabled(): boolean {
     return !this.config.disabled
   }
 
   /**
+   * Whether this assembly's agent may receive the read-back (fix #2). With no
+   * `ownerAgentId` every agent is allowed (legacy); with one, only that exact
+   * id is allowed. A diagnostic assembly with no `agent` is allowed so the
+   * legacy single-agent path keeps working.
+   */
+  allowedAgent(context: AssembleContext): boolean {
+    if (this.config.ownerAgentId === undefined) return true
+    const agent = assemblyAgent(context)
+    if (agent === undefined) return true
+    return agent.id === this.config.ownerAgentId
+  }
+
+  /**
    * Query the kernel for its live RLM snapshot. Returns `undefined` when the
-   * kernel is unavailable, the facet is not mounted, or parsing fails.
+   * kernel is unavailable, the facet is not mounted, parsing fails, or the
+   * kernel reports `busy()` (fix #1: never queue a read behind an in-flight
+   * fan-out cell on the serialized kernel).
    */
   async read(signal?: AbortSignal): Promise<RlmSnapshot | undefined> {
     if (this.config.disabled) return undefined
     try {
+      if (this.ctx.kernel.busy()) return undefined
       const result = await this.ctx.kernel.execute(
         { code: 'rlm_dump()', timeoutMs: READ_TIMEOUT_MS },
         signal,
@@ -168,21 +243,29 @@ export class KernelContextService extends Service<Config> {
 export function apply(ctx: Context, config: Config): void {
   const resolved: ResolvedConfig = {
     disabled: config.disabled ?? false,
+    ownerAgentId: config.ownerAgentId !== undefined && config.ownerAgentId.length > 0 ? config.ownerAgentId : undefined,
     maxAnswerChars: config.maxAnswerChars ?? 4000,
     maxBindChars: config.maxBindChars ?? 2000,
   }
   const service = new KernelContextService(ctx, resolved)
 
-  const dispose = ctx.on('system-prompt/assemble', async (_assembly: PromptAssembly, _context, next) => {
+  const dispose = ctx.on('system-prompt/assemble', async (_assembly: PromptAssembly, context: AssembleContext, next) => {
     const assembled = await next()
     if (resolved.disabled) return assembled
+    if (!service.allowedAgent(context)) return assembled
     const snapshot = await service.read()
     if (snapshot === undefined) return assembled
+    // Fix #3: a READY answer is terminal — the agent already received it via
+    // `llm_batch`'s return value. Re-injecting it every turn would only amplify
+    // a settled result. Contribute nothing for it.
+    if (snapshot.answer.ready) return assembled
     const text = renderRlmContext(snapshot, resolved)
     if (text.length === 0) return assembled
+    // Fix #6: replace-not-append, so there is never a second `kernel:rlm` entry.
+    const contexts = assembled.contexts.filter(entry => entry.name !== RLM_CONTEXT_SECTION)
     return {
       ...assembled,
-      contexts: [...assembled.contexts, { name: RLM_CONTEXT_SECTION, text }],
+      contexts: [...contexts, { name: RLM_CONTEXT_SECTION, text }],
     }
   })
 
