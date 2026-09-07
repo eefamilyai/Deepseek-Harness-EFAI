@@ -306,6 +306,7 @@ export async function dispatchSeam(
   if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)
   if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, request, signal)
   if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, request, signal)
+  if (request.op.startsWith('rlm.')) return dispatchRlm(agentCtx, request, signal)
   if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, request)
   if (request.op.startsWith('sessions.')) return dispatchSessions(agentCtx, request)
   if (request.op.startsWith('skills.')) return dispatchSkills(agentCtx, request, signal)
@@ -463,6 +464,54 @@ async function dispatchSubagents(
     } finally {
       await run.dispose()
     }
+  } catch (error) {
+    return failed(request.id, error)
+  }
+}
+
+async function dispatchRlm(
+  agentCtx: Context | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
+  const args = asArgs(request.args)
+  if (request.op === 'rlm.answer') {
+    // The `answer`/`ready` variable lives in the Python kernel; this seam only
+    // confirms the RLM facet is mounted so the kernel never hard-blocks on it.
+    return ok(request.id, { mounted: true })
+  }
+  if (request.op !== 'rlm.llm_batch') return unavailable(request.id, `unknown seam operation: ${request.op}`)
+  const subagents = subagentsOf(agentCtx)
+  if (subagents === undefined) return unavailable(request.id, 'ctx.subagents is not mounted for this agent')
+  const parent = (agentCtx as Context & { agent?: unknown }).agent
+  if (parent === undefined || parent === null) return unavailable(request.id, 'ctx.agent is not available for this agent')
+  const prompts = Array.isArray(args.prompts)
+    ? args.prompts.filter((entry): entry is string => typeof entry === 'string')
+    : []
+  if (prompts.length === 0) return failed(request.id, new Error('rlm.llm_batch requires a non-empty array of string "prompts"'))
+  const names = subagents.list()
+  if (names.length === 0) return unavailable(request.id, 'no subagent provider is registered')
+  const provider = typeof args.provider === 'string' && args.provider.length > 0 ? args.provider : names[0]
+  if (provider === undefined) return unavailable(request.id, 'no subagent provider is registered')
+  const sig = signal ?? new AbortController().signal
+  try {
+    const results = await Promise.all(prompts.map(async (prompt) => {
+      const run = await subagents.start(provider, {
+        prompt: [{ type: 'text', text: prompt }],
+        parent,
+        signal: sig,
+      })
+      try {
+        const result = await run.result
+        return result.output
+          .filter((block): block is SubagentContentBlockShape & { type: 'text'; text: string } => block.type === 'text' && typeof block.text === 'string')
+          .map(block => block.text)
+          .join('')
+      } finally {
+        await run.dispose()
+      }
+    }))
+    return ok(request.id, { results })
   } catch (error) {
     return failed(request.id, error)
   }

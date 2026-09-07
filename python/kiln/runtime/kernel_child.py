@@ -1497,6 +1497,12 @@ def web_fetch(url, timeout=30):
 from browser_tools import browser_use  # noqa: E402 — full sandboxed browser toolset (deferred: heavy deps)
 
 from context_store import context_stats, index_context, search_context  # noqa: E402 — deferred: heavy deps
+try:  # noqa: E402 — RLM context-as-variable facet (local overlay)
+    import rlm_context  # noqa: E402
+except Exception as _rlm_import_error:
+    rlm_context = None
+    _rlm_import_error = _rlm_import_error
+
 
 
 
@@ -3603,6 +3609,12 @@ prompt_dict.update({
 # sync into the live namespace (was snapshotted earlier)
 
 _ns.update(prompt_dict)
+# sync into the live namespace (was snapshotted earlier)
+try:
+    if rlm_context is not None:
+        rlm_context.install(_ns, _seam_request)
+except Exception as _rlm_install_error:
+    sys.stderr.write("rlm_context install failed: %s\n" % _rlm_install_error)
 
 
 
