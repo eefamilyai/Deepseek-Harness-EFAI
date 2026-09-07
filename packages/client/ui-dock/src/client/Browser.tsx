@@ -11,7 +11,7 @@
  * @module @deepseek-ai/dsh-client-ui-dock/client/Browser
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent, WheelEvent } from 'react'
 import css from './dock.module.css'
 
@@ -64,10 +64,20 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
     try {
       const res = await fetch('/kiln/browser/state', { cache: 'no-store' })
       const next = await res.json() as BrowserState
-      setState(next)
-      if (!addressFocused.current) setAddress(next.url)
-      if (next.ts !== undefined && next.ts !== lastTs.current) {
-        if (lastTs.current !== 0) { setLive(true); window.setTimeout(() => setLive(false), 1600) }
+      // The full state (including the screenshot filename) only changes when the
+      // shared browser actually acted. Re-applying it on every poll re-renders
+      // and re-decodes a large high-res PNG for no reason, which is what made
+      // this pane feel laggy at low FPS next to the push-based Terminal. When
+      // the timestamp is unchanged there is nothing new to paint, so skip the
+      // render work entirely. A state file without `ts` keeps the old always-
+      // apply behaviour because we cannot tell whether it changed.
+      const changed = next.ts !== undefined && next.ts !== lastTs.current
+      if (next.ts === undefined || lastTs.current === 0 || changed) {
+        setState(next)
+        if (!addressFocused.current) setAddress(next.url)
+      }
+      if (changed) {
+        if (lastTs.current !== 0) { setLive(true); window.setTimeout(() => { setLive(false) }, 1600) }
         lastTs.current = next.ts
       }
     } catch { /* the bridge may not be up yet; the next tick retries */ }
@@ -157,7 +167,7 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
     }
   }, [actLive])
 
-  const shot = state.screenshot === '' ? '' : `/kiln/browser/shot/${encodeURIComponent(state.screenshot)}?t=${state.ts ?? ''}`
+  const shot = state.screenshot === '' ? '' : `/kiln/browser/shot/${encodeURIComponent(state.screenshot)}`
 
   return (
     <div className={css.browser}>
@@ -174,7 +184,7 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
             spellCheck={false}
             onFocus={() => { addressFocused.current = true }}
             onBlur={() => { addressFocused.current = false }}
-            onChange={event => setAddress(event.target.value)}
+            onChange={(event) => { setAddress(event.target.value) }}
             onKeyDown={onAddressKey}
           />
         </div>
