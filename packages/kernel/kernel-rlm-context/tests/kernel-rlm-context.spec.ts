@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseRlmDump, renderRlmContext } from '../src/index.ts'
+import { parseRlmDump, renderRlmContext, type ResolvedConfig } from '../src/index.ts'
 
-const cfg = { disabled: false, ownerAgentId: undefined, maxAnswerChars: 4000, maxBindChars: 2000 }
+const cfg: ResolvedConfig = { disabled: false, ownerAgentId: undefined, maxAnswerChars: 4000, maxBindChars: 2000 }
 
 describe('parseRlmDump', () => {
   it('parses a marker line and ignores surrounding output', () => {
