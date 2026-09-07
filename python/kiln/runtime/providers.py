@@ -519,6 +519,15 @@ def _module_stream(provider_id, model_key, messages, opts, cancelled, cfg):
     yield from mod.stream(model_key, messages, opts, cancelled, cfg)
 
 
+# Clean, user-facing replacement for the context-overflow diagnostic. The meta
+# frame's `error` field still carries the raw string so the harness recognises
+# it and runs the same compaction as /compact; this is what the user sees
+# instead of the raw "context window exceeded — ..." wording.
+_COMPACT_NOTICE = (
+    "This conversation reached its length limit, so I've condensed the earlier "
+    "part to make room \u2014 the important context is kept, and I'm continuing."
+)
+
 def stream(provider_id, model_key, messages, opts=None, cancelled=None):
     """Provider dispatch: yield normalized events for the loop.
 
@@ -546,8 +555,18 @@ def stream(provider_id, model_key, messages, opts=None, cancelled=None):
         # /compact + retry, rate limit → wait, else transport) and must never
         # have to scrape it back out of model-facing prose. Dropping it here made
         # every raised failure look like a generic transport error.
-        yield {"type": "content", "text": "\n[provider error] %s" % e}
-        yield {"type": "meta", "finish": "error", "error": str(e)}
+        raw = str(e)
+        # Context-overflow keeps the raw wording in the machine `error` field
+        # (the harness classifies from it and runs /compact), but the visible
+        # content is a clean note rather than the internal diagnostic. Every
+        # other failure keeps the labelled diagnostic so the user can tell it
+        # apart from model prose.
+        if "context window exceeded" in raw.lower():
+            visible = _COMPACT_NOTICE
+        else:
+            visible = "[provider error] " + raw
+        yield {"type": "content", "text": "\n" + visible}
+        yield {"type": "meta", "finish": "error", "error": raw}
 
 
 class ProviderClient:

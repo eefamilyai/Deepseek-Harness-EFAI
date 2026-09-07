@@ -59,6 +59,8 @@ function WidthHandle(props: {
   const base = useRef(0)
   const origin = useRef(0)
   const latest = useRef(0)
+  const pointerY = useRef(0)
+  const handleEl = useRef<HTMLDivElement | null>(null)
   const frame = useRef<number | null>(null)
   const callbacks = useRef(props)
   callbacks.current = props
@@ -79,13 +81,26 @@ function WidthHandle(props: {
     base.current = callbacks.current.onStart()
     setDragging(true)
   }, [])
+  // DSH-FORK(dock): read the handle's box inside the rAF tick instead of on
+  // every raw pointermove — a per-event layout read fights the resize write
+  // and makes the drag stutter. Hover (no capture) keeps the synchronous
+  // glow update because it never competes with the resize path.
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const box = e.currentTarget.getBoundingClientRect()
-    e.currentTarget.style.setProperty('--dsh-width-handle-pointer-y', `${e.clientY - box.top}px`)
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
+      const box = e.currentTarget.getBoundingClientRect()
+      e.currentTarget.style.setProperty('--dsh-width-handle-pointer-y', `${e.clientY - box.top}px`)
+      return
+    }
     latest.current = e.clientX
+    pointerY.current = e.clientY
+    handleEl.current = e.currentTarget
     frame.current ??= requestAnimationFrame(() => {
       frame.current = null
+      const el = handleEl.current
+      if (el !== null) {
+        const box = el.getBoundingClientRect()
+        el.style.setProperty('--dsh-width-handle-pointer-y', `${pointerY.current - box.top}px`)
+      }
       callbacks.current.onDrag(outwardWidth())
     })
   }, [])
