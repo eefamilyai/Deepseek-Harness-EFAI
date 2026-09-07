@@ -282,4 +282,3 @@ export function apply(ctx: Context, config: Config): void {
   }, 'kernel-rlm-context system-prompt/assemble')
 }
 
-export default apply
