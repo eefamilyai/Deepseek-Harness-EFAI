@@ -266,6 +266,7 @@
     { "path": "./packages/kernel/kernel-mode" },
     { "path": "./packages/kernel/kernel-python" },
     { "path": "./packages/kernel/tool-kernel" },
+    { "path": "./packages/kernel/kernel-rlm-context" },
     { "path": "./packages/spill/spill" },
     { "path": "./packages/spill/spill-local" },
     { "path": "./packages/spill/spill-policy" },
