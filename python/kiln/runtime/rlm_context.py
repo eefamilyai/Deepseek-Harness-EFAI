@@ -44,6 +44,7 @@ class RlmContext:
         self._ns = ns
         self._seam = seam_request
         self.answer = {"content": "", "ready": False}
+        self._written = set()
 
     # -- terminal answer value ------------------------------------------------
     def set_answer(self, content, ready=True):
@@ -64,6 +65,7 @@ class RlmContext:
         if not key:
             return "ctx_write: name must not be empty"
         self._ns[key] = value
+        self._written.add(key)
         try:
             self._ns["remember"](key, value)
         except Exception:
@@ -89,6 +91,50 @@ class RlmContext:
                 continue
             rows.append("%-24s %s" % (key, type(value).__name__))
         return "\n".join(rows) if rows else "(no context variables)"
+
+
+    # -- machine-readable snapshot for the harness read-back path -----------
+    _RLM_MARKER = "__KILN_RLM_STATE__"
+
+    @staticmethod
+    def _json_safe(value):
+        try:
+            json.dumps(value)
+            return value
+        except Exception:
+            try:
+                return repr(value)
+            except Exception:
+                return "<unserializable>"
+
+    def rlm_dump(self):
+        """Emit one marker line carrying answer + tracked binds as JSON.
+
+        This is the TS->Python query target: KernelContextService runs
+        ``rlm_dump()`` through ``ctx.kernel.execute`` and parses the marker.
+        It is a pure read -- it mutates nothing and prints nothing else.
+        """
+        names = set(self._written)
+        for key in self._ns:
+            if key.startswith("sub_"):
+                names.add(key)
+        binds = {}
+        for key in sorted(names):
+            if key not in self._ns:
+                continue
+            value = self._ns[key]
+            if callable(value):
+                continue
+            binds[key] = self._json_safe(value)
+        payload = json.dumps({
+            "answer": {
+                "content": self.answer.get("content", ""),
+                "ready": bool(self.answer.get("ready")),
+            },
+            "binds": binds,
+        }, ensure_ascii=False, default=repr)
+        print("%s %s" % (self._RLM_MARKER, payload))
+        return payload
 
     # -- clean-context child fan-out -----------------------------------------
     def llm_batch(self, prompts, tools=None, model=None):
@@ -118,4 +164,5 @@ def install(ns, seam_request):
     for name in ("set_answer", "answer_ready", "answer_content",
                  "ctx_write", "ctx_read", "ctx_list", "llm_batch"):
         ns[name] = getattr(ctx, name)
+    ns["rlm_dump"] = ctx.rlm_dump
     return ctx
