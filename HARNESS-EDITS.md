@@ -13,14 +13,15 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 | Fork point | `47f943859b` | upstream merge of PR #2519, 2026-08-13 |
 | Upstream now | `dd6322d604` | `release/dsh-0.1.2-alpha.3` |
 | Upstream commits since the fork point | 11,947 | |
-| `origin/master` | `0662f45ace` | 7 fork commits, still on the **old** base — not merged |
-| `origin/wip/upstream-merge` | `aeb50aa097` | upstream merged; 10 commits ahead of `upstream/master` |
+| Upstream merge landed | `9b262d25ec` | 26 conflicts resolved; recorded in `.merge-port/MERGE-STATUS.md` |
+| `master` | merge + 26 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider |
+| `wip/upstream-merge` | merge + 5 commits | the tsdown workspace fix and this document |
 
-`wip/upstream-merge` is the current state of the work. `master` is stale by 11,947 upstream commits and should be replaced by it.
+Both branches descend from `9b262d25ec`, so upstream is fully merged into each and what separates them is ordinary work rather than a sync.
 
-Measured against `upstream/master`, the fork's surface is **167 files**: 106 added, 61 modified, 0 deleted.
+Measured against `upstream/master`, `master`'s surface is **195 files** (122 added, 73 modified, 0 deleted) and `wip/upstream-merge`'s is **167** (106 added, 61 modified). The inventory below enumerates the 167; `master`'s further 28 files are its newer kernel packages and the registration entries they need, and they fall into the same groups.
 
-Of the 106 added files, 104 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
+Of those 106 added files, 104 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
 
 The 61 modified files are the entire cost of every future update. Each one is a file two projects edit, and `git merge` has no way to know which side is intentional. Two further files live inside an upstream package directory and carry the same risk without ever showing a conflict.
 
@@ -336,5 +337,5 @@ Ordered by how much each removes from the next merge.
 5. **`pnpm-lock.yaml merge=ours`.** One line; removes the single largest conflicting file.
 6. **Move `ds_config.json` and `ds_sessions.json` out of the repository tree.**
 7. **Write the ten missing package READMEs.** Turns `doc-sync` back into a signal.
-8. **Replace `master` with `wip/upstream-merge`.** `master` is 11,947 upstream commits stale; leaving it as the default branch invites the next person to fork from it.
+8. **Fold `wip/upstream-merge` into `master`.** They are siblings off the same upstream merge, five commits apart; leaving both alive invites work to land on the wrong one.
 9. **Move row 11** — the system-prompt identity string — to a prompt section registered by a fork plugin. One line today, but it is in a file upstream edits often.
