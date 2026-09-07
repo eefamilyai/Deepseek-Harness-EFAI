@@ -27,6 +27,14 @@
  *     from binds (the parent already consumed them).
  *   - #6 duplicate section: the listener replaces any existing `kernel:rlm`
  *     context instead of appending a same-named entry.
+ *   - #4 hard stop on ready: the actual "stop driving once `answer.ready`"
+ *     decision belongs to core agent-loop tool-result handling, which this
+ *     overlay deliberately does not edit. This package only suppresses the
+ *     settled answer's re-injection (fix #3); a true hard-stop still needs a
+ *     core patch outside the update-safe surface.
+ *   - #5 namespace collisions: the Python facet (`rlm_context.py`) now refuses
+ *     `ctx_write` of any pre-installed callable or facet primitive, so a bind
+ *     cannot silently clobber a harness helper (remember/recall/llm_batch/…).
  *
  * Update safety: this whole package is a new local file (does not exist
  * upstream), and it plugs into public seams (`ctx.kernel.execute`,
