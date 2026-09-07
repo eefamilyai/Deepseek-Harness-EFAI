@@ -1,7 +1,7 @@
 # Gap Matrix: Claude Code Tool/Feature Surface vs. Kiln Kernel
 
 **Generated:** 2026-08-29
-**Source:** CLAUDE_CODE_REFERENCE.md, CLAUDE_CODE_TOOLS_DETAILED.md, .claude_code_docs/
+**Source:** Claude Code reference capture (removed from this repository).
 
 ## Legend
 - ✅ **Already exists** — name the kernel package/tool.
