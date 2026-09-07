@@ -349,6 +349,13 @@
       config:
         timeoutMs: 180000
 
+    # RLM context-as-variable read-back: an async system-prompt/assemble
+    # listener that reads the live kernel `answer`/binds via ctx.kernel and
+    # contributes them as runtime context the agent loop already renders.
+    - id: kernel-rlm-context
+      name: '@deepseek-ai/dsh-kernel-rlm-context'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'
       config:

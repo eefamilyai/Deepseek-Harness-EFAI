@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@deepseek-ai/dsh-invariants'
+import { describe, expect, it } from 'vitest'
 import { parseRlmDump, renderRlmContext } from '../src/index.ts'
 
 const cfg = { disabled: false, maxAnswerChars: 4000, maxBindChars: 2000 }
