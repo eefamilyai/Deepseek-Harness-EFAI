@@ -71,14 +71,15 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       // the timestamp is unchanged there is nothing new to paint, so skip the
       // render work entirely. A state file without `ts` keeps the old always-
       // apply behaviour because we cannot tell whether it changed.
-      const changed = next.ts !== undefined && next.ts !== lastTs.current
-      if (next.ts === undefined || lastTs.current === 0 || changed) {
+      const ts = next.ts
+      const changed = typeof ts === 'number' && ts !== lastTs.current
+      if (typeof ts !== 'number' || lastTs.current === 0 || changed) {
         setState(next)
         if (!addressFocused.current) setAddress(next.url)
       }
-      if (changed) {
+      if (typeof ts === 'number' && changed) {
         if (lastTs.current !== 0) { setLive(true); window.setTimeout(() => { setLive(false) }, 1600) }
-        lastTs.current = next.ts
+        lastTs.current = ts
       }
     } catch { /* the bridge may not be up yet; the next tick retries */ }
   }, [])
