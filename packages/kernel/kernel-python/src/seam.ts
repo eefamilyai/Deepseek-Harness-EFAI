@@ -149,6 +149,7 @@ interface SubagentStartRequestShape {
   readonly maxDepth?: number
   readonly toolFilter?: unknown
   readonly persona?: string
+  readonly agentOptions?: { readonly provider?: string; readonly model?: string }
 }
 interface SubagentRuntimeSeamShape {
   list(): string[]
@@ -496,10 +497,19 @@ async function dispatchRlm(
   const sig = signal ?? new AbortController().signal
   try {
     const results = await Promise.all(prompts.map(async (prompt) => {
+      const agentOptions: { provider?: string; model?: string } | undefined =
+        (typeof args.provider === 'string' && args.provider.length > 0) ||
+        (typeof args.model === 'string' && args.model.length > 0)
+          ? {
+            ...(typeof args.provider === 'string' && args.provider.length > 0 ? { provider: args.provider } : {}),
+            ...(typeof args.model === 'string' && args.model.length > 0 ? { model: args.model } : {}),
+          }
+          : undefined
       const run = await subagents.start(provider, {
         prompt: [{ type: 'text', text: prompt }],
         parent,
         signal: sig,
+        ...(agentOptions === undefined ? {} : { agentOptions }),
       })
       try {
         const result = await run.result
