@@ -51,6 +51,9 @@
     { "path": "./packages/client/ui-attachment" },
     { "path": "./packages/client/ui-primitives" },
     { "path": "./packages/client/ui-dock" },
+    // DSH-FORK(browser): client half of the dedicated Chromium-style browser surface.
+    // EXIT: upstream ships a user browser surface.
+    { "path": "./packages/client/ui-chromium-surface" },
     { "path": "./packages/client/ui-effects" },
     { "path": "./packages/client/modules" },
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
