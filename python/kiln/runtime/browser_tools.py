@@ -37,6 +37,16 @@ def _browser_executor():
     if _BROWSER_EXECUTOR is None:
         _BROWSER_EXECUTOR = _futures.ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="kiln-browser")
+        # The ThreadPoolExecutor registers its own interpreter-exit cleanup on
+        # threading's internal callback list, and CPython drains that list LIFO
+        # BEFORE any plain atexit hook. Registering ours right after the
+        # executor's own hook therefore runs us FIRST -- while the worker thread
+        # is still alive and schedulable -- so Playwright/screencast teardown
+        # completes instead of raising "cannot schedule new futures after
+        # shutdown" and leaving node writing into a closing pipe (the EPIPE).
+        _register = getattr(_threading, "_register_atexit", None)
+        if _register is not None:
+            _register(_browser_shutdown)
     return _BROWSER_EXECUTOR
 
 
@@ -167,6 +177,57 @@ class KilnBrowser:
         except Exception:
             # Screencast is best-effort: the PNG screenshot path still works.
             self._screencast = None
+
+    def _stop_screencast(self):
+        """Stop the CDP screencast, if one is running.
+
+        ``page.screencast.start()`` returns a ``DisposableStub`` whose only
+        public teardown is ``dispose()``/context-manager exit — it does NOT
+        expose ``.stop()``. The real stop lives on the page's sync
+        ``Screencast`` wrapper (``page.screencast.stop()``), which sends
+        ``screencastStop`` and clears the frame callback. Stopping from the
+        correct worker thread prevents the Playwright node driver from
+        writing one more frame into a closing pipe — the unhandled EPIPE +
+        node stack trace this teardown exists to avoid.
+        """
+        self._screencast = None
+        if self.page is None:
+            return
+        try:
+            self.page.screencast.stop()
+        except Exception:
+            # Best-effort: the screencast is already dead, or the page is gone.
+            pass
+
+    def shutdown(self):
+        """Orderly teardown: stop the live feed, then close browser resources.
+
+        Playwright's CDP screencast has no interpreter-exit hook, so a bare
+        exit leaves its node driver writing into a closed pipe — an unhandled
+        EPIPE plus a node stack trace. Stopping the screencast first, then
+        closing context/browser/playwright in dependency order, lets the
+        process exit quietly. Idempotent and never raises.
+        """
+        self._stop_screencast()
+        if self.context is not None:
+            try:
+                self.context.close()
+            except Exception:
+                pass
+        if self.browser is not None:
+            try:
+                self.browser.close()
+            except Exception:
+                pass
+        if self.pw is not None:
+            try:
+                self.pw.stop()
+            except Exception:
+                pass
+        self.page = None
+        self.context = None
+        self.browser = None
+        self.pw = None
 
     def _state(self, **extra):
         # vw/vh are the CSS viewport the screenshot covers, so the dock pane can
@@ -989,6 +1050,26 @@ def _clean_ddg_url(u):
 
 
 BROWSER = KilnBrowser()
+
+def _browser_shutdown():
+    """Interpreter-exit hook: shut the shared browser down on ITS worker thread.
+
+    Playwright's sync API is thread-affine: the live browser, its CDP
+    screencast, and every close() belong to the single browser worker thread
+    that ``browser_use`` marshals every call onto. This hook is registered via
+    ``threading._register_atexit`` (inside ``_browser_executor``) so it runs
+    before the executor's own exit cleanup -- while the worker thread is still
+    alive and schedulable. Marshalling shutdown through that same worker keeps
+    thread affinity; when the browser never launched there is nothing to
+    marshal and shutdown on this thread is a no-op.
+    """
+    try:
+        if BROWSER.page is not None or _BROWSER_EXECUTOR is not None:
+            _on_browser_thread(BROWSER.shutdown)
+        else:
+            BROWSER.shutdown()
+    except Exception:
+        pass
 
 
 def browser_search(query, limit=8):
