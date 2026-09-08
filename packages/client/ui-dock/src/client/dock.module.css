@@ -241,6 +241,16 @@
   background: var(--ds-color-bg, #0b0c0f);
 }
 
+
+/* ── live iframe render ─────────────────────────────────────────────────── */
+.frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff; /* pages without a background still render white, not the dock's dark */
+}
+
 .stage {
   display: flex;
   align-items: center;
