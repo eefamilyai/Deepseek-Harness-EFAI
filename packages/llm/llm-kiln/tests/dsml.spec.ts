@@ -851,23 +851,24 @@ describe('rebuildRoutes', () => {
     return { routes: new Map<string, KilnProvider>(), kilnIds: new Map<string, string>(), accounts: new Map<string, string>() }
   }
 
-  it('adds one route per pooled login, plus the base route', () => {
+  it('keeps one route for a provider however many logins it pools', () => {
+    // A pooled login is an account behind one entry, not an entry of its own:
+    // the picker shows the provider once and the sidecar's ring chooses.
     const t = tables()
     rebuildRoutes(t, catalogWith(['a@x.com', 'b@x.com']), 'kiln-', false)
-    expect([...t.routes.keys()]).toEqual(['kiln-deepseek', 'kiln-deepseek@a@x.com', 'kiln-deepseek@b@x.com'])
-    expect(t.accounts.get('kiln-deepseek@b@x.com')).toBe('b@x.com')
+    expect([...t.routes.keys()]).toEqual(['kiln-deepseek'])
+    expect(t.accounts.size).toBe(0)
   })
 
-  it('surfaces a freshly added account as a new route on re-run, in place', () => {
-    // This is the whole point of the re-register approach: after add_account
-    // persists a login, a second catalog read carries it, and rebuilding the
-    // SAME table objects (the adapter closes over them) makes it selectable.
+  it('adds no route when a fresh login joins the pool', () => {
+    // add_account persists a login and a second catalog read carries it. The
+    // route set is unchanged: the new login is reachable through the route that
+    // was already there.
     const t = tables()
     rebuildRoutes(t, catalogWith(['a@x.com']), 'kiln-', false)
-    expect(t.routes.has('kiln-deepseek@new@x.com')).toBe(false)
+    expect([...t.routes.keys()]).toEqual(['kiln-deepseek'])
     rebuildRoutes(t, catalogWith(['a@x.com', 'new@x.com']), 'kiln-', false)
-    expect(t.routes.has('kiln-deepseek@new@x.com')).toBe(true)
-    expect(t.accounts.get('kiln-deepseek@new@x.com')).toBe('new@x.com')
+    expect([...t.routes.keys()]).toEqual(['kiln-deepseek'])
   })
 
   it('drops a route that can no longer serve when onlyConfigured is set', () => {
