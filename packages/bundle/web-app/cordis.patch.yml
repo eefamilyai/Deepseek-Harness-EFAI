@@ -130,12 +130,6 @@
     - id: sidebar-bridge
       name: '@deepseek-ai/dsh-host-sidebar-bridge'
 
-    # DSH-FORK(browser): a dedicated Chromium-style browser surface with its own
-    # persistent session, tabs, and per-tab history (routes under /chromium).
-    # EXIT: upstream ships a user browser surface.
-    - id: chromium-surface
-      name: '@deepseek-ai/dsh-host-chromium-surface'
-
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
@@ -195,11 +189,6 @@
 
     - id: ui-dock
       name: '@deepseek-ai/dsh-client-ui-dock'
-
-    # DSH-FORK(browser): client half of the dedicated Chromium-style browser surface.
-    # EXIT: upstream ships a user browser surface.
-    - id: ui-chromium-surface
-      name: '@deepseek-ai/dsh-client-ui-chromium-surface'
 
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'

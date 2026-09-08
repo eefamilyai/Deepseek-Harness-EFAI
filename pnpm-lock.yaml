@@ -1557,9 +1557,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-chat':
         specifier: workspace:^
         version: link:../../client/ui-chat
-      '@deepseek-ai/dsh-client-ui-chromium-surface':
-        specifier: workspace:^
-        version: link:../../client/ui-chromium-surface
       '@deepseek-ai/dsh-client-ui-commands':
         specifier: workspace:^
         version: link:../../client/ui-commands
@@ -1680,9 +1677,6 @@ importers:
       '@deepseek-ai/dsh-file-reference-local':
         specifier: workspace:^
         version: link:../../context/file-reference-local
-      '@deepseek-ai/dsh-host-chromium-surface':
-        specifier: workspace:^
-        version: link:../../host/chromium-surface
       '@deepseek-ai/dsh-host-directory-picker-auto':
         specifier: workspace:^
         version: link:../../host/directory-picker-auto
@@ -2185,24 +2179,6 @@ importers:
       '@deepseek-ai/dsh-util-workspace-path':
         specifier: workspace:^
         version: link:../../util/workspace-path
-      '@types/react':
-        specifier: ~18.3.1
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ~18.3.0
-        version: 18.3.7(@types/react@18.3.31)
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-
-  packages/client/ui-chromium-surface:
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
@@ -6136,31 +6112,6 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
-
-  packages/host/chromium-surface:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: link:../../../vendor/schemastery
-        version: link:../../../vendor/schemastery
-      playwright:
-        specifier: ^1.49.0
-        version: 1.61.1
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:^
-        version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-host-webserver':
-        specifier: workspace:^
-        version: link:../webserver
-      '@deepseek-ai/dsh-invariants':
-        specifier: workspace:^
-        version: link:../../runtime-diagnostics/invariants
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
 
   packages/host/directory-picker:
     devDependencies:

@@ -333,9 +333,6 @@
     { "path": "./packages/host/plugin-inventory" },
     { "path": "./packages/llm/plugin-package-inventory-deepseek" },
     { "path": "./packages/host/sidebar-bridge" },
-    // DSH-FORK(browser): dedicated Chromium-style browser surface (own session/tabs/history),
-    // separate from the agent-facing web-browser tool. EXIT: upstream ships a user browser surface.
-    { "path": "./packages/host/chromium-surface" },
     { "path": "./packages/host/webserver" },
     { "path": "./packages/sdk/client" },
     { "path": "./packages/sdk/protocol" },
