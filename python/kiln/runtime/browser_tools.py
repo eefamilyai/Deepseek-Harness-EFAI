@@ -76,6 +76,10 @@ class KilnBrowser:
         self._console = []           # (type, text)
         self._proxy = None
         self._storage_path = None
+        self._screencast = None       # DisposableStub while the CDP screencast runs
+        self._last_frame = 0.0           # monotonic time of the last kept frame
+        self._last_state = None       # last full state.json dict, merged per frame
+        self._state_lock = _threading.Lock()   # serialize state.json writes (screencast + worker)
 
     # ── lifecycle ──────────────────────────────────────────────
     def _ensure(self):
@@ -109,9 +113,60 @@ class KilnBrowser:
             self._console = []
             self.page.on("response", lambda r: self._requests.append((r.status, r.url)))
             self.page.on("console", lambda m: self._console.append((m.type, m.text)))
+            self._start_screencast()
             return True, None
         except Exception as e:
             return False, f"browser launch failed: {e}"
+
+    def _start_screencast(self):
+        """Stream the live viewport to ``latest.jpg`` via Playwright's CDP screencast.
+
+        Playwright wraps Chromium's Page.startScreencast: frames arrive as raw JPEG
+        bytes on a per-page channel. Each frame is written to a stable filename
+        (atomically) and the shared ``state.json`` timestamp is bumped, so the host
+        bridge's fs.watch push emits exactly one change per frame. This is the live
+        dock feed; the one-shot PNG ``_shot`` path remains for explicit screenshots.
+        """
+        if not _BROWSER_DIR or self._screencast is not None:
+            return
+        if self.page is None or self.page.is_closed():
+            return
+        try:
+            def _on_frame(frame):
+                data = frame.get("data")
+                if not isinstance(data, (bytes, bytearray)):
+                    return
+                # Throttle the write side to ~15 fps: dropping surplus frames
+                # costs nothing visually but keeps each base64 + state write a
+                # small, fixed per-second load instead of spiking with the
+                # producer's native rate.
+                now = time.monotonic()
+                if now - self._last_frame < 0.066:
+                    return
+                self._last_frame = now
+                try:
+                    os.makedirs(_BROWSER_DIR, exist_ok=True)
+                    tmp = os.path.join(_BROWSER_DIR, "latest.jpg.tmp")
+                    dst = os.path.join(_BROWSER_DIR, "latest.jpg")
+                    with open(tmp, "wb") as f:
+                        f.write(data)
+                    os.replace(tmp, dst)
+                except Exception:
+                    return
+                base = self._last_state
+                if base is not None:
+                    st = dict(base)
+                    st["ts"] = time.time()
+                    st["screenshot"] = "latest.jpg"
+                    self._write_state(st)
+            self._screencast = self.page.screencast.start(
+                on_frame=_on_frame,
+                quality=90,
+                size={"width": 1440, "height": 900},
+            )
+        except Exception:
+            # Screencast is best-effort: the PNG screenshot path still works.
+            self._screencast = None
 
     def _state(self, **extra):
         # vw/vh are the CSS viewport the screenshot covers, so the dock pane can
@@ -142,19 +197,29 @@ class KilnBrowser:
         except Exception:
             pass
         st.update(extra)
+        # The live CDP screencast is the dock's authoritative feed: a one-shot
+        # PNG that an action just wrote must not overwrite ``latest.jpg`` while
+        # the screencast is running, or the pane would flicker back to a still.
+        if self._screencast is not None and os.path.isfile(os.path.join(_BROWSER_DIR, "latest.jpg")):
+            st["screenshot"] = "latest.jpg"
         self._write_state(st)
         return st
 
     def _write_state(self, st):
-        if not _BROWSER_DIR:
-            return
-        try:
-            os.makedirs(_BROWSER_DIR, exist_ok=True)
-            with open(os.path.join(_BROWSER_DIR, "state.json"), "w",
-                      encoding="utf-8") as f:
-                json.dump(st, f, ensure_ascii=False)
-        except Exception:
-            pass
+        # The screencast callback runs on Playwright's dispatcher thread while
+        # normal actions run on the browser worker thread; the lock keeps their
+        # state.json writes from interleaving into a torn JSON document.
+        with self._state_lock:
+            self._last_state = st
+            if not _BROWSER_DIR:
+                return
+            try:
+                os.makedirs(_BROWSER_DIR, exist_ok=True)
+                with open(os.path.join(_BROWSER_DIR, "state.json"), "w",
+                          encoding="utf-8") as f:
+                    json.dump(st, f, ensure_ascii=False)
+            except Exception:
+                pass
 
     def _shot(self, path=None):
         if not _BROWSER_DIR or self.page is None:

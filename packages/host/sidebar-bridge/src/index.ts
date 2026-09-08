@@ -7,7 +7,8 @@
  *                                    `ctx.subprocess`) in the chat's cwd — its
  *                                    own session, independent of whatever the
  *                                    model runs in its terminal tool.
- *   - GET  /kiln/browser/state       the agent's live browser `state.json`.
+ *   - WS   /kiln/browser/stream      change-driven push of the agent's live
+ *                                    browser (fs.watch, no polling).
  *   - GET  /kiln/browser/shot/<name> a screenshot PNG.
  *   - POST /kiln/browser/act         drive `browser_use` on the SHARED browser.
  *
@@ -23,6 +24,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
+import { watch } from 'node:fs'
+import type { FSWatcher } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -50,8 +53,8 @@ export const inject = ['webServer']
 /** The empty browser state served when nothing has been captured yet. */
 const EMPTY_STATE = JSON.stringify({ url: '', title: '', screenshot: '', text_preview: '', links: [] })
 
-/** A screenshot filename must be a plain basename ending in .png (no traversal). */
-const SHOT_NAME = /^[\w.-]+\.png$/
+/** A screenshot filename must be a plain basename ending in .png or .jpg (no traversal). */
+const SHOT_NAME = /^[\w.-]+\.(?:png|jpg)$/
 
 /** Minimal view of the kernel service, read opportunistically for browser actions. */
 interface KernelLike {
@@ -142,6 +145,112 @@ async function serveShot(browserDir: string, pathname: string, res: ServerRespon
     res.writeHead(404)
     res.end()
   }
+}
+
+/** A light view of the browser state we re-publish to the pane. */
+interface StreamState {
+  url?: unknown
+  title?: unknown
+  screenshot?: unknown
+  text_preview?: unknown
+  ts?: unknown
+  vw?: unknown
+  vh?: unknown
+}
+
+/**
+ * WS /kiln/browser/stream — push the agent's live browser to the dock instead of
+ * making the client poll. The bridge reads the kernel-written `state.json` on a
+ * short server-side tick and pushes a `frame` only when the `ts` stamp changes,
+ * so an idle browser sends nothing and the client renders nothing. The frame is
+ * a base64 PNG data URI (the shared browser is headless Chromium, so there is no
+ * DOM to mount), but it is delivered as a change-driven push, never a client-side
+ * re-fetch loop. `state` messages carry url/title/text without a frame so the
+ * address bar and empty state stay live between navigations.
+ */
+function openBrowserStream(browserDir: string, ws: WebSocket): void {
+  let closed = false
+  let lastTs: number | undefined
+  let lastFrameData: string | null = null
+
+  const send = (obj: unknown): void => {
+    if (!closed && ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj))
+  }
+
+  const readState = async (): Promise<StreamState | null> => {
+    try {
+      const raw = await readFile(join(browserDir, 'state.json'), 'utf8')
+      const parsed: unknown = JSON.parse(raw)
+      return typeof parsed === 'object' && parsed !== null ? parsed as StreamState : null
+    } catch {
+      return null
+    }
+  }
+
+  const push = async (): Promise<void> => {
+    if (closed) return
+    const state = await readState()
+    if (state === null) {
+      send({ type: 'state', url: '', title: '', text_preview: '', vw: 1440, vh: 900 })
+      return
+    }
+    const ts = typeof state.ts === 'number' ? state.ts : undefined
+    const url = typeof state.url === 'string' ? state.url : ''
+    const title = typeof state.title === 'string' ? state.title : ''
+    const text = typeof state.text_preview === 'string' ? state.text_preview : ''
+    const vw = typeof state.vw === 'number' ? state.vw : 1440
+    const vh = typeof state.vh === 'number' ? state.vh : 900
+    const name = typeof state.screenshot === 'string' ? state.screenshot : ''
+
+    if (ts !== undefined && ts !== lastTs) {
+      lastTs = ts
+      let frame: string | null = null
+      if (SHOT_NAME.test(name)) {
+        try {
+          const buf = await readFile(join(browserDir, name))
+          const mime = name.endsWith('.jpg') ? 'image/jpeg' : 'image/png'
+          lastFrameData = `data:${mime};base64,${buf.toString('base64')}`
+        } catch { /* screenshot not flushed yet; keep the last good frame */ }
+        frame = lastFrameData
+      }
+      send({ type: 'frame', ts, url, title, text_preview: text, vw, vh, screenshot: frame })
+    } else {
+      send({ type: 'state', ts, url, title, text_preview: text, vw, vh })
+    }
+  }
+
+  void push()
+
+  // Watch the state file instead of polling: the kernel rewrites state.json on
+  // every browser action, so a change event fires the moment a new frame exists
+  // and an idle browser wakes nothing at all. A short debounce coalesces the
+  // atomic-rename + edit bursts an editor-style writer can produce.
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const schedule = (): void => {
+    if (closed) return
+    if (timer !== null) clearTimeout(timer)
+    timer = setTimeout(() => { timer = null; void push() }, 50)
+  }
+
+  let watcher: FSWatcher | null = null
+  try {
+    watcher = watch(browserDir, (_event, filename) => {
+      if (filename === null || filename === 'state.json') schedule()
+    })
+    watcher.on('error', () => { /* the fallback interval below still drives it */ })
+  } catch { /* dir may not exist yet; the interval still reads the first frame */ }
+
+  // Safety net only: drives the initial read and rescues us if fs.watch is
+  // unavailable on this platform. It never races the watcher — both paths run
+  // the same debounced push and the ts guard makes duplicates no-ops.
+  const id = setInterval(schedule, 1000)
+
+  ws.on('close', () => {
+    closed = true
+    if (timer !== null) clearTimeout(timer)
+    clearInterval(id)
+    watcher?.close()
+  })
 }
 
 /**
@@ -276,6 +385,14 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
           // net.Socket it actually is at runtime.
           wss.handleUpgrade(req, socket as unknown as Socket, head, (ws) => {
             void openTerminal(ctx, config, req, ws)
+          })
+        },
+      }),
+      ctx.webServer.registerUpgrade({
+        path: '/kiln/browser/stream',
+        handler: (req, socket: Duplex, head) => {
+          wss.handleUpgrade(req, socket as unknown as Socket, head, (ws) => {
+            openBrowserStream(browserDir, ws)
           })
         },
       }),

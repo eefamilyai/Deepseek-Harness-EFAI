@@ -277,7 +277,11 @@
 }
 
 .stage {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   outline: none;
   cursor: crosshair;
 }
@@ -290,7 +294,8 @@
 .shot {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
 }
 
 .browserEmpty {
