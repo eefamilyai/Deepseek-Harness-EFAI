@@ -244,6 +244,18 @@ class KilnBrowser:
             # Best-effort: the screencast is already dead, or the page is gone.
             pass
 
+    def _reattach_screencast(self, page):
+        """Move the live CDP feed to `page`, which just became the active tab.
+
+        The screencast is per-page: Playwright attaches it to one Page at a
+        time. Without re-attaching here, new_tab/switch_tab would leave the
+        mirror showing the previous tab's last frame indefinitely, which reads
+        as the new tab "never loading".
+        """
+        self._stop_screencast()
+        self.page = page
+        self._start_screencast()
+
     def shutdown(self):
         """Orderly teardown: stop the live feed, then close browser resources.
 
@@ -1007,7 +1019,7 @@ class KilnBrowser:
             page = self.context.new_page()
             if url:
                 page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            self.page = page
+            self._reattach_screencast(page)
             while len(self._histories) < len(self.context.pages):
                 self._histories.append(_empty_history())
             if url and not page.is_closed():
@@ -1028,7 +1040,7 @@ class KilnBrowser:
             i = int(index)
             if not (-len(pages) <= i < len(pages)):
                 return f"switch_tab: index {i} out of range ({len(pages)} tabs)"
-            self.page = pages[i]
+            self._reattach_screencast(pages[i])
             self.page.bring_to_front()
             self._state()
             return f"switched to tab {i} ({len(pages)} total)"
@@ -1055,7 +1067,7 @@ class KilnBrowser:
             if 0 <= idx < len(self._histories):
                 self._histories.pop(idx)
             remaining = self.context.pages
-            self.page = remaining[min(idx, len(remaining) - 1)]
+            self._reattach_screencast(remaining[min(idx, len(remaining) - 1)])
             self._persist_histories()
             self._state()
             return f"closed tab ({len(remaining)} remain)"
