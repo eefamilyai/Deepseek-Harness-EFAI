@@ -59,20 +59,40 @@ describe('installModelSelection()', () => {
     await ctx.fiber.dispose()
   })
 
-  it('adopts a scope that already declares the accessor instead of crashing on re-entry', async () => {
-    // A resume/reconnect can re-enter setup on the same agent context before the
+  it('rebinds prompt variables and request routing when a re-entrant install replaces the ref', async () => {
+    // A resume/reconnect re-enters setup on the same agent context before the
     // first attempt's fiber unwound; a second raw accessor declaration throws
     // `already declared`, which failed the whole resume. The second install must
-    // be a no-op that leaves the first wiring intact.
+    // not throw AND must govern: the caller holds the new ref and sets the picked
+    // model on it, so wiring that still read the first ref would route every
+    // request to a model the picker no longer shows.
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
+    const agent = {} as Agent
+    const signal = new AbortController().signal
+    const seed: LlmCallConfig = { provider: 'seed', model: 'seed', temperature: 0.2 }
     const first: ModelSelectionRef = { current: { provider: 'alpha', model: 'a1' }, assembled: undefined }
-    installModelSelection(ctx, first)
+    const disposeFirst = installModelSelection(ctx, first)
 
     const second: ModelSelectionRef = { current: { provider: 'beta', model: 'b1' }, assembled: undefined }
-    expect(() => installModelSelection(ctx, second)).not.toThrow()
-    // The original wiring still governs: the scope reads the first selection.
+    let disposeSecond: (() => void) | undefined
+    expect(() => { disposeSecond = installModelSelection(ctx, second) }).not.toThrow()
+    expect(ctx.modelSelection).toEqual({ provider: 'beta', model: 'b1' })
+    expect((await ctx.systemPrompt.assemble()).variables).toMatchObject({ provider: 'beta', model: 'b1' })
+    await expect(agentEvents(ctx, agent).waterfall(
+      'agent/request', { turn: 1, step: 0, signal }, () => Promise.resolve(seed),
+    )).resolves.toMatchObject({ provider: 'beta', model: 'b1' })
+
+    // A later pick on the ref the caller holds reaches both surfaces.
+    second.current = { provider: 'gamma', model: 'g1' }
+    expect((await ctx.systemPrompt.assemble()).variables).toMatchObject({ provider: 'gamma', model: 'g1' })
+
+    // Unwinding the re-entrant install restores the ref it replaced.
+    disposeSecond?.()
     expect(ctx.modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
+
+    disposeFirst()
+    expect((await ctx.systemPrompt.assemble()).variables).toEqual({})
     await ctx.fiber.dispose()
   })
 })
