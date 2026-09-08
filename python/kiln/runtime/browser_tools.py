@@ -76,6 +76,50 @@ window.chrome = window.chrome || { runtime: {} };
 """
 
 
+
+
+# Per-tab navigation history. Purely functional over plain dicts so it is
+# testable without Chromium; the same semantics the (reverted) chromium-surface
+# host tests proved, now tracking the SHARED kernel browser instead of a separate
+# instance. Each tab keeps back[] / current / forward[] (most recent last / first).
+def _empty_history():
+    return {"back": [], "current": None, "forward": []}
+
+
+def _push_navigation(history, url, title):
+    """Record a fresh navigation: append it, truncating any forward entries."""
+    back = list(history.get("back") or [])
+    current = history.get("current")
+    if current is not None:
+        back.append(current)
+    return {"back": back, "current": {"url": url, "title": title}, "forward": []}
+
+
+def _go_back(history):
+    """Move one entry backward, or leave the history unchanged at the oldest entry."""
+    back = list(history.get("back") or [])
+    if not back:
+        return history
+    previous = back[-1]
+    forward = list(history.get("forward") or [])
+    current = history.get("current")
+    if current is not None:
+        forward.insert(0, current)
+    return {"back": back[:-1], "current": previous, "forward": forward}
+
+
+def _go_forward(history):
+    """Move one entry forward, or leave the history unchanged at the newest entry."""
+    forward = list(history.get("forward") or [])
+    if not forward:
+        return history
+    nxt = forward[0]
+    back = list(history.get("back") or [])
+    current = history.get("current")
+    if current is not None:
+        back.append(current)
+    return {"back": back, "current": nxt, "forward": forward[1:]}
+
 class KilnBrowser:
     def __init__(self):
         self.pw = None
@@ -90,6 +134,7 @@ class KilnBrowser:
         self._last_frame = 0.0           # monotonic time of the last kept frame
         self._last_state = None       # last full state.json dict, merged per frame
         self._state_lock = _threading.Lock()   # serialize state.json writes (screencast + worker)
+        self._histories = []          # per-page navigation history, aligned to context.pages
 
     # ── lifecycle ──────────────────────────────────────────────
     def _ensure(self):
@@ -257,6 +302,12 @@ class KilnBrowser:
                     pass
         except Exception:
             pass
+        try:
+            st["tabs"] = list(self._histories)
+            st["history"] = self._ensure_history()
+        except Exception:
+            st.setdefault("tabs", [])
+            st.setdefault("history", _empty_history())
         st.update(extra)
         # The live CDP screencast is the dock's authoritative feed: a one-shot
         # PNG that an action just wrote must not overwrite ``latest.jpg`` while
@@ -281,6 +332,68 @@ class KilnBrowser:
                     json.dump(st, f, ensure_ascii=False)
             except Exception:
                 pass
+
+    def _page_index(self):
+        try:
+            return self.context.pages.index(self.page)
+        except (ValueError, AttributeError):
+            return -1
+
+    def _ensure_history(self):
+        """The active page's history, growing the list to cover its index."""
+        i = self._page_index()
+        if i < 0:
+            return _empty_history()
+        while len(self._histories) <= i:
+            self._histories.append(_empty_history())
+        return self._histories[i]
+
+    def _set_history(self, history):
+        """Commit one tab's history and persist the whole session model."""
+        i = self._page_index()
+        if i < 0:
+            return
+        while len(self._histories) <= i:
+            self._histories.append(_empty_history())
+        self._histories[i] = history
+        self._persist_histories()
+
+    def _persist_histories(self):
+        # Tab metadata only: a headless browser process never survives a restart,
+        # so live DOM/navigation state cannot be restored — the model on disk is
+        # the durable session (tabs + per-tab history) the UI and a later
+        # restore action consume.
+        if not _BROWSER_DIR:
+            return
+        try:
+            os.makedirs(_BROWSER_DIR, exist_ok=True)
+            with open(os.path.join(_BROWSER_DIR, "history.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"tabs": self._histories}, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def history(self):
+        ok, err = self._ensure()
+        if not ok:
+            return f"history needs Playwright ({err})"
+        try:
+            h = self._ensure_history()
+            lines = []
+            for e in (h.get("back") or []):
+                label = e.get("title") or e.get("url") or ""
+                lines.append(f"< {label}  {e.get('url', '')}")
+            cur = h.get("current")
+            if cur is not None:
+                label = cur.get("title") or cur.get("url") or ""
+                lines.append(f"> {label}  {cur.get('url', '')}")
+            for e in (h.get("forward") or []):
+                label = e.get("title") or e.get("url") or ""
+                lines.append(f"> {label}  {e.get('url', '')}")
+            self._state()
+            return "\n".join(lines) or "(no navigation history)"
+        except Exception as e:
+            return f"history error: {e}"
 
     def _shot(self, path=None):
         if not _BROWSER_DIR or self.page is None:
@@ -313,6 +426,8 @@ class KilnBrowser:
             return _http_fetch_text(url)
         try:
             self.page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            self._set_history(_push_navigation(self._ensure_history(),
+                                               self.page.url, self.page.title()))
             shot = self._shot()
             st = self._state(screenshot=shot)
             return (f"URL: {self.page.url}\nTITLE: {st['title']}\n\n"
@@ -535,6 +650,7 @@ class KilnBrowser:
             return f"back needs Playwright ({err})"
         try:
             self.page.go_back(timeout=30000, wait_until="domcontentloaded")
+            self._set_history(_go_back(self._ensure_history()))
             st = self._state(screenshot=self._shot())
             return f"URL: {self.page.url}\nTITLE: {st['title']}"
         except Exception as e:
@@ -546,6 +662,7 @@ class KilnBrowser:
             return f"forward needs Playwright ({err})"
         try:
             self.page.go_forward(timeout=30000, wait_until="domcontentloaded")
+            self._set_history(_go_forward(self._ensure_history()))
             st = self._state(screenshot=self._shot())
             return f"URL: {self.page.url}\nTITLE: {st['title']}"
         except Exception as e:
@@ -804,6 +921,12 @@ class KilnBrowser:
             if url:
                 page.goto(url, timeout=30000, wait_until="domcontentloaded")
             self.page = page
+            while len(self._histories) < len(self.context.pages):
+                self._histories.append(_empty_history())
+            if url and not page.is_closed():
+                self._set_history(_push_navigation(_empty_history(), page.url, page.title()))
+            else:
+                self._persist_histories()
             self._state()
             return f"opened new tab ({len(self.context.pages)} total)"
         except Exception as e:
@@ -836,7 +959,10 @@ class KilnBrowser:
             p = self.page
             idx = pages.index(p) if p in pages else 0
             p.close()
+            if 0 <= idx < len(self._histories):
+                self._histories.pop(idx)
             self.page = self.context.pages[min(idx, len(self.context.pages) - 1)]
+            self._persist_histories()
             self._state()
             return f"closed tab ({len(self.context.pages)} remain)"
         except Exception as e:
@@ -1182,6 +1308,8 @@ def _browser_use_impl(action="navigate", **kw):
             return b.close_tab()
         if a == "tabs":
             return b.tabs()
+        if a == "history":
+            return b.history()
         if a == "network":
             return b.network(kw.get("limit", 40))
         if a == "console":
@@ -1195,7 +1323,7 @@ def _browser_use_impl(action="navigate", **kw):
         return (f"browser_use: unknown action {action!r}. Known: navigate, read_page, "
                 f"find, get_text, snapshot, dom, coords, screenshot, back, forward, wait, "
                 f"move, click, dblclick, hover, drag, type, key, clear, select, scroll, "
-                f"zoom, save_state, load_state, new_tab, switch_tab, close_tab, tabs, "
+                f"zoom, save_state, load_state, new_tab, switch_tab, close_tab, tabs, history, "
                 f"network, console, clear_network, search")
     except Exception as e:
         return f"browser_use error: {e}"
