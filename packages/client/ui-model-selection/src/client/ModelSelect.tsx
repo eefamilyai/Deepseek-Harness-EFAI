@@ -99,11 +99,25 @@ export function ModelSelect(
       })),
     ], [reasoning, t])
   const busy = state.status === 'selecting'
-  // DSH-FORK(browser): collapsible provider groups in the model pane.
+  // DSH-FORK(browser): collapsible provider groups in the model pane, with
+  // the provider owning the current selection expanded by default and every
+  // other provider collapsed.
   // EXIT: upstream adopts per-provider collapse in ModelSelect.
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set())
+  // True once the user has expressed a manual preference during this open;
+  // until then the default collapse follows the current selection so a late
+  // catalog arrival does not re-expand providers the user already collapsed.
+  const manualCollapseRef = useRef(false)
+
+  // Default collapse: every provider except the one owning the current
+  // selection starts minimized.
+  const defaultCollapsed = useMemo(() => {
+    const current = state.current?.provider
+    return new Set(state.groups.map(group => group.id).filter(id => id !== current))
+  }, [state.groups, state.current?.provider])
 
   const toggleGroup = (groupId: string): void => {
+    manualCollapseRef.current = true
     setCollapsedGroups((prev) => {
       const next = new Set(prev)
       if (next.has(groupId)) next.delete(groupId)
@@ -111,6 +125,18 @@ export function ModelSelect(
       return next
     })
   }
+
+  // While the model pane is open and no manual preference exists, keep the
+  // collapse set in step with the default (groups may load after the pane
+  // opens, and the current selection may change from elsewhere).
+  useEffect(() => {
+    if (!open || manualCollapseRef.current) return
+    setCollapsedGroups((prev) => {
+      const same = prev.size === defaultCollapsed.size
+        && [...defaultCollapsed].every(id => prev.has(id))
+      return same ? prev : defaultCollapsed
+    })
+  }, [open, defaultCollapsed])
 
   const reload = (): void => {
     lastActionRef.current = 'load'
@@ -130,6 +156,8 @@ export function ModelSelect(
 
   const show = (): void => {
     setPane('root')
+    manualCollapseRef.current = false
+    setCollapsedGroups(defaultCollapsed)
     setOpen(true)
     reload()
   }

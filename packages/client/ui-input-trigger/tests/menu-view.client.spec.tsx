@@ -87,10 +87,17 @@ function menuShell(): HTMLElement {
   return shell
 }
 
-/** The non-interactive group title rows (role=presentation), in document order. */
+/** The collapsible heading toggle buttons, in document order (text without the chevron glyph). */
 function titles(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('div[role="presentation"][data-source]')]
+  return [...container.querySelectorAll('button[data-trigger-heading]')]
     .map(el => el.textContent ?? '')
+}
+
+/** Find one heading toggle by its visible label (the chevron SVG contributes no text). */
+function headingToggle(name: string): HTMLElement {
+  const el = screen.getByRole('button', { name })
+  if (!(el instanceof HTMLElement)) throw new Error('heading toggle is not an element')
+  return el
 }
 
 describe('MenuView', () => {
@@ -132,7 +139,7 @@ describe('MenuView', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('titles each group with the localized source name, raw name for unknown sources, none for empty ready groups', () => {
+  it('heads each ready group with a collapsible toggle, raw name for unknown sources, none for empty or pending groups', () => {
     const { view } = mount(openState({
       groups: [
         { source: 'command', status: 'ready', items: [{ name: 'goal' }] },
@@ -141,10 +148,10 @@ describe('MenuView', () => {
         { source: 'skill', status: 'pending', items: [] },
       ],
     }))
-    expect(titles(view.container)).toEqual(['指令', 'mystery', '技能'])
+    expect(titles(view.container)).toEqual(['指令', 'mystery'])
   })
 
-  it('renders contiguous candidate sections once without changing option indexes', () => {
+  it('renders contiguous candidate sections as toggles and preserves option indexes', () => {
     const { onPick } = mount(openState({
       groups: [{
         source: 'reference',
@@ -158,8 +165,21 @@ describe('MenuView', () => {
       highlight: { source: 'reference', index: 0 },
     }))
     expect(screen.queryByText('reference')).toBeNull()
+    // The highlight sits in the first section, so it is expanded by default
+    // and the second section is minimized.
+    const first = headingToggle('文件与文件夹')
+    const second = headingToggle('对话')
+    expect(first.getAttribute('aria-expanded')).toBe('true')
+    expect(second.getAttribute('aria-expanded')).toBe('false')
     expect(screen.getAllByText('文件与文件夹')).toHaveLength(1)
     expect(screen.getAllByText('对话')).toHaveLength(1)
+    expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
+      'Folder · src/',
+      'File · README.md',
+    ])
+
+    // Expanding the second section reveals the third option with its index intact.
+    fireEvent.click(second)
     const options = screen.getAllByRole('option')
     expect(options.map(option => option.textContent)).toEqual([
       'Folder · src/',

@@ -230,8 +230,7 @@ describe('ModelSelect provider group collapse', () => {
     },
   ]
 
-  it('collapses and re-expands one provider group without touching the others', () => {
-    const directory = createSnapshotStore<ModelDirectoryState>(state({ groups: twoGroups }))
+  function mountModelSelect(directory: ReturnType<typeof createSnapshotStore<ModelDirectoryState>>) {
     render(<ModelSelect
       locked={false}
       available
@@ -240,28 +239,87 @@ describe('ModelSelect provider group collapse', () => {
       select={vi.fn().mockResolvedValue(true)}
       t={t}
     />)
-
     fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+  }
 
-    // Both group headings are the new toggle buttons, expanded by default.
+  it('expands only the provider owning the current selection by default', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      groups: twoGroups,
+      current: { provider: 'provider-a', model: 'a-flash' },
+    }))
+    mountModelSelect(directory)
+
     const a = screen.getByRole('button', { name: 'Provider A' })
     const b = screen.getByRole('button', { name: 'Provider B' })
+    // The provider holding the current selection is expanded; the rest are minimized.
     expect(a.getAttribute('aria-expanded')).toBe('true')
-    expect(b.getAttribute('aria-expanded')).toBe('true')
+    expect(b.getAttribute('aria-expanded')).toBe('false')
     expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
-    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
+  })
 
-    // Collapse provider A: its models leave the tree, provider B is untouched.
+  it('collapses every provider by default when none owns the current selection', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      groups: twoGroups,
+      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    }))
+    mountModelSelect(directory)
+
+    expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByRole('button', { name: 'Provider B' }).getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('menuitemradio')).toBeNull()
+  })
+
+  it('collapses and re-expands one provider group without touching the others', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      groups: twoGroups,
+      current: { provider: 'provider-a', model: 'a-flash' },
+    }))
+    mountModelSelect(directory)
+
+    const a = screen.getByRole('button', { name: 'Provider A' })
+    const b = screen.getByRole('button', { name: 'Provider B' })
+
+    // Collapse provider A: its models leave the tree, provider B stays minimized.
     fireEvent.click(a)
     expect(a.getAttribute('aria-expanded')).toBe('false')
-    expect(b.getAttribute('aria-expanded')).toBe('true')
+    expect(b.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('menuitemradio', { name: /A Flash/ })).toBeNull()
-    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
 
-    // Toggling again restores A.
+    // Toggling provider A again restores its models; provider B remains minimized.
     fireEvent.click(a)
     expect(a.getAttribute('aria-expanded')).toBe('true')
+    expect(b.getAttribute('aria-expanded')).toBe('false')
     expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
+
+    // Expanding provider B leaves provider A untouched.
+    fireEvent.click(b)
+    expect(a.getAttribute('aria-expanded')).toBe('true')
+    expect(b.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
+  })
+
+  it('keeps a manual collapse across a catalog reload while the pane stays open', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      groups: twoGroups,
+      current: { provider: 'provider-a', model: 'a-flash' },
+    }))
+    mountModelSelect(directory)
+
+    const b = screen.getByRole('button', { name: 'Provider B' })
+    fireEvent.click(b) // expand B manually
+    expect(b.getAttribute('aria-expanded')).toBe('true')
+
+    // A late catalog refresh must not overwrite the user's explicit choice.
+    directory.set(state({
+      groups: twoGroups,
+      current: { provider: 'provider-a', model: 'a-flash' },
+    }))
+    expect(screen.getByRole('button', { name: 'Provider B' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('true')
   })
 })

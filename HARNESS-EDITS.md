@@ -282,6 +282,7 @@ Every Tier-2 edit, its owner, and what removes it. Keep this table current; it i
 | 20 | `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}` | `browser` | collapsible per-provider groups in the model dropdown | Upstream adopts provider collapse in `ModelSelect` |
 | 21 | `packages/skill/tool-skill/src/index.ts` | `kernel` | `@skill <name>` is a second user-explicit skill load gesture beside `/name` | Upstream PR, or a fork-owned pre-step plugin |
 | 22 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
+| 23 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |
 
 If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops from 61 files to roughly 12 — and the survivors are lists and infrastructure, which conflict predictably in one place each.
 

@@ -158,6 +158,46 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* DSH-FORK(browser): collapsible menu-section toggles. The heading row becomes
+   an interactive disclosure row whose chevron denotes the collapsed state.
+   EXIT: upstream adopts collapsible trigger-menu sections. */
+.groupToggle {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  outline: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupToggle:hover,
+.groupToggle:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.groupChevron {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-caption);
+  transition: transform 120ms ease;
+}
+
+.groupChevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.groupName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Pending-source skeleton rows: item cell metrics around a breathing bar
    (deepsuite Skeleton text variant: 2s color pulse; here the single
    bg-skeleton token pulses through opacity instead of a second color). */
