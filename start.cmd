@@ -19,20 +19,21 @@ rem build output is missing, so a fresh checkout starts with one command.
 cd /d "%~dp0"
 
 rem ── Version banner ──────────────────────────────────────────────────────
-rem Show which commit this launcher is about to run (full + short hash) so the
-rem operator can confirm the checkout matches the running build. The script has
-rem already cd'd to the repo root above, so plain `git rev-parse` (no -C flag,
-rem whose trailing-backslash path trips cmd's quote rules) reads THIS checkout.
-rem Best-effort: a missing git binary or a vendored install with no .git prints
-rem `unknown` and never blocks startup.
-set "DSH_GIT_COMMIT=unknown"
-set "DSH_GIT_SHORT=unknown"
-git rev-parse HEAD >nul 2>&1
+rem Show which change this launcher is about to run: the latest commit subject
+rem plus its short hash so the operator can both read the change and confirm
+rem the checkout matches the running build. The script has already cd'd to the
+rem repo root above, so plain `git` (no -C flag, whose trailing-backslash path
+rem trips cmd's quote rules) reads THIS checkout. Best-effort: a missing git
+rem binary or a vendored install with no .git prints `unknown` and never
+rem blocks startup.
+set "DSH_GIT_COMMIT_NAME=unknown"
+set "DSH_GIT_COMMIT_SHORT=unknown"
+git rev-parse --is-inside-work-tree >nul 2>&1
 if not errorlevel 1 (
-  for /f "delims=" %%V in ('git rev-parse HEAD') do set "DSH_GIT_COMMIT=%%V"
-  for /f "delims=" %%V in ('git rev-parse --short HEAD') do set "DSH_GIT_SHORT=%%V"
+  for /f "delims=" %%V in ('git log -1 --pretty=%%s') do set "DSH_GIT_COMMIT_NAME=%%V"
+  for /f "delims=" %%V in ('git rev-parse --short HEAD') do set "DSH_GIT_COMMIT_SHORT=%%V"
 )
-echo [start] version: %DSH_GIT_COMMIT% ^(short: %DSH_GIT_SHORT%^)
+echo [start] version: %DSH_GIT_COMMIT_NAME% ^(%DSH_GIT_COMMIT_SHORT%^)
 
 set "FORCE_BUILD="
 set "DSH_ARGS="
