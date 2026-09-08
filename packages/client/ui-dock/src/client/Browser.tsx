@@ -1,18 +1,17 @@
 /**
- * The browser pane: a LIVE, native render of the agent's shared browser URL.
+ * The browser pane: a LIVE, native render of the shared browser URL, with a
+ * screenshot "Mirror" fallback for sites that refuse to be embedded.
  *
- * It no longer streams bitmap frames. Instead it subscribes to
- * `/kiln/browser/stream` only for the current URL/title, and renders that URL
- * in a real `<iframe>` so the page's own HTML, CSS, and JavaScript run in the
- * user's browser — crisp at any size and smooth because there is no image
- * round-trip. URL-level driving (address bar, back/forward/reload) and the
- * ref-tree "Elements" view still POST to `/kiln/browser/act`, so the AI's
- * browser follows; the next pushed URL simply re-points the iframe.
+ * Default mode points a real <iframe> at the shared browser's current URL, so
+ * the page's own HTML/CSS/JS run natively in the user's browser — crisp and
+ * smooth. Some sites (google.com among them) send `X-Frame-Options` or a CSP
+ * frame-ancestors rule that browsers enforce at the security layer; no client
+ * code can embed those. The Mirror toggle renders the agent's own screenshot
+ * stream instead, so even blocking sites remain visible (as the AI sees them).
  *
- * Trade-off: because the iframe runs in the user's browser, it uses the user's
- * own cookies/session rather than the agent's, and a site that sends
- * `X-Frame-Options: DENY`/`SAMEORIGIN` (or a restrictive CSP) will refuse to
- * embed — use the "Open" button for those.
+ * The stream also keeps URL/title sync and the "Elements" ref-tree; the address
+ * bar, back/forward/reload, Open, and Elements actions still drive the shared
+ * browser through `/kiln/browser/act`.
  * @module @deepseek-ai/dsh-client-ui-dock/client/Browser
  */
 
@@ -20,11 +19,16 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
 import type { KeyboardEvent } from 'react'
 import css from './dock.module.css'
 
+type RenderMode = 'live' | 'mirror'
+
 interface BrowserState {
   url: string
   title: string
   text_preview: string
   links: string[]
+  screenshot: string
+  vw: number
+  vh: number
   ts?: number
 }
 
@@ -32,7 +36,7 @@ type BrowserEvent =
   | { type: 'frame'; ts: number; url: string; title: string; text_preview: string; vw: number; vh: number; screenshot: string | null }
   | { type: 'state'; ts?: number; url: string; title: string; text_preview: string; vw: number; vh: number }
 
-const EMPTY: BrowserState = { url: '', title: '', text_preview: '', links: [] }
+const EMPTY: BrowserState = { url: '', title: '', text_preview: '', links: [], screenshot: '', vw: 1440, vh: 900 }
 
 /** POST one browser_use action to the shared browser; returns its text output. */
 async function act(action: string, args: Record<string, unknown> = {}): Promise<string> {
@@ -52,6 +56,7 @@ async function act(action: string, args: Record<string, unknown> = {}): Promise<
 /** The browser pane. `active` gates the stream so a hidden tab does no work. */
 export function Browser({ active }: { active: boolean }): JSX.Element {
   const [state, setState] = useState<BrowserState>(EMPTY)
+  const [mode, setMode] = useState<RenderMode>('live')
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [tree, setTree] = useState<string | null>(null)
@@ -69,6 +74,11 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       url: event.url,
       title: event.title,
       text_preview: event.text_preview,
+      vw: event.vw,
+      vh: event.vh,
+      // A frame carries the PNG inline; a state tick must not clobber the last
+      // good frame with an empty string while the bridge re-reads state.
+      screenshot: event.type === 'frame' ? (event.screenshot ?? prev.screenshot) : prev.screenshot,
       ...(typeof ts === 'number' ? { ts } : {}),
     }))
     if (!addressFocused.current) setAddress(event.url)
@@ -163,6 +173,14 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
             onKeyDown={onAddressKey}
           />
         </div>
+        <button
+          className={css.textBtn}
+          title={mode === 'live' ? 'This site may block embedding — show the agent\'s screenshot instead' : 'Show the native live page when it allows embedding'}
+          onClick={() => { setMode(mode === 'live' ? 'mirror' : 'live') }}
+          disabled={busy}
+        >
+          {mode === 'live' ? 'Mirror' : 'Live'}
+        </button>
         <button className={css.textBtn} title="Interactive element tree" onClick={() => void toggleTree()} disabled={busy}>
           {tree === null ? 'Elements' : 'Hide'}
         </button>
@@ -182,7 +200,15 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       <div className={css.browserView}>
         {current === ''
           ? <div className={css.browserEmpty}>{state.text_preview === '' ? 'No page yet — type an address above to browse.' : state.text_preview}</div>
-          : <iframe className={css.frame} src={current} title={state.title || 'page'} />}
+          : mode === 'live'
+            ? <iframe className={css.frame} src={current} title={state.title || 'page'} />
+            : state.screenshot === ''
+              ? <div className={css.browserEmpty}>No snapshot yet — the shared browser is still loading this page.</div>
+              : (
+                <div className={css.stage}>
+                  <img className={css.shot} src={state.screenshot} alt={state.title || 'page'} draggable={false} />
+                </div>
+              )}
         {tree !== null && (
           <div className={css.tree}>
             <div className={css.treeHead}>Elements — click one to act on it</div>
