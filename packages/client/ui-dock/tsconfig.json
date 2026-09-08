@@ -8,14 +8,12 @@
     "src"
   ],
   "references": [
-    {
-      "path": "../ui-session"
-    },
-    {
-      "path": "../../../vendor/cordis"
-    },
-    {
-      "path": "../../../vendor/cordis"
-    }
+    { "path": "../../../vendor/cordis" },
+    { "path": "../ui-session" },
+    { "path": "../locale" },
+    { "path": "../ui-conversation" },
+    { "path": "../ui-primitives" },
+    { "path": "../ui-renderer" },
+    { "path": "../ui-slots" }
   ]
 }

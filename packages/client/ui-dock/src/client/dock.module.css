@@ -2,44 +2,9 @@
    terminal. Self-contained, fixed-position, themed through --ds tokens with
    solid fallbacks so it looks right even where a token is absent. */
 
-.handle {
-  position: fixed;
-  top: 50%;
-  right: 0;
-  z-index: 1000;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 92px;
-  padding: 0;
-  border: 1px solid var(--ds-color-border, #2a2d34);
-  border-right: none;
-  border-radius: 10px 0 0 10px;
-  background: var(--dsw-specific-sidebar-fill, #16181d);
-  color: var(--ds-color-text-secondary, #9aa0aa);
-  cursor: pointer;
-  box-shadow: -6px 0 20px rgb(0 0 0 / 22%);
-  transition: color 0.15s ease, background 0.15s ease, transform 0.18s ease, opacity 0.18s ease;
-}
 
-.handle:hover {
-  color: var(--ds-color-text, #e8eaed);
-  background: var(--ds-color-fill-hover, #1e2128);
-  transform: translateY(-50%) translateX(-2px);
-}
 
-.handle[data-hidden] {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) translateX(30px);
-}
 
-.handleGlyph {
-  font-size: 15px;
-  line-height: 1;
-}
 
 /* ── drawer ─────────────────────────────────────────────────────────────── */
 .drawer {

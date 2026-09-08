@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Browser } from './Browser.tsx'
+import { DOCK_OPEN_TAB_EVENT, DOCK_TOGGLE_EVENT, type DockTab } from './dock-events.ts'
 import { Terminal } from './Terminal.tsx'
 import type { TerminalInject } from './Terminal.tsx'
 import css from './dock.module.css'
@@ -106,6 +107,24 @@ export function Dock({ activeChat }: { activeChat: ActiveChat }): JSX.Element {
   }, [open, tab, chat.id, chat.cwd])
 
   const close = useCallback(() => setOpen(false), [])
+  // Header buttons are mounted in the slot tree (no shared React parent
+  // with this private overlay root), so they reach the drawer through tiny
+  // window custom events instead of props.
+  useEffect(() => {
+    const onToggle = (): void => { setOpen(value => !value) }
+    const onOpenTab = (event: Event): void => {
+      const tab = (event as CustomEvent<DockTab>).detail
+      setOpen(true)
+      if (tab === 'browser' || tab === 'terminal') setTab(tab)
+    }
+    window.addEventListener(DOCK_TOGGLE_EVENT, onToggle)
+    window.addEventListener(DOCK_OPEN_TAB_EVENT, onOpenTab)
+    return () => {
+      window.removeEventListener(DOCK_TOGGLE_EVENT, onToggle)
+      window.removeEventListener(DOCK_OPEN_TAB_EVENT, onOpenTab)
+    }
+  }, [])
+
 
   // The terminal has consumed the injection; clear it so the same block can
   // be run again later (nonce already makes each injection distinct).
@@ -132,16 +151,6 @@ export function Dock({ activeChat }: { activeChat: ActiveChat }): JSX.Element {
 
   return (
     <>
-      <button
-        className={css.handle}
-        data-hidden={open || undefined}
-        onClick={() => setOpen(true)}
-        title="Open browser & terminal"
-        aria-label="Open the browser and terminal dock"
-      >
-        <span className={css.handleGlyph}>⧉</span>
-      </button>
-
       <aside
         className={css.drawer}
         data-open={open || undefined}

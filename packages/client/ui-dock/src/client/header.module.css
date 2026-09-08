@@ -1,0 +1,28 @@
+/* Conversation-header dock controls, themed through the same --dsw tokens as the
+   upstream Session header utilities so the buttons sit flush beside them. */
+
+.toggleButton,
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 18px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+}
+
+.toggleButton:hover,
+.menuButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.toggleButton svg,
+.menuButton svg {
+  flex: none;
+}
