@@ -1005,6 +1005,34 @@ describe('user-explicit invocation injection', () => {
       && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
   })
 
+  it('injects a user-invocable skill named by an @skill <name> token', async () => {
+    const { ctx, agent } = await invokeHarness()
+    const decision = await proposeStep(ctx, agent, [gesture('@skill hidden-demo do the thing')])
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    const injections = decision.messages.filter(message =>
+      (message.source as { kind?: string }).kind === 'skill-invocation')
+    expect(injections).toHaveLength(1)
+    expect(injections[0]?.source).toMatchObject({ kind: 'skill-invocation', name: 'hidden-demo', form: 'instructions' })
+    const block = injections[0]?.content[0]
+    if (block?.type !== 'text') throw new Error('expected text injection')
+    expect(block.text).toContain('PINEAPPLE.')
+  })
+
+  it('recognizes @skill anywhere in prose but not a bare @name mention', async () => {
+    const { ctx, agent } = await invokeHarness()
+    const positive = await proposeStep(ctx, agent, [gesture('please use @skill shared-skill here')])
+    if (positive.kind !== 'enter') throw new Error('expected enter')
+    expect(positive.messages.some(message =>
+      (message.source as { kind?: string; name?: string }).kind === 'skill-invocation'
+      && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
+
+    // `@hidden-demo` without the `skill` keyword is a mention, not a load gesture.
+    const negative = await proposeStep(ctx, agent, [gesture('run @hidden-demo now')])
+    if (negative.kind !== 'enter') throw new Error('expected enter')
+    expect(negative.messages.some(message =>
+      (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
+  })
+
   it('recognizes a mid-sentence gesture but not paths, fractions, or broken boundaries', async () => {
     const { ctx, agent } = await invokeHarness()
     const decision = await proposeStep(ctx, agent, [

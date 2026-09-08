@@ -279,6 +279,8 @@ Every Tier-2 edit, its owner, and what removes it. Keep this table current; it i
 | 17 | `docs/subsystems/{code-runtime,llm-streaming}.*` | `kernel` `kiln` | hand-written docs for fork features | Move to fork-owned `docs/` pages |
 | 18 | 8 test files | various | mirror 3–6 above | Follows whatever those become |
 | 19 | 2 files inside `client/ui-settings-general` | `kernel` | new files placed in an upstream package directory | Move to a fork-owned client package |
+| 20 | `packages/skill/tool-skill/src/index.ts` | `kernel` | `@skill <name>` is a second user-explicit skill load gesture beside `/name` | Upstream PR, or a fork-owned pre-step plugin |
+| 21 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
 
 If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops from 61 files to roughly 12 — and the survivors are lists and infrastructure, which conflict predictably in one place each.
 

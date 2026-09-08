@@ -407,6 +407,12 @@ function assertPositiveInteger(name: string, value: number, minimum = 1): void {
  */
 const SKILL_GESTURE = /(^|\s)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/g
 
+// DSH-FORK(kernel): an `@skill <name>` token is the same user-explicit skill
+// load gesture as `/name`, so the typed picker form (the client @-source lands
+// `@skill <name>`) injects the skill body instead of shipping dead prose.
+// EXIT: upstream adopts an `@`-prefixed skill gesture in tool-skill.
+const SKILL_AT_GESTURE = /(^|\s)@skill\s+([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/g
+
 /**
  * `/name` gesture tokens from the claimed user messages, deduplicated in
  * first-seen order. Every text block of direct user input is scanned; no
@@ -421,6 +427,10 @@ function invokedSkillNames(messages: readonly UserMessage[]): string[] {
     for (const block of message.content) {
       if (block.type !== 'text') continue
       for (const match of block.text.matchAll(SKILL_GESTURE)) {
+        const name = match[2]
+        if (name !== undefined && !names.includes(name)) names.push(name)
+      }
+      for (const match of block.text.matchAll(SKILL_AT_GESTURE)) {
         const name = match[2]
         if (name !== undefined && !names.includes(name)) names.push(name)
       }

@@ -192,4 +192,46 @@ export function apply(ctx: ClientContext): void {
       clearAll()
     }
   }, 'ui-skill: source')
+
+  // DSH-FORK(kernel): the `@skill` picker. Typing `@skill` lists the same
+  // session skill catalog under the `@` trigger (beside @file/@session), and
+  // a pick lands the literal `@skill <name> ` that the tool-skill pre-step
+  // recognizes as a user-explicit load gesture.
+  // EXIT: upstream ships an `@`-prefix skill mention source.
+  const atSource: InputTriggerSource = {
+    trigger: '@',
+    name: 'skills',
+    order: 3,
+    async candidates(session, { query, signal }) {
+      const skills = await fetchCatalog(session.sessionId)
+      if (signal.aborted) return []
+      const remainder = query.replace(/^skill\s*/, '')
+      return skills
+        .filter(skill => remainder === '' || skill.name.startsWith(remainder))
+        .map(skill => ({
+          name: skill.name,
+          description: skill.modelInvocable ? skill.description : `${t('menu.userOnly')} · ${skill.description}`,
+        }))
+    },
+    warm(session) {
+      fetchCatalog(session.sessionId).catch(() => {})
+    },
+    lexicon(session) {
+      return fetches.get(session.sessionId)?.settled?.map(skill => skill.name)
+    },
+    subscribeLexicon(session, listener) {
+      const key = session.sessionId
+      const listeners = lexiconListeners.get(key) ?? new Set()
+      listeners.add(listener)
+      lexiconListeners.set(key, listeners)
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0) lexiconListeners.delete(key)
+      }
+    },
+    onPick({ candidate }) {
+      return { text: `@skill ${candidate.name} ` }
+    },
+  }
+  ctx.effect(() => inputTriggers.registerSource(atSource), 'ui-skill: @skills source')
 }
