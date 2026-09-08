@@ -386,7 +386,8 @@ class KilnBrowser:
             os.makedirs(_BROWSER_DIR, exist_ok=True)
             with open(os.path.join(_BROWSER_DIR, "history.json"), "w",
                       encoding="utf-8") as f:
-                json.dump({"tabs": self._histories}, f, ensure_ascii=False)
+                json.dump({"tabs": self._histories, "active": self._page_index()},
+                          f, ensure_ascii=False)
         except Exception:
             pass
 
@@ -411,6 +412,75 @@ class KilnBrowser:
             return "\n".join(lines) or "(no navigation history)"
         except Exception as e:
             return f"history error: {e}"
+
+    def restore(self):
+        """Reopen the persisted tab set from ``history.json``.
+
+        The headless Chromium process does not survive a restart, so live DOM
+        state cannot be resurrected; what IS durable is the tab/history model.
+        This reopens one page per recorded tab, navigates each to its most
+        recent URL, and re-seeds the per-tab histories so back/forward still
+        work after the restore. Best effort: a URL that now 403s/redirects is
+        left blank but its history record is kept.
+        """
+        ok, err = self._ensure()
+        if not ok:
+            return f"restore needs Playwright ({err})"
+        try:
+            path = os.path.join(_BROWSER_DIR, "history.json")
+            saved = None
+            if _BROWSER_DIR and os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+            records = (saved or {}).get("tabs") or []
+            if not records:
+                return "(no saved session to restore)"
+            active = int((saved or {}).get("active", 0) or 0)
+            # The first existing page hosts the first restored tab; the rest get
+            # fresh pages in order, so tab order matches the saved order.
+            pages = self.context.pages
+            self._histories = []
+            for i, record in enumerate(records):
+                if i < len(pages):
+                    page = pages[i]
+                else:
+                    page = self.context.new_page()
+                cur = (record or {}).get("current")
+                if cur and cur.get("url"):
+                    try:
+                        page.goto(cur["url"], timeout=30000,
+                                  wait_until="domcontentloaded")
+                    except Exception:
+                        pass
+                # The page's real post-navigation URL is the current entry; keep
+                # the saved stack but refresh current.url/title from the live page.
+                try:
+                    live_url = page.url if not page.is_closed() else (cur or {}).get("url", "")
+                    live_title = page.title() if not page.is_closed() else (cur or {}).get("title", "")
+                except Exception:
+                    live_url = (cur or {}).get("url", "")
+                    live_title = (cur or {}).get("title", "")
+                restored = dict(record or {})
+                if restored.get("current") is not None:
+                    restored["current"] = dict(restored["current"])
+                    restored["current"]["url"] = live_url
+                    restored["current"]["title"] = live_title
+                self._histories.append(restored)
+            # Close any surplus pages left over from a pre-restore blank tab.
+            for extra in pages[len(records):]:
+                try:
+                    extra.close()
+                except Exception:
+                    pass
+            if 0 <= active < len(self.context.pages):
+                self.page = self.context.pages[active]
+            else:
+                self.page = self.context.pages[0]
+            self._persist_histories()
+            self._state()
+            return f"restored {len(records)} tab(s)"
+        except Exception as e:
+            return f"restore error: {e}"
 
     def _shot(self, path=None):
         if not _BROWSER_DIR or self.page is None:
@@ -1334,6 +1404,8 @@ def _browser_use_impl(action="navigate", **kw):
             return b.tabs()
         if a == "history":
             return b.history()
+        if a in ("restore", "restore_session"):
+            return b.restore()
         if a == "network":
             return b.network(kw.get("limit", 40))
         if a == "console":
@@ -1347,7 +1419,7 @@ def _browser_use_impl(action="navigate", **kw):
         return (f"browser_use: unknown action {action!r}. Known: navigate, read_page, "
                 f"find, get_text, snapshot, dom, coords, screenshot, back, forward, wait, "
                 f"move, click, dblclick, hover, drag, type, key, clear, select, scroll, "
-                f"zoom, save_state, load_state, new_tab, switch_tab, close_tab, tabs, history, "
+                f"zoom, save_state, load_state, new_tab, switch_tab, close_tab, tabs, history, restore, "
                 f"network, console, clear_network, search")
     except Exception as e:
         return f"browser_use error: {e}"
