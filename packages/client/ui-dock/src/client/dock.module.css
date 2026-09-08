@@ -233,6 +233,89 @@
 .textBtn:hover:not(:disabled) { color: var(--ds-color-text, #e8eaed); background: var(--ds-color-fill-hover, #23262e); }
 .textBtn:disabled { opacity: 0.4; cursor: default; }
 
+
+
+/* ── tab strip ─────────────────────────────────────────────────────────── */
+.tabStrip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--ds-color-border, #2a2d34);
+  flex: 0 0 auto;
+  overflow-x: auto;
+}
+
+.tabChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--ds-color-border, #2a2d34);
+  border-radius: 7px;
+  background: var(--ds-color-fill-subtle, #1b1e24);
+  color: var(--ds-color-text-secondary, #9aa0aa);
+  white-space: nowrap;
+}
+
+.tabChipActive {
+  border-color: var(--ds-color-accent, #4f8cff);
+  background: var(--ds-color-bg-elevated, #2a2e37);
+  color: var(--ds-color-text, #f4f5f7);
+}
+
+.tabChipLabel {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  max-width: 180px;
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabChipClose {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.tabChipClose:hover { color: var(--ds-color-text, #e8eaed); background: var(--ds-color-fill-hover, #23262e); }
+
+.tabAdd {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 3px 9px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ds-color-text-secondary, #9aa0aa);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tabAdd:hover { color: var(--ds-color-text, #e8eaed); background: var(--ds-color-fill-hover, #23262e); }
+
+.historyPanel {
+  flex: 0 0 auto;
+  max-height: 160px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ds-color-border, #2a2d34);
+  background: var(--ds-color-bg-elevated, #101216);
+  font-family: var(--ds-font-mono, 'JetBrains Mono', Consolas, monospace);
+  font-size: 12px;
+}
+
 .browserView {
   position: relative;
   flex: 1 1 auto;

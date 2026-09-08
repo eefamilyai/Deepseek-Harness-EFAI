@@ -156,6 +156,9 @@ interface StreamState {
   ts?: unknown
   vw?: unknown
   vh?: unknown
+  tabs?: unknown
+  active?: unknown
+  history?: unknown
 }
 
 /**
@@ -191,7 +194,7 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
     if (closed) return
     const state = await readState()
     if (state === null) {
-      send({ type: 'state', url: '', title: '', text_preview: '', vw: 1440, vh: 900 })
+      send({ type: 'state', url: '', title: '', text_preview: '', vw: 1440, vh: 900, tabs: [], active: -1, history: {} })
       return
     }
     const ts = typeof state.ts === 'number' ? state.ts : undefined
@@ -201,6 +204,9 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
     const vw = typeof state.vw === 'number' ? state.vw : 1440
     const vh = typeof state.vh === 'number' ? state.vh : 900
     const name = typeof state.screenshot === 'string' ? state.screenshot : ''
+    const tabs = Array.isArray(state.tabs) ? state.tabs : []
+    const active = typeof state.active === 'number' ? state.active : -1
+    const history = typeof state.history === 'object' && state.history !== null ? state.history : {}
 
     if (ts !== undefined && ts !== lastTs) {
       lastTs = ts
@@ -213,9 +219,9 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
         } catch { /* screenshot not flushed yet; keep the last good frame */ }
         frame = lastFrameData
       }
-      send({ type: 'frame', ts, url, title, text_preview: text, vw, vh, screenshot: frame })
+      send({ type: 'frame', ts, url, title, text_preview: text, vw, vh, screenshot: frame, tabs, active, history })
     } else {
-      send({ type: 'state', ts, url, title, text_preview: text, vw, vh })
+      send({ type: 'state', ts, url, title, text_preview: text, vw, vh, tabs, active, history })
     }
   }
 

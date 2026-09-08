@@ -21,6 +21,20 @@ import css from './dock.module.css'
 
 type RenderMode = 'live' | 'mirror'
 
+interface HistoryInfo {
+  back: { url: string; title: string }[]
+  current: { url: string; title: string } | null
+  forward: { url: string; title: string }[]
+}
+
+interface TabInfo {
+  index: number
+  url: string
+  title: string
+  active: boolean
+  history: HistoryInfo
+}
+
 interface BrowserState {
   url: string
   title: string
@@ -30,13 +44,15 @@ interface BrowserState {
   vw: number
   vh: number
   ts?: number
+  tabs: TabInfo[]
+  active: number
 }
 
 type BrowserEvent =
-  | { type: 'frame'; ts: number; url: string; title: string; text_preview: string; vw: number; vh: number; screenshot: string | null }
-  | { type: 'state'; ts?: number; url: string; title: string; text_preview: string; vw: number; vh: number }
+  | { type: 'frame'; ts: number; url: string; title: string; text_preview: string; vw: number; vh: number; screenshot: string | null; tabs?: TabInfo[]; active?: number; history?: HistoryInfo }
+  | { type: 'state'; ts?: number; url: string; title: string; text_preview: string; vw: number; vh: number; tabs?: TabInfo[]; active?: number; history?: HistoryInfo }
 
-const EMPTY: BrowserState = { url: '', title: '', text_preview: '', links: [], screenshot: '', vw: 1440, vh: 900 }
+const EMPTY: BrowserState = { url: '', title: '', text_preview: '', links: [], screenshot: '', vw: 1440, vh: 900, tabs: [], active: -1 }
 
 /** POST one browser_use action to the shared browser; returns its text output. */
 async function act(action: string, args: Record<string, unknown> = {}): Promise<string> {
@@ -61,7 +77,9 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [tree, setTree] = useState<string | null>(null)
   const [live, setLive] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const lastTs = useRef(0)
+  const historyRef = useRef<HistoryInfo | null>(null)
   const addressFocused = useRef(false)
   const suppressLive = useRef(false)
   const wsRef = useRef<WebSocket | null>(null)
@@ -76,11 +94,14 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       text_preview: event.text_preview,
       vw: event.vw,
       vh: event.vh,
+      tabs: event.tabs ?? prev.tabs,
+      active: event.active ?? prev.active,
       // A frame carries the PNG inline; a state tick must not clobber the last
       // good frame with an empty string while the bridge re-reads state.
       screenshot: event.type === 'frame' ? (event.screenshot ?? prev.screenshot) : prev.screenshot,
       ...(typeof ts === 'number' ? { ts } : {}),
     }))
+    if (event.history !== undefined) historyRef.current = event.history
     if (!addressFocused.current) setAddress(event.url)
     if (changed) {
       if (!suppressLive.current && lastTs.current !== 0) {
@@ -106,7 +127,14 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       ws.onmessage = (ev) => {
         try {
           const parsed = JSON.parse(String(ev.data)) as BrowserEvent
-          if (parsed.type === 'frame' || parsed.type === 'state') applyEvent(parsed)
+          switch (parsed.type) {
+            case 'frame':
+            case 'state':
+              applyEvent(parsed)
+              break
+            default:
+              break
+          }
         } catch { /* ignore malformed frames */ }
       }
       ws.onclose = () => {
@@ -130,6 +158,11 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
     const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(target) ? target : `https://${target}`
     setBusy(true)
     try { suppressLive.current = true; await act('navigate', { url }) } finally { setBusy(false) }
+  }, [])
+
+  const tabAction = useCallback(async (action: string, args: Record<string, unknown> = {}): Promise<void> => {
+    setBusy(true)
+    try { suppressLive.current = true; await act(action, args) } finally { setBusy(false) }
   }, [])
 
   const nav = useCallback(async (action: string): Promise<void> => {
@@ -197,6 +230,41 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
         </a>
       </div>
 
+      <div className={css.tabStrip} role="tablist" aria-label="Browser tabs">
+        {state.tabs.map(tab => (
+          <div key={tab.index} className={`${css.tabChip} ${tab.active ? css.tabChipActive : ''}`}>
+            <button type="button" className={css.tabChipLabel} title={tab.url || 'New tab'} onClick={() => void tabAction('switch_tab', { index: tab.index })} disabled={busy}>
+              {tab.title || tab.url || `Tab ${tab.index + 1}`}
+            </button>
+            <button type="button" className={css.tabChipClose} title="Close tab" onClick={() => void tabAction('close_tab', { index: tab.index })} disabled={busy}>×</button>
+          </div>
+        ))}
+        <button type="button" className={css.tabAdd} title="New tab" onClick={() => void tabAction('new_tab')} disabled={busy}>+</button>
+        <button type="button" className={css.textBtn} title="Navigation history" onClick={() => { setShowHistory(v => !v) }} disabled={busy}>
+          {showHistory ? 'Hide history' : 'History'}
+        </button>
+      </div>
+      {showHistory && (
+        <div className={css.historyPanel}>
+          {historyRef.current === null
+            ? <div className={css.treeLine}>No navigation history yet.</div>
+            : (
+              <>
+                {historyRef.current.back.map((e, i) => (
+                  <div key={`b${i}`} className={css.treeLine}>‹ {e.title || e.url}</div>
+                ))}
+                {historyRef.current.current !== null && (
+                  <div className={css.treeItem}>
+                    {historyRef.current.current.title || historyRef.current.current.url}
+                  </div>
+                )}
+                {historyRef.current.forward.map((e, i) => (
+                  <div key={`f${i}`} className={css.treeLine}>› {e.title || e.url}</div>
+                ))}
+              </>
+            )}
+        </div>
+      )}
       <div className={css.browserView}>
         {current === ''
           ? <div className={css.browserEmpty}>{state.text_preview === '' ? 'No page yet — type an address above to browse.' : state.text_preview}</div>

@@ -303,10 +303,27 @@ class KilnBrowser:
         except Exception:
             pass
         try:
-            st["tabs"] = list(self._histories)
+            # One tidy per-tab record the client tab strip can render directly:
+            # url/title for the label, a boolean active flag, and the tab's own
+            # navigation history. Index is the position in context.pages.
+            tabs = []
+            pages = list(self.context.pages) if self.context is not None else []
+            for i, page in enumerate(pages):
+                h = self._histories[i] if i < len(self._histories) else _empty_history()
+                try:
+                    url = page.url if not page.is_closed() else ""
+                    title = page.title() if not page.is_closed() else ""
+                except Exception:
+                    url = ""
+                    title = ""
+                tabs.append({"index": i, "url": url, "title": title,
+                             "active": page is self.page, "history": h})
+            st["tabs"] = tabs
+            st["active"] = self._page_index()
             st["history"] = self._ensure_history()
         except Exception:
             st.setdefault("tabs", [])
+            st.setdefault("active", -1)
             st.setdefault("history", _empty_history())
         st.update(extra)
         # The live CDP screencast is the dock's authoritative feed: a one-shot
@@ -948,7 +965,7 @@ class KilnBrowser:
         except Exception as e:
             return f"switch_tab error: {e}"
 
-    def close_tab(self):
+    def close_tab(self, index=None):
         ok, err = self._ensure()
         if not ok:
             return f"close_tab needs Playwright ({err})"
@@ -956,15 +973,22 @@ class KilnBrowser:
             pages = self.context.pages
             if len(pages) <= 1:
                 return "only one tab — not closing it"
-            p = self.page
-            idx = pages.index(p) if p in pages else 0
+            if index is None:
+                p = self.page
+                idx = pages.index(p) if p in pages else 0
+            else:
+                idx = int(index)
+                if not (-len(pages) <= idx < len(pages)):
+                    return f"close_tab: index {idx} out of range ({len(pages)} tabs)"
+                p = pages[idx]
             p.close()
             if 0 <= idx < len(self._histories):
                 self._histories.pop(idx)
-            self.page = self.context.pages[min(idx, len(self.context.pages) - 1)]
+            remaining = self.context.pages
+            self.page = remaining[min(idx, len(remaining) - 1)]
             self._persist_histories()
             self._state()
-            return f"closed tab ({len(self.context.pages)} remain)"
+            return f"closed tab ({len(remaining)} remain)"
         except Exception as e:
             return f"close_tab error: {e}"
 
@@ -1305,7 +1329,7 @@ def _browser_use_impl(action="navigate", **kw):
         if a == "switch_tab":
             return b.switch_tab(kw.get("index", 0))
         if a == "close_tab":
-            return b.close_tab()
+            return b.close_tab(kw.get("index"))
         if a == "tabs":
             return b.tabs()
         if a == "history":
