@@ -144,6 +144,27 @@
   margin-top: 4px;
 }
 
+/* DSH-FORK(browser): per-provider collapse toggle. EXIT: upstream adopts
+   collapsible provider groups in the model dropdown. */
+.groupToggle {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupToggle:hover,
+.groupToggle:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .groupTitle {
   position: sticky;
   top: 0;
@@ -154,6 +175,24 @@
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
+}
+
+.groupChevron {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-caption);
+  transition: transform 120ms ease;
+}
+
+.groupChevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.groupName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .option {

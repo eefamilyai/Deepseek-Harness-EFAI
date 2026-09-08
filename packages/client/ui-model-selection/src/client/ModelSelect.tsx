@@ -99,6 +99,18 @@ export function ModelSelect(
       })),
     ], [reasoning, t])
   const busy = state.status === 'selecting'
+  // DSH-FORK(browser): collapsible provider groups in the model pane.
+  // EXIT: upstream adopts per-provider collapse in ModelSelect.
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set())
+
+  const toggleGroup = (groupId: string): void => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }
 
   const reload = (): void => {
     lastActionRef.current = 'load'
@@ -284,30 +296,44 @@ export function ModelSelect(
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
-                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map((model) => {
-                        const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
-                          <button
-                            ref={itemRef()}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            className={clsx(css.option, selected && css.selected)}
-                            key={model.id}
-                            title={model.name}
-                            disabled={busy}
-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
-                          >
-                            <span className={css.optionCopy}>
-                              <span className={css.modelName}>{model.name}</span>
-                            </span>
-                            <span className={css.check}>
-                              {selected ? <IconCheckOutline16 /> : null}
-                            </span>
-                          </button>
-                        )
-                      })}
+                      <button
+                        type="button"
+                        className={clsx(css.groupTitle, css.groupToggle)}
+                        id={headingId}
+                        aria-expanded={!collapsedGroups.has(group.id)}
+                        aria-controls={`${id}-group-${group.id}`}
+                        onClick={() => { toggleGroup(group.id) }}
+                      >
+                        <IconChevronDownOutline14
+                          className={clsx(css.groupChevron, collapsedGroups.has(group.id) && css.groupChevronCollapsed)}
+                        />
+                        <span className={css.groupName}>{group.name}</span>
+                      </button>
+                      <div id={`${id}-group-${group.id}`} hidden={collapsedGroups.has(group.id)}>
+                        {group.models.map((model) => {
+                          const selected = state.current?.provider === group.id && state.current.model === model.id
+                          return (
+                            <button
+                              ref={itemRef()}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={selected}
+                              className={clsx(css.option, selected && css.selected)}
+                              key={model.id}
+                              title={model.name}
+                              disabled={busy}
+                              onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                            >
+                              <span className={css.optionCopy}>
+                                <span className={css.modelName}>{model.name}</span>
+                              </span>
+                              <span className={css.check}>
+                                {selected ? <IconCheckOutline16 /> : null}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </section>
                   )
                 })}

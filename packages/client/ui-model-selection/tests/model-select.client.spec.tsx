@@ -215,3 +215,53 @@ describe('ModelSelect reasoning effort', () => {
     expect(load).not.toHaveBeenCalled()
   })
 })
+
+describe('ModelSelect provider group collapse', () => {
+  const twoGroups = [
+    {
+      id: 'provider-a',
+      name: 'Provider A',
+      models: [{ id: 'a-flash', name: 'A Flash', reasoning }],
+    },
+    {
+      id: 'provider-b',
+      name: 'Provider B',
+      models: [{ id: 'b-pro', name: 'B Pro' }],
+    },
+  ]
+
+  it('collapses and re-expands one provider group without touching the others', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({ groups: twoGroups }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+
+    // Both group headings are the new toggle buttons, expanded by default.
+    const a = screen.getByRole('button', { name: 'Provider A' })
+    const b = screen.getByRole('button', { name: 'Provider B' })
+    expect(a.getAttribute('aria-expanded')).toBe('true')
+    expect(b.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
+
+    // Collapse provider A: its models leave the tree, provider B is untouched.
+    fireEvent.click(a)
+    expect(a.getAttribute('aria-expanded')).toBe('false')
+    expect(b.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.queryByRole('menuitemradio', { name: /A Flash/ })).toBeNull()
+    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
+
+    // Toggling again restores A.
+    fireEvent.click(a)
+    expect(a.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
+  })
+})
