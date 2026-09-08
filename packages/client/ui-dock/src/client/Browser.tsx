@@ -56,7 +56,7 @@ async function act(action: string, args: Record<string, unknown> = {}): Promise<
 /** The browser pane. `active` gates the stream so a hidden tab does no work. */
 export function Browser({ active }: { active: boolean }): JSX.Element {
   const [state, setState] = useState<BrowserState>(EMPTY)
-  const [mode, setMode] = useState<RenderMode>('live')
+  const [mode, setMode] = useState<RenderMode>('mirror')
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [tree, setTree] = useState<string | null>(null)
@@ -179,7 +179,7 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
           onClick={() => { setMode(mode === 'live' ? 'mirror' : 'live') }}
           disabled={busy}
         >
-          {mode === 'live' ? 'Mirror' : 'Live'}
+          {mode === 'live' ? 'Shared frame' : 'Live iframe'}
         </button>
         <button className={css.textBtn} title="Interactive element tree" onClick={() => void toggleTree()} disabled={busy}>
           {tree === null ? 'Elements' : 'Hide'}
