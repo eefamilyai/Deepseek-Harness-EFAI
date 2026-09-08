@@ -101,7 +101,17 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       screenshot: event.type === 'frame' ? (event.screenshot ?? prev.screenshot) : prev.screenshot,
       ...(typeof ts === 'number' ? { ts } : {}),
     }))
-    if (event.history !== undefined) historyRef.current = event.history
+    if (event.history !== undefined) {
+      // The bridge may send a bare {} for an empty/incomplete state; normalize
+      // to the full {back,current,forward} shape so the History panel can never
+      // call .map on an undefined list and crash the dock.
+      const h = event.history ?? {}
+      historyRef.current = {
+        back: Array.isArray(h.back) ? h.back : [],
+        current: h.current ?? null,
+        forward: Array.isArray(h.forward) ? h.forward : [],
+      }
+    }
     if (!addressFocused.current) setAddress(event.url)
     if (changed) {
       if (!suppressLive.current && lastTs.current !== 0) {
@@ -186,6 +196,9 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
   }, [address, go])
 
   const current = state.url
+  const hist = historyRef.current
+  const emptyHistory = hist === null
+    || (hist.back.length === 0 && hist.current === null && hist.forward.length === 0)
 
   return (
     <div className={css.browser}>
@@ -246,19 +259,19 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       </div>
       {showHistory && (
         <div className={css.historyPanel}>
-          {historyRef.current === null
+          {emptyHistory
             ? <div className={css.treeLine}>No navigation history yet.</div>
             : (
               <>
-                {historyRef.current.back.map((e, i) => (
+                {hist.back.map((e, i) => (
                   <div key={`b${i}`} className={css.treeLine}>‹ {e.title || e.url}</div>
                 ))}
-                {historyRef.current.current !== null && (
+                {hist.current !== null && (
                   <div className={css.treeItem}>
-                    {historyRef.current.current.title || historyRef.current.current.url}
+                    {hist.current.title || hist.current.url}
                   </div>
                 )}
-                {historyRef.current.forward.map((e, i) => (
+                {hist.forward.map((e, i) => (
                   <div key={`f${i}`} className={css.treeLine}>› {e.title || e.url}</div>
                 ))}
               </>

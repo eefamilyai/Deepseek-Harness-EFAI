@@ -194,7 +194,7 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
     if (closed) return
     const state = await readState()
     if (state === null) {
-      send({ type: 'state', url: '', title: '', text_preview: '', vw: 1440, vh: 900, tabs: [], active: -1, history: {} })
+      send({ type: 'state', url: '', title: '', text_preview: '', vw: 1440, vh: 900, tabs: [], active: -1, history: { back: [], current: null, forward: [] } })
       return
     }
     const ts = typeof state.ts === 'number' ? state.ts : undefined
