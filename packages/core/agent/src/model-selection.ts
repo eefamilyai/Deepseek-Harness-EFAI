@@ -24,6 +24,21 @@ export interface ModelSelectionRef {
   assembled: ModelSelection | undefined
 }
 
+/** The selection one wired scope currently reads through. */
+interface WiredSelection {
+  /** Ref the live accessor and both listeners resolve on every read. */
+  ref: ModelSelectionRef
+}
+
+/**
+ * Selections wired per Agent scope, so a re-entrant install rebinds the live
+ * wiring instead of leaving the first ref in place. A resume or reconnect builds
+ * a fresh ref for a scope that is already wired; without the rebind the picker
+ * would show that ref while prompt assembly and request routing still read the
+ * one before it, sending the request to a model the user did not choose.
+ */
+const wiredSelections = new WeakMap<Context, WiredSelection>()
+
 /**
  * Couple one mutable selection to Agent-scoped prompt assembly and request routing.
  * Prompt assembly snapshots the selected model before delegating, then applies
@@ -37,22 +52,35 @@ export interface ModelSelectionRef {
  * @returns Disposer for both scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
-  // Declaring an accessor twice on one scope is a hard cordis error, and a
-  // resume or reconnect can re-enter setup on the SAME agent context before the
-  // previous attempt's fiber has unwound its accessor — which crashed the whole
-  // resume with `property "modelSelection" is already declared as accessor`. A
-  // scope that already exposes `modelSelection` is already wired (accessor and
-  // both listeners came in together and unwind together), so adopt it rather
-  // than redeclare. The check reads the same per-scope prop table `accessor`
-  // writes to, so it is true only for a genuine same-scope re-entry.
-  if ('modelSelection' in agentCtx) return () => {}
-  agentCtx.accessor('modelSelection', {
-    get: () => selection.current,
-  })
+  const wired = wiredSelections.get(agentCtx)
+  if (wired !== undefined) {
+    const previous = wired.ref
+    // A step that already assembled captured its selection on the previous ref;
+    // carry it so `agent/request` still routes that step to the model its own
+    // prompt described.
+    selection.assembled ??= previous.assembled
+    wired.ref = selection
+    return () => {
+      if (wired.ref === selection) wired.ref = previous
+    }
+  }
+  const holder: WiredSelection = { ref: selection }
+  wiredSelections.set(agentCtx, holder)
+  // Declaring an accessor twice on one scope is a hard cordis error, and the
+  // accessor unwinds with the scope's fiber rather than with this disposer, so a
+  // scope that still exposes `modelSelection` keeps the declaration it has. The
+  // getter reads through the holder, so it follows a rebind and reports nothing
+  // once the wiring is disposed.
+  if (!('modelSelection' in agentCtx)) {
+    agentCtx.accessor('modelSelection', {
+      get: () => wiredSelections.get(agentCtx)?.ref.current,
+    })
+  }
   const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
-    const selected = selection.current
+    const active = holder.ref
+    const selected = active.current
     const assembled = await next()
-    selection.assembled = selected
+    active.assembled = selected
     if (selected === undefined) return assembled
     return {
       ...assembled,
@@ -67,7 +95,7 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
     'agent/request',
     async (_payload, next): Promise<LlmCallConfig> => {
       const resolved = await next()
-      const selected = selection.assembled
+      const selected = holder.ref.assembled
       if (selected === undefined) return resolved
       const { reasoningEffort: _inheritedEffort, ...withoutInheritedEffort } = resolved
       return {
@@ -81,6 +109,7 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
     },
   )
   return () => {
+    if (wiredSelections.get(agentCtx) === holder) wiredSelections.delete(agentCtx)
     disposeAssembly()
     disposeRequest()
   }

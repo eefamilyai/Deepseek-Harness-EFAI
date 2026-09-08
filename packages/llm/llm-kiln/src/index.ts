@@ -185,10 +185,11 @@ interface RouteTables {
  * Rebuild the route tables from a catalog IN PLACE, so the adapter's live
  * `() => routes` getter sees the new set without being handed new Map objects.
  *
- * One base route per provider, plus one extra per pooled login — adding a
- * DeepSeek account is exactly what makes a new pooled login appear, so this is
- * re-run after {@link KilnBridge.addAccount} to surface the account as its own
- * selectable route.
+ * One route per provider. A provider that pools logins keeps one route for all
+ * of them and lets the sidecar's account ring choose per request, so a second
+ * DeepSeek login is another account behind one entry rather than a second entry
+ * in the picker. This is re-run after {@link KilnBridge.addAccount} because a
+ * new login can make an unconfigured provider configured.
  * @param tables - the mutable lookups the adapter closes over.
  * @param catalog - the freshly read provider catalog.
  * @param prefix - the configured route prefix.
@@ -208,12 +209,6 @@ export function rebuildRoutes(
     const route = `${prefix}${entry.id}`
     tables.routes.set(route, entry)
     tables.kilnIds.set(route, entry.id)
-    for (const account of entry.accounts ?? []) {
-      const pinned = accountRoute(prefix, entry.id, account)
-      tables.routes.set(pinned, entry)
-      tables.kilnIds.set(pinned, entry.id)
-      tables.accounts.set(pinned, account)
-    }
   }
 }
 
@@ -346,7 +341,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
     rebuildRoutes(tables, await bridge.catalog(), prefix, config.onlyConfigured === true)
     handle.replace([...routes.keys()])        // publishes llm/adapters-updated → picker refreshes
-    return { ok: true, account: result.account, route: accountRoute(prefix, kilnId, result.account) }
+    return { ok: true, account: result.account, route: `${prefix}${kilnId}` }
   }
   const accountHandle = ctx.llm.registerAccountProvider(`${prefix}deepseek`, addAccount)
 
