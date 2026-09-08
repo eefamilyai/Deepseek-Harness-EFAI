@@ -55,6 +55,11 @@ BUILTINS = [
     {"id": "openrouter", "module": "openai_provider", "schema": "openai",
      "name": "OpenRouter (300+ models)", "enabled": False,
      "base_url": "https://openrouter.ai/api/v1", "api_key_env": "OPENROUTER_API_KEY"},
+    # The catalogue lists without a key, so `refresh_models_for` fills the model
+    # list before OPENCODE_API_KEY is set; the key is needed only to generate.
+    {"id": "opencodezen", "module": "openai_provider", "schema": "openai",
+     "name": "OpenCode Zen", "enabled": False,
+     "base_url": "https://opencode.ai/zen/v1", "api_key_env": "OPENCODE_API_KEY"},
     {"id": "deepseek-api", "module": "openai_provider", "schema": "openai",
      "name": "DeepSeek API", "enabled": False,
      "base_url": "https://api.deepseek.com", "api_key_env": "DEEPSEEK_API_KEY"},
