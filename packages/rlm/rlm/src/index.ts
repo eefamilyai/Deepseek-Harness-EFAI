@@ -170,10 +170,13 @@ export function apply(ctx: Context, config: Config): void {
     name: 'tool:rlm',
     order: 90,
     text: [
-      'You have a `rlm` tool: run a Recursive Language Model completion. Inside it you',
-      'write Python into a persistent REPL, keep live variables, spawn recursive sub-calls',
-      'with `llm_batch`, and terminate by setting an answer ready. Prefer it for long-',
-      'context or programmatic reasoning tasks that decompose into code plus sub-results.',
+      'You have a `rlm` tool: run a Recursive Language Model completion. This is your',
+      'Python/kernel execution path while RLM is enabled — the standalone `kernel` tool',
+      'is not mounted. Inside an `rlm` completion the inner model has a persistent Python',
+      'REPL with live variables, can call `llm_batch` for sub-results, and manages durable',
+      'context variables with `ctx_write`/`ctx_read`; `ctx_write` values are automatically',
+      're-injected every turn (including after restarts) without a fetch. Prefer `rlm` for',
+      'long-context or programmatic reasoning tasks that decompose into code plus sub-results.',
     ].join('\n'),
   })
 
