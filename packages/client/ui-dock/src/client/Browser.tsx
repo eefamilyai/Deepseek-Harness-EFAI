@@ -170,9 +170,13 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
     try { suppressLive.current = true; await act('navigate', { url }) } finally { setBusy(false) }
   }, [])
 
-  const tabAction = useCallback(async (action: string, args: Record<string, unknown> = {}): Promise<void> => {
-    setBusy(true)
-    try { suppressLive.current = true; await act(action, args) } finally { setBusy(false) }
+  const tabAction = useCallback((action: string, args: Record<string, unknown> = {}): void => {
+    // Tab-strip actions are fire-and-forget: the /kiln/browser/stream feed
+    // already pushes the new tabs/active/url as soon as the kernel rewrites
+    // state.json, so blocking the whole strip on the kernel round-trip (and
+    // its heavy _state() DOM walk) is what made new/close tab feel frozen.
+    suppressLive.current = true
+    void act(action, args)
   }, [])
 
   const nav = useCallback(async (action: string): Promise<void> => {
@@ -246,13 +250,13 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       <div className={css.tabStrip} role="tablist" aria-label="Browser tabs">
         {state.tabs.map(tab => (
           <div key={tab.index} className={`${css.tabChip} ${tab.active ? css.tabChipActive : ''}`}>
-            <button type="button" className={css.tabChipLabel} title={tab.url || 'New tab'} onClick={() => void tabAction('switch_tab', { index: tab.index })} disabled={busy}>
+            <button type="button" className={css.tabChipLabel} title={tab.url || 'New tab'} onClick={() => { tabAction('switch_tab', { index: tab.index }) }} disabled={busy}>
               {tab.title || tab.url || `Tab ${tab.index + 1}`}
             </button>
-            <button type="button" className={css.tabChipClose} title="Close tab" onClick={() => void tabAction('close_tab', { index: tab.index })} disabled={busy}>×</button>
+            <button type="button" className={css.tabChipClose} title="Close tab" onClick={() => { tabAction('close_tab', { index: tab.index }) }} disabled={busy}>×</button>
           </div>
         ))}
-        <button type="button" className={css.tabAdd} title="New tab" onClick={() => void tabAction('new_tab')} disabled={busy}>+</button>
+        <button type="button" className={css.tabAdd} title="New tab" onClick={() => { tabAction('new_tab') }} disabled={busy}>+</button>
         <button type="button" className={css.textBtn} title="Navigation history" onClick={() => { setShowHistory(v => !v) }} disabled={busy}>
           {showHistory ? 'Hide history' : 'History'}
         </button>

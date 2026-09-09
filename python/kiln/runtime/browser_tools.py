@@ -286,7 +286,7 @@ class KilnBrowser:
         self.browser = None
         self.pw = None
 
-    def _state(self, **extra):
+    def _state(self, light=False, **extra):
         # vw/vh are the CSS viewport the screenshot covers, so the dock pane can
         # scale a click on the image back to browser coordinates.
         st = {"ts": time.time(), "url": "", "title": "",
@@ -303,15 +303,25 @@ class KilnBrowser:
                         st["vh"] = vp["height"]
                 except Exception:
                     pass
-                try:
-                    st["text_preview"] = self.page.inner_text("body")[:4000]
-                except Exception:
-                    pass
-                try:
-                    st["links"] = self.page.eval_on_selector_all(
-                        "a[href]", "els => els.map(e => e.href)")[:60] or []
-                except Exception:
-                    pass
+                if not light:
+                    try:
+                        st["text_preview"] = self.page.inner_text("body")[:4000]
+                    except Exception:
+                        pass
+                    try:
+                        st["links"] = self.page.eval_on_selector_all(
+                            "a[href]", "els => els.map(e => e.href)")[:60] or []
+                    except Exception:
+                        pass
+                else:
+                    # Tab-strip ops only need url/title/tabs/active/history — a
+                    # fresh full-DOM walk here is the dominant per-click cost and
+                    # buys the dock nothing. Carry the last known preview forward
+                    # so the pane never blanks between navigations.
+                    last = self._last_state
+                    if last is not None:
+                        st["text_preview"] = last.get("text_preview", "")
+                        st["links"] = last.get("links", [])
         except Exception:
             pass
         try:
@@ -1026,7 +1036,7 @@ class KilnBrowser:
                 self._set_history(_push_navigation(_empty_history(), page.url, page.title()))
             else:
                 self._persist_histories()
-            self._state()
+            self._state(light=True)
             return f"opened new tab ({len(self.context.pages)} total)"
         except Exception as e:
             return f"new_tab error: {e}"
@@ -1042,7 +1052,7 @@ class KilnBrowser:
                 return f"switch_tab: index {i} out of range ({len(pages)} tabs)"
             self._reattach_screencast(pages[i])
             self.page.bring_to_front()
-            self._state()
+            self._state(light=True)
             return f"switched to tab {i} ({len(pages)} total)"
         except Exception as e:
             return f"switch_tab error: {e}"
@@ -1069,7 +1079,7 @@ class KilnBrowser:
             remaining = self.context.pages
             self._reattach_screencast(remaining[min(idx, len(remaining) - 1)])
             self._persist_histories()
-            self._state()
+            self._state(light=True)
             return f"closed tab ({len(remaining)} remain)"
         except Exception as e:
             return f"close_tab error: {e}"
@@ -1119,7 +1129,7 @@ class KilnBrowser:
             return f"clear_network needs Playwright ({err})"
         self._requests = []
         self._console = []
-        self._state()
+        self._state(light=True)
         return "cleared network + console logs"
 
     def search(self, query, limit=8):
