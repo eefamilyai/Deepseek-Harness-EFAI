@@ -30,10 +30,14 @@ set "DSH_GIT_COMMIT_NAME=unknown"
 set "DSH_GIT_COMMIT_SHORT=unknown"
 git rev-parse --is-inside-work-tree >nul 2>&1
 if not errorlevel 1 (
-  for /f "delims=" %%V in ('git log -1 --pretty=%%s') do set "DSH_GIT_COMMIT_NAME=%%V"
+  for /f "delims=" %%V in ('git log -1 --format=%%s') do set "DSH_GIT_COMMIT_NAME=%%V"
   for /f "delims=" %%V in ('git rev-parse --short HEAD') do set "DSH_GIT_COMMIT_SHORT=%%V"
 )
-echo [start] version: %DSH_GIT_COMMIT_NAME% ^(%DSH_GIT_COMMIT_SHORT%^)
+rem Capture one ANSI escape character so the banner can color itself without
+rem depending on a non-ASCII byte literal in the batch file. The `prompt $E`
+rem trick writes a bare ESC; the `#` delimiter keeps only it.
+for /F "tokens=1 delims=#" %%A in ('"prompt #$E# & for %%B in (1) do rem"') do set "ESC=%%A"
+echo [start] %ESC%[36mversion%ESC%[0m: %DSH_GIT_COMMIT_NAME% ^(%DSH_GIT_COMMIT_SHORT%^)
 
 set "FORCE_BUILD="
 set "DSH_ARGS="
