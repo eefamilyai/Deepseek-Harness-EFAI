@@ -50,9 +50,13 @@ describe('ToolRow.module.css family accents', () => {
     }
   })
 
-  it('carries the accent onto the hover chevron and the separator dot', () => {
-    // The glyph and title come from DisclosureRow's own rebinding contract;
-    // these two parts are ToolRow's own and must follow the same hue.
+  it('colours all four parts from this sheet, not across the artifact split', () => {
+    // DisclosureRow's own `.leading`/`.title` read the accent too, but that
+    // rule ships in the app bundle while the rebind ships in this plugin's
+    // injected stylesheet. Relying on it alone means a row loses its hue
+    // whenever only one of the two artifacts is current — the failure that
+    // left every row but the self-contained skill row grey.
+    expect(declarationText).toMatch(/\.root \.leading,\s*\.root \.title\s*\{\s*color: var\(--dsh-row-accent\);/)
     expect(declarationText).toMatch(/\.chevron\s*\{\s*color: var\(--dsh-row-accent, var\(--dsw-alias-label-secondary\)\);/)
     expect(declarationText).toMatch(/background: var\(--dsh-row-accent, var\(--dsw-alias-label-caption\)\);/)
   })

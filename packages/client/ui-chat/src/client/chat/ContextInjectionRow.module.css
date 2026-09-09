@@ -18,6 +18,12 @@
   --dsh-row-accent: var(--dsw-alias-flow-instruct);
 }
 
+/* Restated here rather than left to DisclosureRow's own read: that rule ships
+   in the app bundle and this rebind ships in the plugin's injected stylesheet,
+   so a row whose hue spans both artifacts loses it whenever only one is
+   current. Two classes, so it outranks the primitive's rule either way. */
+.root .leading,
+.root .title,
 .chevron {
   color: var(--dsh-row-accent);
 }

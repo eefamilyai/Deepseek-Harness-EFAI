@@ -94,6 +94,17 @@
   font-weight: 500;
 }
 
+/* DisclosureRow's own `.leading`/`.title` already read --dsh-row-accent, but
+   that rule ships in the app bundle while the rebind above ships in this
+   plugin's injected stylesheet. The two are independent build artifacts, and
+   when only one is current the row silently loses its colour. Restating the
+   read here (two classes, so it outranks the primitive's single-class rule
+   either way) keeps each row's hue in the same stylesheet as its rebind. */
+.root .leading,
+.root .title {
+  color: var(--dsh-row-accent);
+}
+
 /* The hover/open chevron replaces the leading glyph in place, so it takes the
    same accent — a neutral chevron would drain the row's colour on hover. */
 .chevron {

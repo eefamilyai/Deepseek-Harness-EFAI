@@ -38,6 +38,8 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
     <DisclosureRow
       className={css.root}
       rowClassName={css.row}
+      leadingClassName={css.leading}
+      titleClassName={css.title}
       icon={provenance.role === 'recall'
         ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
         : <IconContextInjectionOutline16 size={14} />}
