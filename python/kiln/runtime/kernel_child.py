@@ -793,6 +793,25 @@ def _memory_store():
 
 
 
+def _ctx_bind_entries():
+    store = _memory_store()
+    if store is None:
+        return {}
+    try:
+        entries = store.entries()
+    except Exception:
+        return {}
+    out = {}
+    for name, entry in entries.items():
+        if entry.get("kind") != "ctx":
+            continue
+        _, text = store.get(name)
+        if text is None:
+            continue
+        out[str(name)] = text
+    return out
+
+
 def _as_text(value):
 
     """Text for storage. Strings go verbatim; everything else is rendered so
@@ -823,7 +842,7 @@ def _as_text(value):
 
 
 
-def remember(name, value):
+def remember(name, value, kind="note"):
 
     """Store something durably under `name`, and keep the live object too.
 
@@ -863,7 +882,7 @@ def remember(name, value):
 
         text = _as_text(value)
 
-        entry = store.put(key, text, kind="note")
+        entry = store.put(key, text, kind=kind)
 
     except Exception as e:
 
@@ -3631,7 +3650,7 @@ _ns.update(prompt_dict)
 # sync into the live namespace (was snapshotted earlier)
 try:
     if rlm_context is not None:
-        rlm_context.install(_ns, _seam_request)
+        rlm_context.install(_ns, _seam_request, _ctx_bind_entries)
 except Exception as _rlm_install_error:
     sys.stderr.write("rlm_context install failed: %s\n" % _rlm_install_error)
 

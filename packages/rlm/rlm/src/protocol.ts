@@ -53,4 +53,9 @@ export const RLM_SYSTEM_PROMPT = [
   'rlm_dump() emits your machine-readable state; the harness calls it for you,',
   'so you usually do not need to call it yourself. Just keep your variables and',
   'answer current.',
+  '',
+  'Your ctx_write variables are given to you again every turn automatically,',
+  'including after a kernel restart, without you calling anything to fetch',
+  'them. You may still call ctx_read(name) to pull a value explicitly and',
+  'ctx_write(name, value) to update it in place.',
 ].join('\n')

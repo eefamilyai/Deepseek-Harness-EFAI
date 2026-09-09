@@ -232,12 +232,18 @@ export class KernelContextService extends Service<Config> {
    * kernel reports `busy()` (fix #1: never queue a read behind an in-flight
    * fan-out cell on the serialized kernel).
    */
-  async read(signal?: AbortSignal): Promise<RlmSnapshot | undefined> {
+  async read(signal?: AbortSignal, owner?: AssemblyAgentLike): Promise<RlmSnapshot | undefined> {
     if (this.config.disabled) return undefined
     try {
       if (this.ctx.kernel.busy()) return undefined
+      // Thread the owning agent as `agentCtx` so the provider scopes the cell's
+      // conversation key: rlm_dump() then rehydrates THIS conversation's durable
+      // ctx binds (kind="ctx") instead of returning a store-less empty dump.
+      const agentCtx = owner === undefined ? undefined : ({ agent: owner } as unknown as Context)
       const result = await this.ctx.kernel.execute(
-        { code: 'rlm_dump()', timeoutMs: READ_TIMEOUT_MS },
+        agentCtx === undefined
+          ? { code: 'rlm_dump()', timeoutMs: READ_TIMEOUT_MS }
+          : { code: 'rlm_dump()', timeoutMs: READ_TIMEOUT_MS, agentCtx },
         signal,
       )
       if (result.outcome !== 'ok') return undefined
@@ -261,7 +267,7 @@ export function apply(ctx: Context, config: Config): void {
     const assembled = await next()
     if (resolved.disabled) return assembled
     if (!service.allowedAgent(context)) return assembled
-    const snapshot = await service.read()
+    const snapshot = await service.read(context.signal, assemblyAgent(context))
     if (snapshot === undefined) return assembled
     // Fix #3: a READY answer is terminal — the agent already received it via
     // `llm_batch`'s return value. Re-injecting it every turn would only amplify

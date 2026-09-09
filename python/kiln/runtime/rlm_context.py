@@ -40,11 +40,12 @@ def _to_text(value):
 
 
 class RlmContext:
-    def __init__(self, ns, seam_request):
+    def __init__(self, ns, seam_request, durable_entries=None):
         self._ns = ns
         self._seam = seam_request
         self.answer = {"content": "", "ready": False}
         self._written = set()
+        self._durable_entries = durable_entries
         # Names the model may NOT shadow with ctx_write: the namespace is the
         # harness's live surface, and overwriting a helper (remember, recall,
         # llm_batch, rlm_dump, ...) would silently break later capability.
@@ -83,7 +84,7 @@ class RlmContext:
         self._ns[key] = value
         self._written.add(key)
         try:
-            self._ns["remember"](key, value)
+            self._ns["remember"](key, value, kind="ctx")
         except Exception:
             pass
         return "ctx %r = %s" % (key, type(value).__name__)
@@ -123,6 +124,17 @@ class RlmContext:
             except Exception:
                 return "<unserializable>"
 
+    def _durable_binds(self):
+        if self._durable_entries is None:
+            return {}
+        try:
+            entries = self._durable_entries()
+        except Exception:
+            return {}
+        if not isinstance(entries, dict):
+            return {}
+        return {str(k): v for k, v in entries.items()}
+
     def rlm_dump(self):
         """Emit one marker line carrying answer + tracked binds as JSON.
 
@@ -130,18 +142,22 @@ class RlmContext:
         ``rlm_dump()`` through ``ctx.kernel.execute`` and parses the marker.
         It is a pure read -- it mutates nothing and prints nothing else.
         """
+        durable = self._durable_binds()
         names = set(self._written)
         for key in self._ns:
             if key.startswith("sub_"):
                 names.add(key)
+        for key in durable:
+            if key not in self._reserved and key not in names:
+                names.add(key)
         binds = {}
         for key in sorted(names):
-            if key not in self._ns:
+            if key in self._reserved:
                 continue
-            value = self._ns[key]
-            if callable(value):
-                continue
-            binds[key] = self._json_safe(value)
+            if key in self._ns and not callable(self._ns[key]):
+                binds[key] = self._json_safe(self._ns[key])
+            elif key in durable:
+                binds[key] = durable[key]
         payload = json.dumps({
             "answer": {
                 "content": self.answer.get("content", ""),
@@ -173,9 +189,9 @@ class RlmContext:
         return results
 
 
-def install(ns, seam_request):
+def install(ns, seam_request, durable_entries=None):
     """Install the RLM facet into the kernel namespace. Returns the RlmContext."""
-    ctx = RlmContext(ns, seam_request)
+    ctx = RlmContext(ns, seam_request, durable_entries)
     ns["answer"] = ctx.answer
     for name in ("set_answer", "answer_ready", "answer_content",
                  "ctx_write", "ctx_read", "ctx_list", "llm_batch",
