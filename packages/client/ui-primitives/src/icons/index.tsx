@@ -853,6 +853,29 @@ export const IconSparkle16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
+/** braces_16 (code tool-row leading glyph; hand-authored `{ }` at the family
+ *  stroke weight. Not the `</>` form — IconInspectOutline12 already carries
+ *  that shape as the trajectory affordance, and both appear on one expanded
+ *  code row.) */
+export const IconBracesOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M6.2 2.6C4.9 2.6 4.3 3.2 4.3 4.5V6.4C4.3 7.4 3.85 8 3 8C3.85 8 4.3 8.6 4.3 9.6V11.5C4.3 12.8 4.9 13.4 6.2 13.4"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M9.8 2.6C11.1 2.6 11.7 3.2 11.7 4.5V6.4C11.7 7.4 12.15 8 13 8C12.15 8 11.7 8.6 11.7 9.6V11.5C11.7 12.8 11.1 13.4 9.8 13.4"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 /** inspect_outline_12 (shared tool-row trajectory affordance glyph) */
 export const IconInspectOutline12 = ({ size = 12, className }: IconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>

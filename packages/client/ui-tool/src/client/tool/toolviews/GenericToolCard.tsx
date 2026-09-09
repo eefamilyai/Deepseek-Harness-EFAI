@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import {
-  IconApiOutline14, IconBrowseOutline16, IconCodeOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
+  IconApiOutline14, IconBracesOutline16, IconBrowseOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallOwnerProps, ToolTreeProps } from '../../contract/slots.ts'
 import { readCardModel } from '../models/read-card-model.ts'
@@ -18,7 +18,7 @@ const VARIANT_ICONS: Record<ToolRowVariant, ReactNode> = {
   bash: <IconApiOutline14 size={14} />,
   write: <IconEditOutline16 size={14} />,
   edit: <IconEditOutline16 size={14} />,
-  code: <IconCodeOutline16 size={14} />,
+  code: <IconBracesOutline16 size={14} />,
   others: <IconSparkle16 size={14} />,
 }
 

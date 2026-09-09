@@ -46,23 +46,60 @@
   flex-shrink: 0;
 }
 
+/* Family accent (--dsw-alias-flow-*, design-platform.css): the leading glyph,
+   the title, and the separator dot carry one hue per row family, so a scrolled
+   transcript indexes by colour. The summary keeps its neutral tone — it is the
+   row's content, not its kind. Write and edit share the mutate hue: they are
+   one family, already drawn with one icon. `others` sets nothing and falls
+   through to the neutral defaults below, because an unclassified call must not
+   claim a hue that means something on a classified one. */
+.root[data-variant='search'] {
+  --dsh-row-accent: var(--dsw-alias-flow-search);
+}
+
+.root[data-variant='read'] {
+  --dsh-row-accent: var(--dsw-alias-flow-read);
+}
+
+.root[data-variant='write'],
+.root[data-variant='edit'] {
+  --dsh-row-accent: var(--dsw-alias-flow-mutate);
+}
+
+.root[data-variant='bash'] {
+  --dsh-row-accent: var(--dsw-alias-flow-shell);
+}
+
+.root[data-variant='code'] {
+  --dsh-row-accent: var(--dsw-alias-flow-code);
+}
+
 /* Cordis lifecycle tools retain their generic row mechanics while carrying a
-   shared product accent and tool-owned action title. */
-.root[data-tool^='cordis_'] .leading,
-.root[data-tool^='cordis_'] .title {
-  color: var(--dsw-alias-state-business-primary);
+   shared product accent and tool-owned action title. Tool-scoped, so it must
+   follow the variant rules it overrides — both are one class plus one
+   attribute, and the cascade resolves the tie by order. */
+.root[data-tool^='cordis_'] {
+  --dsh-row-accent: var(--dsw-alias-state-business-primary);
 }
 
 .root[data-tool^='cordis_'] .title {
   font-weight: 500;
 }
 
-.root[data-tool^='cordis_'] .sep {
-  background: var(--dsw-alias-state-business-primary);
+/* Two classes each, so the accent wins over DisclosureRow's own single-class
+   `.leading` and `.title` colors whichever sheet the bundler emits first. */
+.root .leading {
+  color: var(--dsh-row-accent, var(--dsw-alias-label-tertiary));
 }
 
+.root .title {
+  color: var(--dsh-row-accent, var(--dsw-alias-label-secondary));
+}
+
+/* The hover/open chevron replaces the leading glyph in place, so it takes the
+   same accent — a neutral chevron would drain the row's colour on hover. */
 .chevron {
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsh-row-accent, var(--dsw-alias-label-secondary));
 }
 
 .title {
@@ -75,7 +112,7 @@
   height: 2px;
   border-radius: 1px;
   margin: 0 8px;
-  background: var(--dsw-alias-label-caption);
+  background: var(--dsh-row-accent, var(--dsw-alias-label-caption));
 }
 
 .summary {

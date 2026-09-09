@@ -53,6 +53,8 @@ kind: "package-reference"
 
 `src/styles/` 下有五张样式表，由 ui-theme 的动态客户端 entry 依次导入：`base.css`、`design-platform.css`、`scrollbar.css`、`gradient-shadow-text.css` 与 `shiki.css`。客户端 bundle 将其编译并注入为插件持有的全局样式，因此卸载与 HMR 会随 ui-theme 一同移除。`scrollbar.css` 是 `--dsw-alias-scrollbar-*` token 的唯一消费方，必须排在声明这些 token 的 `design-platform.css` 之后。
 
+`design-platform.css` 还声明了 `--dsw-alias-flow-*` 强调色组：为每类紧凑流内行各配一种色相——`think`、`search`、`read`、`mutate`（write 与 edit）、`shell` 与 `code`——由 ui-chat 的 think 行与 ui-tool 的工具行应用到前导字形、标题、hover chevron 与分隔点上。该组与表示运行状态的 `--dsw-alias-state-*` 分开，并避开 error 与 warn 色阶，因此强调色不会被读成失败或中断的行。每套主题解析各自的 static 阶，对该主题的 `--dsw-alias-bg-base` 均达到 4.5:1。未分类的通用行不设强调色，保持中性 label 色调。
+
 `gradient-shadow-text.css` 从 `--dsh-content-font-size` 派生 `--dsh-content-font-delta`，并以该增量移动 Markdown 标题与基础文本阶梯。它同时派生低一档变量 `--dsh-content-font-size-secondary`（设置 ≤14 时为设置值 −1，>14 时为设置值 −2；默认设置下为 13px）及配套的 `--dsh-content-font-delta-secondary`，供表格变体与比正文低一档的流内行使用。紧凑的小号文本与代码变体保持固定字号。阶梯之外，用户气泡与 composer 草稿直接读取正文档变量对，流内行的标题及摘要读取低一档变量对。
 
 ### 滚动条重新绑定

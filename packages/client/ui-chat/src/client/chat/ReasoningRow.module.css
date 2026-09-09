@@ -33,8 +33,15 @@
   flex-shrink: 0;
 }
 
-.chevron {
-  color: var(--dsw-alias-label-secondary);
+/* Think's seat in the flow-row accent set (--dsw-alias-flow-*,
+   design-platform.css): the glyph, the title, the hover/open chevron, and the
+   separator dot, matching what ui-tool's ToolRow gives each tool family. The
+   two-class selectors outrank DisclosureRow's own single-class `.leading` and
+   `.title` colors whichever sheet the bundler emits first. */
+.root .leading,
+.root .title,
+.root .chevron {
+  color: var(--dsw-alias-flow-think);
 }
 
 .title {
@@ -47,7 +54,7 @@
   height: 2px;
   margin: 0 8px;
   border-radius: 1px;
-  background: var(--dsw-alias-label-caption);
+  background: var(--dsw-alias-flow-think);
 }
 
 /* Think text reads the secondary tier — one step under the body size
