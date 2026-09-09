@@ -33,10 +33,13 @@ file. It builds on the existing fork seams:
 
 ## Composition
 
-The companion fork-owned bundle `packages/bundle/efai-rlm` carries the
-`rlm.enabled` toggle. When enabled it mounts this package and removes the
-standalone `kernel`, filesystem, shell, and background-job tools — the things
-the RLM REPL subsumes — while keeping the `kernel`/`kernel-python` *services*
-alive underneath, because the engine's REPL is that kernel.
+The `rlm.enabled` toggle is mounted from the host base composition
+(`packages/bundle/base/cordis.patch.yml`) alongside the `rlm-mode` settings
+row. When enabled, it mounts this package, unmounts the standalone
+`tool-kernel` row, and the engine drives the persistent kernel directly. The
+shell, filesystem, search, and background-job tools remain gated by
+`kernel.enabled`, because the RLM REPL subsumes them while it is active — and
+the `kernel`/`kernel-python` *services* stay alive underneath, since the
+engine's REPL is that kernel.
 
 See `HARNESS-EDITS.md` for the fork's tier rules; this package is Tier 1.

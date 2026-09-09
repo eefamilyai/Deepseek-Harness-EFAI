@@ -7,7 +7,7 @@
  * owns `kernel.enabled`. It stays mounted in BOTH positions of its own switch
  * (a switch that disappeared when off could never be turned back on), and the
  * gating itself is composition: the rows in the shipped agent presets read
- * `dshSettingFlag('rlm.enabled', false)` once at boot (`applies: 'restart'`).
+ * `dshSettingFlag('rlm.enabled', true)` once at boot (`applies: 'restart'`).
  *
  * RLM mode still needs the persistent Python kernel *seam* underneath — the
  * engine executes cells through `ctx.kernel` — so a profile that turns RLM on
@@ -17,7 +17,7 @@
  * - id: rlm-mode
  *   name: '@deepseek-ai/dsh-rlm-mode'
  *   config:
- *     enabled: false
+ *     enabled: true
  * ```
  *
  * @module @deepseek-ai/dsh-rlm-mode
@@ -36,8 +36,8 @@ export const RLM_SETTINGS_NAMESPACE = 'rlm'
 /** The document path compositions read through `dshSettingFlag`. */
 export const RLM_ENABLED_PATH = 'rlm.enabled'
 
-/** Default when the user has never touched the switch: conventional kernel tool, no RLM. */
-export const RLM_ENABLED_DEFAULT = false
+/** Default when the user has never touched the switch: recursive RLM engine. */
+export const RLM_ENABLED_DEFAULT = true
 
 /** Plugin config: the switch, and its composition-layer default. */
 export interface Config {
