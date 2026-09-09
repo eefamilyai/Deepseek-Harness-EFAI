@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-web-flow-row-family-accents.md
-2026-09-09-web-flow-row-family-accents.md: 9b7dcfe2b0bf6bc77ffc0e5921c8431e9981d652
-2026-09-09-web-flow-row-family-accents.zh.md: ebf6e27f806b0278b105cb9e2d65281872ba1087
+2026-09-09-web-flow-row-family-accents.md: 5d4ea5ee8da68549a73ae9d7866a8c5c6b6aec0d
+2026-09-09-web-flow-row-family-accents.zh.md: 4e1cfe659865377fab187460a94bca5fe0447cc1

@@ -25,10 +25,12 @@ function declared(prefix: string, dark: boolean): Map<string, string> {
 }
 
 describe('design-platform.css flow accents', () => {
-  it('declares the same six family accents in both themes', () => {
+  it('declares the same eight family accents in both themes', () => {
     const light = [...declared('--dsw-alias-flow-', false).keys()].sort()
     expect(light).toEqual([
       '--dsw-alias-flow-code',
+      '--dsw-alias-flow-generic',
+      '--dsw-alias-flow-instruct',
       '--dsw-alias-flow-mutate',
       '--dsw-alias-flow-read',
       '--dsw-alias-flow-search',
@@ -36,6 +38,13 @@ describe('design-platform.css flow accents', () => {
       '--dsw-alias-flow-think',
     ])
     expect([...declared('--dsw-alias-flow-', true).keys()].sort()).toEqual(light)
+  })
+
+  it('gives each family a step no other family shares', () => {
+    for (const dark of [false, true]) {
+      const steps = [...declared('--dsw-alias-flow-', dark).values()]
+      expect(new Set(steps).size, `dark=${String(dark)} reuses a step across families`).toBe(steps.length)
+    }
   })
 
   it('gives each theme its own step of the family hue', () => {

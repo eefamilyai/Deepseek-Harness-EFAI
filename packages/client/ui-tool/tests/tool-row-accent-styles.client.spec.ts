@@ -1,8 +1,10 @@
 /**
  * ToolRow's family-accent wiring as CSS text. jsdom resolves no cascade, so
- * these read the module directly: a classified variant with no
- * `--dsh-row-accent` silently falls back to the neutral tone, and the cordis
- * tool override only wins its equal-specificity tie by appearing later.
+ * these read the module directly: a variant with no `--dsh-row-accent`
+ * silently falls back to the neutral tone, a rebind that lands on `.root`
+ * instead of `.row` leaks the parent's hue into every nested subcall row, and
+ * the cordis tool override only wins its equal-specificity tie by appearing
+ * later.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -15,18 +17,21 @@ const css = readFileSync(
 )
 const declarationText = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
 
-/** Variant -> accent token, read off the `--dsh-row-accent` rules in source order. */
-const accents = new Map<string, string>()
-for (const [, selectors, token] of declarationText.matchAll(
+/** Rules that rebind the accent, in source order, with their selector text. */
+const rebinds = [...declarationText.matchAll(
   /([^{}]*?)\{\s*--dsh-row-accent: var\((--dsw-alias-[\w-]+)\);\s*\}/g,
-)) {
-  for (const [, variant] of selectors!.matchAll(/\[data-variant='([\w-]+)'\]/g)) {
-    accents.set(variant!, token!)
+)].map(([, selectors, token]) => ({ selectors: selectors!, token: token! }))
+
+/** Variant -> accent token; a later rule for the same variant wins, as in the cascade. */
+const accents = new Map<string, string>()
+for (const { selectors, token } of rebinds) {
+  for (const [, variant] of selectors.matchAll(/\[data-variant='([\w-]+)'\]/g)) {
+    accents.set(variant!, token)
   }
 }
 
 describe('ToolRow.module.css family accents', () => {
-  it('gives every classified variant a flow accent and leaves others neutral', () => {
+  it('gives every variant a flow accent, including the unclassified one', () => {
     const variants = Object.keys(VARIANT_TITLE_KEYS) as ToolRowVariant[]
     expect(Object.fromEntries(variants.map(v => [v, accents.get(v) ?? null]))).toEqual({
       search: '--dsw-alias-flow-search',
@@ -35,23 +40,28 @@ describe('ToolRow.module.css family accents', () => {
       edit: '--dsw-alias-flow-mutate',
       bash: '--dsw-alias-flow-shell',
       code: '--dsw-alias-flow-code',
-      others: null,
+      others: '--dsw-alias-flow-generic',
     })
   })
 
-  it('applies the accent to the glyph, the title, the chevron, and the dot', () => {
-    for (const selector of ['.root .leading', '.root .title', '.chevron']) {
-      expect(declarationText).toMatch(
-        new RegExp(`${selector.replace(/[.]/g, '\\.')}\\s*\\{\\s*color: var\\(--dsh-row-accent, var\\(--dsw-alias-label-\\w+\\)\\);`),
-      )
+  it('rebinds on the row, never on the root that also holds nested subcalls', () => {
+    for (const { selectors } of rebinds) {
+      expect(selectors.trim(), 'a `.root` rebind inherits into every nested subcall row').toMatch(/\.row\s*$/)
     }
+  })
+
+  it('carries the accent onto the hover chevron and the separator dot', () => {
+    // The glyph and title come from DisclosureRow's own rebinding contract;
+    // these two parts are ToolRow's own and must follow the same hue.
+    expect(declarationText).toMatch(/\.chevron\s*\{\s*color: var\(--dsh-row-accent, var\(--dsw-alias-label-secondary\)\);/)
     expect(declarationText).toMatch(/background: var\(--dsh-row-accent, var\(--dsw-alias-label-caption\)\);/)
   })
 
   it('orders the cordis tool override after the variant rules it overrides', () => {
-    // Both are one class plus one attribute; only source order breaks the tie.
+    // Equal specificity (one class, one attribute, one class); only source order
+    // breaks the tie, and cordis_package_inspect is also a `read` variant.
     const lastVariant = declarationText.lastIndexOf("[data-variant='")
-    const cordis = declarationText.indexOf("[data-tool^='cordis_'] {")
+    const cordis = declarationText.indexOf("[data-tool^='cordis_'] .row {")
     expect(lastVariant).toBeGreaterThan(-1)
     expect(cordis).toBeGreaterThan(lastVariant)
   })

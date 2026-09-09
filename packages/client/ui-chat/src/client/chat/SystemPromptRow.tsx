@@ -24,6 +24,7 @@ export function SystemPromptRow({ text, t }: SystemPromptRowProps) {
   return (
     <DisclosureRow
       className={css.root}
+      rowClassName={css.row}
       icon={<IconBrowseOutline16 size={14} />}
       chevronClassName={css.chevron}
       title={t('message.systemPrompt')}

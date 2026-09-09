@@ -9,8 +9,17 @@
   padding-bottom: 4px;
 }
 
+/* Instruction material's seat in the flow-row accent set (--dsw-alias-flow-*,
+   design-platform.css), shared with the skill row: an injected instruction
+   file, a skill catalog, a recalled session, and the complete system prompt
+   are all text placed in the model's instructions, which is one kind of row
+   however it was produced. Rebound on `.row` per DisclosureRow's contract. */
+.row {
+  --dsh-row-accent: var(--dsw-alias-flow-instruct);
+}
+
 .chevron {
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsh-row-accent);
 }
 
 /* Separator and producer name beside the role title: ToolRow's summary geometry,
@@ -21,7 +30,7 @@
   height: 2px;
   margin: 0 8px;
   border-radius: 1px;
-  background: var(--dsw-alias-label-caption);
+  background: var(--dsh-row-accent);
 }
 
 .source {

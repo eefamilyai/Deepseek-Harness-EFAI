@@ -36,6 +36,18 @@ describe('DisclosureRow.module.css font-size axis', () => {
     ]))
   })
 
+  it('routes the glyph and title colors through the family-accent rebind', () => {
+    // Every flow row (tool calls, think, context, system prompt) recolours
+    // itself by setting --dsh-row-accent above the row; unset must leave both
+    // parts on the neutral label tokens, which is what a plain disclosure gets.
+    expect(declarations('.leading')).toEqual(expect.arrayContaining([
+      'color: var(--dsh-row-accent, var(--dsw-alias-label-tertiary))',
+    ]))
+    expect(declarations('.title')).toEqual(expect.arrayContaining([
+      'color: var(--dsh-row-accent, var(--dsw-alias-label-secondary))',
+    ]))
+  })
+
   it('scales leading glyphs via the svg edge but exempts StateDot', () => {
     // StateDot marks itself with data-state; the :not filter keeps the status
     // mark at its fixed figma size while text-furniture icons follow the text.

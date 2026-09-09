@@ -33,7 +33,7 @@ Ordinary-session candidates come from the `skills/list` Remote; the host serves 
 
 ### The skill tool row
 
-A collapsed row renders the skill glyph, `Skill` title, and requested skill name; running calls carry the transcript shimmer, failures replace the name with the first error line, and interrupted calls use the warning state. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
+A collapsed row renders the skill glyph, `Skill` title, and requested skill name in the `instruct` family accent it shares with the context-injection and system-prompt rows ([token group](../ui-theme/README.md)) — a loaded skill and an injected instruction file are the same kind of material. This row builds its own chrome instead of composing `DisclosureRow`, so it rebinds `--dsh-row-accent` itself. Running calls carry the transcript shimmer, failures replace the name with the first error line, and interrupted calls use the warning state. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
 
 -----
 

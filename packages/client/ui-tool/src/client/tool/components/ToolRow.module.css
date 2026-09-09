@@ -47,53 +47,51 @@
 }
 
 /* Family accent (--dsw-alias-flow-*, design-platform.css): the leading glyph,
-   the title, and the separator dot carry one hue per row family, so a scrolled
-   transcript indexes by colour. The summary keeps its neutral tone — it is the
-   row's content, not its kind. Write and edit share the mutate hue: they are
-   one family, already drawn with one icon. `others` sets nothing and falls
-   through to the neutral defaults below, because an unclassified call must not
-   claim a hue that means something on a classified one. */
-.root[data-variant='search'] {
+   the title, the hover chevron, and the separator dot carry one hue per row
+   family, so a scrolled transcript indexes by colour. The summary keeps its
+   neutral tone — it is the row's content, not its kind. Write and edit share
+   the mutate hue: they are one family, already drawn with one icon.
+   `--dsh-row-accent` binds on `.row`, not `.root`, because subcalls render as
+   nested rows under the same `.root` and would inherit their parent's hue
+   (DisclosureRow.module.css owns the rebinding contract). */
+.root[data-variant='search'] .row {
   --dsh-row-accent: var(--dsw-alias-flow-search);
 }
 
-.root[data-variant='read'] {
+.root[data-variant='read'] .row {
   --dsh-row-accent: var(--dsw-alias-flow-read);
 }
 
-.root[data-variant='write'],
-.root[data-variant='edit'] {
+.root[data-variant='write'] .row,
+.root[data-variant='edit'] .row {
   --dsh-row-accent: var(--dsw-alias-flow-mutate);
 }
 
-.root[data-variant='bash'] {
+.root[data-variant='bash'] .row {
   --dsh-row-accent: var(--dsw-alias-flow-shell);
 }
 
-.root[data-variant='code'] {
+.root[data-variant='code'] .row {
   --dsh-row-accent: var(--dsw-alias-flow-code);
+}
+
+/* Unclassified calls are still calls, and they are common enough here (goal,
+   RLM, and preset tools all land on this variant) that leaving them grey put
+   the busiest rows outside the index. */
+.root[data-variant='others'] .row {
+  --dsh-row-accent: var(--dsw-alias-flow-generic);
 }
 
 /* Cordis lifecycle tools retain their generic row mechanics while carrying a
    shared product accent and tool-owned action title. Tool-scoped, so it must
    follow the variant rules it overrides — both are one class plus one
-   attribute, and the cascade resolves the tie by order. */
-.root[data-tool^='cordis_'] {
+   attribute plus one class, and the cascade resolves the tie by order. */
+.root[data-tool^='cordis_'] .row {
   --dsh-row-accent: var(--dsw-alias-state-business-primary);
 }
 
 .root[data-tool^='cordis_'] .title {
   font-weight: 500;
-}
-
-/* Two classes each, so the accent wins over DisclosureRow's own single-class
-   `.leading` and `.title` colors whichever sheet the bundler emits first. */
-.root .leading {
-  color: var(--dsh-row-accent, var(--dsw-alias-label-tertiary));
-}
-
-.root .title {
-  color: var(--dsh-row-accent, var(--dsw-alias-label-secondary));
 }
 
 /* The hover/open chevron replaces the leading glyph in place, so it takes the
