@@ -134,6 +134,15 @@
   min-width: 0;
 }
 
+/* The whale carries the brand blue while the name beside it stays on the text
+   ink, which is the real lockup — blue mark, dark wordmark. The figma note on
+   .brand above governs the NAME slot only; the mark was never the black half
+   of that pair, it was inheriting the button's ink for want of a rule. */
+.brandMark,
+.railMark {
+  color: var(--dsw-alias-state-business-primary);
+}
+
 .brandMark {
   flex: none;
   display: inline-flex;
@@ -159,21 +168,24 @@
   white-space: nowrap;
 }
 
+/* Two-line lockup in the 24px brand slot: name over build badge, 12 + 12 with
+   no gap, so it occupies the same height as the one-line official wordmark. */
 .localBuildBrand {
   flex: none;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 1px;
+  gap: 0;
   height: 24px;
   white-space: nowrap;
 }
 
 .localBuildTitle {
   font-size: 12px;
-  line-height: 13px;
+  line-height: 12px;
   letter-spacing: 0;
+  color: var(--dsw-alias-label-primary);
 }
 
 .iconButton {
@@ -227,19 +239,24 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Build badge: a brand-blue pill under the name, tying the version to the
+   whale above it rather than reading as a black debug sticker. Foreground,
+   not inverted — the token pair is designed against a brand fill and holds in
+   both themes, where inverted ink on blue does not. */
 .buildVersion {
   flex: none;
   display: inline-flex;
   align-items: center;
-  height: 10px;
-  padding: 0 3px;
-  border-radius: 2px;
-  color: var(--dsw-alias-label-primary-inverted);
-  background: var(--dsw-alias-label-primary);
+  height: 12px;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-state-business-primary);
   font-family: var(--ds-font-family-code);
-  font-size: 6px;
+  font-size: 8px;
   font-weight: 500;
-  line-height: 10px;
+  line-height: 12px;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 

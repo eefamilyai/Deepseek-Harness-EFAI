@@ -18,7 +18,11 @@ Both themes take the most chromatic value their surface allows at a 4.5:1 floor 
 
 The rebind binds on the row element, never on an outer wrapper: `ToolCallTree` renders subcalls as nested rows inside the parent call's wrapper, and a wrapper binding would inherit the parent's hue into every child that sets none. `ToolRow` therefore writes `.root[data-variant='…'] .row`, and the `cordis_*` rule rebinds to the product accent from the same position, which requires it to sit after the variant rules it overrides (equal specificity; only source order breaks the tie).
 
+Three rows replicate the disclosure chrome rather than composing `DisclosureRow`, so each rebinds and applies the accent on its own four parts: `SkillRow`, the keyed `bash` view in `bash-sample.module.css`, and — already, on the product accent — the Cordis rows. The bash one is the trap: `bash` dispatches to that keyed view, so `ToolRow`'s `[data-variant='bash']` rule never runs for a real shell call and the shell hue would have shipped dead. `bash-sample.module.css` already carries a TODO to migrate onto `DisclosureRow`, which would delete its copy of this wiring along with its copy of the glyph rule.
+
 The code variant's glyph is the new `IconBracesOutline16`, a hand-authored `{ }` at the icon family's 1.25 stroke weight. `IconCodeOutline16` keeps its other call sites (the dock header action and the two Cordis rows).
+
+The sidebar brand lockup adopts the same reading. Both mark seats take the brand blue while the name beside them stays on the text ink — a blue mark with a dark wordmark is the lockup either occupant expects, and the figma note that fixed the main-screen instance black governs the name slot; the mark had no rule of its own and was inheriting the button's ink. The local-build version badge becomes a brand-blue pill on foreground ink at 8px rather than a black slab at 6px, so it reads as part of that lockup, and the two-line stack keeps the 24px slot height a one-line official wordmark occupies.
 
 ## Alternatives considered
 
@@ -40,7 +44,7 @@ The code variant's glyph is the new `IconBracesOutline16`, a hand-authored `{ }`
 
 ## Testing
 
-`flow-accent-tokens.client.spec.ts` reads `design-platform.css` and pins the group: the same eight accents in both themes, a different step per theme, no step shared between two families, every accent resolving to a static step that theme declares, and no accent on the red or amber ramps. `tool-row-accent-styles.client.spec.ts` pins the variant-to-token map for every variant, the two parts ToolRow itself colours, the cordis rule's position after the variant rules, and that every rebind selector ends at `.row` rather than `.root`. `disclosure-row-styles.client.spec.ts` pins the primitive's fallback, which is what keeps an unset row neutral. All three read CSS text because jsdom resolves no cascade.
+`flow-accent-tokens.client.spec.ts` reads `design-platform.css` and pins the group: the same eight accents in both themes, a different step per theme, no step shared between two families, every accent resolving to a static step that theme declares, and no accent on the red or amber ramps. `tool-row-accent-styles.client.spec.ts` pins the variant-to-token map for every variant, the two parts ToolRow itself colours, the cordis rule's position after the variant rules, that every rebind selector ends at `.row` rather than `.root`, and that the keyed bash view rebinds the shell hue on all four of its own parts — the case where a live variant rule reaches no live row. `disclosure-row-styles.client.spec.ts` pins the primitive's fallback, which is what keeps an unset row neutral. All three read CSS text because jsdom resolves no cascade.
 
 ## Consequences
 

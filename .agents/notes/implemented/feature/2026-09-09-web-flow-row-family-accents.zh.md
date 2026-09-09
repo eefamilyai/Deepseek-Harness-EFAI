@@ -18,7 +18,11 @@ Status: implemented
 
 重新绑定落在行元素上，绝不落在外层容器上：`ToolCallTree` 把子调用渲染成父调用容器内部的嵌套行，绑在容器上会让每个自身未设置的子行继承父行的色相。因此 `ToolRow` 写作 `.root[data-variant='…'] .row`，`cordis_*` 规则也从同一位置重新绑定到产品强调色；这要求它排在被其覆盖的变体规则之后（特异性相同，只有源码顺序能打破平局）。
 
+有三种行复制了 disclosure 行内结构而非组合 `DisclosureRow`，因此各自在自己的四处上重新绑定并应用强调色：`SkillRow`、`bash-sample.module.css` 中按 key 注册的 `bash` 视图，以及已经采用产品强调色的 Cordis 行。bash 那一处是陷阱：`bash` 会分派到该 keyed 视图，因此 `ToolRow` 的 `[data-variant='bash']` 规则对真实的 shell 调用根本不会生效，shell 色相本会成为死代码。`bash-sample.module.css` 中已有一条 TODO 建议迁移到 `DisclosureRow`，那将连同它那份字形规则一起删掉这份接线副本。
+
 code 变体的字形换成新的 `IconBracesOutline16`：手工绘制的 `{ }`，采用图标族的 1.25 描边宽度。`IconCodeOutline16` 保留其余调用点（dock 头部动作与两个 Cordis 行）。
+
+侧边栏品牌组合采用同一套读法。两个 mark 位都取品牌蓝，而旁边的名称保持文本墨色——蓝色标记配深色字标正是两种占位者都预期的组合；figma 中把主屏实例定为黑色的那条注记管的是 name 位，mark 位本就没有自己的规则，只是继承了按钮的墨色。本地构建的版本徽标从 6px 的黑色方块改为 8px 的品牌蓝胶囊配前景墨色，因此它读起来属于该组合；两行堆叠也保持单行官方字标所占的 24px 槽位高度。
 
 ## Alternatives considered
 
@@ -40,7 +44,7 @@ code 变体的字形换成新的 `IconBracesOutline16`：手工绘制的 `{ }`�
 
 ## Testing
 
-`flow-accent-tokens.client.spec.ts` 读取 `design-platform.css` 并锁定该组：两套主题声明同样的八个强调色、每套主题各用不同的阶、没有两个族共用同一个阶、每个强调色都解析到该主题声明过的 static 阶、且没有任何强调色落在 red 或 amber 色阶上。`tool-row-accent-styles.client.spec.ts` 锁定每个变体到 token 的映射、ToolRow 自己上色的两处、cordis 规则位于变体规则之后，以及每条重新绑定的选择器都以 `.row` 而非 `.root` 结尾。`disclosure-row-styles.client.spec.ts` 锁定 primitive 的回退值，正是它让未设置强调色的行保持中性。三者都读 CSS 文本，因为 jsdom 不解析 cascade。
+`flow-accent-tokens.client.spec.ts` 读取 `design-platform.css` 并锁定该组：两套主题声明同样的八个强调色、每套主题各用不同的阶、没有两个族共用同一个阶、每个强调色都解析到该主题声明过的 static 阶、且没有任何强调色落在 red 或 amber 色阶上。`tool-row-accent-styles.client.spec.ts` 锁定每个变体到 token 的映射、ToolRow 自己上色的两处、cordis 规则位于变体规则之后、每条重新绑定的选择器都以 `.row` 而非 `.root` 结尾，以及按 key 注册的 bash 视图在自己的四处上都重新绑定了 shell 色相——即某条生效的变体规则却触及不到任何真实行的情形。`disclosure-row-styles.client.spec.ts` 锁定 primitive 的回退值，正是它让未设置强调色的行保持中性。三者都读 CSS 文本，因为 jsdom 不解析 cascade。
 
 ## Consequences
 

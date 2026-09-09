@@ -57,6 +57,23 @@ describe('ToolRow.module.css family accents', () => {
     expect(declarationText).toMatch(/background: var\(--dsh-row-accent, var\(--dsw-alias-label-caption\)\);/)
   })
 
+  it('reaches the keyed bash view, which replicates the chrome instead of composing it', () => {
+    // `bash` dispatches to bash-sample.tsx, not GenericToolCard, so ToolRow's
+    // [data-variant='bash'] rule never runs for a real shell call: the shell
+    // hue only ships if that row rebinds the accent on its own chrome.
+    const bash = readFileSync(
+      fileURLToPath(new URL('../src/client/tool/toolviews/bash-sample.module.css', import.meta.url)),
+      'utf8',
+    ).replace(/\/\*[\s\S]*?\*\//g, ' ')
+    expect(bash).toMatch(/--dsh-row-accent: var\(--dsw-alias-flow-shell\);/)
+    for (const part of ['.leading', '.chevron', '.title']) {
+      expect(bash, `${part} must take the rebound accent`).toMatch(
+        new RegExp(`\\${part}\\s*\\{[^}]*color: var\\(--dsh-row-accent\\)`),
+      )
+    }
+    expect(bash).toMatch(/\.sep\s*\{[^}]*background: var\(--dsh-row-accent\)/)
+  })
+
   it('orders the cordis tool override after the variant rules it overrides', () => {
     // Equal specificity (one class, one attribute, one class); only source order
     // breaks the tie, and cordis_package_inspect is also a `read` variant.

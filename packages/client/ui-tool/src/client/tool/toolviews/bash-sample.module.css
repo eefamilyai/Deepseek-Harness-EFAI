@@ -84,7 +84,12 @@
   cursor: pointer;
 }
 
+/* This row replicates the DisclosureRow structure rather than composing it
+   (see the TODO on .leading below), so it rebinds the shell family accent
+   itself instead of inheriting ToolRow's `[data-variant='bash']` rule — that
+   rule never reaches a real bash call, which dispatches to this keyed view. */
 .root {
+  --dsh-row-accent: var(--dsw-alias-flow-shell);
   position: relative; /* sweep-glare overlay anchor */
   overflow: hidden;
   display: flex;
@@ -125,7 +130,7 @@
   align-items: center;
   justify-content: center;
   margin-right: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsh-row-accent);
 }
 
 /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
@@ -141,7 +146,7 @@
 }
 
 .chevron {
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsh-row-accent);
 }
 
 /* Hover preview on the expandable row: the idle icon crossfades (100ms) into
@@ -172,7 +177,7 @@
   flex: none;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsh-row-accent);
 }
 
 .sep {
@@ -181,7 +186,7 @@
   height: 2px;
   border-radius: 1px;
   margin: 0 8px;
-  background: var(--dsw-alias-label-caption);
+  background: var(--dsh-row-accent);
 }
 
 .summary {
