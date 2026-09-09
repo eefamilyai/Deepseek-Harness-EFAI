@@ -5,6 +5,7 @@
  */
 
 import type { KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider } from '@deepseek-ai/dsh-kernel'
+import type { Context } from '@deepseek-ai/cordis'
 import { KernelAbortError, KernelChild, parseControlResult } from './child.ts'
 import type { SeamRequest } from './seam.ts'
 import { dispatchSeam } from './seam.ts'
@@ -31,6 +32,21 @@ const LOST_NOTICE = ' Variables in the namespace are gone; anything you saved wi
  * possible reading of "no timeout given".
  */
 const FALLBACK_TIMEOUT_MS = 180_000
+
+/**
+ * The owning agent's shared session id, read structurally rather than through
+ * the `Context.agent` augmentation. This package does not import
+ * `@deepseek-ai/dsh-agent`, so that augmentation is outside its type program
+ * and referencing it here would break an isolated typecheck. The shape matches
+ * `Agent.id` (a string `SessionId`). Absence means the cell was dispatched
+ * without an owning agent, and the Python side falls back to standalone
+ * behavior (no durable conversation key).
+ */
+function conversationOf(agentCtx: Context | undefined): string | undefined {
+  if (agentCtx === undefined) return undefined
+  const agent = (agentCtx as Context & { agent?: { id?: unknown } }).agent
+  return typeof agent?.id === 'string' ? agent.id : undefined
+}
 
 /** The PRIMARY cell budget this request runs under (background on expiry). */
 function budgetOf(request: KernelExecuteRequest): number {
@@ -127,7 +143,13 @@ export class KilnKernelProvider implements KernelProvider {
   async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult> {
     return this.serialize(async () => {
       const child = this.ensureChild()
-      child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs)
+      // The owning agent's shared session id is the durable-conversation key:
+      // one kernel process serves every session, so `remember()`/`recall()`
+      // (and the RLM ctx_write/ctx_read bind path) must be scoped per cell,
+      // exactly like `cwd`. Without a live agent the conversation key is
+      // absent and the Python side falls back to standalone behavior.
+      const conv = conversationOf(request.agentCtx)
+      child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
       const outcome = await this.awaitCell(child, request, signal, request.agentCtx)
       if (outcome.kind === 'ok') {
         return { output: outcome.output, outcome: 'ok' as const, restarted: false }

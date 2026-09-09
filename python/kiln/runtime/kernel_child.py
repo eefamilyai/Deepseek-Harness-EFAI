@@ -746,6 +746,13 @@ def memory_append(text):
 
 import kiln_memory  # noqa: E402
 
+# `_active_conv` holds the conversation key for the cell CURRENTLY RUNNING ON THE
+# CURRENT THREAD. It is declared right after `import threading as _threading`
+# below (thread-local machinery must exist first) and is read by _memory_store().
+# The per-cell envelope value is threaded through _CellRunner to keep one session's
+# durable memory out of another session even when a backgrounded cell and a new
+# foreground cell run concurrently in this one process.
+
 
 
 
@@ -756,9 +763,19 @@ def _memory_store():
 
     conversation (bare `python kernel_child.py`), where there is nothing to
 
-    key on — the helpers then say so rather than writing to a stray folder."""
+    key on — the helpers then say so rather than writing to a stray folder.
 
-    conv = os.environ.get("KILN_CONV_ID") or ""
+    The conversation id is read from the active cell's thread-local first: one
+
+    kernel process serves every session, and a backgrounded cell may run while
+
+    a different session's foreground cell also runs, so a single process-global
+
+    `os.environ['KILN_CONV_ID']` would leak one session's memory into another.
+
+    `KILN_CONV_ID` remains only as a legacy/standalone fallback."""
+
+    conv = (getattr(_active_conv, "value", None) or "").strip() or (os.environ.get("KILN_CONV_ID") or "")
 
     if not conv:
 
@@ -3114,6 +3131,8 @@ import threading as _threading  # noqa: E402
 
 import time as _time  # noqa: E402
 
+_active_conv = _threading.local()
+
 
 
 _SUBKERNELS = {}          # id -> dict(proc=..., permanent=..., name=..., created=...)
@@ -4447,11 +4466,13 @@ class _CellRunner(_threading.Thread):
 
 
 
-    def __init__(self, code):
+    def __init__(self, code, conv=None):
 
         super().__init__(daemon=True)
 
         self._code = code
+
+        self._conv = conv if conv else None
 
         self.out = ""
 
@@ -4469,6 +4490,8 @@ class _CellRunner(_threading.Thread):
 
     def run(self):
 
+        _active_conv.value = self._conv
+
         try:
 
             self.out, self.err = _run_cell(self._code)
@@ -4478,6 +4501,8 @@ class _CellRunner(_threading.Thread):
             self.err = _tag_error(_format_exc(e))
 
         finally:
+
+            _active_conv.value = None
 
             self.done.set()
 
@@ -5647,6 +5672,8 @@ while True:
 
     cell_cwd = None
 
+    cell_conv = None
+
     if code.startswith(_CELL_PREFIX):
 
         try:
@@ -5672,6 +5699,12 @@ while True:
             if raw_cwd is not None and str(raw_cwd).strip() != "":
 
                 cell_cwd = str(raw_cwd)
+
+            raw_conv = envelope.get("conv")
+
+            if raw_conv is not None and str(raw_conv).strip() != "":
+
+                cell_conv = str(raw_conv)
 
         except Exception as e:
 
@@ -5731,7 +5764,7 @@ while True:
 
     secondary_ms = _secondary_ms(primary_ms, cell_secondary_ms)
 
-    runner = _CellRunner(code)
+    runner = _CellRunner(code, conv=cell_conv)
 
     # The foreground window (while this loop is blocked in done.wait) is the
     # only time a cell may attempt a harness seam round-trip; a backgrounded

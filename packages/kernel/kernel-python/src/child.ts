@@ -244,10 +244,12 @@ export class KernelChild {
    * @param timeoutMs - optional primary budget (background on expiry).
    * @param cwd - optional working directory for this cell (the chat's workspace).
    * @param backgroundTimeoutMs - optional secondary budget (force-stop a backgrounded cell).
+   * @param conv - the owning conversation id; scopes durable remember()/recall() storage.
    */
-  send(code: string, timeoutMs?: number, cwd?: string, backgroundTimeoutMs?: number): void {
+  send(code: string, timeoutMs?: number, cwd?: string, backgroundTimeoutMs?: number, conv?: string): void {
     const hasCwd = cwd !== undefined && cwd.length > 0
-    const bare = timeoutMs === undefined && backgroundTimeoutMs === undefined && !hasCwd
+    const hasConv = conv !== undefined && conv.length > 0
+    const bare = timeoutMs === undefined && backgroundTimeoutMs === undefined && !hasCwd && !hasConv
     const payload = bare
       ? code
       : CELL_CTRL_PREFIX + JSON.stringify({
@@ -255,6 +257,7 @@ export class KernelChild {
         ...timeoutMs === undefined ? {} : { timeoutMs },
         ...backgroundTimeoutMs === undefined ? {} : { backgroundTimeoutMs },
         ...hasCwd ? { cwd } : {},
+        ...hasConv ? { conv } : {},
       })
     this.write(Buffer.from(payload, 'utf8').toString('base64'))
   }

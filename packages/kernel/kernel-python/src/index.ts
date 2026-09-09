@@ -173,6 +173,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       // Keeps `subkernels.json` and the ds_direct session pin out of the
       // vendored (read-only, reinstallable) runtime tree.
       KILN_STATE_DIR: stateDir,
+      // Root for the durable `remember()`/`recall()` tier. One SHARED root is
+      // safe: kiln_memory keys each conversation by KILN_CONV_ID, which now
+      // arrives per cell from the owning agent. Keeping it outside the readonly
+      // runtime tree makes it survive a reinstall/upgrade and lets every session
+      // in this process share one durable store without leaking entries across
+      // conversations.
+      KILN_MEMORY_DIR: process.env.KILN_MEMORY_DIR ?? join(stateDir, 'memory'),
       // Where browser_tools writes its live state.json + screenshots. The
       // sidebar browser pane reads this SAME directory over HTTP, so the model
       // and the user share one view of one browser. A global default (not the
