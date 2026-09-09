@@ -283,7 +283,7 @@ Every Tier-2 edit, its owner, and what removes it. Keep this table current; it i
 | 21 | `packages/skill/tool-skill/src/index.ts` | `kernel` | `@skill <name>` is a second user-explicit skill load gesture beside `/name` | Upstream PR, or a fork-owned pre-step plugin |
 | 22 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
 | 23 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |
-| 24 | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | mounts `rlm-mode`/`rlm` engine rows and `rlm.enabled` gates the kernel, shell, filesystem, search, and jobs rows | Move to `packages/bundle/efai-rlm/cordis.patch.yml` (a fork-owned bundle applied by profile) |
+| 24 | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | mounts `rlm-mode`/`rlm` engine rows with `rlm.enabled` defaulting on; `rlm.enabled` unmounts the standalone `tool-kernel` and mounts the engine, while the subsumed shell/fs/search/jobs rows follow `kernel.enabled` | Move to `packages/bundle/efai-rlm/cordis.patch.yml` (a fork-owned bundle applied by profile) |
 
 If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops from 61 files to roughly 12 — and the survivors are lists and infrastructure, which conflict predictably in one place each.
 
