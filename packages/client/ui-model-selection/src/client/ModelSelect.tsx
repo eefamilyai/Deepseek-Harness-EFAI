@@ -17,6 +17,7 @@ import {
 } from 'react'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
   IconWarningOutline16, Toast,
@@ -33,6 +34,68 @@ interface EffortChoice {
   key: string
   effort: string | undefined
   label: string
+}
+
+// DSH-FORK(browser): fold account-bound provider routes (`kiln-deepseek@one`,
+// `kiln-deepseek@two`) under their base provider so the dropdown shows one
+// provider header plus an account picker instead of one header per account.
+// EXIT: upstream adopts account grouping in ModelSelect.
+interface AccountChoice {
+  readonly provider: string
+  readonly account: string | null
+}
+
+interface MergedGroup {
+  readonly baseId: string
+  readonly name: string
+  readonly models: readonly ModelCatalogModel[]
+  readonly accounts: readonly AccountChoice[]
+}
+
+function mergeGroups(groups: readonly ModelProviderGroup[]): readonly MergedGroup[] {
+  const baseById = new Map<string, ModelProviderGroup>()
+  const accountsByBase = new Map<string, ModelProviderGroup[]>()
+  for (const group of groups) {
+    if (group.id.includes('@')) {
+      const baseId = group.id.slice(0, group.id.indexOf('@'))
+      const list = accountsByBase.get(baseId)
+      if (list === undefined) accountsByBase.set(baseId, [group])
+      else list.push(group)
+    } else {
+      baseById.set(group.id, group)
+    }
+  }
+
+  const merged: MergedGroup[] = []
+  for (const group of groups) {
+    if (group.id.includes('@')) {
+      // A route whose base provider is absent is not an account route; render
+      // it as its own group exactly as the unmerged list would.
+      if (!baseById.has(group.id.slice(0, group.id.indexOf('@')))) {
+        merged.push({
+          baseId: group.id,
+          name: group.name,
+          models: group.models,
+          accounts: [{ provider: group.id, account: null }],
+        })
+      }
+      continue
+    }
+    const accounts = accountsByBase.get(group.id) ?? []
+    const baseChoice = { provider: group.id, account: null } satisfies AccountChoice
+    merged.push({
+      baseId: group.id,
+      name: group.name,
+      models: group.models,
+      accounts: accounts.length === 0
+        ? [baseChoice]
+        : [baseChoice, ...accounts.map(account => ({
+          provider: account.id,
+          account: account.id.slice(group.id.length + 1),
+        }))],
+    })
+  }
+  return merged
 }
 
 /**
@@ -63,18 +126,38 @@ export function ModelSelect(
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
 
-  const choices = useMemo(() => state.groups.flatMap(group =>
+  const mergedGroups = useMemo(() => mergeGroups(state.groups), [state.groups])
+  // The account route each merged group currently targets, keyed by base id;
+  // defaults to the account owning the current selection, else the base route.
+  const [accountSelections, setAccountSelections] = useState<Readonly<Record<string, string>>>({})
+
+  // The route each merged group targets: an explicit account pick overrides,
+  // then the account owning the current selection, then the base route.
+  const resolvedProvider = useMemo(() => {
+    const resolved: Record<string, string> = {}
+    for (const group of mergedGroups) {
+      const first = group.accounts[0]?.provider ?? group.baseId
+      resolved[group.baseId] = accountSelections[group.baseId]
+        ?? group.accounts.find(account => account.provider === state.current?.provider)?.provider
+        ?? first
+    }
+    return resolved
+  }, [mergedGroups, accountSelections, state.current?.provider])
+
+  // One choice per base model, resolved through the currently selected account
+  // so keyboard navigation, the selected check mark, and `choose` all agree.
+  const choices = useMemo(() => mergedGroups.flatMap(group =>
     group.models.map(model => ({
       group,
       model,
       selection: {
-        provider: group.id,
+        provider: resolvedProvider[group.baseId] ?? group.baseId,
         model: model.id,
         ...model.reasoning?.defaultEffort === undefined
           ? {}
           : { reasoningEffort: model.reasoning.defaultEffort },
       } satisfies ModelSelection,
-    }))), [state.groups])
+    }))), [mergedGroups, resolvedProvider])
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -109,12 +192,12 @@ export function ModelSelect(
   // catalog arrival does not re-expand providers the user already collapsed.
   const manualCollapseRef = useRef(false)
 
-  // Default collapse: every provider except the one owning the current
-  // selection starts minimized.
+  // Default collapse: every merged base group except the one owning the
+  // current selection starts minimized.
   const defaultCollapsed = useMemo(() => {
-    const current = state.current?.provider
-    return new Set(state.groups.map(group => group.id).filter(id => id !== current))
-  }, [state.groups, state.current?.provider])
+    const currentBase = state.current?.provider?.split('@')[0]
+    return new Set(mergedGroups.map(group => group.baseId).filter(id => id !== currentBase))
+  }, [mergedGroups, state.current?.provider])
 
   const toggleGroup = (groupId: string): void => {
     manualCollapseRef.current = true
@@ -138,6 +221,7 @@ export function ModelSelect(
     })
   }, [open, defaultCollapsed])
 
+
   const reload = (): void => {
     lastActionRef.current = 'load'
     load()
@@ -158,6 +242,8 @@ export function ModelSelect(
     setPane('root')
     manualCollapseRef.current = false
     setCollapsedGroups(defaultCollapsed)
+    // A fresh open re-derives each group's account from the current selection.
+    setAccountSelections({})
     setOpen(true)
     reload()
   }
@@ -320,26 +406,49 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
-                  const headingId = `${id}-${group.id}`
+                {mergedGroups.map((group) => {
+                  const headingId = `${id}-${group.baseId}`
+                  const resolved = resolvedProvider[group.baseId]
+                  const expanded = !collapsedGroups.has(group.baseId)
                   return (
-                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
+                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.baseId}>
                       <button
                         type="button"
                         className={clsx(css.groupTitle, css.groupToggle)}
                         id={headingId}
-                        aria-expanded={!collapsedGroups.has(group.id)}
-                        aria-controls={`${id}-group-${group.id}`}
-                        onClick={() => { toggleGroup(group.id) }}
+                        aria-expanded={expanded}
+                        aria-controls={`${id}-group-${group.baseId}`}
+                        onClick={() => { toggleGroup(group.baseId) }}
                       >
                         <IconChevronDownOutline14
-                          className={clsx(css.groupChevron, collapsedGroups.has(group.id) && css.groupChevronCollapsed)}
+                          className={clsx(css.groupChevron, !expanded && css.groupChevronCollapsed)}
                         />
                         <span className={css.groupName}>{group.name}</span>
                       </button>
-                      <div id={`${id}-group-${group.id}`} hidden={collapsedGroups.has(group.id)}>
+                      <div id={`${id}-group-${group.baseId}`} hidden={!expanded}>
+                        {group.accounts.length > 1 && (
+                          <div role="group" aria-label={`${group.name} accounts`} className={css.accountPicker}>
+                            {group.accounts.map((account) => {
+                              const selected = resolved === account.provider
+                              return (
+                                <button
+                                  ref={itemRef()}
+                                  type="button"
+                                  role="menuitemradio"
+                                  aria-checked={selected}
+                                  className={clsx(css.accountOption, selected && css.selected)}
+                                  key={account.provider}
+                                  disabled={busy}
+                                  onClick={() => { setAccountSelections(prev => ({ ...prev, [group.baseId]: account.provider })) }}
+                                >
+                                  <span className={css.accountLabel}>{account.account === null ? group.name : account.account}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
                         {group.models.map((model) => {
-                          const selected = state.current?.provider === group.id && state.current.model === model.id
+                          const selected = state.current?.provider === resolved && state.current?.model === model.id
                           return (
                             <button
                               ref={itemRef()}
@@ -350,7 +459,7 @@ export function ModelSelect(
                               key={model.id}
                               title={model.name}
                               disabled={busy}
-                              onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                              onClick={() => { choose({ provider: resolved ?? group.baseId, model: model.id }) }}
                             >
                               <span className={css.optionCopy}>
                                 <span className={css.modelName}>{model.name}</span>

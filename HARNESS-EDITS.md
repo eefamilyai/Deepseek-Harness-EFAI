@@ -279,7 +279,7 @@ Every Tier-2 edit, its owner, and what removes it. Keep this table current; it i
 | 17 | `docs/subsystems/{code-runtime,llm-streaming}.*` | `kernel` `kiln` | hand-written docs for fork features | Move to fork-owned `docs/` pages |
 | 18 | 8 test files | various | mirror 3–6 above | Follows whatever those become |
 | 19 | 2 files inside `client/ui-settings-general` | `kernel` | new files placed in an upstream package directory | Move to a fork-owned client package |
-| 20 | `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}` | `browser` | collapsible per-provider groups in the model dropdown | Upstream adopts provider collapse in `ModelSelect` |
+| 20 | `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}` | `browser` | collapsible per-provider groups in the model dropdown, with account routes folded under a single base-provider header and an account picker | Upstream adopts provider collapse and account grouping in `ModelSelect` |
 | 21 | `packages/skill/tool-skill/src/index.ts` | `kernel` | `@skill <name>` is a second user-explicit skill load gesture beside `/name` | Upstream PR, or a fork-owned pre-step plugin |
 | 22 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
 | 23 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |

@@ -298,3 +298,44 @@
   flex: 0 0 auto;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* DSH-FORK(browser): account picker row under a merged provider group.
+   EXIT: upstream adopts account grouping in ModelSelect. */
+.accountPicker {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 8px 4px;
+}
+
+.accountOption {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accountOption:hover:not(:disabled),
+.accountOption:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.accountOption:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: default;
+}
+
+.accountLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

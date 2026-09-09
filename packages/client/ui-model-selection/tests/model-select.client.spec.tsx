@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -48,6 +48,19 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
     error: null,
     ...overrides,
   }
+}
+
+function mountModelSelect(directory: ReturnType<typeof createSnapshotStore<ModelDirectoryState>>) {
+  render(<ModelSelect
+    locked={false}
+    available
+    directory={directory}
+    load={vi.fn()}
+    select={vi.fn().mockResolvedValue(true)}
+    t={t}
+  />)
+  fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
 }
 
 afterEach(cleanup)
@@ -230,18 +243,6 @@ describe('ModelSelect provider group collapse', () => {
     },
   ]
 
-  function mountModelSelect(directory: ReturnType<typeof createSnapshotStore<ModelDirectoryState>>) {
-    render(<ModelSelect
-      locked={false}
-      available
-      directory={directory}
-      load={vi.fn()}
-      select={vi.fn().mockResolvedValue(true)}
-      t={t}
-    />)
-    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
-    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
-  }
 
   it('expands only the provider owning the current selection by default', () => {
     const directory = createSnapshotStore<ModelDirectoryState>(state({
@@ -321,5 +322,79 @@ describe('ModelSelect provider group collapse', () => {
     }))
     expect(screen.getByRole('button', { name: 'Provider B' }).getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('true')
+  })
+})
+
+describe('ModelSelect account grouping', () => {
+  const deepseekModels = [
+    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
+    { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+  ]
+
+
+  it('merges account routes under one provider header and targets the picked account', () => {
+    const select = vi.fn().mockResolvedValue(true)
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      current: { provider: 'kiln-deepseek', model: 'deepseek-v4-flash' },
+      groups: [
+        { id: 'kiln-deepseek', name: 'DeepSeek', models: deepseekModels },
+        { id: 'kiln-deepseek@one', name: 'DeepSeek', models: deepseekModels },
+        { id: 'kiln-deepseek@two', name: 'DeepSeek', models: deepseekModels },
+      ],
+    }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+
+    // Exactly one provider header.
+    expect(screen.getAllByRole('button', { name: 'DeepSeek' })).toHaveLength(1)
+
+    // Account picker holds the base route plus both accounts.
+    const picker = screen.getByRole('group', { name: 'DeepSeek accounts' })
+    expect(picker).toBeTruthy()
+    const accountButtons = within(picker).getAllByRole('menuitemradio')
+    expect(accountButtons.map(button => button.textContent)).toEqual(['DeepSeek', 'one', 'two'])
+
+    // Pick account `one`; the base-route model pick must then submit the bound route.
+    fireEvent.click(within(picker).getByRole('menuitemradio', { name: 'one' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Flash/ }))
+    expect(select).toHaveBeenCalledWith({ provider: 'kiln-deepseek@one', model: 'deepseek-v4-flash' })
+  })
+
+  it('defaults the selected account to the account owning the current provider', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      current: { provider: 'kiln-deepseek@two', model: 'deepseek-v4-pro' },
+      groups: [
+        { id: 'kiln-deepseek', name: 'DeepSeek', models: deepseekModels },
+        { id: 'kiln-deepseek@one', name: 'DeepSeek', models: deepseekModels },
+        { id: 'kiln-deepseek@two', name: 'DeepSeek', models: deepseekModels },
+      ],
+    }))
+    mountModelSelect(directory)
+
+    const picker = screen.getByRole('group', { name: 'DeepSeek accounts' })
+    expect(within(picker).getByRole('menuitemradio', { name: 'two' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('keeps non-account providers rendering as before', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      current: { provider: 'provider-b', model: 'b-pro' },
+      groups: [
+        { id: 'provider-b', name: 'Provider B', models: [{ id: 'b-pro', name: 'B Pro' }] },
+      ],
+    }))
+    mountModelSelect(directory)
+
+    expect(screen.getByRole('button', { name: 'Provider B' })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: /accounts/ })).toBeNull()
+    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
   })
 })
