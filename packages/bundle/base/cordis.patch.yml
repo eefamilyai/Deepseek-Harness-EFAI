@@ -351,10 +351,38 @@
 
     # RLM context-as-variable read-back: an async system-prompt/assemble
     # listener that reads the live kernel `answer`/binds via ctx.kernel and
-    # contributes them as runtime context the agent loop already renders.
+    # contributes them as runtime context the agent loop already renders. The
+    # RLM engine itself reads `parseRlmDump` from this same package.
     - id: kernel-rlm-context
       name: '@deepseek-ai/dsh-kernel-rlm-context'
       disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+
+    # ── the RLM switch ─────────────────────────────────────────────────────
+    #
+    # `rlm.enabled` (default false) is the second position of the acting-roster
+    # switch. It mirrors `kernel-mode` exactly: the plugin owns only the setting
+    # and stays mounted in BOTH positions so the switch can always be flipped
+    # back. The engine below needs the persistent kernel seam underneath, so it
+    # mounts only when BOTH `kernel.enabled` and `rlm.enabled` are true. The
+    # tool rows it replaces (shell, filesystem, search, jobs, tool-kernel) are
+    # gated again with `rlm.enabled` in the shipped presets.
+    #
+    # DSH-FORK(rlm): a second settings namespace turning the model's acting
+    # tool from the standalone kernel into the recursive RLM engine.
+    # EXIT: move to packages/bundle/efai-rlm/cordis.patch.yml (a fork-owned
+    # bundle applied by profile) once the profile-boot bundle chain exists.
+    - id: rlm-mode
+      name: '@deepseek-ai/dsh-rlm-mode'
+      config:
+        enabled: false
+
+    # The first-party recursive RLM engine. It provides `rlm` (a one-shot tool)
+    # and the `ctx.rlm` service; both consume `ctx.kernel`, so this row is
+    # gated by BOTH switches. The presets gate the superseded tool rows with
+    # `rlm.enabled` alone because they already gate with `kernel.enabled`.
+    - id: rlm
+      name: '@deepseek-ai/dsh-rlm'
+      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) && dshSettingFlag('rlm.enabled', false))) === false
 
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'

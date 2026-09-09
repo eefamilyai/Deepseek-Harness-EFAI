@@ -28,9 +28,18 @@
 # host plane: the backend owns one interpreter probe and one child process, and
 # an entry-local realm here would mean a second interpreter resolution — and a
 # second kernel — for every preset a session mounts.
+# DSH-FORK(rlm): `rlm.enabled` additionally gates the tool rows the recursive
+# RLM engine replaces — the standalone kernel tool plus shell, filesystem, search,
+# and background-job rows — on top of the existing `kernel.enabled` switch. The
+# `rlm` engine row itself lives host-side in `packages/bundle/base/cordis.patch.yml`
+# and mounts only when BOTH switches are on; the kernel seam rows stay mounted so
+# the engine has a persistent REPL to drive.
+# EXIT: move these gates and the switch rows into a fork-owned
+# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
+# bundle chain exists (see HARNESS-EDITS.md seam register).
 - id: tool-kernel
   name: '@deepseek-ai/dsh-tool-kernel'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
   config:
     timeoutMs: 180000
 
@@ -47,17 +56,17 @@
   config:
     - id: pty
       name: '@deepseek-ai/dsh-terminal'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) || dshSettingFlag('rlm.enabled', false)))
 
     - id: terminal-bash
       name: '@deepseek-ai/dsh-terminal-bash'
-      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) || (typeof dshSettingFlag === 'function' && dshSettingFlag('rlm.enabled', false))
       config:
         timeoutMs: 300000
 
     - id: persistent-bash
       name: '@deepseek-ai/dsh-tool-bash-persistent'
-      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) || (typeof dshSettingFlag === 'function' && dshSettingFlag('rlm.enabled', false))
       config:
         timeoutMs: 300000
         description: |-
@@ -72,14 +81,14 @@
 
     - id: terminal-pwsh
       name: '@deepseek-ai/dsh-terminal-bash'
-      disabled: !!js process.platform !== 'win32'
+      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('rlm.enabled', false))
       config:
         shellDialect: pwsh
         timeoutMs: 300000
 
     - id: persistent-pwsh
       name: '@deepseek-ai/dsh-tool-pwsh-persistent'
-      disabled: !!js process.platform !== 'win32'
+      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('rlm.enabled', false))
       config:
         timeoutMs: 300000
         description: |-
@@ -101,12 +110,12 @@
   config:
     - id: fs-local
       name: '@deepseek-ai/dsh-fs-local'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) || dshSettingFlag('rlm.enabled', false)))
       config:
         cwd: !!js process.env.DSH_CWD ?? process.cwd()
 
     - id: str-replace-editor
       name: '@deepseek-ai/dsh-tool-str-replace-editor'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) || dshSettingFlag('rlm.enabled', false)))
       config:
         maxOutputChars: 16000

@@ -57,6 +57,7 @@
     "@deepseek-ai/dsh-kernel": "workspace:^",
     "@deepseek-ai/dsh-kernel-mode": "workspace:^",
     "@deepseek-ai/dsh-kernel-python": "workspace:^",
+    "@deepseek-ai/dsh-kernel-rlm-context": "workspace:^",
     "@deepseek-ai/dsh-launch-environment": "workspace:^",
     "@deepseek-ai/dsh-llm-kiln": "workspace:^",
     "@deepseek-ai/dsh-mcp-client": "workspace:^",
@@ -64,6 +65,8 @@
     "@deepseek-ai/dsh-plan-mode": "workspace:^",
     "@deepseek-ai/dsh-pwsh-local": "workspace:^",
     "@deepseek-ai/dsh-pwsh-sandbox": "workspace:^",
+    "@deepseek-ai/dsh-rlm": "workspace:^",
+    "@deepseek-ai/dsh-rlm-mode": "workspace:^",
     "@deepseek-ai/dsh-schedule": "workspace:^",
     "@deepseek-ai/dsh-sdk-app": "workspace:^",
     "@deepseek-ai/dsh-sdk-minimal": "workspace:^",
@@ -102,8 +105,7 @@
     "@deepseek-ai/schemastery": "workspace:^",
     "commander": "^15.0.0",
     "js-yaml": "^4.2.0",
-    "node-addon-require-builtin": "^0.1.4",
-    "@deepseek-ai/dsh-kernel-rlm-context": "workspace:^"
+    "node-addon-require-builtin": "^0.1.4"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
