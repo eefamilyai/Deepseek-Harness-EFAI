@@ -173,6 +173,18 @@
       "regenerate": "pnpm run gen-doc-graphs"
     },
     {
+      "path": "docs/module-graph.md",
+      "regenerate": "pnpm run gen-module-graph"
+    },
+    {
+      "path": "docs/module-graph.zh.md",
+      "regenerate": "pnpm run gen-module-graph"
+    },
+    {
+      "path": "docs/module-graph.i18n.yaml",
+      "regenerate": "pnpm run gen-module-graph"
+    },
+    {
       "path": "THIRD_PARTY_NOTICES.md",
       "regenerate": "pnpm run gen-third-party-notices"
     },

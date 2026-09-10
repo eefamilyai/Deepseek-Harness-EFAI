@@ -76,7 +76,7 @@ index fb999f93fb..9201bdd6b1 100644
 +# Harness desktop shell: CDP discovery record, regenerated at every launch
 +.cdp-target.json
 diff --git a/README.i18n.yaml b/README.i18n.yaml
-index 904c7928d2..9639d638a9 100644
+index 904c7928d2..a3ef4b1d18 100644
 --- a/README.i18n.yaml
 +++ b/README.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -85,8 +85,8 @@ index 904c7928d2..9639d638a9 100644
  #   pnpm run verify-translation-pairing --write README.md
 -README.md: 36adfe913902e75ce0673adc2cb5cb692151a291
 -README.zh.md: f6861b4c9490741b5e5f2d825a370766178dd9f6
-+README.md: 70c1aa3459bf9711e29368e8fbca5ebdf226562e
-+README.zh.md: c0653dfcb8b256f9027e7ef83ee92f5e76d46513
++README.md: b0b91153ba49078b6536c76ddbc0a1ea8faef48b
++README.zh.md: 99cf2c68e1163aebb0eb7e178ad17a2c1f5a62f2
 diff --git a/README.md b/README.md
 index 36adfe9139..b0b91153ba 100644
 --- a/README.md

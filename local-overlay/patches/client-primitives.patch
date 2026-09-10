@@ -137,7 +137,7 @@ index 96a9b62ec1..8f9bc0cb6c 100644
    font: var(--dsl-code-block-content-font);
    padding: 16px;
 diff --git a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
-index 4bd573d57e..f0b9158783 100644
+index 4bd573d57e..e3bac20e25 100644
 --- a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
 +++ b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
 @@ -2,6 +2,8 @@ import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore
@@ -211,16 +211,19 @@ index 4bd573d57e..f0b9158783 100644
  }
  
  /**
-@@ -61,7 +118,7 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
+@@ -61,7 +118,10 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
    )
  }
  
 -export function CodeBlock({ code, lang, streaming, className, contentRef, lineNumbers = false, copyLabel, copiedLabel }: CodeBlockProps) {
-+export function CodeBlock({ code, lang, streaming, className, contentRef, lineNumbers = false, copyLabel, copiedLabel, runLabel, downloadLabel, onRun }: CodeBlockProps) {
++export function CodeBlock({
++  code, lang, streaming, className, contentRef, lineNumbers = false,
++  copyLabel, copiedLabel, runLabel, downloadLabel, onRun,
++}: CodeBlockProps) {
    const trimmed = code.endsWith('\n') ? code.slice(0, -1) : code
    const sourceLines = lineNumbers ? trimmed.split('\n') : undefined
    const rootRef = useRef<HTMLDivElement>(null)
-@@ -146,6 +203,14 @@ export function CodeBlock({ code, lang, streaming, className, contentRef, lineNu
+@@ -146,6 +206,14 @@ export function CodeBlock({ code, lang, streaming, className, contentRef, lineNu
    )
    const [copied, setCopied] = useState(false)
  
@@ -235,7 +238,7 @@ index 4bd573d57e..f0b9158783 100644
    const onCopy = useCallback(() => {
      if (copied) return
      /* v8 ignore next -- both arms always mount a <pre>; trimmed is the
-@@ -182,9 +247,22 @@ export function CodeBlock({ code, lang, streaming, className, contentRef, lineNu
+@@ -182,9 +250,22 @@ export function CodeBlock({ code, lang, streaming, className, contentRef, lineNu
        {/* These paired attributes are stable semantic hooks for owner styling and DOM tests. */}
        <div className={css.bannerWrap}>
          <div className={css.banner} data-code-block-banner>

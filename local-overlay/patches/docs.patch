@@ -33,7 +33,7 @@ index 31bcff64bd..8f516d221c 100644
  | `webserver/index-inject` | `emit` | [`packages/host/webserver/src/index.ts:34`](../packages/host/webserver/src/index.ts) | `webserver` (`emit`) | `connection`, `inspector`, `modules` |
  | `workflow/agent-end` | `emit` | [`packages/workflow/workflow/src/index.ts:79`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | [`tool-workflow`](../packages/workflow/tool-workflow), [`workflow`](../packages/workflow/workflow) |
 diff --git a/docs/subsystems/code-runtime.i18n.yaml b/docs/subsystems/code-runtime.i18n.yaml
-index 45f30b34df..d1651046ae 100644
+index 45f30b34df..cefd29449c 100644
 --- a/docs/subsystems/code-runtime.i18n.yaml
 +++ b/docs/subsystems/code-runtime.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -42,8 +42,8 @@ index 45f30b34df..d1651046ae 100644
  #   pnpm run verify-translation-pairing --write docs/subsystems/code-runtime.md
 -code-runtime.md: 4c7fce42c363c7735d03fcb723bb5c5f1af12bb9
 -code-runtime.zh.md: f01e3bccef165a5aeb9130ac983b2e8ff63a81b0
-+code-runtime.md: 87a7132794ba37c809d0722eab4dea0974111739
-+code-runtime.zh.md: 108e74bedead98384c9a10e9b14a00e0e903dd7e
++code-runtime.md: c482c0e6928f91d504aead67bd44904849b44a6f
++code-runtime.zh.md: 8f4626b447cbf4694243a8521a8e34ba8dacf3fb
 diff --git a/docs/subsystems/code-runtime.md b/docs/subsystems/code-runtime.md
 index 4c7fce42c3..c482c0e692 100644
 --- a/docs/subsystems/code-runtime.md

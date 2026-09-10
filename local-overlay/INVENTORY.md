@@ -208,6 +208,9 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 | `docs/tool-catalog.md` | `pnpm run gen-tool-catalog` |
 | `apps/cli/composition.md` | `pnpm run gen-doc-graphs` |
 | `docs/capability-seams.md` | `pnpm run gen-doc-graphs` |
+| `docs/module-graph.md` | `pnpm run gen-module-graph` |
+| `docs/module-graph.zh.md` | `pnpm run gen-module-graph` |
+| `docs/module-graph.i18n.yaml` | `pnpm run gen-module-graph` |
 | `THIRD_PARTY_NOTICES.md` | `pnpm run gen-third-party-notices` |
 | `snapshots/web/lifecycle-chrome/hero.expected.md` | `pnpm run test:snapshot:record` |
 | `snapshots/web/lifecycle-chrome/plan-active.expected.md` | `pnpm run test:snapshot:record` |
