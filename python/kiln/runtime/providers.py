@@ -476,6 +476,12 @@ def _deepseek_stream(model, messages, opts, cancelled, cfg):
     kwargs = {"temperature": temperature, "cancelled": cancelled, "conv_id": conv_id}
     if max_tokens:
         kwargs["max_tokens"] = max_tokens
+    # DeepSeek file ids already uploaded through `ds_direct.upload_files`. The
+    # ids are account-scoped, so the caller that obtained them also passes the
+    # matching `account`; without both, the chat cannot see the file.
+    ref_file_ids = opts.get("ref_file_ids")
+    if ref_file_ids:
+        kwargs["ref_file_ids"] = list(ref_file_ids)
     # A one-shot auxiliary call (compaction / session-title summary) runs in its
     # own throwaway chat instead of threading onto the conversation's persistent
     # one; the adapter marks it and supplies a unique conv_id.

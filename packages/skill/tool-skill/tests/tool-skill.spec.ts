@@ -1111,4 +1111,105 @@ describe('user-explicit invocation injection', () => {
       .map(message => (message.source as { name: string }).name)
     expect(invoked).toEqual(['shared-skill'])
   })
+  // DSH-FORK(kernel) regression: an always-load body must outlive the compaction
+  // that prunes it. The catalog republishes `{name, description}`, which is not
+  // enough to follow a recovery procedure the model can no longer read.
+  describe('always-load skills survive compaction', () => {
+    async function alwaysLoadHarness(
+      config: toolSkill.Config = {},
+    ): Promise<{ ctx: Context; agent: Agent }> {
+      const home = await tempDir('always-load')
+      const root = join(home, '.dsh/skills')
+      await writeSkill(root, 'recovery-skill', 'Recovery procedure', 'Read the durable log first.')
+      const ctx = await setup(home, config)
+      const session = Session.create(SessionId(`always-load-${Math.random()}`))
+      const agent = sessionAgent(session)
+      openMessageTurn(session)
+      return { ctx, agent }
+    }
+
+    const invocationBodies = (session: Session): string[] => session.events
+      .filter((event): event is Extract<SessionEvent, { type: 'user/message' }> =>
+        event.type === 'user/message' && event.data.source.kind === 'skill-invocation')
+      .map(event => JSON.stringify(event.data.content))
+
+    it('injects the configured body beside the first catalog publication', async () => {
+      const { ctx, agent } = await alwaysLoadHarness({ alwaysLoadSkills: ['recovery-skill'] })
+
+      await composePrefixForAgent(ctx, agent)
+
+      expect(invocationBodies(agent.session)).toHaveLength(1)
+      expect(invocationBodies(agent.session)[0]).toContain('Read the durable log first.')
+    })
+
+    it('defaults to the shipped session-history skill', async () => {
+      const home = await tempDir('always-load-default')
+      const root = join(home, '.dsh/skills')
+      await writeSkill(root, 'dsh-session-history', 'Session history', 'Run latest-prompt.')
+      const ctx = await setup(home)
+      const session = Session.create(SessionId('always-load-default'))
+      const agent = sessionAgent(session)
+      openMessageTurn(session)
+
+      await composePrefixForAgent(ctx, agent)
+
+      expect(invocationBodies(agent.session).join()).toContain('Run latest-prompt.')
+    })
+
+    it('re-injects the body after compaction prunes it from the surface', async () => {
+      const { ctx, agent } = await alwaysLoadHarness({ alwaysLoadSkills: ['recovery-skill'] })
+      await composePrefixForAgent(ctx, agent)
+      const initial = agent.session.events.find(event => event.type === 'user/message'
+        && event.data.source.kind === 'skill-invocation')
+      if (initial === undefined) throw new Error('expected an initial injection')
+
+      // Compaction replaces the span holding the injected body with a summary.
+      agent.session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'compacted history' }],
+        source: { kind: 'plugin', plugin: 'compact' },
+      }), {
+        surfaceOp: { op: 'replace', start: initial.seq, end: initial.seq },
+        sourceEventSeqs: [initial.seq],
+      })
+
+      await fireStep(ctx, agent, 1, 1)
+
+      const bodies = invocationBodies(agent.session)
+      expect(bodies).toHaveLength(2)
+      expect(bodies.at(-1)).toContain('Read the durable log first.')
+    })
+
+    it('does not duplicate a body that is still on the surface', async () => {
+      const { ctx, agent } = await alwaysLoadHarness({ alwaysLoadSkills: ['recovery-skill'] })
+
+      await composePrefixForAgent(ctx, agent)
+      await fireStep(ctx, agent, 1, 1)
+      await fireStep(ctx, agent, 1, 2)
+
+      expect(invocationBodies(agent.session)).toHaveLength(1)
+    })
+
+    it('omits a body whose skill is absent or model-disabled', async () => {
+      const { ctx, agent } = await alwaysLoadHarness({
+        alwaysLoadSkills: ['no-such-skill'],
+      })
+
+      await composePrefixForAgent(ctx, agent)
+
+      expect(invocationBodies(agent.session)).toHaveLength(0)
+      // The catalog still publishes; only the always-load body is absent.
+      const kinds = (await composePrefixForAgent(ctx, agent))
+        .map(message => (message.source as { kind?: string }).kind)
+      expect(kinds).toContain('skill-catalog')
+      expect(kinds).not.toContain('skill-invocation')
+    })
+
+    it('injects nothing when the configured list is empty', async () => {
+      const { ctx, agent } = await alwaysLoadHarness({ alwaysLoadSkills: [] })
+
+      await composePrefixForAgent(ctx, agent)
+
+      expect(invocationBodies(agent.session)).toHaveLength(0)
+    })
+  })
 })

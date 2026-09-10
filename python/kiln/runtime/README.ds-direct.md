@@ -97,24 +97,46 @@ refresh can never truncate the file and log you out.
 `ds_direct` exposes several ids that map onto DeepSeek's web tiers and toggles.
 Each id is `(model_type, thinking, search)`:
 
-| Model id | Label | Tier | Thinking | Web search |
-| --- | --- | --- | --- | --- |
-| `deepseek-default` | DeepSeek | default | – | – |
-| `deepseek-reasoner` | DeepSeek · Reasoner | default | ✓ | – |
-| `deepseek-search` | DeepSeek · Search | default | – | ✓ |
-| `deepseek-reasoner-search` | DeepSeek · Reasoner + Search | default | ✓ | ✓ |
-| `deepseek-expert` | DeepSeek · Expert | expert | ✓ | – |
-| `deepseek-expert-reasoner` | DeepSeek · Expert Reasoner | expert | ✓ | – |
-| `deepseek-expert-offline` | DeepSeek · Expert Reasoner (web off) | expert | ✓ | – |
-| `deepseek-expert-search` | DeepSeek · Expert Search | expert | – | ✓ |
-| `deepseek-vision` | DeepSeek · Vision | vision | – | – |
-| `deepseek-vision-reasoner` | DeepSeek · Vision Reasoner | vision | ✓ | – |
+| Model id | Label | Thinking | Web search |
+| --- | --- | --- | --- |
+| `deepseek-default` | DeepSeek | – | – |
+| `deepseek-reasoner` | DeepSeek · Thinking | ✓ | – |
+| `deepseek-search` | DeepSeek · Search | – | ✓ |
+| `deepseek-reasoner-search` | DeepSeek · Thinking + Search | ✓ | ✓ |
 
-> **Why the expert tier ships with search *off*.** Sending
-> `search_enabled: true` tells the web model a tool is available, which primes it
-> to emit its native tool-call markup (DSML) instead of a fenced code block — and
-> on this endpoint there is nothing to dispatch that markup. Web search stays
-> available on the explicit `*-search` ids for chat that needs it.
+Those four are the website's whole picker: **DeepSeek**, **DeepSeek Thinking**,
+**DeepSeek Search**, and **DeepSeek Thinking + Search**. There is no Expert or
+Vision tier any more — that is the website's change, not this connector's — and
+`LABELS` deliberately lists only the four, because that map is the advisory
+catalogue the picker falls back to before a token is present. Advertising a mode
+the website no longer offers would put a dead entry in front of the user.
+
+### Retired ids still resolve
+
+An older id may survive in a saved conversation, an agent preset, a pinned
+route, or a default in `app_settings.json`. `MODEL_MAP` alone would send every
+one of those through its `.get(..., default)` fallback and silently change which
+mode answers, so `resolve_model()` maps them onto the closest surviving mode:
+
+| Retired id | Resolves to |
+| --- | --- |
+| `deepseek-expert` | `deepseek-reasoner` |
+| `deepseek-expert-reasoner` | `deepseek-reasoner` |
+| `deepseek-expert-offline` | `deepseek-reasoner` |
+| `deepseek-expert-search` | `deepseek-reasoner-search` |
+| `deepseek-vision` | `deepseek-default` |
+| `deepseek-vision-reasoner` | `deepseek-reasoner` |
+
+Each target carries the `(thinking, search)` pair the retired id used to send,
+so an old conversation keeps behaving as it did — only the label in the picker
+changes. The Vision ids land on the plain modes because a file now rides an
+**ordinary** chat as `ref_file_ids` rather than needing a vision tier at all;
+see [File attachments](#file-attachments).
+
+> **The backend still accepts `model_type: "expert"` and `"vision"`.** Verified
+> live: both answer normally. They are nonetheless gone from the website, so
+> nothing here depends on them — resolving a retired id onto a live mode keeps
+> working whichever way DeepSeek eventually takes those values.
 
 ---
 
@@ -202,12 +224,16 @@ Consumed by `providers.py` / `server.py`:
 | Function | Purpose |
 | --- | --- |
 | `configured()` | True if any account can serve a request (has a token, or can log in). |
-| `models()` | The available model ids (empty until configured). |
-| `is_dsfree(model)` | True for a `deepseek-*` id this connector owns. |
+| `models()` | The live model ids (empty until configured). |
+| `model_labels(cfg=None)` | id → display name, for the registry's catalogue. |
+| `default_model(cfg=None)` | The mode a fresh conversation starts on (`deepseek-default`). |
+| `resolve_model(model)` | Map any accepted id — current or retired — onto a live mode id. |
+| `is_dsfree(model)` | True for an id this connector owns, retired ones included (they still route here). |
 | `account_ids()` | Stable list of configured account ids (ids only — never a credential). |
-| `stream(model, messages, conv_id=…, account=…, …)` | Generator yielding `{type: reasoning\|content\|refs\|title\|meta, …}` deltas. The main entry point. |
+| `stream(model, messages, conv_id=…, account=…, ref_file_ids=[…], …)` | Generator yielding `{type: reasoning\|content\|refs\|title\|meta, …}` deltas. The main entry point. |
+| `upload_files(files, account=None, …)` | Push `[(name, blob)]` into DeepSeek; returns `{account, files:[{name,id,size}], errors:[…]}`. |
 | `messages_to_prompt(messages)` | Flatten a role-tagged message list into the single prompt string the web endpoint takes. **Adds no instructions.** |
-| `describe_files(files, prompt, …)` | Vision: upload images and return `{name: description}`. |
+| `describe_files(files, prompt, …)` | Upload files and return `{name: description}` — the specialised "describe this for me" path. |
 | `add_account(email, password, …)` | Test a login and persist it as a new pooled account. |
 
 > `messages_to_prompt` deliberately injects **no** provider-authored guidance —
@@ -217,16 +243,46 @@ Consumed by `providers.py` / `server.py`:
 
 ---
 
-## Vision & file uploads
+## File attachments
 
-Image description goes through **one shared vision chat** (not one per
-conversation): opening a chat costs a session call plus a PoW solve, and the
-descriptions are independent of each other and of whatever chat you're in.
-Each file is uploaded independently, so one bad file fails only itself; a
-multi-file reply is best-effort split back into a description per file.
+A file rides an **ordinary chat** as `ref_file_ids`. There is no separate vision
+tier: the website retired it, and the plain modes read attachments. Verified
+live — a file containing a known phrase, referenced from a
+`model_type="default"` turn, comes back with the phrase.
 
-Uploads require a content type DeepSeek recognises (it routes on it) and their
-**own** PoW challenge minted for the upload path.
+Two entry points, for two different jobs:
+
+| Call | Use it when |
+| --- | --- |
+| `describe_files(files, prompt)` | You want the model to **describe** the files and you will pass that prose on. Goes through one shared chat, returns `{name: description}`, splits a multi-file reply back per file. |
+| `upload_files(files)` then `stream(…, ref_file_ids=[ids])` | You already know what to ask. Upload the bytes, get ids, attach them to your own turn. |
+
+`upload_files` is the bridge the harness uses, and it is also available over
+`provider_bridge.py` as the `upload_files` command (bytes cross base64-encoded,
+because the framing is newline-delimited JSON). Its result names the account the
+ids belong to:
+
+```json
+{"id": 5, "ok": true, "account": "you@example.com",
+ "files": [{"name": "notes.txt", "id": "file-…", "size": 42}],
+ "errors": [{"name": "big.bin", "error": "…"}]}
+```
+
+**File ids are scoped to the login that uploaded them.** Pass the returned
+`account` back as `stream(..., account=<id>)` so the turn that references the
+files runs on the same login; an id attached on a different account is a file
+the chat cannot see.
+
+Uploads require a content type DeepSeek recognises (it routes on it), their
+**own** PoW challenge minted for the upload path, and the byte length in
+`x-file-size`. Each file is uploaded independently, so one bad file fails only
+itself and is reported under `errors` — losing one of five attachments is the
+caller's decision, not this connector's.
+
+`file_status()` is best-effort: `/file/fetch_files` no longer returns file rows,
+so it answers `{}` for "no evidence either way" and callers proceed rather than
+refusing every file. The upload response already carries the real `status`, and
+referencing a freshly uploaded id works immediately.
 
 ---
 

@@ -11,3 +11,5 @@ PyYAML>=6.0
 python-dotenv>=1.0
 cryptography>=41.0
 requests>=2.31
+mss>=9.0          # vision_tools: screen capture
+pillow>=10.0      # vision_tools: image scaling + PNG encoding

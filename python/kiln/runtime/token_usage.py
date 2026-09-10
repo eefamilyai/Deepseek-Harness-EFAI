@@ -12,10 +12,15 @@ context limits let the UI show
 # serves a 1M-token context window (chat.deepseek.com); the paid API models
 # below are separate entries and keep their own limits.
 MODEL_LIMITS = {
+    # The four live chat.deepseek.com modes.
     "deepseek-default": 1000000,
     "deepseek-reasoner": 1000000,
     "deepseek-search": 1000000,
     "deepseek-reasoner-search": 1000000,
+    # Retired Expert/Vision ids kept so a saved conversation, an agent preset,
+    # or a pinned route naming one still shows a context window instead of
+    # falling through to DEFAULT_LIMIT. They RESOLVE onto the modes above
+    # (ds_direct.LEGACY_ALIASES), which is why they carry the same window.
     "deepseek-expert": 1000000,
     "deepseek-expert-reasoner": 1000000,
     "deepseek-expert-offline": 1000000,

@@ -18,6 +18,7 @@ import {
   isUserInvocable,
   renderSkillContent,
   type SkillInvocationSource,
+  type SkillLookupOptions,
   type SkillSummary,
 } from '@deepseek-ai/dsh-skill'
 
@@ -25,6 +26,14 @@ export const name = 'tool-skill'
 export const inject = ['agents', 'tools', 'skills']
 
 const DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH = 500
+// DSH-FORK(kernel): skills whose body must outlive context compaction. The
+// catalog republishes `{name, description}` after compaction prunes it, but a
+// body only ever entered through a user-explicit `/name` or `@skill <name>`
+// gesture, so a recovery procedure the model cannot read was reduced to its own
+// name. These names re-enter beside every catalog (re)publication instead.
+// EXIT: upstream gains a per-skill declaration that keeps a body on the surface
+// across compaction, or the recovery procedure stops living in a skill.
+const DEFAULT_ALWAYS_LOAD_SKILLS: readonly string[] = ['dsh-session-history']
 /**
  * Durable provider and item records for one published session skill catalog. The catalog is a
  * `catalog`-form context, so it records the entries it published beside the
@@ -61,11 +70,17 @@ function catalogSourceEntries(
 export interface Config {
   /** Maximum normalized description length rendered in the session catalog; minimum 3. */
   catalogDescriptionMaxLength?: number
+  /**
+   * Skill names whose full body rides every catalog publication, including the
+   * republication after compaction prunes both. An empty list disables it.
+   */
+  alwaysLoadSkills?: string[]
 }
 
 /** Validate and default the model-facing skill catalog configuration. */
 export const Config: z<Config> = z.object({
   catalogDescriptionMaxLength: z.number().default(DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH),
+  alwaysLoadSkills: z.array(z.string()).default([...DEFAULT_ALWAYS_LOAD_SKILLS]),
 })
 
 /**
@@ -76,6 +91,9 @@ export const Config: z<Config> = z.object({
  */
 export function apply(ctx: Context, config: Config = {}): void {
   const catalogDescriptionMaxLength = config.catalogDescriptionMaxLength ?? DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH
+  const alwaysLoadSkills = config.alwaysLoadSkills ?? [...DEFAULT_ALWAYS_LOAD_SKILLS]
+  /** Per-agent names that resolved to no usable body, so a bad entry costs one lookup. */
+  const alwaysLoadMissing = new WeakMap<Agent, Set<string>>()
   assertPositiveInteger('catalogDescriptionMaxLength', catalogDescriptionMaxLength, 3)
 
   const skillTool = defineTool({
@@ -181,7 +199,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     const decision = await next()
     if (decision.kind === 'reject') return decision
     const names = invokedSkillNames(messages)
-    if (names.length === 0) return decision
     signal.throwIfAborted()
     const lookup = { cwd: agent.session.header.cwd, signal, scope: agent }
     const injections: UserMessage[] = []
@@ -198,6 +215,26 @@ export function apply(ctx: Context, config: Config = {}): void {
         content: [{ type: 'text', text: renderSkillContent(skill) }],
         source,
       }))
+    }
+    // DSH-FORK(kernel): re-enter every configured always-load body that the
+    // surface no longer holds. This listener runs last, so the catalog and any
+    // gesture body are already in `injections`; a body pruned by compaction is
+    // the case this exists for, and `visibleInvokedSkillNames` reads the surface
+    // rather than the message list to detect it.
+    // EXIT: upstream gains a per-skill declaration that keeps a body on the
+    // surface across compaction, or the recovery procedure stops living in a skill.
+    const carried = new Set(injections.flatMap(message => (
+      message.source.kind === 'skill-invocation' ? [message.source.name] : []
+    )))
+    const visible = visibleInvokedSkillNames(agent)
+    const wanted = alwaysLoadSkills.filter(name => !carried.has(name) && !visible.has(name))
+    if (wanted.length > 0) {
+      let missing = alwaysLoadMissing.get(agent)
+      if (missing === undefined) {
+        missing = new Set()
+        alwaysLoadMissing.set(agent, missing)
+      }
+      injections.push(...await alwaysLoadInjections(ctx, lookup, wanted, carried, missing))
     }
     if (injections.length === 0) return decision
     return { ...decision, messages: [...decision.messages, ...injections] }
@@ -385,6 +422,61 @@ function catalogMessage(
     if (entries !== undefined) return { message, entries }
   }
   return undefined
+}
+
+/**
+ * Names of injected skill bodies still visible on the session surface. An
+ * injected body leaves the surface when compaction prunes its span, which is
+ * exactly the condition that makes re-injection necessary.
+ */
+function visibleInvokedSkillNames(agent: Agent): Set<string> {
+  const visible = new Set(agent.session.surface.nodes)
+  const names = new Set<string>()
+  for (const event of agent.session.events) {
+    if (event.type !== 'user/message' || event.data.source.kind !== 'skill-invocation') continue
+    if (visible.has(event.seq)) names.add(event.data.source.name)
+  }
+  return names
+}
+
+/**
+ * Load the bodies of `names` that are available, model-invocable, and no longer
+ * visible on the surface. Each returned message carries the canonical
+ * `<skill_content>` rendering under the same `skill-invocation` source a
+ * user-explicit gesture uses, so transcript consumers present one shape.
+ * @param ctx - host context owning the skill registry.
+ * @param agent - session owner whose surface and cwd select the bodies.
+ * @param signal - step abort signal, forwarded to discovery and loading.
+ * @param lookup - registry lookup context for this step.
+ * @param names - configured always-load skill names, in publication order.
+ * @param already - names this step's own injections already carry.
+ * @param missing - per-agent cache of names that resolved to no usable body.
+ * @returns one injection per body still missing from the surface.
+ */
+async function alwaysLoadInjections(
+  ctx: Context,
+  lookup: SkillLookupOptions & { scope: Agent },
+  names: readonly string[],
+  already: ReadonlySet<string>,
+  missing: Set<string>,
+): Promise<UserMessage[]> {
+  const injections: UserMessage[] = []
+  for (const name of names) {
+    if (already.has(name) || missing.has(name)) continue
+    const skill = await ctx.skills.get(name, lookup)
+    if (skill === undefined || !isModelInvocable(skill)) {
+      // An absent or model-disabled name is a configuration fact, not a
+      // transient miss: cache it so a bad entry costs one lookup, not one per
+      // step, while a later registry change still lands on a fresh session.
+      missing.add(name)
+      continue
+    }
+    injections.push(createUserMessage({
+      content: [{ type: 'text', text: renderSkillContent(skill) }],
+      source: { kind: 'skill-invocation', name, form: 'instructions' },
+    }))
+  }
+  return injections
 }
 
 function catalogDescription(value: string, maxLength: number): string {

@@ -12,6 +12,8 @@ Requests (stdin, newline-delimited JSON):
     {"id": 3, "cmd": "stream", "provider": "deepseek", "model": "deepseek-default",
      "messages": [{"role": "user", "content": "hi"}], "opts": {"temperature": 0.6}}
     {"id": 4, "cmd": "cancel", "target": 3}
+    {"id": 5, "cmd": "upload_files", "provider": "deepseek",
+     "files": [{"name": "notes.txt", "data": "<base64>"}], "account": "you@example.com"}
 
 Responses (stdout, newline-delimited JSON), each carrying the request `id`:
 
@@ -19,6 +21,9 @@ Responses (stdout, newline-delimited JSON), each carrying the request `id`:
     {"id": 3, "ev": {"type": "content", "text": "..."}}   # repeated
     {"id": 3, "done": true}
     {"id": 2, "ok": false, "error": "..."}
+    {"id": 5, "ok": true, "account": "you@example.com",
+     "files": [{"name": "notes.txt", "id": "file-...", "size": 42}],
+     "errors": [{"name": "big.bin", "error": "..."}]}
 
 A stream runs on its own thread so a `cancel` for it can be read and dispatched
 while it is still producing; `providers.stream` already turns adapter failures
@@ -30,6 +35,7 @@ environment at request time and its catalog reports only `has_key` booleans, so
 no key, cookie, or token value ever appears in a response.
 """
 
+import base64
 import json
 import os
 import sys
@@ -165,6 +171,56 @@ def _add_account(req):
     _send({"id": req["id"], "ok": True, "account": acct_id})
 
 
+def _upload_files(req):
+    """Push caller-supplied bytes into DeepSeek's file store and return ids.
+
+    Files cross this wire base64-encoded, because the framing is newline-
+    delimited JSON and raw bytes would break it. The ids that come back can be
+    passed to a later `stream` as `opts.ref_file_ids`, together with the
+    returned `account` as `opts.account` — ids are scoped to the login that
+    uploaded them, so the two must travel together or the chat cannot see the
+    file.
+
+    A per-file failure comes back in `errors` rather than failing the request:
+    the caller decides whether losing one of five attachments is fatal, and it
+    is the only party that knows. Only a whole-call failure (no credentials,
+    no curl_cffi, a broken base64 payload) sets ok=false.
+    """
+    provider = req.get("provider") or ""
+    if provider != "deepseek":
+        _send({"id": req["id"], "ok": False,
+               "error": "file upload is only supported for provider 'deepseek'"})
+        return
+    try:
+        mod = providers._load_module("ds_direct")
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+
+    pairs = []
+    for raw in req.get("files") or []:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or "file")
+        try:
+            blob = base64.b64decode(raw.get("data") or "", validate=True)
+        except Exception as e:  # noqa: BLE001 — one bad payload, named
+            _send({"id": req["id"], "ok": False,
+                   "error": "file %r has an invalid base64 payload: %s" % (name, e)})
+            return
+        pairs.append((name, blob))
+
+    try:
+        result = mod.upload_files(pairs, account=req.get("account") or None)
+    except Exception as e:  # noqa: BLE001 — same reason as _stream
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+    _send({"id": req["id"], "ok": True,
+           "account": result.get("account"),
+           "files": result.get("files") or [],
+           "errors": result.get("errors") or []})
+
+
 def _stream(req):
     rid = req["id"]
     flag = threading.Event()
@@ -224,6 +280,8 @@ def _dispatch(req):
             _add_account(req)
         elif cmd == "cancel":
             _cancel(req)
+        elif cmd == "upload_files":
+            _upload_files(req)
         else:
             _send({"id": req.get("id"), "ok": False,
                    "error": "unknown command: %r" % cmd})

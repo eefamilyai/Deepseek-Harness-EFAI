@@ -27,6 +27,8 @@ dependencies = [
   "python-dotenv>=1.0", # config: .env loading (config.py)
   "cryptography>=41.0",  # ds_waf: TLS fingerprint / request signing
   "requests>=2.31",   # provider fallbacks that do not go through curl_cffi
+  "mss>=9.0",         # vision_tools: screen/monitor capture for the model
+  "pillow>=10.0",     # vision_tools: scaling + PNG encode of a captured screen
 ]
 
 [tool.uv]

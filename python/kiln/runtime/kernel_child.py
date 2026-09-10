@@ -1657,6 +1657,16 @@ def web_fetch(url, timeout=30):
 
 from browser_tools import browser_use  # noqa: E402 — full sandboxed browser toolset (deferred: heavy deps)
 
+# vision_tools: screenshots the model can actually read. Imported the same
+# feature-gated way as everything above — mss/Pillow are optional, and a box
+# without them keeps a working kernel and gets a clear message from the tool
+# instead of a failed startup.
+try:  # noqa: E402
+    import vision_tools  # noqa: E402
+except Exception as _vision_import_error:  # pragma: no cover
+    vision_tools = None
+    _vision_import_error = _vision_import_error
+
 from context_store import context_stats, index_context, search_context  # noqa: E402 — deferred: heavy deps
 try:  # noqa: E402 — RLM context-as-variable facet (local overlay)
     import rlm_context  # noqa: E402
@@ -5821,6 +5831,31 @@ prompt_dict.update({
     "run_cell": run_cell,
     "tool_help": tool_help,
 })
+
+# vision: capture the screen/window/browser and read it with a model. Registered
+# only when the module imported — with mss and Pillow absent the names would be
+# None, and a tool that exists but always fails is worse than one that is not
+# offered. `vision_status()` reports the real reason either way, and `tool_help`
+# lists whatever ended up bound here.
+if vision_tools is not None:
+    # Bound into module GLOBALS as well as the namespace dict, because
+    # `tool_help` discovers tools by scanning globals() for functions with a
+    # docstring. Registering only in prompt_dict made all nine callable but
+    # invisible to `tool_help('vision')`, which is how the model finds out a
+    # tool exists — a tool the model cannot discover is a tool it will not use.
+    _VISION_TOOLS = {
+        "see": vision_tools.see,
+        "capture_screen": vision_tools.capture_screen,
+        "capture_window": vision_tools.capture_window,
+        "capture_browser": vision_tools.capture_browser,
+        "describe_image": vision_tools.describe_image,
+        "describe_screen": vision_tools.describe_screen,
+        "vision_monitors": vision_tools.vision_monitors,
+        "vision_windows": vision_tools.vision_windows,
+        "vision_status": vision_tools.vision_status,
+    }
+    prompt_dict.update(_VISION_TOOLS)
+    globals().update(_VISION_TOOLS)
 _ns.update(prompt_dict)
 
 send_frame({"ready": True, "engine": engine})

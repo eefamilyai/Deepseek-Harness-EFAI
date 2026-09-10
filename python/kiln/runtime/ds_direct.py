@@ -104,27 +104,58 @@ MODEL_MAP = {
     "deepseek-reasoner":           ("default", True,  False),
     "deepseek-search":             ("default", False, True),
     "deepseek-reasoner-search":    ("default", True,  True),
-    "deepseek-expert":             ("expert",  True,  False),
-    "deepseek-expert-reasoner":    ("expert",  True,  False),
-    "deepseek-expert-offline":     ("expert",  True,  False),
-    "deepseek-expert-search":      ("expert",  False, True),
-    "deepseek-vision":             ("vision",  False, False),
-    "deepseek-vision-reasoner":    ("vision",  True,  False),
 }
 
+# Retired ids that must still RESOLVE. chat.deepseek.com's picker collapsed to
+# the four modes above, so the Expert and Vision tiers no longer exist as
+# choices — but a conversation, an agent preset, a saved default, or a pinned
+# route may still name one. Deleting the ids outright would send every such
+# reference through `MODEL_MAP.get(model, ...)`'s fallback and silently change
+# which model answers; resolving them onto the closest surviving mode keeps the
+# old name working and only changes the LABEL the picker shows.
+#
+# Each maps onto a mode whose (model_type, thinking, search) matches what the
+# retired id used to send, so a legacy turn behaves as it did before:
+#   * Expert shipped with thinking ON and search OFF  -> deepseek-reasoner
+#   * Expert Search shipped with search ON            -> deepseek-reasoner-search
+#   * Vision is no longer a distinct tier at all: images and files now ride an
+#     ordinary `default` chat as `ref_file_ids`, which is verified working
+#     (see describe_files), so the vision ids resolve to the plain modes.
+LEGACY_ALIASES = {
+    "deepseek-expert":             "deepseek-reasoner",
+    "deepseek-expert-reasoner":    "deepseek-reasoner",
+    "deepseek-expert-offline":     "deepseek-reasoner",
+    "deepseek-expert-search":      "deepseek-reasoner-search",
+    "deepseek-vision":             "deepseek-default",
+    "deepseek-vision-reasoner":    "deepseek-reasoner",
+}
+
+
+def resolve_model(model):
+    """Map any accepted id — current or retired — onto a live mode id.
+
+    The ONE place that decides which mode a requested id means. Callers that
+    only need the flags go through `MODEL_MAP[resolve_model(model)]`; keeping
+    the lookup here rather than repeating a `.get(..., default)` at each call
+    site is what makes a legacy id behave identically everywhere (streaming,
+    session keys, and the picker's current selection).
+    """
+    m = model or ""
+    if m in MODEL_MAP:
+        return m
+    return LEGACY_ALIASES.get(m, "deepseek-default")
+
+
 # Display names, read by providers.py so the model picker doesn't have to
-# reverse-engineer these ids.
+# reverse-engineer these ids. Only the four live modes appear here: this map is
+# the advisory catalogue the harness falls back to before a token is present
+# (see provider_bridge._advertised), so a retired id listed here would put a
+# mode the website no longer offers back in front of the user.
 LABELS = {
     "deepseek-default":            "DeepSeek",
-    "deepseek-reasoner":           "DeepSeek · Reasoner",
-    "deepseek-search":             "DeepSeek · Search",
-    "deepseek-reasoner-search":    "DeepSeek · Reasoner + Search",
-    "deepseek-expert":             "DeepSeek · Expert",
-    "deepseek-expert-reasoner":    "DeepSeek · Expert Reasoner",
-    "deepseek-expert-offline":     "DeepSeek · Expert Reasoner (web off)",
-    "deepseek-expert-search":      "DeepSeek · Expert Search",
-    "deepseek-vision":             "DeepSeek · Vision",
-    "deepseek-vision-reasoner":    "DeepSeek · Vision Reasoner",
+    "deepseek-reasoner":           "DeepSeek \u00b7 Thinking",
+    "deepseek-search":             "DeepSeek \u00b7 Search",
+    "deepseek-reasoner-search":    "DeepSeek \u00b7 Thinking + Search",
 }
 
 
@@ -958,6 +989,11 @@ class _Client:
         pow_response = solve_pow(self._pow("/api/v0/file/upload_file"))
         headers = self._headers(pow_response)
         headers.pop("content-type", None)          # multipart sets its own
+        # The web client sends the byte length up front. The endpoint accepts
+        # an upload without it, but this mirrors the browser exactly and costs
+        # nothing, so a future build that starts requiring it does not break
+        # the attachment path first.
+        headers["x-file-size"] = str(len(blob))
         # curl_cffi does NOT accept requests' `files=` — it raises
         # NotImplementedError and tells you to use `multipart`. That error text
         # went straight to the attachment chip, which is how this was found.
@@ -1002,8 +1038,22 @@ class _Client:
         raise RuntimeError(f"upload returned no file id: {r.text[:200]}")
 
     def file_status(self, file_ids):
-        """DeepSeek parses uploads asynchronously; a file is only usable once
-        its status settles. Returns {id: status}."""
+        """Best-effort {id: status} for uploaded files. `{}` means UNKNOWN.
+
+        As of this writing `/file/fetch_files` no longer returns file rows —
+        it answers without a `files` array, so every call lands in the except
+        and returns `{}`. That is a legitimate answer here, not a failure: the
+        upload response itself already carries `status` (PENDING) and a
+        `file_size`, and referencing a freshly uploaded id works immediately
+        (verified: an attachment uploaded and read back in the same turn). So
+        the caller must treat `{}` as "no evidence either way" and go ahead,
+        which is exactly what `_describe_once` does — it only holds a file back
+        when this method actually reported a non-ready status.
+
+        Kept rather than deleted because the endpoint may come back, and a
+        status check that starts working again should be used again without a
+        code change.
+        """
         try:
             r = self.sess.post(f"{BASE}/file/fetch_files", headers=self._headers(),
                                json={"file_ids": list(file_ids)},
@@ -1369,13 +1419,92 @@ def _parse(resp, cancelled, raw_sink=None):
 
 # ─── public API (used by server.py) ─────────────────────────────────
 def is_dsfree(model):
+    """True for an id this connector owns.
+
+    Legacy ids answer True as well: they still RESOLVE here (see LEGACY_ALIASES),
+    so a router that classified them as someone else's would send a retired
+    DeepSeek id to a provider that has never heard of it.
+    """
     m = model or ""
-    return "/" not in m and m.startswith("deepseek-")
+    return "/" not in m and (m in MODEL_MAP or m in LEGACY_ALIASES
+                             or m.startswith("deepseek-"))
 
 
 def models():
     """Static list — direct connection is always available when a token is set."""
     return list(MODEL_MAP.keys()) if configured() else []
+
+
+def model_labels(cfg=None):
+    """id -> display name. The registry calls this with a cfg argument."""
+    return dict(LABELS)
+
+
+def default_model(cfg=None):
+    """The mode a fresh conversation starts on. Plain `deepseek-default`.
+
+    Not a thinking mode: the four modes are all equally available, and picking
+    the plainest one as the default means a new chat behaves like the website's
+    default rather than quietly spending thinking tokens on every turn.
+    """
+    return "deepseek-default"
+
+
+# ─── file upload (the harness-facing bridge) ────────────────────────
+# `describe_files` below is the specialised path: upload, then ask the model to
+# DESCRIBE what it sees, returning prose. That is what an image attachment
+# needs. It is the wrong shape for a caller that already knows what it wants to
+# ask and just needs the file IN the chat — a document, a data file, a
+# screenshot the harness itself will reason about. `upload_files` is that
+# bridge: push bytes, get ids back, hand the ids to `stream(ref_file_ids=...)`.
+#
+# Why not just let callers reach `_Client.upload_file` directly: that needs a
+# leased client, and a caller that leases one and then streams would hold two
+# leases and could land on a DIFFERENT account than the chat it is about to
+# write into. File ids are account-scoped, so that mismatch produces a file the
+# chat cannot see. Doing the upload and releasing the lease here keeps the id
+# and the chat on whatever account the pool hands out next — and the caller is
+# told which account that was, so it can pin the stream to it.
+
+
+def upload_files(files, account=None, cancelled=None):
+    """Push [(name, blob)] into DeepSeek. -> {"account": id, "files": [...], "errors": [...]}.
+
+    Never raises for a per-file failure: one unreadable file must not lose the
+    others, which is the same rule `_describe_once` follows. A failure that
+    invalidates the WHOLE call (no credentials, no curl_cffi) still raises,
+    because there is nothing partial to report.
+
+    The returned `account` is the login the ids belong to. Pass it back as
+    `stream(..., account=<that id>)` so the turn that references these files
+    runs on the same login; ids are not portable across accounts.
+    """
+    if cffi is None:
+        raise RuntimeError(_cffi_unavailable())
+    if not configured():
+        raise RuntimeError("No DeepSeek session — put a token in ds_config.json.")
+    files = [(str(n), b) for n, b in (files or [])]
+    if not files:
+        return {"account": None, "files": [], "errors": []}
+
+    out, errors = [], []
+    with _lease_client(account) as client:
+        acct_id = getattr(getattr(client, "account", None), "id", None)
+        for name, blob in files:
+            if cancelled and cancelled():
+                break
+            try:
+                out.append({"name": name, "id": client.upload_file(name, blob),
+                            "size": len(blob)})
+            except (_AuthExpired, _SessionStale) as e:
+                # These invalidate the credential, not the file — the caller
+                # re-logs-in and retries the whole call, exactly as
+                # `describe_files` does, rather than reporting N file errors.
+                raise RuntimeError("DeepSeek auth failed during upload: %s" % e)
+            except Exception as e:  # noqa: BLE001 — one bad file, not the batch
+                errors.append({"name": name, "error": "%s: %s" % (type(e).__name__, e)})
+        _persist_cookies(client)          # uploads can slide the WAF cookies
+    return {"account": acct_id, "files": out, "errors": errors}
 
 
 def _msg_text(msg):
@@ -1743,7 +1872,7 @@ def _sleep_cancellable(secs, cancelled, step=0.5):
 
 
 def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: False,
-           conv_id=None, preempt=False, account=None, oneshot=False):
+           conv_id=None, preempt=False, account=None, oneshot=False, ref_file_ids=None):
     """Yield {'type': 'reasoning'|'content'|'title', 'text': ...}. ONE persistent, threaded
     DeepSeek session per (kiln conversation, account) — a chat is always the same tab, and
     after the first turn we send only the new message.
@@ -1756,13 +1885,21 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     `account` pins a NEW conversation to one login instead of taking the next in
     the ring. The harness exposes one route per account and passes the route's
     account here, which is how a subagent is kept off the account its parent is
-    on: without it, both take round-robin picks and can collide."""
+    on: without it, both take round-robin picks and can collide.
+
+    `ref_file_ids` attaches already-uploaded DeepSeek file ids (see
+    `upload_files`) to this turn, so a harness caller can put a file in front of
+    the model without going through `describe_files`. Ids are bound to the
+    account that uploaded them, so only pass ids obtained from the same login
+    this conversation is pinned to."""
     if cffi is None:
         raise RuntimeError(_cffi_unavailable())
     if not configured():
         raise RuntimeError("No DeepSeek token — put one in ds_config.json (token + cookie).")
     config.dbg("ds_direct.stream() conv=%s model=%s preempt=%s", conv_id, model, preempt)
-    model_type, thinking, search = MODEL_MAP.get(model, ("default", False, False))
+    # `resolve_model` is what keeps a retired id (deepseek-expert-offline, say)
+    # on the mode it used to mean rather than on MODEL_MAP's fallback.
+    model_type, thinking, search = MODEL_MAP[resolve_model(model)]
     key = _state_key(conv_id, model_type, search)
     # No automatic account failover. A conversation stays on the account it is
     # pinned to (or its sticky one); "server is busy" and rate limits WAIT and
@@ -1776,7 +1913,8 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     try:
         with _lease_client(acct_id) as client:
             for ev in _stream_with(client, model_type, thinking, search, messages,
-                                   cancelled, conv_id, preempt, is_last=True):
+                                   cancelled, conv_id, preempt, is_last=True,
+                                   ref_file_ids=ref_file_ids):
                 yield ev
     finally:
         # A one-shot auxiliary call (compaction / session-title summary) opened a
@@ -1791,7 +1929,7 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
 
 
 def _stream_with(client, model_type, thinking, search, messages, cancelled, conv_id,
-                  user_preempt=False, is_last=True):
+                  user_preempt=False, is_last=True, ref_file_ids=None):
     # Track whether the previous turn was cancelled mid-stream. If DeepSeek is still
     # generating on the server, preempt:true kills that stale generation so our new
     # prompt isn't queued behind it. The Interrupt button (user_preempt) arms a
@@ -1838,7 +1976,8 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                                 why=why, model_type=model_type, search=search)
                 prompt = _prompt_for(messages, st)
                 r = client.open_completion(st["sid"], prompt, thinking, search,
-                                           model_type, st.get("parent"), need_preempt)
+                                           model_type, st.get("parent"), need_preempt,
+                                           ref_file_ids=ref_file_ids)
                 if r.status_code in (401, 403):
                     raise _AuthExpired()
                 if r.status_code == 404:
@@ -2091,7 +2230,12 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
         heal += 1                                 # bounded: one thread-reset retry, then give up
 
 
-# ═══════════════════════════════════════════════════════════════ vision ════
+# ═══════════════════════════════════════════════ file attachments ════
+# Uploading a file and letting a chat read it. Named "vision" throughout this
+# section because that is what it was built for and what the harness still
+# calls it (`describe_files`), but it is no longer vision-tier specific: a file
+# rides any ordinary chat as `ref_file_ids` now, and the modes it uses here are
+# the plain ones.
 
 VISION_KEY = "__vision__"        # its own slot in the session store
 _vision_lock = threading.Lock()
@@ -2105,9 +2249,9 @@ def _vision_session(client):
     four screenshots noticeably slow for no benefit — the descriptions are
     independent of each other and of whatever chat you happen to be in.
 
-    The flip side is that the vision model accumulates history it might read
-    meaning into, which is exactly why the prompt in vision.py states outright
-    that the files are unrelated.
+    The flip side is that the model accumulates history it might read meaning
+    into, which is exactly why the prompt the caller passes states outright that
+    the files are unrelated.
     """
     with _session_lock:
         st = _sessions.get(VISION_KEY)
@@ -2241,10 +2385,19 @@ def _describe_once(client, files, prompt, cancelled, timeout):
 
 
 def _run_vision_turn(client, prompt, ref_ids, cancelled):
-    """One completion in the shared vision chat. Returns its text."""
+    """One completion in the shared attachment chat. Returns its text.
+
+    `model_type="default"`, not `"vision"`. The website retired the Vision tier
+    as a separate mode: an attached file (image or document) now rides an
+    ORDINARY chat as `ref_file_ids`, and the plain mode reads it. Verified
+    live — a file uploaded with a passphrase in it, referenced from a
+    `model_type="default"` chat, came back with the passphrase. Asking for
+    `model_type="vision"` also still works today, but that tier is gone from the
+    picker, so depending on it is depending on something already retired.
+    """
     st = _vision_session(client)
     r = client.open_completion(st["sid"], prompt, thinking=False, search=False,
-                               model_type="vision",
+                               model_type="default",
                                parent_message_id=st.get("parent"),
                                ref_file_ids=ref_ids)
     if r.status_code in (401, 403):
@@ -2258,7 +2411,7 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
             st["parent"] = None
             _save_sessions()
         r = client.open_completion(st["sid"], prompt, thinking=False, search=False,
-                                   model_type="vision", ref_file_ids=ref_ids)
+                                   model_type="default", ref_file_ids=ref_ids)
     if r.status_code != 200:
         raise RuntimeError(f"DeepSeek vision {r.status_code}: {r.text[:180]}")
 
