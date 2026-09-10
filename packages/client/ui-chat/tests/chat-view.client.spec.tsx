@@ -1540,15 +1540,35 @@ describe('ChatView', () => {
   })
 
   it('colours each folded phrase by its tool family and separates the verb', () => {
+    // `write` and `read` only classify as a mutation and a read when the call
+    // carries the file it touched, so each fixture names one.
+    const write = (seq: number, callId: string, path: string): ToolResultNode => ({
+      ...toolResult(seq, callId, 'write'),
+      call: { name: 'write', argsRaw: JSON.stringify({ file_path: path, content: 'x' }) },
+    })
+    const read = (seq: number, callId: string, path: string): ToolResultNode => ({
+      ...toolResult(seq, callId, 'read'),
+      call: { name: 'read', argsRaw: JSON.stringify({ file_path: path }) },
+    })
+    // The process window needs an owning step-1 assistant; without it the row
+    // never mounts and the assertion reads null.
+    const first = {
+      ...assistant(2, 'earlier reply', 1, 1),
+      blocks: [
+        { kind: 'reasoning' as const, text: 'inspect the repository' },
+        { kind: 'text' as const, text: 'earlier reply' },
+      ],
+    }
     const h = makeHarness({
       nodes: [
         user(1, 'question'),
-        kernelResult(2, 'a', '# Repeat the read-only listing of the working directory top level'),
-        toolResult(3, 'b', 'write'),
-        toolResult(4, 'c', 'read'),
-        assistant(5, 'final answer', 1, 2),
+        first,
+        kernelResult(3, 'a', '# Read the checkout root'),
+        write(4, 'b', '/w/notes.md'),
+        read(5, 'c', '/w/manifest.json'),
+        assistant(6, 'final answer', 1, 2),
       ],
-      turnEnds: new Map([[1, 6]]),
+      turnEnds: new Map([[1, 7]]),
     })
     const view = render(<h.ChatView {...h.props} />)
     const control = turnProcessControl(view.container)!
@@ -1561,7 +1581,8 @@ describe('ChatView', () => {
     expect(tones).toContain('read')
     // A kernel comment is already a capitalised sentence, so the verb needs a
     // separator in front of it; "ran Repeat the ..." read as one broken word.
-    expect(control.textContent).toContain('ran: Repeat the read-only listing')
+    // This suite renders the zh dictionary.
+    expect(control.textContent).toContain('运行了脚本：Read the checkout root')
   })
 
   it('budgets the folded row label so it is never cut mid-word', () => {
