@@ -1,7 +1,9 @@
 # browser_tools.py — sandboxed browser automation for Kiln-Kernel.
 #
-# The browser is ALWAYS headless: it never touches your mouse or keyboard and
-# can't open windows on your desktop. Playwright drives it when installed;
+# The browser is a REAL Chromium: headed by default, so a genuine window opens
+# on the desktop and the session the agent drives is the same one you can see
+# and grab. Set KILN_BROWSER_HEADED=0 to force the windowless shell (CI, or a
+# host with no display). Playwright drives it when installed;
 # without Playwright the "navigate" action degrades to a plain HTTP text fetch
 # and everything else explains what is available. The tool never raises.
 #
@@ -135,10 +137,28 @@ class KilnBrowser:
         self._last_state = None       # last full state.json dict, merged per frame
         self._state_lock = _threading.Lock()   # serialize state.json writes (screencast + worker)
         self._histories = []          # per-page navigation history, aligned to context.pages
+        # Headed by default: the whole point is a real window the user can use,
+        # not a screenshot of one. KILN_BROWSER_HEADED=0 restores the headless
+        # shell for CI and for hosts with no display.
+        _h = os.environ.get("KILN_BROWSER_HEADED", "1").strip().lower()
+        self._headed = _h not in ("0", "false", "no", "off")
+        # A dedicated profile keeps logins and cookies across restarts WITHOUT
+        # touching the user's own Chrome profile (which would fight over its
+        # lock file and mix the agent's session into their real browsing).
+        self._profile_dir = (os.path.join(_BROWSER_DIR, "profile")
+                             if _BROWSER_DIR else "")
+        self._persistent = False      # persistent context owns its own browser
 
     # ── lifecycle ──────────────────────────────────────────────
     def _ensure(self):
-        """Lazily launch the headless browser. Returns (ok, err_or_None)."""
+        """Lazily launch the real browser. Returns (ok, err_or_None).
+
+        Headed by default (``KILN_BROWSER_HEADED=0`` opts out), launched as a
+        PERSISTENT context over a dedicated profile directory so logins survive
+        restarts. A fixed viewport is kept even when headed: the dock maps its
+        own pixels to page coordinates through state.json's vw/vh, so the
+        viewport must stay a known size rather than following the window.
+        """
         if self.page is not None and not self.page.is_closed():
             return True, None
         try:
@@ -147,11 +167,10 @@ class KilnBrowser:
             return False, f"Playwright is not installed: {e}"
         try:
             self.pw = sync_playwright().start()
-            launch_kw = {"headless": True,
+            launch_kw = {"headless": not self._headed,
                          "args": ["--disable-blink-features=AutomationControlled"]}
             if self._proxy:
                 launch_kw["proxy"] = {"server": self._proxy}
-            self.browser = self.pw.chromium.launch(**launch_kw)
             ctx_opts = {
                 "user_agent": _UA,
                 "viewport": {"width": 1440, "height": 900},
@@ -159,11 +178,25 @@ class KilnBrowser:
                 "locale": "en-US",
                 "extra_http_headers": {"Accept-Language": "en-US,en;q=0.9"},
             }
-            if self._storage_path and os.path.isfile(self._storage_path):
-                ctx_opts["storage_state"] = self._storage_path
-            self.context = self.browser.new_context(**ctx_opts)
+            if self._headed and self._profile_dir:
+                # A persistent context IS the browser: it has no separate
+                # ``browser`` handle, and closing the context closes Chromium.
+                os.makedirs(self._profile_dir, exist_ok=True)
+                self.context = self.pw.chromium.launch_persistent_context(
+                    self._profile_dir, **launch_kw, **ctx_opts)
+                self.browser = None
+                self._persistent = True
+            else:
+                self.browser = self.pw.chromium.launch(**launch_kw)
+                if self._storage_path and os.path.isfile(self._storage_path):
+                    ctx_opts["storage_state"] = self._storage_path
+                self.context = self.browser.new_context(**ctx_opts)
+                self._persistent = False
             self.context.add_init_script(_STEALTH_JS)   # look like a real browser
-            self.page = self.context.new_page()
+            # A persistent context can restore the previous session's tabs, so
+            # adopt one when present instead of always adding another.
+            _existing = list(self.context.pages)
+            self.page = _existing[0] if _existing else self.context.new_page()
             self._requests = []
             self._console = []
             self.page.on("response", lambda r: self._requests.append((r.status, r.url)))
@@ -284,14 +317,74 @@ class KilnBrowser:
         self.page = None
         self.context = None
         self.browser = None
+        self._persistent = False
         self.pw = None
+
+    def _window_id(self):
+        """CDP window id for the active page, or None. Best-effort."""
+        try:
+            cdp = self.context.new_cdp_session(self.page)
+            return cdp, cdp.send("Browser.getWindowForTarget").get("windowId")
+        except Exception:
+            return None, None
+
+    def show_window(self):
+        """Bring the real Chromium window to the front and focus it.
+
+        The whole point of a headed browser is that the user can take over, and
+        that only works if the window is actually in front of everything else.
+        """
+        ok, err = self._ensure()
+        if not ok:
+            return f"show_window needs Playwright ({err})"
+        if not getattr(self, "_headed", False):
+            return ("browser is headless; set KILN_BROWSER_HEADED=1 and restart "
+                    "the harness to get a real window")
+        try:
+            self.page.bring_to_front()
+            try:
+                cdp, wid = self._window_id()
+                if wid is not None:
+                    # A minimized window stays minimized through bring_to_front.
+                    cdp.send("Browser.setWindowBounds",
+                             {"windowId": wid, "bounds": {"windowState": "normal"}})
+                    self.page.bring_to_front()
+            except Exception:
+                pass   # bounds are cosmetic; bring_to_front already raised it
+            return "browser window shown"
+        except Exception as e:
+            return f"show_window error: {e}"
+
+    def window_state(self):
+        """Report headed/headless, the profile dir, and the live window bounds."""
+        info = {"headed": bool(getattr(self, "_headed", False)),
+                "profile": self._profile_dir or None,
+                "bounds": None}
+        ok, err = self._ensure()
+        if not ok:
+            info["error"] = err
+            return json.dumps(info)
+        if info["headed"]:
+            try:
+                cdp, wid = self._window_id()
+                if wid is not None:
+                    info["bounds"] = cdp.send(
+                        "Browser.getWindowBounds", {"windowId": wid}).get("bounds")
+            except Exception:
+                pass
+        return json.dumps(info)
 
     def _state(self, light=False, **extra):
         # vw/vh are the CSS viewport the screenshot covers, so the dock pane can
         # scale a click on the image back to browser coordinates.
         st = {"ts": time.time(), "url": "", "title": "",
               "screenshot": "", "text_preview": "", "links": [],
-              "vw": 1440, "vh": 900}
+              "vw": 1440, "vh": 900,
+              # A plain bool, deliberately: the dock needs to know whether a
+              # real window exists, but querying window bounds over CDP on
+              # every state write would re-add the per-action latency that
+              # light mode exists to avoid.
+              "headed": bool(getattr(self, "_headed", False))}
         try:
             if self.page is not None and not self.page.is_closed():
                 st["url"] = self.page.url
@@ -849,6 +942,55 @@ class KilnBrowser:
             return f"moved mouse to ({x}, {y})"
         except Exception as e:
             return f"move error: {e}"
+
+    def ui_mouse(self, kind, x=None, y=None, button="left", clicks=1, dy=0, dx=0):
+        """Forward one raw mouse event from the dock's live pane.
+
+        ``kind`` is move / down / up / click / wheel. Coordinates are already in
+        page space: the dock scales the pixels the user clicked on its image by
+        the vw/vh it read from state.json, so the kernel never has to guess.
+        No screenshot is taken — the live screencast emits the resulting frame.
+        """
+        ok, err = self._ensure()
+        if not ok:
+            return f"ui_mouse needs Playwright ({err})"
+        try:
+            if kind == "move":
+                self.page.mouse.move(float(x or 0), float(y or 0))
+            elif kind == "down":
+                self.page.mouse.move(float(x or 0), float(y or 0))
+                self.page.mouse.down(button=button)
+            elif kind == "up":
+                self.page.mouse.up(button=button)
+            elif kind == "click":
+                self.page.mouse.move(float(x or 0), float(y or 0))
+                self.page.mouse.click(float(x or 0), float(y or 0),
+                                      button=button, click_count=int(clicks or 1))
+            elif kind == "wheel":
+                self.page.mouse.wheel(float(dx or 0), float(dy or 0))
+            else:
+                return f"ui_mouse: unknown kind {kind!r}"
+            return f"ui_mouse {kind} ok"
+        except Exception as e:
+            return f"ui_mouse error: {e}"
+
+    def ui_key(self, key=None, text=None):
+        """Forward a keystroke or literal text to the focused element.
+
+        ``key`` is a Playwright key/combo ("Enter", "Control+A"); ``text`` types
+        literally through the keyboard, which is what character input needs.
+        """
+        ok, err = self._ensure()
+        if not ok:
+            return f"ui_key needs Playwright ({err})"
+        try:
+            if text:
+                self.page.keyboard.type(str(text))
+                return f"ui_key typed {len(str(text))} chars"
+            self.page.keyboard.press(str(key))
+            return f"ui_key pressed {key!r}"
+        except Exception as e:
+            return f"ui_key error: {e}"
 
     def click(self, target, button="left"):
         ok, err = self._ensure()
@@ -1424,6 +1566,17 @@ def _browser_use_impl(action="navigate", **kw):
             return b.close_tab(kw.get("index"))
         if a == "tabs":
             return b.tabs()
+        if a == "ui_mouse":
+            return b.ui_mouse(kw.get("kind") or "click", kw.get("x"), kw.get("y"),
+                              button=kw.get("button") or "left",
+                              clicks=kw.get("clicks") or 1,
+                              dx=kw.get("dx") or 0, dy=kw.get("dy") or 0)
+        if a == "ui_key":
+            return b.ui_key(kw.get("key"), kw.get("text"))
+        if a in ("show_window", "show"):
+            return b.show_window()
+        if a in ("window_state", "window"):
+            return b.window_state()
         if a == "history":
             return b.history()
         if a in ("restore", "restore_session"):
@@ -1442,6 +1595,7 @@ def _browser_use_impl(action="navigate", **kw):
                 f"find, get_text, snapshot, dom, coords, screenshot, back, forward, wait, "
                 f"move, click, dblclick, hover, drag, type, key, clear, select, scroll, "
                 f"zoom, save_state, load_state, new_tab, switch_tab, close_tab, tabs, history, restore, "
+                f"show_window, window_state, ui_mouse, ui_key, "
                 f"network, console, clear_network, search")
     except Exception as e:
         return f"browser_use error: {e}"

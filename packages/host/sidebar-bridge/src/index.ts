@@ -159,6 +159,7 @@ interface StreamState {
   tabs?: unknown
   active?: unknown
   history?: unknown
+  headed?: unknown
 }
 
 /**
@@ -166,9 +167,10 @@ interface StreamState {
  * making the client poll. The bridge reads the kernel-written `state.json` on a
  * short server-side tick and pushes a `frame` only when the `ts` stamp changes,
  * so an idle browser sends nothing and the client renders nothing. The frame is
- * a base64 PNG data URI (the shared browser is headless Chromium, so there is no
- * DOM to mount), but it is delivered as a change-driven push, never a client-side
- * re-fetch loop. `state` messages carry url/title/text without a frame so the
+ * a base64 image data URI of the shared Chromium (screencast JPEG, or a PNG
+ * screenshot), delivered as a change-driven push, never a client-side re-fetch
+ * loop. It cannot be an iframe: the pane shows the AGENT's browser, and an
+ * iframe would load the URL as the user's own separate session. `state` messages carry url/title/text without a frame so the
  * address bar and empty state stay live between navigations.
  */
 function openBrowserStream(browserDir: string, ws: WebSocket): void {
@@ -207,6 +209,9 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
     const tabs = Array.isArray(state.tabs) ? state.tabs : []
     const active = typeof state.active === 'number' ? state.active : -1
     const history = typeof state.history === 'object' && state.history !== null ? state.history : {}
+    // Whether the kernel is running a real headed Chromium, so the pane can
+    // offer "raise the window" instead of pretending a screenshot is a browser.
+    const headed = state.headed === true
 
     if (ts !== undefined && ts !== lastTs) {
       lastTs = ts
@@ -219,9 +224,9 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
         } catch { /* screenshot not flushed yet; keep the last good frame */ }
         frame = lastFrameData
       }
-      send({ type: 'frame', ts, url, title, text_preview: text, vw, vh, screenshot: frame, tabs, active, history })
+      send({ type: 'frame', ts, url, title, text_preview: text, vw, vh, screenshot: frame, tabs, active, history, headed })
     } else {
-      send({ type: 'state', ts, url, title, text_preview: text, vw, vh, tabs, active, history })
+      send({ type: 'state', ts, url, title, text_preview: text, vw, vh, tabs, active, history, headed })
     }
   }
 

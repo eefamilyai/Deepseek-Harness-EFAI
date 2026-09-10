@@ -326,14 +326,6 @@
 
 
 /* ── live iframe render ─────────────────────────────────────────────────── */
-.frame {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #fff; /* pages without a background still render white, not the dock's dark */
-}
-
 .stage {
   display: flex;
   align-items: center;
@@ -342,6 +334,24 @@
   height: 100%;
   outline: none;
   cursor: crosshair;
+  /* The pane is an input surface: it forwards clicks and keys to the real
+     browser, so it must be focusable and must not be scrolled by the dock. */
+  touch-action: none;
+  user-select: none;
+}
+
+.stage:focus-visible {
+  outline: 1px solid var(--ds-color-accent, #4a9eff);
+  outline-offset: -1px;
+}
+
+.browserNotice {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ds-color-border, #2a2d34);
+  background: var(--ds-color-bg-elevated, #101216);
+  color: var(--ds-color-text-secondary, #9aa0aa);
+  font-size: 11.5px;
 }
 
 /* A ring while focused, so it is clear the browser is taking your keystrokes. */

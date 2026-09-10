@@ -1,25 +1,25 @@
 /**
- * The browser pane: a LIVE, native render of the shared browser URL, with a
- * screenshot "Mirror" fallback for sites that refuse to be embedded.
+ * The browser pane: a live, interactive view of the REAL Chromium the agent
+ * drives, plus a button that raises its window.
  *
- * Default mode points a real <iframe> at the shared browser's current URL, so
- * the page's own HTML/CSS/JS run natively in the user's browser — crisp and
- * smooth. Some sites (google.com among them) send `X-Frame-Options` or a CSP
- * frame-ancestors rule that browsers enforce at the security layer; no client
- * code can embed those. The Mirror toggle renders the agent's own screenshot
- * stream instead, so even blocking sites remain visible (as the AI sees them).
+ * There is no <iframe> here, and there cannot be one. An iframe makes the
+ * user's own browser load the URL as a SEPARATE session — different cookies,
+ * different logins, different scroll position — so it was never the agent's
+ * browser, and sites that send X-Frame-Options refused to render in it at all.
+ * A web page also cannot host a native Chromium window. So the pane shows the
+ * agent's own live frames (the CDP screencast of its real window) and forwards
+ * every mouse and key event back to that same browser: what you do here happens
+ * in the real window, and "Show browser" raises it on the desktop.
  *
- * The stream also keeps URL/title sync and the "Elements" ref-tree; the address
- * bar, back/forward/reload, Open, and Elements actions still drive the shared
- * browser through `/kiln/browser/act`.
+ * The stream keeps URL/title sync and the ref-tree; the address bar,
+ * back/forward/reload, tabs, and Elements actions drive the shared browser
+ * through `/kiln/browser/act`.
  * @module @deepseek-ai/dsh-client-ui-dock/client/Browser
  */
 
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import css from './dock.module.css'
-
-type RenderMode = 'live' | 'mirror'
 
 interface HistoryInfo {
   back: { url: string; title: string }[]
@@ -46,13 +46,14 @@ interface BrowserState {
   ts?: number
   tabs: TabInfo[]
   active: number
+  headed: boolean
 }
 
 type BrowserEvent =
-  | { type: 'frame'; ts: number; url: string; title: string; text_preview: string; vw: number; vh: number; screenshot: string | null; tabs?: TabInfo[]; active?: number; history?: HistoryInfo }
-  | { type: 'state'; ts?: number; url: string; title: string; text_preview: string; vw: number; vh: number; tabs?: TabInfo[]; active?: number; history?: HistoryInfo }
+  | { type: 'frame'; ts: number; url: string; title: string; text_preview: string; vw: number; vh: number; screenshot: string | null; tabs?: TabInfo[]; active?: number; history?: HistoryInfo; headed?: boolean }
+  | { type: 'state'; ts?: number; url: string; title: string; text_preview: string; vw: number; vh: number; tabs?: TabInfo[]; active?: number; history?: HistoryInfo; headed?: boolean }
 
-const EMPTY: BrowserState = { url: '', title: '', text_preview: '', links: [], screenshot: '', vw: 1440, vh: 900, tabs: [], active: -1 }
+const EMPTY: BrowserState = { url: '', title: '', text_preview: '', links: [], screenshot: '', vw: 1440, vh: 900, tabs: [], active: -1, headed: false }
 
 /** POST one browser_use action to the shared browser; returns its text output. */
 async function act(action: string, args: Record<string, unknown> = {}): Promise<string> {
@@ -69,20 +70,40 @@ async function act(action: string, args: Record<string, unknown> = {}): Promise<
   }
 }
 
+/** Translate a key event into the page's key name, or null to send it as text. */
+function keyCombo(event: KeyboardEvent<HTMLDivElement>): string | null {
+  const k = event.key
+  const mods: string[] = []
+  if (event.ctrlKey) mods.push('Control')
+  if (event.altKey) mods.push('Alt')
+  if (event.shiftKey && k.length > 1) mods.push('Shift')
+  if (event.metaKey) mods.push('Meta')
+  const named = k.length > 1
+  if (!named && mods.length === 0) return null
+  const base = named ? k : k.toUpperCase()
+  return mods.length > 0 ? [...mods, base].join('+') : base
+}
+
 /** The browser pane. `active` gates the stream so a hidden tab does no work. */
 export function Browser({ active }: { active: boolean }): JSX.Element {
   const [state, setState] = useState<BrowserState>(EMPTY)
-  const [mode, setMode] = useState<RenderMode>('mirror')
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [tree, setTree] = useState<string | null>(null)
   const [live, setLive] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [notice, setNotice] = useState('')
   const lastTs = useRef(0)
   const historyRef = useRef<HistoryInfo | null>(null)
   const addressFocused = useRef(false)
   const suppressLive = useRef(false)
   const wsRef = useRef<WebSocket | null>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const dragging = useRef(false)
+  // Read inside listeners that must not be re-bound on every viewport change.
+  const vp = useRef({ vw: 1440, vh: 900 })
+  vp.current = { vw: state.vw, vh: state.vh }
 
   const applyEvent = useCallback((event: BrowserEvent): void => {
     const ts = event.ts
@@ -94,10 +115,11 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       text_preview: event.text_preview,
       vw: event.vw,
       vh: event.vh,
+      headed: event.headed ?? prev.headed ?? false,
       tabs: event.tabs ?? prev.tabs,
       active: event.active ?? prev.active,
-      // A frame carries the PNG inline; a state tick must not clobber the last
-      // good frame with an empty string while the bridge re-reads state.
+      // A frame carries the image inline; a state tick must not clobber the
+      // last good frame with an empty string while the bridge re-reads state.
       screenshot: event.type === 'frame' ? (event.screenshot ?? prev.screenshot) : prev.screenshot,
       ...(typeof ts === 'number' ? { ts } : {}),
     }))
@@ -195,6 +217,76 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
     try { suppressLive.current = true; await act('click', { ref }); setTree(await act('read_page')) } finally { setBusy(false) }
   }, [])
 
+  const showWindow = useCallback(async (): Promise<void> => {
+    const out = await act('show_window')
+    setNotice(out)
+    window.setTimeout(() => { setNotice('') }, 4000)
+  }, [])
+
+  /** Map a click on the pane to page coordinates through the letterboxed image. */
+  const toPage = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
+    const img = imgRef.current
+    if (img === null) return null
+    const rect = img.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return null
+    const { vw, vh } = vp.current
+    // The image is object-fit: contain, so it is scaled uniformly and centred;
+    // undo that letterboxing before scaling into page space.
+    const scale = Math.min(rect.width / vw, rect.height / vh)
+    const offX = (rect.width - vw * scale) / 2
+    const offY = (rect.height - vh * scale) / 2
+    const x = (clientX - rect.left - offX) / scale
+    const y = (clientY - rect.top - offY) / scale
+    if (x < 0 || y < 0 || x > vw || y > vh) return null
+    return { x: Math.round(x), y: Math.round(y) }
+  }, [])
+
+  const onStageMouseDown = useCallback((event: MouseEvent<HTMLDivElement>): void => {
+    const pt = toPage(event.clientX, event.clientY)
+    if (pt === null) return
+    event.preventDefault()
+    stageRef.current?.focus()
+    dragging.current = true
+    void act('ui_mouse', { kind: 'down', x: pt.x, y: pt.y, button: event.button === 2 ? 'right' : 'left' })
+  }, [toPage])
+
+  const onStageMouseUp = useCallback((event: MouseEvent<HTMLDivElement>): void => {
+    if (!dragging.current) return
+    dragging.current = false
+    // Release exactly what mousedown pressed. Sending `click` here would add a
+    // second down+up on top of the pending press and double-fire buttons.
+    void act('ui_mouse', { kind: 'up', button: event.button === 2 ? 'right' : 'left' })
+  }, [toPage])
+
+  const onStageMouseMove = useCallback((event: MouseEvent<HTMLDivElement>): void => {
+    if (!dragging.current) return
+    const pt = toPage(event.clientX, event.clientY)
+    if (pt === null) return
+    void act('ui_mouse', { kind: 'move', x: pt.x, y: pt.y })
+  }, [toPage])
+
+  const onStageKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>): void => {
+    const combo = keyCombo(event)
+    event.preventDefault()
+    if (combo === null) {
+      void act('ui_key', { text: event.key })
+      return
+    }
+    void act('ui_key', { key: combo })
+  }, [])
+
+  // Wheel must be non-passive to stop the dock's own scroll from also moving.
+  useEffect(() => {
+    const node = stageRef.current
+    if (node === null) return
+    const onWheel = (event: globalThis.WheelEvent): void => {
+      event.preventDefault()
+      void act('ui_mouse', { kind: 'wheel', dx: event.deltaX, dy: event.deltaY })
+    }
+    node.addEventListener('wheel', onWheel, { passive: false })
+    return () => { node.removeEventListener('wheel', onWheel) }
+  }, [active, state.url])
+
   const onAddressKey = useCallback((event: KeyboardEvent<HTMLInputElement>): void => {
     if (event.key === 'Enter') void go(address)
   }, [address, go])
@@ -203,6 +295,7 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
   const hist = historyRef.current
   const emptyHistory = hist === null
     || (hist.back.length === 0 && hist.current === null && hist.forward.length === 0)
+  const headed = state.headed === true
 
   return (
     <div className={css.browser}>
@@ -225,27 +318,20 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
         </div>
         <button
           className={css.textBtn}
-          title={mode === 'live' ? 'This site may block embedding — show the agent\'s screenshot instead' : 'Show the native live page when it allows embedding'}
-          onClick={() => { setMode(mode === 'live' ? 'mirror' : 'live') }}
+          title={headed
+            ? 'Raise the real Chromium window on your desktop'
+            : 'The browser is headless; set KILN_BROWSER_HEADED=1 and restart to get a real window'}
+          onClick={() => void showWindow()}
           disabled={busy}
         >
-          {mode === 'live' ? 'Shared frame' : 'Live iframe'}
+          {headed ? 'Show browser' : 'Headless'}
         </button>
         <button className={css.textBtn} title="Interactive element tree" onClick={() => void toggleTree()} disabled={busy}>
           {tree === null ? 'Elements' : 'Hide'}
         </button>
-        <a
-          className={css.textBtn}
-          href={current === '' ? undefined : current}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open in a new tab"
-          aria-disabled={current === ''}
-          onClick={(event) => { if (current === '') event.preventDefault() }}
-        >
-          Open
-        </a>
       </div>
+
+      {notice !== '' && <div className={css.browserNotice}>{notice}</div>}
 
       <div className={css.tabStrip} role="tablist" aria-label="Browser tabs">
         {state.tabs.map(tab => (
@@ -285,15 +371,30 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       <div className={css.browserView}>
         {current === ''
           ? <div className={css.browserEmpty}>{state.text_preview === '' ? 'No page yet — type an address above to browse.' : state.text_preview}</div>
-          : mode === 'live'
-            ? <iframe className={css.frame} src={current} title={state.title || 'page'} />
-            : state.screenshot === ''
-              ? <div className={css.browserEmpty}>No snapshot yet — the shared browser is still loading this page.</div>
-              : (
-                <div className={css.stage}>
-                  <img className={css.shot} src={state.screenshot} alt={state.title || 'page'} draggable={false} />
-                </div>
-              )}
+          : state.screenshot === ''
+            ? <div className={css.browserEmpty}>No frame yet — the shared browser is still loading this page.</div>
+            : (
+              <div
+                ref={stageRef}
+                className={css.stage}
+                tabIndex={0}
+                role="application"
+                aria-label="Live browser — click to interact"
+                onMouseDown={onStageMouseDown}
+                onMouseUp={onStageMouseUp}
+                onMouseMove={onStageMouseMove}
+                onKeyDown={onStageKeyDown}
+                onContextMenu={(event) => { event.preventDefault() }}
+              >
+                <img
+                  ref={imgRef}
+                  className={css.shot}
+                  src={state.screenshot}
+                  alt={state.title || 'page'}
+                  draggable={false}
+                />
+              </div>
+            )}
         {tree !== null && (
           <div className={css.tree}>
             <div className={css.treeHead}>Elements — click one to act on it</div>
@@ -310,7 +411,10 @@ export function Browser({ active }: { active: boolean }): JSX.Element {
       </div>
 
       <div className={css.browserFoot} title={current}>
-        <span className={css.pageTitle}>{state.title === '' ? (current === '' ? 'DeepSeek Browser' : current) : state.title}</span>
+        <span className={css.pageTitle}>
+          {state.title === '' ? (current === '' ? 'DeepSeek Browser' : current) : state.title}
+          {headed ? ' — real window (click here or press Show browser)' : ' — headless'}
+        </span>
       </div>
     </div>
   )
