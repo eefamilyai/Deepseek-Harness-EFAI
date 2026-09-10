@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **119** in **21** patch(es).
+Tier-2 files: **122** in **21** patch(es).
 
 ## Patches
 
@@ -100,7 +100,7 @@ Tier-2 files: **119** in **21** patch(es).
 - `packages/client/locale/src/locales/en.ts`
 - `packages/client/locale/src/locales/zh.ts`
 
-### `patches/client-chat.patch` — 12 file(s)
+### `patches/client-chat.patch` — 15 file(s)
 
 - `packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx`
 - `packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css`
@@ -111,8 +111,11 @@ Tier-2 files: **119** in **21** patch(es).
 - `packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css`
 - `packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx`
 - `packages/client/ui-chat/src/client/contract/slots.ts`
+- `packages/client/ui-chat/src/client/contract/store.ts`
 - `packages/client/ui-chat/src/client/locale.ts`
 - `packages/client/ui-chat/src/client/markdown-labels.ts`
+- `packages/client/ui-chat/src/client/stores.ts`
+- `packages/client/ui-chat/tests/chat-store.client.spec.ts`
 - `packages/client/ui-chat/tests/chat-view.client.spec.tsx`
 
 ### `patches/client-input-trigger.patch` — 3 file(s)

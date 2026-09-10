@@ -98,14 +98,19 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     [processSignature],
   )
   const nodeStore = useChat(snapshot => snapshot.nodes)
+  // DSH-FORK(brand): a Turn folds while it is still running, and a partially
+  // paged history withholds only the one Turn whose own `turn/start` is missing.
+  // Upstream required closed + finalized + fully-loaded at once, which left the
+  // row absent for most of a live session. EXIT: upstream gives the folded
+  // process row a content-derived label.
   const processLayoutKeys = useChat((snapshot) => {
-    if (!compactTranscript || historyIncomplete || processSpec === undefined) return EMPTY_PROCESS_KEYS
+    if (!compactTranscript || processSpec === undefined) return EMPTY_PROCESS_KEYS
     const current = snapshot.nodes.get(nodeKey) as ChatNode | undefined
     const location = current?.location
     if (current === undefined
       || (location?.kind !== 'turn' && location?.kind !== 'step')
-      || location.turn.status !== 'closed'
       || location.turn.turn !== processSpec.turn) return EMPTY_PROCESS_KEYS
+    if (historyIncomplete && location.turn.start === undefined) return EMPTY_PROCESS_KEYS
     const ownsLayout = current.kind === 'turn-process'
       || (current.kind === 'assistant-step' && current.data.step === processSpec.answerStep)
     return ownsLayout ? snapshot.locations.getTurn(processSpec.turn) : EMPTY_PROCESS_KEYS
@@ -137,7 +142,6 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     ? undefined
     : storedTurnProcessEntry(state, processSpec.turn))
   const processEntry = storedEntry?.generation === processGeneration ? storedEntry : undefined
-  const processOpen = processEntry !== undefined
   const setOpen = useCallback((open: boolean) => {
     if (processGeneration !== undefined && processSpec !== undefined) {
       actions.setTurnProcessOpen(processSpec.turn, processGeneration, open)
@@ -148,18 +152,29 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && processSpec !== undefined
     && (routedNode.location.kind === 'turn' || routedNode.location.kind === 'step')
     && routedNode.location.turn.turn === processSpec.turn
-  const turnClosed = sameTurn
-    && routedNode.location.turn.status === 'closed'
+  // DSH-FORK(brand): the row exists for a Turn that is still running, not only
+  // after it closes. The folded window ends at the finalized answer when there
+  // is one and is otherwise open-ended, so a running Turn's row summarizes the
+  // work it has done so far rather than waiting for the Turn to finish.
+  // EXIT: upstream gives the folded process row a content-derived label.
+  const turnLocation = sameTurn ? routedNode.location.turn : undefined
+  const turnClosed = turnLocation?.status === 'closed'
+  // A running Turn starts expanded so the reader watches the work land; a
+  // finalized one starts folded. Either way the reader's own toggle wins.
+  const processOpen = processEntry === undefined ? turnClosed === false : processEntry.open
+  const historyTruncatesTurn = historyIncomplete && turnLocation?.start === undefined
+  const processEndSeq = processSpec === undefined
+    ? null
+    : processSpec.answerAnchorSeq ?? Number.POSITIVE_INFINITY
   const processWindowReady = processSpec !== undefined
     && compactTranscript
-    && processSpec.answerAnchorSeq !== null
-    && turnClosed
-    && !historyIncomplete
+    && !historyTruncatesTurn
   const processMember = sameTurn
     && processWindowReady
+    && processEndSeq !== null
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
     && routedNode.anchorSeq >= processSpec.processStartSeq
-    && routedNode.anchorSeq < processSpec.answerAnchorSeq
+    && routedNode.anchorSeq < processEndSeq
   const processAnswer = sameTurn
     && processWindowReady
     && routedNode.kind === 'assistant-step'
@@ -185,6 +200,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && foldable
     && processLayout?.compactAnswer === true
     && !processOpen
+  // `processOpen` already carries the default (open while running, folded once
+  // finalized), so hiding follows the resolved state and no extra Turn-status
+  // condition is needed: a reader who collapses a running Turn sees it close.
   const processHidden = controllerInactive || (foldable && processMember && !processOpen)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)

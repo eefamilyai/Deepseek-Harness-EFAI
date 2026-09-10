@@ -1429,7 +1429,7 @@ describe('ChatView', () => {
     expect(answer?.hasAttribute('data-turn-process-answer')).toBe(false)
   })
 
-  it('keeps a live Turn expanded and folds it once at turn/end', () => {
+  it('shows a running Turn expanded and folds it once at turn/end', () => {
     const process = assistant(2, 'inspect', 1, 1)
     const h = makeHarness({
       nodes: [user(1, 'question'), process],
@@ -1437,8 +1437,12 @@ describe('ChatView', () => {
       running: true,
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(turnProcessControl(view.container)).toBeNull()
+    // The row exists during the work and starts expanded, so the streaming
+    // answer it summarizes is not folded away while it is still arriving.
+    const live = turnProcessControl(view.container)!
+    expect(live.getAttribute('aria-expanded')).toBe('true')
     const processRow = view.getByText('inspect').closest('[data-chat-flow-kind="assistant-step"]') as HTMLElement
+    expect(processRow.getAttribute('hidden')).toBeNull()
 
     act(() => {
       h.set({
@@ -1451,6 +1455,73 @@ describe('ChatView', () => {
     const toggle = turnProcessControl(view.container)!
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(processRow.getAttribute('hidden')).toBe('until-found')
+  })
+
+  it('folds a running Turn the reader collapsed, and remembers it', () => {
+    const process = assistant(2, 'inspect', 1, 1)
+    const h = makeHarness({
+      nodes: [user(1, 'question'), process],
+      partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'streaming answer' }] },
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.getByText('inspect').closest('[data-chat-flow-kind="assistant-step"]') as HTMLElement
+    const toggle = turnProcessControl(view.container)!
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(row.getAttribute('hidden')).toBe('until-found')
+
+    // A live update must not override the reader's explicit collapse.
+    act(() => { h.set({ partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'more' }] } }) })
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    expect(row.getAttribute('hidden')).toBe('until-found')
+  })
+
+  // DSH-FORK(brand): a Turn folds while it is still running, so the cases that
+  // only exist mid-Turn are pinned here. EXIT: upstream gives the folded process
+  // row a content-derived label.
+  it('keeps a live Tool call inside the running Turn process and folds it with the rest', () => {
+    const h = makeHarness({
+      nodes: [user(1, 'question'), reasoningAssistant(2, 'inspect', 1, 1)],
+      partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'streaming answer' }] },
+      // The call must belong to the Turn under test, not the fixture's default.
+      runningCalls: [{ ...runningCall('r1'), turn: 1 }],
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    // A call still in flight is work the Turn has done, so it belongs to the
+    // process window rather than floating outside the disclosure.
+    const row = view.container.querySelector<HTMLElement>('[data-chat-flow-key="fixture:tool:r1"]')!
+    expect(row.dataset.turnProcessMember).toBe('true')
+    expect(row.getAttribute('hidden')).toBeNull()
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('true')
+
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(row.getAttribute('hidden')).toBe('until-found')
+  })
+
+  // DSH-FORK(brand): the reader's own mid-run steer must stay outside the fold.
+  it('keeps a steer that lands mid-run outside the process fold', () => {
+    const h = makeHarness({
+      nodes: [
+        user(1, 'question'),
+        reasoningAssistant(2, 'inspect', 1, 1),
+        steering(3, 'also mention safety', 1),
+      ],
+      partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'streaming answer' }] },
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.getByText('also mention safety')
+      .closest('[data-chat-flow-kind="steering"]') as HTMLElement
+    // The reader's own words are never hidden behind the Turn's work.
+    expect(row.dataset.turnProcessMember).toBeUndefined()
+    expect(row.getAttribute('hidden')).toBeNull()
+
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    expect(row.getAttribute('hidden')).toBeNull()
   })
 
   it('switches completed Turns between the persisted Normal and Compact modes', () => {
