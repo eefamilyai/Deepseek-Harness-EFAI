@@ -214,7 +214,7 @@ export const en = {
   'message.turnProcess.read': 'Read {name}',
   'message.turnProcess.command': 'ran a command',
   'message.turnProcess.script': 'ran a script',
-  'message.turnProcess.scriptNamed': 'ran: {label}',
+  'message.turnProcess.scriptNamed': 'Ran: {label}',
   'message.turnProcess.search': 'searched the code',
   'message.turnProcess.web': 'searched the web',
   'message.turnProcess.fetch': 'fetched a page',

@@ -50,6 +50,7 @@ ds_config.json
 .kiln_kernel_state/
 
 # Local machine recon / agent memory - never publish
+.dsh-agent-logs/
 .freebuff/
 KILN.md
 acl_scan_output.txt

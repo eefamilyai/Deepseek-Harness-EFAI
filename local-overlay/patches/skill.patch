@@ -1,0 +1,67 @@
+diff --git a/packages/skill/tool-skill/src/index.ts b/packages/skill/tool-skill/src/index.ts
+index 222e8a0ace..af7db02051 100644
+--- a/packages/skill/tool-skill/src/index.ts
++++ b/packages/skill/tool-skill/src/index.ts
+@@ -407,6 +407,12 @@ function assertPositiveInteger(name: string, value: number, minimum = 1): void {
+  */
+ const SKILL_GESTURE = /(^|\s)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/g
+ 
++// DSH-FORK(kernel): an `@skill <name>` token is the same user-explicit skill
++// load gesture as `/name`, so the typed picker form (the client @-source lands
++// `@skill <name>`) injects the skill body instead of shipping dead prose.
++// EXIT: upstream adopts an `@`-prefixed skill gesture in tool-skill.
++const SKILL_AT_GESTURE = /(^|\s)@skill\s+([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/g
++
+ /**
+  * `/name` gesture tokens from the claimed user messages, deduplicated in
+  * first-seen order. Every text block of direct user input is scanned; no
+@@ -424,6 +430,10 @@ function invokedSkillNames(messages: readonly UserMessage[]): string[] {
+         const name = match[2]
+         if (name !== undefined && !names.includes(name)) names.push(name)
+       }
++      for (const match of block.text.matchAll(SKILL_AT_GESTURE)) {
++        const name = match[2]
++        if (name !== undefined && !names.includes(name)) names.push(name)
++      }
+     }
+   }
+   return names
+diff --git a/packages/skill/tool-skill/tests/tool-skill.spec.ts b/packages/skill/tool-skill/tests/tool-skill.spec.ts
+index 2f7ee6bbc8..50d44b613d 100644
+--- a/packages/skill/tool-skill/tests/tool-skill.spec.ts
++++ b/packages/skill/tool-skill/tests/tool-skill.spec.ts
+@@ -1005,6 +1005,34 @@ describe('user-explicit invocation injection', () => {
+       && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
+   })
+ 
++  it('injects a user-invocable skill named by an @skill <name> token', async () => {
++    const { ctx, agent } = await invokeHarness()
++    const decision = await proposeStep(ctx, agent, [gesture('@skill hidden-demo do the thing')])
++    if (decision.kind !== 'enter') throw new Error('expected enter')
++    const injections = decision.messages.filter(message =>
++      (message.source as { kind?: string }).kind === 'skill-invocation')
++    expect(injections).toHaveLength(1)
++    expect(injections[0]?.source).toMatchObject({ kind: 'skill-invocation', name: 'hidden-demo', form: 'instructions' })
++    const block = injections[0]?.content[0]
++    if (block?.type !== 'text') throw new Error('expected text injection')
++    expect(block.text).toContain('PINEAPPLE.')
++  })
++
++  it('recognizes @skill anywhere in prose but not a bare @name mention', async () => {
++    const { ctx, agent } = await invokeHarness()
++    const positive = await proposeStep(ctx, agent, [gesture('please use @skill shared-skill here')])
++    if (positive.kind !== 'enter') throw new Error('expected enter')
++    expect(positive.messages.some(message =>
++      (message.source as { kind?: string; name?: string }).kind === 'skill-invocation'
++      && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
++
++    // `@hidden-demo` without the `skill` keyword is a mention, not a load gesture.
++    const negative = await proposeStep(ctx, agent, [gesture('run @hidden-demo now')])
++    if (negative.kind !== 'enter') throw new Error('expected enter')
++    expect(negative.messages.some(message =>
++      (message.source as { kind?: string }).kind === 'skill-invocation')).toBe(false)
++  })
++
+   it('recognizes a mid-sentence gesture but not paths, fractions, or broken boundaries', async () => {
+     const { ctx, agent } = await invokeHarness()
+     const decision = await proposeStep(ctx, agent, [

@@ -1,0 +1,746 @@
+diff --git a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
+index 00eb9fd70d..a57adffdd5 100644
+--- a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
++++ b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
+@@ -7,6 +7,9 @@ import {
+   decodeTurnProcess, TURN_PROCESS_INDEPENDENT_KINDS, turnProcessGeneration,
+   type TurnProcessSpec,
+ } from '../contract/turn-process.ts'
++// DSH-FORK(brand): derive what the Turn's tool calls did, for the folded row's
++// label. EXIT: upstream gives the folded process row a content-derived label.
++import { summarizeToolCalls, type TurnToolSummary } from '../contract/turn-tool-summary.ts'
+ import { storedTurnProcessEntry } from '../stores.ts'
+ import { useSearchableHidden } from './searchable-hidden.ts'
+ import css from './ChatView.module.css'
+@@ -113,6 +116,19 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
+       : turnProcessLayout(processLayoutKeys, nodeStore, processSpec),
+     [nodeStore, processLayoutKeys, processSpec],
+   )
++  // DSH-FORK(brand): the folded row names the Turn's work instead of counting
++  // it, so it reads "Created a.mjs, ran a command +53 -0". Only root tool-call
++  // nodes inside the process window contribute; a Turn with none keeps the
++  // count-only label the renderer falls back to.
++  const processSummary = useMemo<TurnToolSummary | undefined>(() => {
++    if (processSpec === undefined || processLayoutKeys.length === 0) return undefined
++    const roots = []
++    for (const key of processLayoutKeys) {
++      const candidate = nodeStore.get(key) as ChatNode | undefined
++      if (candidate?.kind === 'tool-call') roots.push(candidate.data.root)
++    }
++    return roots.length === 0 ? undefined : summarizeToolCalls(roots)
++  }, [nodeStore, processLayoutKeys, processSpec])
+   const processGeneration = useMemo(
+     () => processSpec === undefined ? undefined : turnProcessGeneration(processSpec),
+     [processSpec],
+@@ -159,8 +175,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
+       foldable,
+       open: processOpen,
+       setOpen,
++      summary: processSummary,
+     }, [
+-    foldable, processGeneration, processOpen, processSpec, setOpen,
++    foldable, processGeneration, processOpen, processSpec, processSummary, setOpen,
+   ])
+   const controllerInactive = routedNode?.kind === 'turn-process'
+     && !foldable
+diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
+index 788322535c..c90f123541 100644
+--- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
++++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
+@@ -9,8 +9,23 @@
+   padding-bottom: 4px;
+ }
+ 
++/* Instruction material's seat in the flow-row accent set (--dsw-alias-flow-*,
++   design-platform.css), shared with the skill row: an injected instruction
++   file, a skill catalog, a recalled session, and the complete system prompt
++   are all text placed in the model's instructions, which is one kind of row
++   however it was produced. Rebound on `.row` per DisclosureRow's contract. */
++.row {
++  --dsh-row-accent: var(--dsw-alias-flow-instruct);
++}
++
++/* Restated here rather than left to DisclosureRow's own read: that rule ships
++   in the app bundle and this rebind ships in the plugin's injected stylesheet,
++   so a row whose hue spans both artifacts loses it whenever only one is
++   current. Two classes, so it outranks the primitive's rule either way. */
++.root .leading,
++.root .title,
+ .chevron {
+-  color: var(--dsw-alias-label-secondary);
++  color: var(--dsh-row-accent);
+ }
+ 
+ /* Separator and producer name beside the role title: ToolRow's summary geometry,
+@@ -21,7 +36,7 @@
+   height: 2px;
+   margin: 0 8px;
+   border-radius: 1px;
+-  background: var(--dsw-alias-label-caption);
++  background: var(--dsh-row-accent);
+ }
+ 
+ .source {
+diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
+index 37f08dc2f5..6ba40d5d3a 100644
+--- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
++++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
+@@ -37,6 +37,9 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
+   return (
+     <DisclosureRow
+       className={css.root}
++      rowClassName={css.row}
++      leadingClassName={css.leading}
++      titleClassName={css.title}
+       icon={provenance.role === 'recall'
+         ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
+         : <IconContextInjectionOutline16 size={14} />}
+diff --git a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
+index 2d7cbe8f07..80fe6525a8 100644
+--- a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
++++ b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
+@@ -33,8 +33,22 @@
+   flex-shrink: 0;
+ }
+ 
++/* Think's seat in the flow-row accent set (--dsw-alias-flow-*,
++   design-platform.css): one rebind carries the glyph and the title through
++   DisclosureRow's contract, matching what ui-tool's ToolRow gives each tool
++   family. */
++.row {
++  --dsh-row-accent: var(--dsw-alias-flow-think);
++}
++
++/* Restated here rather than left to DisclosureRow's own read: that rule ships
++   in the app bundle and this rebind ships in the plugin's injected stylesheet,
++   so a row whose hue spans both artifacts loses it whenever only one is
++   current. Two classes, so it outranks the primitive's rule either way. */
++.root .leading,
++.root .title,
+ .chevron {
+-  color: var(--dsw-alias-label-secondary);
++  color: var(--dsh-row-accent);
+ }
+ 
+ .title {
+@@ -47,7 +61,7 @@
+   height: 2px;
+   margin: 0 8px;
+   border-radius: 1px;
+-  background: var(--dsw-alias-label-caption);
++  background: var(--dsh-row-accent);
+ }
+ 
+ /* Think text reads the secondary tier — one step under the body size
+diff --git a/packages/client/ui-chat/src/client/chat/StatsLine.module.css b/packages/client/ui-chat/src/client/chat/StatsLine.module.css
+index 29c0bc3aab..efaec0455a 100644
+--- a/packages/client/ui-chat/src/client/chat/StatsLine.module.css
++++ b/packages/client/ui-chat/src/client/chat/StatsLine.module.css
+@@ -15,9 +15,10 @@
+   font-size: var(--dsh-content-font-size-secondary, 13px);
+   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+   color: var(--dsw-alias-label-tertiary);
+-  white-space: nowrap;
+-  overflow: hidden;
+-  text-overflow: ellipsis;
++  /* Wrap instead of eliding: the token readout (and every other group) stays
++     fully visible instead of clipping the trailing figures into an ellipsis. */
++  white-space: normal;
++  overflow-wrap: break-word;
+ }
+ 
+ .sep {
+diff --git a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
+index 26c43b1793..d4bcebecf5 100644
+--- a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
++++ b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
+@@ -24,6 +24,9 @@ export function SystemPromptRow({ text, t }: SystemPromptRowProps) {
+   return (
+     <DisclosureRow
+       className={css.root}
++      rowClassName={css.row}
++      leadingClassName={css.leading}
++      titleClassName={css.title}
+       icon={<IconBrowseOutline16 size={14} />}
+       chevronClassName={css.chevron}
+       title={t('message.systemPrompt')}
+diff --git a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
+index d0e0cd92a0..338ce8a44e 100644
+--- a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
++++ b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
+@@ -41,6 +41,60 @@
+   white-space: nowrap;
+ }
+ 
++/* One hue per tool family, the same --dsw-alias-flow-* set the expanded rows
++   colour through (ui-tool's ToolRow, ReasoningRow, ContextInjectionRow). A
++   folded Turn then reads as a miniature of the rows it hides: what was read,
++   what was written, and what was run stay distinguishable at a glance instead
++   of collapsing into one grey sentence.
++
++   Only the verb carries the hue. A kernel cell's trailing text is the model's
++   own sentence, quoted here rather than restated by the row, so tinting it
++   would claim the row's palette for words the row did not write. */
++.phrase[data-tone='mutate'] {
++  color: var(--dsw-alias-flow-mutate);
++}
++
++.phrase[data-tone='read'] {
++  color: var(--dsw-alias-flow-read);
++}
++
++.phrase[data-tone='shell'] {
++  color: var(--dsw-alias-flow-shell);
++}
++
++.phrase[data-tone='search'] {
++  color: var(--dsw-alias-flow-search);
++}
++
++.phrase[data-tone='instruct'] {
++  color: var(--dsw-alias-flow-instruct);
++}
++
++.phrase[data-tone='generic'] {
++  color: var(--dsw-alias-label-secondary);
++}
++
++/* A quoted sentence the verb introduces: the row's own copy stops at the verb,
++   so the quotation reads as ordinary text in the row's default colour. */
++.detail {
++  color: var(--dsw-alias-label-secondary);
++}
++
++/* What the row could not print, and the line delta: secondary facts about the
++   Turn, so they stay quieter than the actions themselves. The delta keeps the
++   diff card's add/remove convention. */
++.more {
++  color: var(--dsw-alias-label-tertiary);
++}
++
++.added {
++  color: var(--dsw-alias-state-success-primary);
++}
++
++.removed {
++  color: var(--dsw-alias-state-error-primary);
++}
++
+ @media (prefers-reduced-motion: reduce) {
+   .chevron {
+     transition: none;
+diff --git a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx
+index f9210e84db..60c52220bc 100644
+--- a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx
++++ b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx
+@@ -1,8 +1,183 @@
+-import { memo } from 'react'
++import { Fragment, memo } from 'react'
+ import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+ import type { ChatNodeViewProps } from '../contract/slots.ts'
++import type { TurnToolAction, TurnToolSummary } from '../contract/turn-tool-summary.ts'
++import { fitLabelParts, MAX_SUMMARY_LABEL } from '../contract/turn-tool-summary.ts'
+ import css from './TurnProcessNodeView.module.css'
+ 
++/**
++ * Characters held back for the overflow marker when the row must drop phrases.
++ *
++ * The marker reports what the row did not print, so it needs room of its own;
++ * without the reserve it would be the phrase the row elides.
++ */
++const OVERFLOW_RESERVE = 10
++
++/**
++ * Tool family a phrase's verb belongs to, as the accent it prints in.
++ *
++ * These are the same families the expanded rows colour through
++ * `--dsw-alias-flow-*`, so a folded Turn reads as a miniature of the rows it
++ * hides rather than as one undifferentiated grey line.
++ */
++type PhraseTone = 'mutate' | 'read' | 'shell' | 'search' | 'instruct' | 'generic'
++
++/** One printable piece of the folded line. */
++interface Phrase {
++  /** The verb, printed in the family accent. */
++  readonly text: string
++  /**
++   * A model-authored sentence the verb introduces, printed as neutral prose.
++   *
++   * A kernel cell's leading comment is the model's own words, so painting it in
++   * the family hue would tint a sentence that is not the row's own copy.
++   */
++  readonly detail?: string | undefined
++  readonly tone: PhraseTone
++}
++
++/** The folded line: its phrases, its overflow marker, and its line delta. */
++interface SummaryLine {
++  readonly phrases: readonly Phrase[]
++  /** Rendered overflow marker, or an empty string when nothing was dropped. */
++  readonly marker: string
++  readonly added: number
++  readonly removed: number
++}
++
++/** One action as a reader-facing phrase. */
++function actionLabel(action: TurnToolAction, t: ChatNodeViewProps<'turn-process'>['t']): string {
++  switch (action.kind) {
++    case 'created':
++      return t('message.turnProcess.created', { name: action.name })
++    case 'edited':
++      return t('message.turnProcess.edited', { name: action.name })
++    case 'read':
++      return t('message.turnProcess.read', { name: action.name })
++    case 'command':
++      return t('message.turnProcess.command')
++    case 'script':
++      return action.label === undefined
++        ? t('message.turnProcess.script')
++        : t('message.turnProcess.scriptNamed', { label: action.label })
++    case 'search':
++      return t('message.turnProcess.search')
++    case 'web':
++      return t('message.turnProcess.web')
++    case 'fetch':
++      return t('message.turnProcess.fetch')
++    case 'plan':
++      return t('message.turnProcess.plan')
++    case 'delegated':
++      return t('message.turnProcess.delegated', { name: action.name })
++    case 'other':
++      return t('message.turnProcess.other', { name: action.name })
++  }
++}
++
++/**
++ * Split a rendered phrase into its verb and the sentence that follows it.
++ *
++ * Both dictionaries separate the two with a colon, so the verb is everything up
++ * to and including it. A phrase with no colon is all verb.
++ * @param text - the rendered phrase.
++ * @returns the verb and the trailing sentence, or undefined when there is none.
++ */
++function splitVerb(text: string): { verb: string; detail: string } | undefined {
++  const match = /^([^:：]{1,24}[:：])([\s\S]*)$/.exec(text)
++  if (match === null) return undefined
++  const [, verb, detail] = match
++  if (verb === undefined || detail === undefined || detail.trim() === '') return undefined
++  return { verb, detail }
++}
++
++/** The accent an action's verb prints in. */
++function actionTone(action: TurnToolAction): PhraseTone {
++  switch (action.kind) {
++    case 'created':
++    case 'edited':
++      return 'mutate'
++    case 'read':
++      return 'read'
++    // A kernel cell and a shell command both name an execution, so they share
++    // the shell family's hue rather than splitting hairs over the language run.
++    case 'command':
++    case 'script':
++      return 'shell'
++    case 'search':
++    case 'web':
++    case 'fetch':
++      return 'search'
++    case 'delegated':
++      return 'instruct'
++    case 'plan':
++    case 'other':
++      return 'generic'
++  }
++}
++
++/** One action as a phrase the row can print. */
++function actionPhrase(
++  action: TurnToolAction,
++  t: ChatNodeViewProps<'turn-process'>['t'],
++): Phrase {
++  const tone = actionTone(action)
++  if (action.kind !== 'script' || action.label === undefined) {
++    return { text: actionLabel(action, t), tone }
++  }
++  const rendered = t('message.turnProcess.scriptNamed', { label: action.label })
++  const split = splitVerb(rendered)
++  return split === undefined
++    ? { text: rendered, tone }
++    : { text: split.verb, detail: split.detail, tone }
++}
++
++// DSH-FORK(brand): the folded row's content-derived label, budgeted to the row
++// so it is never elided mid-phrase. EXIT: upstream gives the folded process row
++// a content-derived label.
++/**
++ * One line describing the Turn's tool activity: distinct actions in order, a
++ * repeat count where the Turn did the same thing more than once, the aggregate
++ * line delta of its file mutations, and an overflow marker.
++ *
++ * How many phrases to print is decided against the row's character budget here
++ * rather than left to the row's own overflow rule, which would cut the last
++ * phrase mid-word and hide how much was dropped.
++ */
++function summaryLine(
++  summary: TurnToolSummary,
++  t: ChatNodeViewProps<'turn-process'>['t'],
++): SummaryLine {
++  const separator = t('message.turnProcess.separator')
++  const phrases: Phrase[] = summary.actions.map(({ action, count }) => {
++    const phrase = actionPhrase(action, t)
++    if (count === 1) return phrase
++    return {
++      text: t('message.turnProcess.repeat', {
++        text: `${phrase.text}${phrase.detail ?? ''}`,
++        count,
++      }),
++      tone: phrase.tone,
++    }
++  })
++  const delta = summary.added === 0 && summary.removed === 0
++    ? 0
++    : ` +${String(summary.added)} -${String(summary.removed)}`.length
++  const available = MAX_SUMMARY_LABEL - delta
++  const texts = phrases.map(phrase => `${phrase.text}${phrase.detail ?? ''}`)
++  let fitted = fitLabelParts(texts, separator, available)
++  if (fitted.omitted + summary.omitted > 0) {
++    fitted = fitLabelParts(texts, separator, available - OVERFLOW_RESERVE)
++  }
++  const dropped = fitted.omitted + summary.omitted
++  return {
++    phrases: phrases.slice(0, fitted.parts.length),
++    marker: dropped === 0 ? '' : t('message.turnProcess.more', { count: dropped }),
++    added: summary.added,
++    removed: summary.removed,
++  }
++}
++
+ /** Turn-level process disclosure controller. */
+ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
+   node, turnProcess, t,
+@@ -10,34 +185,48 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
+   if (turnProcess === undefined) throw new Error('turn-process node requires Turn process owner state')
+   if (!turnProcess.foldable) return null
+   const open = turnProcess.open
+-  const labels: string[] = []
+-  if (node.data.toolCallCount > 0) {
+-    labels.push(t(
+-      node.data.toolCallCount === 1
+-        ? 'message.turnProcess.toolCalls.one'
+-        : 'message.turnProcess.toolCalls.other',
+-      { count: node.data.toolCallCount },
+-    ))
+-  }
+-  if (node.data.messageCount > 0) {
+-    labels.push(t(
+-      node.data.messageCount === 1
+-        ? 'message.turnProcess.messages.one'
+-        : 'message.turnProcess.messages.other',
+-      { count: node.data.messageCount },
+-    ))
+-  }
+-  if (node.data.subagentCount > 0) {
+-    labels.push(t(
+-      node.data.subagentCount === 1
+-        ? 'message.turnProcess.subagents.one'
+-        : 'message.turnProcess.subagents.other',
+-      { count: node.data.subagentCount },
+-    ))
++  // DSH-FORK(brand): name the Turn's work when it is known, and fall back to the
++  // count-only label for a Turn whose tool calls were not all loaded. EXIT:
++  // upstream gives the folded process row a content-derived label.
++  const summary = turnProcess.summary
++  const separator = t('message.turnProcess.separator')
++  let line: SummaryLine
++  if (summary !== undefined && summary.actions.length > 0) {
++    line = summaryLine(summary, t)
++  } else {
++    const counted: string[] = []
++    if (node.data.toolCallCount > 0) {
++      counted.push(t(
++        node.data.toolCallCount === 1
++          ? 'message.turnProcess.toolCalls.one'
++          : 'message.turnProcess.toolCalls.other',
++        { count: node.data.toolCallCount },
++      ))
++    }
++    if (node.data.messageCount > 0) {
++      counted.push(t(
++        node.data.messageCount === 1
++          ? 'message.turnProcess.messages.one'
++          : 'message.turnProcess.messages.other',
++        { count: node.data.messageCount },
++      ))
++    }
++    if (node.data.subagentCount > 0) {
++      counted.push(t(
++        node.data.subagentCount === 1
++          ? 'message.turnProcess.subagents.one'
++          : 'message.turnProcess.subagents.other',
++        { count: node.data.subagentCount },
++      ))
++    }
++    line = {
++      phrases: (counted.length === 0 ? [t('message.turnProcess.thoughtForAWhile')] : counted)
++        .map(text => ({ text, tone: 'generic' as const })),
++      marker: '',
++      added: 0,
++      removed: 0,
++    }
+   }
+-  const label = labels.length === 0
+-    ? t('message.turnProcess.thoughtForAWhile')
+-    : labels.join(t('message.turnProcess.separator'))
+   return (
+     <button
+       type="button"
+@@ -53,7 +242,33 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
+         turnProcess.setOpen(!open)
+       }}
+     >
+-      <span className={css.label}>{label}</span>
++      <span className={css.label}>
++        {line.phrases.map((phrase, index) => (
++          <Fragment key={`${String(index)}:${phrase.text}`}>
++            {index > 0 ? separator : null}
++            <span className={css.phrase} data-tone={phrase.tone}>{phrase.text}</span>
++            {phrase.detail === undefined ? null : <span className={css.detail}>{phrase.detail}</span>}
++          </Fragment>
++        ))}
++        {line.marker === ''
++          ? null
++          : (
++            <>
++              {line.phrases.length > 0 ? separator : null}
++              <span className={css.more}>{line.marker}</span>
++            </>
++          )}
++        {line.added === 0 && line.removed === 0
++          ? null
++          : (
++            <>
++              {' '}
++              <span className={css.added}>{`+${String(line.added)}`}</span>
++              {' '}
++              <span className={css.removed}>{`-${String(line.removed)}`}</span>
++            </>
++          )}
++      </span>
+       <IconChevronDownOutline14 className={css.chevron} />
+     </button>
+   )
+diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/client/ui-chat/src/client/contract/slots.ts
+index 14fe308321..26cc4905b4 100644
+--- a/packages/client/ui-chat/src/client/contract/slots.ts
++++ b/packages/client/ui-chat/src/client/contract/slots.ts
+@@ -15,6 +15,7 @@ import type { ToolCallId, SelectionTarget } from './store.ts'
+ import type { ChatNode, ChatNodeKind } from './chat-nodes.ts'
+ import type { ChatSnapshot, CommandNode, CompactionSummaryNode, ToolCallBlock } from './snapshot.ts'
+ import type { TurnProcessSpec } from './turn-process.ts'
++import type { TurnToolSummary } from './turn-tool-summary.ts'
+ import type { TranscriptViewMode } from '../../chat-settings.ts'
+ 
+ /** Selector hook over the current Conversation binding's Chat target. */
+@@ -78,6 +79,10 @@ export interface TurnProcessOwnerProps {
+   readonly foldable: boolean
+   readonly open: boolean
+   setOpen(open: boolean): void
++  // DSH-FORK(brand): what the Turn's tool calls did, so the collapsed row reads
++  // as work ("Created a.mjs, ran a command +53 -0") instead of raw counts.
++  // EXIT: upstream gives the folded process row a content-derived label.
++  readonly summary?: TurnToolSummary | undefined
+ }
+ 
+ /** Full props of one keyed Chat renderer. */
+diff --git a/packages/client/ui-chat/src/client/locale.ts b/packages/client/ui-chat/src/client/locale.ts
+index f10a9ced20..c0eec5d6ab 100644
+--- a/packages/client/ui-chat/src/client/locale.ts
++++ b/packages/client/ui-chat/src/client/locale.ts
+@@ -74,6 +74,22 @@ export const zh = {
+   'message.turnProcess.subagents.other': '{count} 个 subagent',
+   'message.turnProcess.thoughtForAWhile': '已思考',
+   'message.turnProcess.separator': ' · ',
++  // DSH-FORK(brand): phrases naming what the folded Turn's tool calls did.
++  // EXIT: upstream gives the folded process row a content-derived label.
++  'message.turnProcess.created': '新建了 {name}',
++  'message.turnProcess.edited': '编辑了 {name}',
++  'message.turnProcess.read': '读取了 {name}',
++  'message.turnProcess.command': '运行了命令',
++  'message.turnProcess.script': '运行了脚本',
++  'message.turnProcess.scriptNamed': '运行了脚本：{label}',
++  'message.turnProcess.search': '搜索了代码',
++  'message.turnProcess.web': '进行了网页搜索',
++  'message.turnProcess.fetch': '读取了网页',
++  'message.turnProcess.plan': '更新了任务列表',
++  'message.turnProcess.delegated': '委派了 {name}',
++  'message.turnProcess.other': '调用了 {name}',
++  'message.turnProcess.repeat': '{text} ×{count}',
++  'message.turnProcess.more': '还有 {count} 项',
+   'message.stopped': '已停止',
+   'message.branch': '在新对话中分支',
+   'message.branchUnavailable': '仅可从已完成轮次的最后一条消息分支',
+@@ -191,6 +207,22 @@ export const en = {
+   'message.turnProcess.subagents.other': '{count} subagents',
+   'message.turnProcess.thoughtForAWhile': 'Thought for a while',
+   'message.turnProcess.separator': ' · ',
++  // DSH-FORK(brand): phrases naming what the folded Turn's tool calls did.
++  // EXIT: upstream gives the folded process row a content-derived label.
++  'message.turnProcess.created': 'Created {name}',
++  'message.turnProcess.edited': 'Edited {name}',
++  'message.turnProcess.read': 'Read {name}',
++  'message.turnProcess.command': 'ran a command',
++  'message.turnProcess.script': 'ran a script',
++  'message.turnProcess.scriptNamed': 'Ran: {label}',
++  'message.turnProcess.search': 'searched the code',
++  'message.turnProcess.web': 'searched the web',
++  'message.turnProcess.fetch': 'fetched a page',
++  'message.turnProcess.plan': 'updated the plan',
++  'message.turnProcess.delegated': 'delegated to {name}',
++  'message.turnProcess.other': 'called {name}',
++  'message.turnProcess.repeat': '{text} ×{count}',
++  'message.turnProcess.more': '{count} more',
+   'message.stopped': 'Stopped',
+   'message.branch': 'Branch into a new conversation',
+   'message.branchUnavailable': 'Available only on the last message of a completed turn',
+diff --git a/packages/client/ui-chat/src/client/markdown-labels.ts b/packages/client/ui-chat/src/client/markdown-labels.ts
+index 6c30b99396..0149f49fef 100644
+--- a/packages/client/ui-chat/src/client/markdown-labels.ts
++++ b/packages/client/ui-chat/src/client/markdown-labels.ts
+@@ -1,5 +1,6 @@
+ /** Localized copy adapters for Cordis-free Markdown primitives. */
+ 
++import { requestRunInTerminal } from '@deepseek-ai/dsh-client-ui-primitives'
+ import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+ import type { ChatViewSlotProps } from './contract/slots.ts'
+ 
+@@ -10,7 +11,7 @@ import type { ChatViewSlotProps } from './contract/slots.ts'
+  */
+ export function markdownLabels(t: ChatViewSlotProps['t']): MarkdownLabels {
+   return {
+-    code: { copyLabel: t('copy'), copiedLabel: t('copied') },
++    code: { copyLabel: t('copy'), copiedLabel: t('copied'), runLabel: t('run'), downloadLabel: t('download'), onRun: requestRunInTerminal },
+     footnotes: t('markdown.footnotes'),
+   }
+ }
+diff --git a/packages/client/ui-chat/tests/chat-view.client.spec.tsx b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
+index 9ebacea1de..cfa9f1c233 100644
+--- a/packages/client/ui-chat/tests/chat-view.client.spec.tsx
++++ b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
+@@ -169,6 +169,13 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode
+   callTime: seq * 1_000 - 500,
+   content: [], isError: false, subCalls: [],
+ })
++/** Settled kernel cell whose leading comment becomes the row's phrase. */
++const kernelResult = (seq: number, callId: string, comment: string): ToolResultNode => ({
++  kind: 'tool-result', seq, time: seq * 1_000, callId,
++  call: { name: 'kernel', argsRaw: JSON.stringify({ code: `${comment}\nprint(1)` }) },
++  callTime: seq * 1_000 - 500,
++  content: [], isError: false, subCalls: [],
++})
+ const runningCall = (callId: string, name = 'bash'): RunningToolCall => ({
+   callId, name, argsRaw: `{"command":"cmd-${callId}"}`, turn: 2, step: 1, time: 1_000, subCalls: [],
+ })
+@@ -1255,7 +1262,7 @@ describe('ChatView', () => {
+       turnEnds: new Map([[1, 6]]),
+     })
+     const view = render(<h.ChatView {...h.props} />)
+-    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 个 subagent' })
++    const toggle = view.getByRole('button', { name: '运行了命令 · 委派了 subagent' })
+     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+     expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
+     expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
+@@ -1286,7 +1293,7 @@ describe('ChatView', () => {
+     act(() => { h.set({
+       nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
+     }) })
+-    const renewedToggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 个 subagent' })
++    const renewedToggle = view.getByRole('button', { name: '运行了命令 · 委派了 subagent' })
+     expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
+     expect(members[0]?.getAttribute('hidden')).toBeNull()
+   })
+@@ -1532,6 +1539,85 @@ describe('ChatView', () => {
+     expect(view.getByLabelText('回到底部')).toBeTruthy()
+   })
+ 
++  it('colours each folded phrase by its tool family and separates the verb', () => {
++    // `write` and `read` only classify as a mutation and a read when the call
++    // carries the file it touched, so each fixture names one.
++    const write = (seq: number, callId: string, path: string): ToolResultNode => ({
++      ...toolResult(seq, callId, 'write'),
++      call: { name: 'write', argsRaw: JSON.stringify({ file_path: path, content: 'x' }) },
++    })
++    const read = (seq: number, callId: string, path: string): ToolResultNode => ({
++      ...toolResult(seq, callId, 'read'),
++      call: { name: 'read', argsRaw: JSON.stringify({ file_path: path }) },
++    })
++    // The process window needs an owning step-1 assistant; without it the row
++    // never mounts and the assertion reads null.
++    const first = {
++      ...assistant(2, 'earlier reply', 1, 1),
++      blocks: [
++        { kind: 'reasoning' as const, text: 'inspect the repository' },
++        { kind: 'text' as const, text: 'earlier reply' },
++      ],
++    }
++    const h = makeHarness({
++      nodes: [
++        user(1, 'question'),
++        first,
++        kernelResult(3, 'a', '# Read the checkout root'),
++        write(4, 'b', '/w/notes.md'),
++        read(5, 'c', '/w/manifest.json'),
++        assistant(6, 'final answer', 1, 2),
++      ],
++      turnEnds: new Map([[1, 7]]),
++    })
++    const view = render(<h.ChatView {...h.props} />)
++    const control = turnProcessControl(view.container)!
++    const tones = [...control.querySelectorAll<HTMLElement>('[data-tone]')]
++      .map(span => span.getAttribute('data-tone'))
++    // One hue per family, so the folded line stays a miniature of the expanded
++    // rows it hides. A kernel cell is an execution, so it takes the shell
++    // family's hue; a write is a mutation and a read is a read.
++    expect(tones).toContain('shell')
++    expect(tones).toContain('mutate')
++    expect(tones).toContain('read')
++    // Only the verb is tinted: the model's own sentence follows as neutral
++    // text, so the row does not claim its palette for words it did not write.
++    const detail = control.querySelector<HTMLElement>('[class*="detail"]')
++    expect(detail?.textContent).toBe('Read the checkout root')
++    // A kernel comment is already a capitalised sentence, so the verb needs a
++    // separator in front of it; "ran Repeat the ..." read as one broken word.
++    // This suite renders the zh dictionary, whose verb already ends in a colon.
++    expect(control.textContent).toContain('运行了脚本：Read the checkout root')
++  })
++
++  it('budgets the folded row label so it is never cut mid-word', () => {
++    const first = {
++      ...assistant(2, 'earlier reply', 1, 1),
++      blocks: [
++        { kind: 'reasoning' as const, text: 'inspect the repository' },
++        { kind: 'text' as const, text: 'earlier reply' },
++      ],
++    }
++    const h = makeHarness({
++      nodes: [
++        user(1, 'question'),
++        first,
++        kernelResult(3, 'a', '# Report working directory and top-level contents of the checkout root'),
++        kernelResult(4, 'b', '# Show working directory and top-level entries with file sizes'),
++        assistant(5, 'final answer', 1, 2),
++      ],
++      turnEnds: new Map([[1, 6]]),
++    })
++    const view = render(<h.ChatView {...h.props} />)
++    const label = turnProcessControl(view.container)?.textContent ?? ''
++    // The leading phrase is abbreviated at a word boundary...
++    expect(label).toContain('Report working directory and top-level contents of the…')
++    // ...and what the row could not print is reported rather than silently
++    // elided, which is what used to leave a fragment like "entries wi…".
++    expect(label).toContain('还有 1 项')
++    expect(label).not.toContain('entries wi')
++  })
++
+   it('keeps a focused process row visible when a live Turn completes', () => {
+     const h = makeHarness({
+       nodes: [user(1, 'question'), context(2, 'runtime policy', 1)],

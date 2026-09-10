@@ -1,0 +1,133 @@
+diff --git a/packages/boot/app-boot/src/index.ts b/packages/boot/app-boot/src/index.ts
+index 85e25eb641..6f325fbe29 100644
+--- a/packages/boot/app-boot/src/index.ts
++++ b/packages/boot/app-boot/src/index.ts
+@@ -24,9 +24,70 @@ declare module '@deepseek-ai/cordis' {
+   interface Context {
+     /** Harness-home path resolver available to Loader `!!js` config expressions. */
+     dshHomePath?: typeof dshHomePath
++    /** Settings-document flag reader available to Loader `!!js` config expressions. */
++    dshSettingFlag?: typeof dshSettingFlag
+   }
+ }
+ 
++/**
++ * Boot-time snapshots of the settings document, one read per resolved path.
++ *
++ * Reading once is the point, not an optimization: Loader entries evaluate their
++ * `disabled` expressions at different moments, and a document edited mid-boot
++ * would otherwise enable half a roster and disable the other half. A
++ * composition decides its shape from one consistent answer. One boot resolves
++ * one harness home, so keying by path preserves that exactly while leaving the
++ * function honest about a `$DSH_HOME` that differs between calls.
++ */
++const settingsSnapshots = new Map<string, Record<string, unknown>>()
++
++/** Read and cache `$DSH_HOME/settings.yaml`; an absent or broken document reads as empty. */
++function readSettingsDocument(): Record<string, unknown> {
++  const filename = dshHomePath('settings.yaml')
++  const cached = settingsSnapshots.get(filename)
++  if (cached !== undefined) return cached
++  let parsed: unknown
++  try {
++    parsed = yaml.load(readFileSync(filename, 'utf8'))
++  } catch {
++    // Absent, unreadable, or malformed: a composition must still boot, and it
++    // boots on the defaults its `!!js` callers pass. The settings service
++    // reports the document's real problems when it loads it for itself.
++    parsed = undefined
++  }
++  const document = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
++    ? parsed as Record<string, unknown>
++    : {}
++  settingsSnapshots.set(filename, document)
++  return document
++}
++
++/**
++ * Read one boolean from the user's settings document, for compositions whose
++ * SHAPE a setting decides.
++ *
++ * This exists for the narrow case a settings *value* cannot cover: whether a
++ * plugin is mounted at all. A tool's prompt sections, its registry entry, and
++ * its backing service come and go together with its Loader entry, so a roster
++ * chosen by a switch has to be chosen here — a plugin that mounted and then
++ * hid its own tool would leave its instructions in the system prompt,
++ * describing a tool the model cannot call.
++ *
++ * Because the read happens once at boot, a namespace using it must register
++ * with `applies: 'restart'`, which is what tells the settings UI to say so.
++ * @param path - dot-separated path into the document, e.g. `kernel.enabled`.
++ * @param fallback - the value for an absent path or a non-boolean at it.
++ * @returns the stored boolean, or `fallback`.
++ */
++export function dshSettingFlag(path: string, fallback = false): boolean {
++  let node: unknown = readSettingsDocument()
++  for (const segment of path.split('.')) {
++    if (typeof node !== 'object' || node === null || Array.isArray(node)) return fallback
++    node = (node as Record<string, unknown>)[segment]
++  }
++  return typeof node === 'boolean' ? node : fallback
++}
++
+ export {
+   composeEntries,
+   DEFAULT_PROFILE_BUNDLES,
+@@ -783,6 +844,7 @@ export async function boot(
+   try {
+     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
+     ctx.provide('dshHomePath', dshHomePath)
++    ctx.provide('dshSettingFlag', dshSettingFlag)
+     await ctx.plugin(Loader)
+     await prepare?.(ctx)
+     stage = 'plugin tree failed to load'
+diff --git a/packages/boot/app-boot/tests/app-boot.spec.ts b/packages/boot/app-boot/tests/app-boot.spec.ts
+index e5fc24aaf3..41b49f4cba 100644
+--- a/packages/boot/app-boot/tests/app-boot.spec.ts
++++ b/packages/boot/app-boot/tests/app-boot.spec.ts
+@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
+ import { Context } from '@deepseek-ai/cordis'
+ import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+ import {
+-  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot,
++  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot, dshSettingFlag,
+   FAIL_LOUD_RELEASE_TIMEOUT_MS, HARNESS_SOURCE_SECTION,
+   installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudProcess,
+ } from '../src/index.ts'
+@@ -856,3 +856,36 @@ describe('addHarnessSourceSection', () => {
+     }
+   })
+ })
++
++describe('dshSettingFlag', () => {
++  const homeWith = (document: string): string => {
++    const home = tmp()
++    writeFileSync(join(home, 'settings.yaml'), document)
++    return home
++  }
++
++  it('reads a boolean at a dotted path', () => {
++    vi.stubEnv('DSH_HOME', homeWith('kernel:\n  enabled: false\n'))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(false)
++  })
++
++  it('falls back when the path, the document, or the file is absent', () => {
++    vi.stubEnv('DSH_HOME', homeWith('other:\n  thing: 1\n'))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++    vi.stubEnv('DSH_HOME', tmp())
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++    expect(dshSettingFlag('kernel.enabled', false)).toBe(false)
++  })
++
++  it('falls back for a non-boolean value rather than coercing it', () => {
++    // A composition row turns this into a mounted-or-not decision, and
++    // `'no'` coercing to true would silently mount the opposite roster.
++    vi.stubEnv('DSH_HOME', homeWith("kernel:\n  enabled: 'no'\n"))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++  })
++
++  it('falls back when a malformed document cannot be parsed', () => {
++    vi.stubEnv('DSH_HOME', homeWith('kernel: [unclosed\n'))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++  })
++})

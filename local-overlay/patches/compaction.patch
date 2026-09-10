@@ -1,3 +1,101 @@
+diff --git a/packages/compaction/command-compact/src/index.ts b/packages/compaction/command-compact/src/index.ts
+index 47657cf9b8..77e0284e17 100644
+--- a/packages/compaction/command-compact/src/index.ts
++++ b/packages/compaction/command-compact/src/index.ts
+@@ -4,7 +4,7 @@
+  */
+ 
+ import type { Context } from '@deepseek-ai/cordis'
+-import { ManualCompactionError } from '@deepseek-ai/dsh-compaction'
++import { ManualCompactionError, type CompactionResult } from '@deepseek-ai/dsh-compaction'
+ import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
+ 
+ export const name = 'command-compact'
+@@ -63,7 +63,7 @@ async function executeCompact(
+     return { kind: 'error', text: USAGE }
+   }
+   try {
+-    const result = await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
++    const result = await compactWhenIdle(ctx, invocation)
+     if (result === null) return { kind: 'success', text: 'No compactable history yet.' }
+     return {
+       kind: 'success',
+@@ -77,6 +77,26 @@ async function executeCompact(
+   }
+ }
+ 
++/**
++ * Run compaction, waiting for the agent to finish its current turn first.
++ *
++ * `compactNow` requires a true idle phase and raises `busy` while the agent is
++ * mid-turn. Retrying once after `whenIdle()` lets a `/compact` typed during an
++ * active run settle behind it, mirroring how queued messages wait for the same
++ * driver to quiesce — instead of failing with "the agent is not idle".
++ */
++async function compactWhenIdle(ctx: Context, invocation: CommandInvocation): Promise<CompactionResult | null> {
++  try {
++    return await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
++  } catch (error: unknown) {
++    if (!(error instanceof ManualCompactionError) || error.code !== 'busy') throw error
++    if (invocation.signal.aborted) throw error
++    await invocation.agent.whenIdle()
++    invocation.signal.throwIfAborted()
++    return await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
++  }
++}
++
+ /**
+  * Register `/compact` for every composed human-command adapter.
+  * @param ctx - context carrying the command registry and the compaction seam.
+diff --git a/packages/compaction/command-compact/tests/command-compact.spec.ts b/packages/compaction/command-compact/tests/command-compact.spec.ts
+index 97229590b7..cce9db3836 100644
+--- a/packages/compaction/command-compact/tests/command-compact.spec.ts
++++ b/packages/compaction/command-compact/tests/command-compact.spec.ts
+@@ -101,6 +101,7 @@ async function harness(): Promise<Harness> {
+     status: 'idle',
+     options: {},
+     reserveTurnAdmission: () => () => undefined,
++    whenIdle: async () => {},
+   } as unknown as Agent
+   return { ctx, compact, agent, plugin }
+ }
+@@ -219,6 +220,24 @@ describe('/compact human command', () => {
+     expect(execution.commandId).toBe(expectLastLifecycle(test, '', execution.result))
+   })
+ 
++  it('waits for a busy agent to go idle, then retries compaction', async () => {
++    const test = await harness()
++    let attempts = 0
++    test.compact.operation = () => {
++      attempts += 1
++      if (attempts === 1) return Promise.reject(new ManualCompactionError('busy', 'mid-turn'))
++      return Promise.resolve(RESULT)
++    }
++    const execution = await run(test)
++    expect(execution.result).toEqual({
++      kind: 'success',
++      text: 'Compacted 3 history items (~42 tokens).',
++      sourceEventSeq: RESULT.summarySeq,
++    })
++    expect(execution.commandId).toBe(expectLastLifecycle(test, '', execution.result))
++    expect(test.compact.calls).toHaveLength(2)
++  })
++
+   it('preserves cancellation and unexpected implementation failures', async () => {
+     const cancelled = await harness()
+     const controller = new AbortController()
+diff --git a/packages/compaction/command-compact/tests/loader-composition.spec.ts b/packages/compaction/command-compact/tests/loader-composition.spec.ts
+index 95358b0036..3c3ebe1c9a 100644
+--- a/packages/compaction/command-compact/tests/loader-composition.spec.ts
++++ b/packages/compaction/command-compact/tests/loader-composition.spec.ts
+@@ -118,6 +118,7 @@ describe('command-compact real Loader composition', () => {
+       status: 'idle',
+       options: {},
+       reserveTurnAdmission: () => () => undefined,
++      whenIdle: async () => {},
+     } as unknown as Agent
+     expect(context.commands.list(agent)).toContainEqual({
+       name: 'compact',
 diff --git a/packages/compaction/compaction-basic/src/index.ts b/packages/compaction/compaction-basic/src/index.ts
 index dc7d7371bc..eb0ac84ce5 100644
 --- a/packages/compaction/compaction-basic/src/index.ts

@@ -14,17 +14,25 @@ import css from './TurnProcessNodeView.module.css'
 const OVERFLOW_RESERVE = 10
 
 /**
- * Tool family a phrase belongs to, as the accent it prints in.
+ * Tool family a phrase's verb belongs to, as the accent it prints in.
  *
  * These are the same families the expanded rows colour through
  * `--dsw-alias-flow-*`, so a folded Turn reads as a miniature of the rows it
  * hides rather than as one undifferentiated grey line.
  */
-type PhraseTone = 'mutate' | 'read' | 'shell' | 'code' | 'search' | 'instruct' | 'generic'
+type PhraseTone = 'mutate' | 'read' | 'shell' | 'search' | 'instruct' | 'generic'
 
 /** One printable piece of the folded line. */
 interface Phrase {
+  /** The verb, printed in the family accent. */
   readonly text: string
+  /**
+   * A model-authored sentence the verb introduces, printed as neutral prose.
+   *
+   * A kernel cell's leading comment is the model's own words, so painting it in
+   * the family hue would tint a sentence that is not the row's own copy.
+   */
+  readonly detail?: string | undefined
   readonly tone: PhraseTone
 }
 
@@ -67,7 +75,23 @@ function actionLabel(action: TurnToolAction, t: ChatNodeViewProps<'turn-process'
   }
 }
 
-/** The accent an action prints in. */
+/**
+ * Split a rendered phrase into its verb and the sentence that follows it.
+ *
+ * Both dictionaries separate the two with a colon, so the verb is everything up
+ * to and including it. A phrase with no colon is all verb.
+ * @param text - the rendered phrase.
+ * @returns the verb and the trailing sentence, or undefined when there is none.
+ */
+function splitVerb(text: string): { verb: string; detail: string } | undefined {
+  const match = /^([^:：]{1,24}[:：])([\s\S]*)$/.exec(text)
+  if (match === null) return undefined
+  const [, verb, detail] = match
+  if (verb === undefined || detail === undefined || detail.trim() === '') return undefined
+  return { verb, detail }
+}
+
+/** The accent an action's verb prints in. */
 function actionTone(action: TurnToolAction): PhraseTone {
   switch (action.kind) {
     case 'created':
@@ -75,10 +99,11 @@ function actionTone(action: TurnToolAction): PhraseTone {
       return 'mutate'
     case 'read':
       return 'read'
+    // A kernel cell and a shell command both name an execution, so they share
+    // the shell family's hue rather than splitting hairs over the language run.
     case 'command':
-      return 'shell'
     case 'script':
-      return 'code'
+      return 'shell'
     case 'search':
     case 'web':
     case 'fetch':
@@ -89,6 +114,22 @@ function actionTone(action: TurnToolAction): PhraseTone {
     case 'other':
       return 'generic'
   }
+}
+
+/** One action as a phrase the row can print. */
+function actionPhrase(
+  action: TurnToolAction,
+  t: ChatNodeViewProps<'turn-process'>['t'],
+): Phrase {
+  const tone = actionTone(action)
+  if (action.kind !== 'script' || action.label === undefined) {
+    return { text: actionLabel(action, t), tone }
+  }
+  const rendered = t('message.turnProcess.scriptNamed', { label: action.label })
+  const split = splitVerb(rendered)
+  return split === undefined
+    ? { text: rendered, tone }
+    : { text: split.verb, detail: split.detail, tone }
 }
 
 // DSH-FORK(brand): the folded row's content-derived label, budgeted to the row
@@ -109,17 +150,21 @@ function summaryLine(
 ): SummaryLine {
   const separator = t('message.turnProcess.separator')
   const phrases: Phrase[] = summary.actions.map(({ action, count }) => {
-    const text = actionLabel(action, t)
+    const phrase = actionPhrase(action, t)
+    if (count === 1) return phrase
     return {
-      text: count > 1 ? t('message.turnProcess.repeat', { text, count }) : text,
-      tone: actionTone(action),
+      text: t('message.turnProcess.repeat', {
+        text: `${phrase.text}${phrase.detail ?? ''}`,
+        count,
+      }),
+      tone: phrase.tone,
     }
   })
   const delta = summary.added === 0 && summary.removed === 0
     ? 0
     : ` +${String(summary.added)} -${String(summary.removed)}`.length
   const available = MAX_SUMMARY_LABEL - delta
-  const texts = phrases.map(phrase => phrase.text)
+  const texts = phrases.map(phrase => `${phrase.text}${phrase.detail ?? ''}`)
   let fitted = fitLabelParts(texts, separator, available)
   if (fitted.omitted + summary.omitted > 0) {
     fitted = fitLabelParts(texts, separator, available - OVERFLOW_RESERVE)
@@ -145,11 +190,11 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
   // upstream gives the folded process row a content-derived label.
   const summary = turnProcess.summary
   const separator = t('message.turnProcess.separator')
-  const counted: string[] = []
   let line: SummaryLine
   if (summary !== undefined && summary.actions.length > 0) {
     line = summaryLine(summary, t)
   } else {
+    const counted: string[] = []
     if (node.data.toolCallCount > 0) {
       counted.push(t(
         node.data.toolCallCount === 1
@@ -202,6 +247,7 @@ export const TurnProcessNodeView = memo(function TurnProcessNodeView({
           <Fragment key={`${String(index)}:${phrase.text}`}>
             {index > 0 ? separator : null}
             <span className={css.phrase} data-tone={phrase.tone}>{phrase.text}</span>
+            {phrase.detail === undefined ? null : <span className={css.detail}>{phrase.detail}</span>}
           </Fragment>
         ))}
         {line.marker === ''

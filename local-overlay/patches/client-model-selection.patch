@@ -1,0 +1,705 @@
+diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.module.css b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
+index 492fb12f8c..29cdf9e721 100644
+--- a/packages/client/ui-model-selection/src/client/ModelSelect.module.css
++++ b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
+@@ -144,6 +144,27 @@
+   margin-top: 4px;
+ }
+ 
++/* DSH-FORK(browser): per-provider collapse toggle. EXIT: upstream adopts
++   collapsible provider groups in the model dropdown. */
++.groupToggle {
++  box-sizing: border-box;
++  display: flex;
++  align-items: center;
++  gap: 4px;
++  width: 100%;
++  border: none;
++  border-radius: 0;
++  outline: none;
++  font: inherit;
++  text-align: left;
++  cursor: pointer;
++}
++
++.groupToggle:hover,
++.groupToggle:focus-visible {
++  background: var(--dsw-alias-interactive-bg-hover);
++}
++
+ .groupTitle {
+   position: sticky;
+   top: 0;
+@@ -156,6 +177,24 @@
+   font-weight: 500;
+ }
+ 
++.groupChevron {
++  flex: 0 0 auto;
++  color: var(--dsw-alias-label-caption);
++  transition: transform 120ms ease;
++}
++
++.groupChevronCollapsed {
++  transform: rotate(-90deg);
++}
++
++.groupName {
++  flex: 1 1 auto;
++  min-width: 0;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
+ .option {
+   box-sizing: border-box;
+   display: flex;
+@@ -259,3 +298,58 @@
+   flex: 0 0 auto;
+   color: var(--dsw-alias-label-tertiary);
+ }
++
++/* DSH-FORK(browser): account picker row under a merged provider group.
++   EXIT: upstream adopts account grouping in ModelSelect. */
++.accountPicker {
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++  margin: 2px 8px 4px;
++  padding: 4px;
++  border: 1px solid var(--dsw-alias-border-inverted);
++  border-radius: 10px;
++}
++
++.accountOption {
++  box-sizing: border-box;
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  width: 100%;
++  padding: 4px 8px;
++  border: none;
++  border-radius: 8px;
++  outline: none;
++  background: transparent;
++  color: var(--dsw-alias-label-secondary);
++  font-size: 12px;
++  line-height: 18px;
++  text-align: left;
++  cursor: pointer;
++}
++
++.accountOption:hover:not(:disabled),
++.accountOption:focus-visible {
++  background: var(--dsw-alias-interactive-bg-hover);
++}
++
++.accountOption:disabled {
++  color: var(--dsw-alias-label-dimmed);
++  cursor: default;
++}
++
++.accountLabel {
++  flex: 1 1 auto;
++  min-width: 0;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.accountCheck {
++  display: grid;
++  place-items: center;
++  flex: 0 0 16px;
++  color: var(--dsw-alias-state-business-primary);
++}
+diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.tsx b/packages/client/ui-model-selection/src/client/ModelSelect.tsx
+index e910651e86..1827b84609 100644
+--- a/packages/client/ui-model-selection/src/client/ModelSelect.tsx
++++ b/packages/client/ui-model-selection/src/client/ModelSelect.tsx
+@@ -17,6 +17,7 @@ import {
+ } from 'react'
+ import clsx from 'clsx'
+ import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
++import type { ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
+ import {
+   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
+   IconWarningOutline16, Toast,
+@@ -35,6 +36,68 @@ interface EffortChoice {
+   label: string
+ }
+ 
++// DSH-FORK(browser): fold account-bound provider routes (`kiln-deepseek@one`,
++// `kiln-deepseek@two`) under their base provider so the dropdown shows one
++// provider header plus an account picker instead of one header per account.
++// EXIT: upstream adopts account grouping in ModelSelect.
++interface AccountChoice {
++  readonly provider: string
++  readonly account: string | null
++}
++
++interface MergedGroup {
++  readonly baseId: string
++  readonly name: string
++  readonly models: readonly ModelCatalogModel[]
++  readonly accounts: readonly AccountChoice[]
++}
++
++function mergeGroups(groups: readonly ModelProviderGroup[]): readonly MergedGroup[] {
++  const baseById = new Map<string, ModelProviderGroup>()
++  const accountsByBase = new Map<string, ModelProviderGroup[]>()
++  for (const group of groups) {
++    if (group.id.includes('@')) {
++      const baseId = group.id.slice(0, group.id.indexOf('@'))
++      const list = accountsByBase.get(baseId)
++      if (list === undefined) accountsByBase.set(baseId, [group])
++      else list.push(group)
++    } else {
++      baseById.set(group.id, group)
++    }
++  }
++
++  const merged: MergedGroup[] = []
++  for (const group of groups) {
++    if (group.id.includes('@')) {
++      // A route whose base provider is absent is not an account route; render
++      // it as its own group exactly as the unmerged list would.
++      if (!baseById.has(group.id.slice(0, group.id.indexOf('@')))) {
++        merged.push({
++          baseId: group.id,
++          name: group.name,
++          models: group.models,
++          accounts: [{ provider: group.id, account: null }],
++        })
++      }
++      continue
++    }
++    const accounts = accountsByBase.get(group.id) ?? []
++    const baseChoice = { provider: group.id, account: null } satisfies AccountChoice
++    merged.push({
++      baseId: group.id,
++      name: group.name,
++      models: group.models,
++      accounts: accounts.length === 0
++        ? [baseChoice]
++        : [baseChoice, ...accounts.map(account => ({
++          provider: account.id,
++          account: account.id.slice(group.id.length + 1),
++        }))],
++    })
++  }
++  return merged
++}
++
+ /**
+  * Render the composer model seat.
+  * @param props - owner share (locked) + injected face (shared directory
+@@ -63,18 +126,38 @@ export function ModelSelect(
+   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
+   const id = useId()
+ 
+-  const choices = useMemo(() => state.groups.flatMap(group =>
++  const mergedGroups = useMemo(() => mergeGroups(state.groups), [state.groups])
++  // The account route each merged group currently targets, keyed by base id;
++  // defaults to the account owning the current selection, else the base route.
++  const [accountSelections, setAccountSelections] = useState<Readonly<Record<string, string>>>({})
++
++  // The route each merged group targets: an explicit account pick overrides,
++  // then the account owning the current selection, then the base route.
++  const resolvedProvider = useMemo(() => {
++    const resolved: Record<string, string> = {}
++    for (const group of mergedGroups) {
++      const first = group.accounts[0]?.provider ?? group.baseId
++      resolved[group.baseId] = accountSelections[group.baseId]
++        ?? group.accounts.find(account => account.provider === state.current?.provider)?.provider
++        ?? first
++    }
++    return resolved
++  }, [mergedGroups, accountSelections, state.current?.provider])
++
++  // One choice per base model, resolved through the currently selected account
++  // so keyboard navigation, the selected check mark, and `choose` all agree.
++  const choices = useMemo(() => mergedGroups.flatMap(group =>
+     group.models.map(model => ({
+       group,
+       model,
+       selection: {
+-        provider: group.id,
++        provider: resolvedProvider[group.baseId] ?? group.baseId,
+         model: model.id,
+         ...model.reasoning?.defaultEffort === undefined
+           ? {}
+           : { reasoningEffort: model.reasoning.defaultEffort },
+       } satisfies ModelSelection,
+-    }))), [state.groups])
++    }))), [mergedGroups, resolvedProvider])
+   const selectedIndex = state.current === null
+     ? -1
+     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
+@@ -99,6 +182,45 @@ export function ModelSelect(
+       })),
+     ], [reasoning, t])
+   const busy = state.status === 'selecting'
++  // DSH-FORK(browser): collapsible provider groups in the model pane, with
++  // the provider owning the current selection expanded by default and every
++  // other provider collapsed.
++  // EXIT: upstream adopts per-provider collapse in ModelSelect.
++  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set())
++  // True once the user has expressed a manual preference during this open;
++  // until then the default collapse follows the current selection so a late
++  // catalog arrival does not re-expand providers the user already collapsed.
++  const manualCollapseRef = useRef(false)
++
++  // Default collapse: every merged base group except the one owning the
++  // current selection starts minimized.
++  const defaultCollapsed = useMemo(() => {
++    const currentBase = state.current?.provider?.split('@')[0]
++    return new Set(mergedGroups.map(group => group.baseId).filter(id => id !== currentBase))
++  }, [mergedGroups, state.current?.provider])
++
++  const toggleGroup = (groupId: string): void => {
++    manualCollapseRef.current = true
++    setCollapsedGroups((prev) => {
++      const next = new Set(prev)
++      if (next.has(groupId)) next.delete(groupId)
++      else next.add(groupId)
++      return next
++    })
++  }
++
++  // While the model pane is open and no manual preference exists, keep the
++  // collapse set in step with the default (groups may load after the pane
++  // opens, and the current selection may change from elsewhere).
++  useEffect(() => {
++    if (!open || manualCollapseRef.current) return
++    setCollapsedGroups((prev) => {
++      const same = prev.size === defaultCollapsed.size
++        && [...defaultCollapsed].every(id => prev.has(id))
++      return same ? prev : defaultCollapsed
++    })
++  }, [open, defaultCollapsed])
++
+ 
+   const reload = (): void => {
+     lastActionRef.current = 'load'
+@@ -118,6 +240,10 @@ export function ModelSelect(
+ 
+   const show = (): void => {
+     setPane('root')
++    manualCollapseRef.current = false
++    setCollapsedGroups(defaultCollapsed)
++    // A fresh open re-derives each group's account from the current selection.
++    setAccountSelections({})
+     setOpen(true)
+     reload()
+   }
+@@ -280,34 +406,74 @@ export function ModelSelect(
+                 </div>
+               ))}
+               <div className={clsx(css.groups, 'scrollable')}>
+-                {state.groups.map((group) => {
+-                  const headingId = `${id}-${group.id}`
++                {mergedGroups.map((group) => {
++                  const headingId = `${id}-${group.baseId}`
++                  const resolved = resolvedProvider[group.baseId]
++                  const expanded = !collapsedGroups.has(group.baseId)
+                   return (
+-                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
+-                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
+-                      {group.models.map((model) => {
+-                        const selected = state.current?.provider === group.id && state.current.model === model.id
+-                        return (
+-                          <button
+-                            ref={itemRef()}
+-                            type="button"
+-                            role="menuitemradio"
+-                            aria-checked={selected}
+-                            className={clsx(css.option, selected && css.selected)}
+-                            key={model.id}
+-                            title={model.name}
+-                            disabled={busy}
+-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
+-                          >
+-                            <span className={css.optionCopy}>
+-                              <span className={css.modelName}>{model.name}</span>
+-                            </span>
+-                            <span className={css.check}>
+-                              {selected ? <IconCheckOutline16 /> : null}
+-                            </span>
+-                          </button>
+-                        )
+-                      })}
++                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.baseId}>
++                      <button
++                        type="button"
++                        className={clsx(css.groupTitle, css.groupToggle)}
++                        id={headingId}
++                        aria-expanded={expanded}
++                        aria-controls={`${id}-group-${group.baseId}`}
++                        onClick={() => { toggleGroup(group.baseId) }}
++                      >
++                        <IconChevronDownOutline14
++                          className={clsx(css.groupChevron, !expanded && css.groupChevronCollapsed)}
++                        />
++                        <span className={css.groupName}>{group.name}</span>
++                      </button>
++                      <div id={`${id}-group-${group.baseId}`} hidden={!expanded}>
++                        {group.accounts.length > 1 && (
++                          <div role="group" aria-label={`${group.name} accounts`} className={css.accountPicker}>
++                            {group.accounts.map((account) => {
++                              const selected = resolved === account.provider
++                              return (
++                                <button
++                                  ref={itemRef()}
++                                  type="button"
++                                  role="menuitemradio"
++                                  aria-checked={selected}
++                                  className={clsx(css.accountOption, selected && css.selected)}
++                                  key={account.provider}
++                                  disabled={busy}
++                                  onClick={() => { setAccountSelections(prev => ({ ...prev, [group.baseId]: account.provider })) }}
++                                >
++                                  <span className={css.accountLabel}>{account.account === null ? group.name : account.account}</span>
++                                  <span className={css.accountCheck}>
++                                    {selected ? <IconCheckOutline16 /> : null}
++                                  </span>
++                                </button>
++                              )
++                            })}
++                          </div>
++                        )}
++                        {group.models.map((model) => {
++                          const selected = state.current?.provider === resolved && state.current?.model === model.id
++                          return (
++                            <button
++                              ref={itemRef()}
++                              type="button"
++                              role="menuitemradio"
++                              aria-checked={selected}
++                              className={clsx(css.option, selected && css.selected)}
++                              key={model.id}
++                              title={model.name}
++                              disabled={busy}
++                              onClick={() => { choose({ provider: resolved ?? group.baseId, model: model.id }) }}
++                            >
++                              <span className={css.optionCopy}>
++                                <span className={css.modelName}>{model.name}</span>
++                              </span>
++                              <span className={css.check}>
++                                {selected ? <IconCheckOutline16 /> : null}
++                              </span>
++                            </button>
++                          )
++                        })}
++                      </div>
+                     </section>
+                   )
+                 })}
+diff --git a/packages/client/ui-model-selection/src/client/directory.ts b/packages/client/ui-model-selection/src/client/directory.ts
+index 6ceee704ed..d99db5263a 100644
+--- a/packages/client/ui-model-selection/src/client/directory.ts
++++ b/packages/client/ui-model-selection/src/client/directory.ts
+@@ -46,6 +46,8 @@ export class ModelDirectory {
+   private generation = 0
+   private disposed = false
+   private resolved = false
++  /** Last user-selected model; preferred over a lagging durable projection. */
++  private lastSelected: ModelSelection | null = null
+   private readonly unsubscribeCatalog: () => void
+   private readonly unsubscribeSelection: () => void
+ 
+@@ -105,6 +107,11 @@ export class ModelDirectory {
+       this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
+       throw new Error(`session.selectModel failed: ${result.error.code}: ${result.error.message}`)
+     }
++    // Remember the HOST-NORMALIZED selection (the exact value the durable
++    // projection will later report) so the directory never snaps back to the
++    // session's creation-time default while the `model/selection` event is
++    // still propagating through the projection.
++    this.lastSelected = result.value.selected
+     this.store.update((s) => { s.status = 'ready'; s.error = null })
+     this.syncInputs()
+   }
+@@ -159,7 +166,17 @@ export class ModelDirectory {
+       })
+       return
+     }
+-    const current = projected.next ?? catalog.value.default
++    const projectedNext = projected.next
++    if (this.lastSelected !== null && projectedNext !== null
++      && sameModelSelection(this.lastSelected, projectedNext)) {
++      // The durable projection has now caught up with the explicit pick; from
++      // here it is the single source of truth again.
++      this.lastSelected = null
++    }
++    // While the projection still lags behind an explicit pick (the session was
++    // created with a different model), prefer the pick so the UI never snaps
++    // back to the creation-time default.
++    const current = this.lastSelected ?? projectedNext ?? catalog.value.default
+     this.resolved = true
+     this.store.set({
+       current,
+@@ -174,6 +191,13 @@ export class ModelDirectory {
+   }
+ }
+ 
++function sameModelSelection(left: ModelSelection | null, right: ModelSelection | null): boolean {
++  return left === right || (left !== null && right !== null
++    && left.provider === right.provider
++    && left.model === right.model
++    && left.reasoningEffort === right.reasoningEffort)
++}
++
+ function modelSelectionProjection(value: unknown): ModelSelectionProjection | undefined {
+   return value === undefined ? undefined : value as ModelSelectionProjection
+ }
+diff --git a/packages/client/ui-model-selection/src/client/locales.ts b/packages/client/ui-model-selection/src/client/locales.ts
+index 3bf0774679..9254a65b65 100644
+--- a/packages/client/ui-model-selection/src/client/locales.ts
++++ b/packages/client/ui-model-selection/src/client/locales.ts
+@@ -28,6 +28,20 @@ export const zh = {
+   'empty.models': '没有可用的模型。',
+   'blocked.composer': '当前模型不可用，请先选择模型',
+   'empty.efforts': '当前模型未提供推理等级。',
++  'provider.accounts': '{count} 个账号',
++  'provider.models': '{count} 个模型',
++  'provider.noModels': '未查询到模型',
++  'provider.configure': '请在设置中配置该提供方以加载模型。',
++  'account.add': '添加账号',
++  'account.needEmail': '请先输入邮箱。',
++  'account.needPassword': '请先输入密码。',
++  'account.testing': '正在测试登录…',
++  'account.added': '已添加 {account}，在上方点击即可使用。',
++  'account.failed': '登录测试失败。',
++  'account.emailPlaceholder': 'name@company.com',
++  'account.passwordPlaceholder': '密码',
++  'account.testAdd': '测试并添加',
++  'account.cancel': '取消',
+ } satisfies Record<string, string>
+ 
+ /** The model namespace key union. */
+@@ -53,4 +67,18 @@ export const en = {
+   'empty.models': 'No models available.',
+   'blocked.composer': 'This model is unavailable — select one to continue',
+   'empty.efforts': 'This model provides no reasoning effort levels.',
++  'provider.accounts': '{count} accounts',
++  'provider.models': '{count} models',
++  'provider.noModels': 'No models yet',
++  'provider.configure': 'Configure this provider in Settings to load its models.',
++  'account.add': 'Add account',
++  'account.needEmail': 'Enter an email first.',
++  'account.needPassword': 'Enter a password first.',
++  'account.testing': 'Testing sign-in…',
++  'account.added': 'Added {account} — tap it above to use it.',
++  'account.failed': 'The login test failed.',
++  'account.emailPlaceholder': 'name@company.com',
++  'account.passwordPlaceholder': 'Password',
++  'account.testAdd': 'Test and add',
++  'account.cancel': 'Cancel',
+ } satisfies Record<ModelKey, string>
+diff --git a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
+index f30c3f7f3e..f888616199 100644
+--- a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
++++ b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
+@@ -1,5 +1,5 @@
+ // @vitest-environment jsdom
+-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
++import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+ import { afterEach, describe, expect, it, vi } from 'vitest'
+ import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
+ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+@@ -50,6 +50,19 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
+   }
+ }
+ 
++function mountModelSelect(directory: ReturnType<typeof createSnapshotStore<ModelDirectoryState>>) {
++  render(<ModelSelect
++    locked={false}
++    available
++    directory={directory}
++    load={vi.fn()}
++    select={vi.fn().mockResolvedValue(true)}
++    t={t}
++  />)
++  fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
++  fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
++}
++
+ afterEach(cleanup)
+ 
+ describe('ModelSelect reasoning effort', () => {
+@@ -215,3 +228,173 @@ describe('ModelSelect reasoning effort', () => {
+     expect(load).not.toHaveBeenCalled()
+   })
+ })
++
++describe('ModelSelect provider group collapse', () => {
++  const twoGroups = [
++    {
++      id: 'provider-a',
++      name: 'Provider A',
++      models: [{ id: 'a-flash', name: 'A Flash', reasoning }],
++    },
++    {
++      id: 'provider-b',
++      name: 'Provider B',
++      models: [{ id: 'b-pro', name: 'B Pro' }],
++    },
++  ]
++
++
++  it('expands only the provider owning the current selection by default', () => {
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      groups: twoGroups,
++      current: { provider: 'provider-a', model: 'a-flash' },
++    }))
++    mountModelSelect(directory)
++
++    const a = screen.getByRole('button', { name: 'Provider A' })
++    const b = screen.getByRole('button', { name: 'Provider B' })
++    // The provider holding the current selection is expanded; the rest are minimized.
++    expect(a.getAttribute('aria-expanded')).toBe('true')
++    expect(b.getAttribute('aria-expanded')).toBe('false')
++    expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
++    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
++  })
++
++  it('collapses every provider by default when none owns the current selection', () => {
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      groups: twoGroups,
++      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
++    }))
++    mountModelSelect(directory)
++
++    expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('false')
++    expect(screen.getByRole('button', { name: 'Provider B' }).getAttribute('aria-expanded')).toBe('false')
++    expect(screen.queryByRole('menuitemradio')).toBeNull()
++  })
++
++  it('collapses and re-expands one provider group without touching the others', () => {
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      groups: twoGroups,
++      current: { provider: 'provider-a', model: 'a-flash' },
++    }))
++    mountModelSelect(directory)
++
++    const a = screen.getByRole('button', { name: 'Provider A' })
++    const b = screen.getByRole('button', { name: 'Provider B' })
++
++    // Collapse provider A: its models leave the tree, provider B stays minimized.
++    fireEvent.click(a)
++    expect(a.getAttribute('aria-expanded')).toBe('false')
++    expect(b.getAttribute('aria-expanded')).toBe('false')
++    expect(screen.queryByRole('menuitemradio', { name: /A Flash/ })).toBeNull()
++    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
++
++    // Toggling provider A again restores its models; provider B remains minimized.
++    fireEvent.click(a)
++    expect(a.getAttribute('aria-expanded')).toBe('true')
++    expect(b.getAttribute('aria-expanded')).toBe('false')
++    expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
++    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
++
++    // Expanding provider B leaves provider A untouched.
++    fireEvent.click(b)
++    expect(a.getAttribute('aria-expanded')).toBe('true')
++    expect(b.getAttribute('aria-expanded')).toBe('true')
++    expect(screen.getByRole('menuitemradio', { name: /A Flash/ })).toBeTruthy()
++    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
++  })
++
++  it('keeps a manual collapse across a catalog reload while the pane stays open', () => {
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      groups: twoGroups,
++      current: { provider: 'provider-a', model: 'a-flash' },
++    }))
++    mountModelSelect(directory)
++
++    const b = screen.getByRole('button', { name: 'Provider B' })
++    fireEvent.click(b) // expand B manually
++    expect(b.getAttribute('aria-expanded')).toBe('true')
++
++    // A late catalog refresh must not overwrite the user's explicit choice.
++    directory.set(state({
++      groups: twoGroups,
++      current: { provider: 'provider-a', model: 'a-flash' },
++    }))
++    expect(screen.getByRole('button', { name: 'Provider B' }).getAttribute('aria-expanded')).toBe('true')
++    expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('true')
++  })
++})
++
++describe('ModelSelect account grouping', () => {
++  const deepseekModels = [
++    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
++    { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
++  ]
++
++
++  it('merges account routes under one provider header and targets the picked account', () => {
++    const select = vi.fn().mockResolvedValue(true)
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      current: { provider: 'kiln-deepseek', model: 'deepseek-v4-flash' },
++      groups: [
++        { id: 'kiln-deepseek', name: 'DeepSeek', models: deepseekModels },
++        { id: 'kiln-deepseek@one', name: 'DeepSeek', models: deepseekModels },
++        { id: 'kiln-deepseek@two', name: 'DeepSeek', models: deepseekModels },
++      ],
++    }))
++    render(<ModelSelect
++      locked={false}
++      available
++      directory={directory}
++      load={vi.fn()}
++      select={select}
++      t={t}
++    />)
++    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
++    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
++
++    // Exactly one provider header.
++    expect(screen.getAllByRole('button', { name: 'DeepSeek' })).toHaveLength(1)
++
++    // Account picker holds the base route plus both accounts.
++    const picker = screen.getByRole('group', { name: 'DeepSeek accounts' })
++    expect(picker).toBeTruthy()
++    const accountButtons = within(picker).getAllByRole('menuitemradio')
++    expect(accountButtons.map(button => button.textContent)).toEqual(['DeepSeek', 'one', 'two'])
++
++    // Pick account `one`; the base-route model pick must then submit the bound route.
++    fireEvent.click(within(picker).getByRole('menuitemradio', { name: 'one' }))
++    fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Flash/ }))
++    expect(select).toHaveBeenCalledWith({ provider: 'kiln-deepseek@one', model: 'deepseek-v4-flash' })
++  })
++
++  it('defaults the selected account to the account owning the current provider', () => {
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      current: { provider: 'kiln-deepseek@two', model: 'deepseek-v4-pro' },
++      groups: [
++        { id: 'kiln-deepseek', name: 'DeepSeek', models: deepseekModels },
++        { id: 'kiln-deepseek@one', name: 'DeepSeek', models: deepseekModels },
++        { id: 'kiln-deepseek@two', name: 'DeepSeek', models: deepseekModels },
++      ],
++    }))
++    mountModelSelect(directory)
++
++    const picker = screen.getByRole('group', { name: 'DeepSeek accounts' })
++    expect(within(picker).getByRole('menuitemradio', { name: 'two' }).getAttribute('aria-checked')).toBe('true')
++    expect(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ }).getAttribute('aria-checked')).toBe('true')
++  })
++
++  it('keeps non-account providers rendering as before', () => {
++    const directory = createSnapshotStore<ModelDirectoryState>(state({
++      current: { provider: 'provider-b', model: 'b-pro' },
++      groups: [
++        { id: 'provider-b', name: 'Provider B', models: [{ id: 'b-pro', name: 'B Pro' }] },
++      ],
++    }))
++    mountModelSelect(directory)
++
++    expect(screen.getByRole('button', { name: 'Provider B' })).toBeTruthy()
++    expect(screen.queryByRole('group', { name: /accounts/ })).toBeNull()
++    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
++  })
++})

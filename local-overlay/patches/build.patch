@@ -68,10 +68,18 @@ index 476641a581..542cd35c06 100644
      key: 'deepseekLlmApiExtensions',
      pkg: 'deepseek-llm-api-extensions',
 diff --git a/scripts/gen-tool-catalog.ts b/scripts/gen-tool-catalog.ts
-index b5dea761cf..1422332fa0 100644
+index b5dea761cf..ec529dfc13 100644
 --- a/scripts/gen-tool-catalog.ts
 +++ b/scripts/gen-tool-catalog.ts
-@@ -65,6 +65,8 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
+@@ -49,6 +49,7 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
+ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
+ import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
+ import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
++import * as ToolNotebookEdit from '@deepseek-ai/dsh-tool-notebook-edit'
+ import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
+ import TerminalSessionService from '@deepseek-ai/dsh-terminal'
+ import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
+@@ -65,6 +66,8 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
  import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
  import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
  import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
@@ -80,7 +88,29 @@ index b5dea761cf..1422332fa0 100644
  import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
  import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
  import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
-@@ -612,6 +614,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -347,6 +350,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
+     note:
+       'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
+   },
++  {
++    pkg: '@deepseek-ai/dsh-tool-notebook-edit',
++    dir: 'tool-notebook-edit',
++    source: 'packages/fs/tool-notebook-edit/src/index.ts',
++    requires: ['ctx.tools', 'ctx.fs', 'ctx.systemPrompt'],
++    writes: ['tool/call', 'fs/write-intent for mutations', 'tool/result'],
++    async mount(ctx) {
++      // The tool injects `fs`; the bare provider is sufficient because the
++      // sandbox/observation policy changes behavior, not schema shape.
++      await ctx.plugin(LocalFileSystem)
++      await ctx.plugin(ToolNotebookEdit)
++    },
++    note:
++      'notebook_edit is one tool with five commands (`view`, `create`, `str_replace`, `insert`, `delete`) over Jupyter `.ipynb` files, and it is registered exclusive (no `isConcurrencySafe`): a mutating command re-reads the whole notebook and writes it back, so two overlapping edits to one file would lose one of them. Paths must be absolute, and mutations go through the mounted filesystem policy.',
++  },
+   {
+     pkg: '@deepseek-ai/dsh-tool-terminal',
+     dir: 'tool-terminal',
+@@ -612,6 +630,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
    },
@@ -103,3 +133,60 @@ index b5dea761cf..1422332fa0 100644
  ]
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
+diff --git a/tsdown.config.ts b/tsdown.config.ts
+index 5a0fcc8c78..ee06dfabc0 100644
+--- a/tsdown.config.ts
++++ b/tsdown.config.ts
+@@ -1,12 +1,43 @@
++import { existsSync, readdirSync } from 'node:fs'
++import { join } from 'node:path'
+ import { defineConfig } from 'tsdown'
+ import { typertPlugin } from './packages/typert/generator/lib/types/tsdown-plugin.js'
+ 
++/** Patterns for the directories the workspace build covers, one package per match. */
++const WORKSPACE_PATTERNS = ['vendor/*', 'packages/*/*', 'apps/cli']
++
+ function isBuildFaceClient(value: unknown): boolean {
+   if (value === undefined || value === 'host') return false
+   if (value === 'client') return true
+   throw new Error(`tsdown: --env.DSH_BUILD_FACE must be host or client, received ${String(value)}`)
+ }
+ 
++/**
++ * Expand one workspace pattern to the repository-relative directories that hold a package manifest.
++ * A `*` segment matches child directories; every other segment is literal.
++ *
++ * tsdown globs its own `workspace` patterns with `onlyDirectories` and no manifest check, and names a
++ * manifest-less match after the nearest enclosing package.json. Build output that a package deletion
++ * strands under `packages/` therefore joins the build as `@deepseek-ai/dsh-root` and fails it on the
++ * entry only a real package emits. Requiring a manifest keeps stranded output out of the build.
++ * @param pattern one entry of {@link WORKSPACE_PATTERNS}.
++ * @returns matched directories holding a package.json, as repository-relative POSIX paths.
++ */
++function workspaceDirectories(pattern: string): string[] {
++  const root = import.meta.dirname
++  let matches: string[] = ['']
++  for (const segment of pattern.split('/')) {
++    matches = matches.flatMap(parent =>
++      segment === '*'
++        ? readdirSync(join(root, parent), { withFileTypes: true })
++            .filter(entry => entry.isDirectory())
++            .map(entry => (parent === '' ? entry.name : `${parent}/${entry.name}`))
++        : [parent === '' ? segment : `${parent}/${segment}`],
++    )
++  }
++  return matches.filter(directory => existsSync(join(root, directory, 'package.json')))
++}
++
+ /**
+  * The ordinary workspace build consumes JavaScript emitted by the Host
+  * TypeScript project and runs Typert. The Client pass selects packages that
+@@ -16,7 +47,7 @@ function isBuildFaceClient(value: unknown): boolean {
+ export default defineConfig(({ env }) => {
+   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
+   return {
+-    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
++    workspace: WORKSPACE_PATTERNS.flatMap(workspaceDirectories),
+     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
+     outDir: 'lib',
+     format: ['esm'],

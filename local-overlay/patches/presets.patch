@@ -1,8 +1,8 @@
 diff --git a/packages/preset/agent-presets/presets/cordis/agent.cordis.yml b/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
-index 96cd7e6b09..3afea0dc67 100644
+index 96cd7e6b09..099e57a79d 100644
 --- a/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
-@@ -44,11 +44,23 @@
+@@ -44,11 +44,33 @@
  # host-plane too.
  - id: tool-bash
    name: '@deepseek-ai/dsh-tool-bash'
@@ -20,15 +20,25 @@ index 96cd7e6b09..3afea0dc67 100644
 +# host plane: the backend owns one interpreter probe and one child process, and
 +# an entry-local realm here would mean a second interpreter resolution — and a
 +# second kernel — for every preset a session mounts.
++# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
++# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
++# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
++# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
++# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
++# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
++# is the sole acting surface, while kernel-off cleanly restores the shell roster.
++# EXIT: move these gates and the switch rows into a fork-owned
++# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
++# bundle chain exists (see HARNESS-EDITS.md seam register).
 +- id: tool-kernel
 +  name: '@deepseek-ai/dsh-tool-kernel'
-+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
 +  config:
 +    timeoutMs: 180000
  
  # ── filesystem ──────────────────────────────────────────────────────────────
  
-@@ -56,9 +68,11 @@
+@@ -56,9 +78,11 @@
  # they need no realm. The `fs` service and its policy stay in the host.
  - id: tool-fs
    name: '@deepseek-ai/dsh-tool-fs'
@@ -40,7 +50,7 @@ index 96cd7e6b09..3afea0dc67 100644
    config:
      sampleOverCapGlobResults: false
  
-@@ -73,6 +87,7 @@
+@@ -73,6 +97,7 @@
  # chooses is whether its agent can collect and stop background work at all.
  - id: tool-jobs
    name: '@deepseek-ai/dsh-tool-jobs'
@@ -49,7 +59,7 @@ index 96cd7e6b09..3afea0dc67 100644
  # ── goals ───────────────────────────────────────────────────────────────────
  
 diff --git a/packages/preset/agent-presets/presets/minimal/agent.cordis.yml b/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
-index 0e1f2b0f5d..9d85216b0b 100644
+index 0e1f2b0f5d..0e1f94f1c5 100644
 --- a/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
 @@ -2,9 +2,18 @@
@@ -74,7 +84,7 @@ index 0e1f2b0f5d..9d85216b0b 100644
  
  - id: persona
    name: '@deepseek-ai/dsh-persona'
-@@ -13,6 +22,18 @@
+@@ -13,6 +22,28 @@
      complete: true
      includeRuntimeContext: false
  
@@ -84,16 +94,26 @@ index 0e1f2b0f5d..9d85216b0b 100644
 +# host plane: the backend owns one interpreter probe and one child process, and
 +# an entry-local realm here would mean a second interpreter resolution — and a
 +# second kernel — for every preset a session mounts.
++# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
++# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
++# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
++# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
++# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
++# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
++# is the sole acting surface, while kernel-off cleanly restores the shell roster.
++# EXIT: move these gates and the switch rows into a fork-owned
++# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
++# bundle chain exists (see HARNESS-EDITS.md seam register).
 +- id: tool-kernel
 +  name: '@deepseek-ai/dsh-tool-kernel'
-+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
 +  config:
 +    timeoutMs: 180000
 +
  # The PTY registry is an agent-owned service, so it lives in an entry-local
  # realm. The backend still consumes the host sandbox policy and subprocess
  # implementation, while the tool registers into this agent's scoped catalog.
-@@ -26,16 +47,17 @@
+@@ -26,16 +57,17 @@
    config:
      - id: pty
        name: '@deepseek-ai/dsh-terminal'
@@ -113,7 +133,24 @@ index 0e1f2b0f5d..9d85216b0b 100644
        config:
          timeoutMs: 300000
          description: |-
-@@ -79,10 +101,12 @@
+@@ -50,14 +82,14 @@
+ 
+     - id: terminal-pwsh
+       name: '@deepseek-ai/dsh-terminal-bash'
+-      disabled: !!js process.platform !== 'win32'
++      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         shellDialect: pwsh
+         timeoutMs: 300000
+ 
+     - id: persistent-pwsh
+       name: '@deepseek-ai/dsh-tool-pwsh-persistent'
+-      disabled: !!js process.platform !== 'win32'
++      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         timeoutMs: 300000
+         description: |-
+@@ -79,10 +111,12 @@
    config:
      - id: fs-local
        name: '@deepseek-ai/dsh-fs-local'
@@ -127,10 +164,10 @@ index 0e1f2b0f5d..9d85216b0b 100644
        config:
          maxOutputChars: 16000
 diff --git a/packages/preset/agent-presets/presets/ptc/agent.cordis.yml b/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
-index 3c8406f907..9a4683e1d6 100644
+index 3c8406f907..2d2a12e169 100644
 --- a/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
-@@ -50,11 +50,23 @@
+@@ -50,11 +50,33 @@
  # host-plane too.
  - id: tool-bash
    name: '@deepseek-ai/dsh-tool-bash'
@@ -148,15 +185,25 @@ index 3c8406f907..9a4683e1d6 100644
 +# host plane: the backend owns one interpreter probe and one child process, and
 +# an entry-local realm here would mean a second interpreter resolution — and a
 +# second kernel — for every preset a session mounts.
++# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
++# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
++# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
++# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
++# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
++# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
++# is the sole acting surface, while kernel-off cleanly restores the shell roster.
++# EXIT: move these gates and the switch rows into a fork-owned
++# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
++# bundle chain exists (see HARNESS-EDITS.md seam register).
 +- id: tool-kernel
 +  name: '@deepseek-ai/dsh-tool-kernel'
-+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
 +  config:
 +    timeoutMs: 180000
  
  # ── filesystem ──────────────────────────────────────────────────────────────
  
-@@ -62,9 +74,11 @@
+@@ -62,9 +84,11 @@
  # they need no realm. The `fs` service and its policy stay in the host.
  - id: tool-fs
    name: '@deepseek-ai/dsh-tool-fs'
@@ -168,7 +215,7 @@ index 3c8406f907..9a4683e1d6 100644
    config:
      sampleOverCapGlobResults: false
  
-@@ -79,6 +93,7 @@
+@@ -79,6 +103,7 @@
  # chooses is whether its agent can collect and stop background work at all.
  - id: tool-jobs
    name: '@deepseek-ai/dsh-tool-jobs'
@@ -177,7 +224,7 @@ index 3c8406f907..9a4683e1d6 100644
  # ── skills ──────────────────────────────────────────────────────────────────
  
 diff --git a/packages/preset/agent-presets/presets/standard/agent.cordis.yml b/packages/preset/agent-presets/presets/standard/agent.cordis.yml
-index 3916d6bf3e..3972a38894 100644
+index 3916d6bf3e..efab2500f0 100644
 --- a/packages/preset/agent-presets/presets/standard/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/standard/agent.cordis.yml
 @@ -1,5 +1,30 @@
@@ -211,7 +258,7 @@ index 3916d6bf3e..3972a38894 100644
  # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
  # standing scope; every session naming it joins by scope parentage, so the
  # tools and prompt sections registered here cover each joined agent while a
-@@ -41,23 +66,43 @@
+@@ -41,23 +66,53 @@
  # never reached the model's shell at all. Both shell tools consume the host
  # registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
  # host-plane too.
@@ -235,9 +282,19 @@ index 3916d6bf3e..3972a38894 100644
 +# an entry-local realm here would mean a second interpreter resolution — and a
 +# second kernel — for every preset a session mounts. What a preset chooses is
 +# whether its agent can execute cells at all.
++# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
++# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
++# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
++# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
++# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
++# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
++# is the sole acting surface, while kernel-off cleanly restores the shell roster.
++# EXIT: move these gates and the switch rows into a fork-owned
++# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
++# bundle chain exists (see HARNESS-EDITS.md seam register).
 +- id: tool-kernel
 +  name: '@deepseek-ai/dsh-tool-kernel'
-+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
 +  config:
 +    timeoutMs: 180000
  
@@ -257,7 +314,7 @@ index 3916d6bf3e..3972a38894 100644
    config:
      sampleOverCapGlobResults: false
  
-@@ -70,8 +115,13 @@
+@@ -70,8 +125,13 @@
  # unavailable" while these controls sat in the catalog. The registry is keyed by
  # owning agent anyway, so one host instance serves every session. What a preset
  # chooses is whether its agent can collect and stop background work at all.

@@ -1575,13 +1575,18 @@ describe('ChatView', () => {
     const tones = [...control.querySelectorAll<HTMLElement>('[data-tone]')]
       .map(span => span.getAttribute('data-tone'))
     // One hue per family, so the folded line stays a miniature of the expanded
-    // rows it hides: a kernel cell reads as code, a write as a mutation.
-    expect(tones).toContain('code')
+    // rows it hides. A kernel cell is an execution, so it takes the shell
+    // family's hue; a write is a mutation and a read is a read.
+    expect(tones).toContain('shell')
     expect(tones).toContain('mutate')
     expect(tones).toContain('read')
+    // Only the verb is tinted: the model's own sentence follows as neutral
+    // text, so the row does not claim its palette for words it did not write.
+    const detail = control.querySelector<HTMLElement>('[class*="detail"]')
+    expect(detail?.textContent).toBe('Read the checkout root')
     // A kernel comment is already a capitalised sentence, so the verb needs a
     // separator in front of it; "ran Repeat the ..." read as one broken word.
-    // This suite renders the zh dictionary.
+    // This suite renders the zh dictionary, whose verb already ends in a colon.
     expect(control.textContent).toContain('运行了脚本：Read the checkout root')
   })
 

@@ -65,7 +65,7 @@ index 3e61060cd6..261c46bd57 100644
 +  })
  })
 diff --git a/packages/core/system-prompt/src/index.ts b/packages/core/system-prompt/src/index.ts
-index fba1b51f50..16d12a3bed 100644
+index fba1b51f50..6e241dbc0b 100644
 --- a/packages/core/system-prompt/src/index.ts
 +++ b/packages/core/system-prompt/src/index.ts
 @@ -409,7 +409,7 @@ export class SystemPrompt extends Service {
@@ -78,7 +78,7 @@ index fba1b51f50..16d12a3bed 100644
      }
      this.section({
 diff --git a/packages/core/system-prompt/tests/system-prompt.spec.ts b/packages/core/system-prompt/tests/system-prompt.spec.ts
-index 9818c50f94..c600788780 100644
+index 9818c50f94..254ca30363 100644
 --- a/packages/core/system-prompt/tests/system-prompt.spec.ts
 +++ b/packages/core/system-prompt/tests/system-prompt.spec.ts
 @@ -12,7 +12,7 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a

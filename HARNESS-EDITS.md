@@ -11,23 +11,24 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 | | commit | note |
 |---|---|---|
 | Fork point | `47f943859b` | upstream merge of PR #2519, 2026-08-13 |
-| Upstream now | `dd6322d604` | `release/dsh-0.1.2-alpha.3` |
-| Upstream commits since the fork point | 11,947 | |
+| Upstream base | `dd6322d604` | `release/dsh-0.1.2-alpha.3`; recorded in `local-overlay/BASE` |
 | Upstream merge landed | `9b262d25ec` | 26 conflicts resolved; recorded in `.merge-port/MERGE-STATUS.md` |
-| `master` | merge + 26 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider |
-| `wip/upstream-merge` | merge + 5 commits | the tsdown workspace fix and this document |
+| `master` | merge + 86 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider |
+| `upstream/master` | `aa8262ec09` | 1,800 commits the fork does not have |
 
-Both branches descend from `9b262d25ec`, so upstream is fully merged into each and what separates them is ordinary work rather than a sync.
+`upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against `upstream/master`, `master`'s surface is **203 files** (130 added, 73 modified, 0 deleted) and `wip/upstream-merge`'s is **175** (114 added, 61 modified). The inventory below enumerates the 175; `master`'s further 28 files are its newer kernel packages and the registration entries they need, and they fall into the same groups.
+Measured against the base `dd6322d604`, `master`'s surface is **311 paths** (187 added, 123 modified, 1 deleted). `local-overlay/INVENTORY.md` enumerates them from the rules that produce the patches, so it cannot drift from the tree the way a hand-written table can.
 
-Of those 114 added files, 112 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
+Of the 187 added paths, all are free: upstream owns no path among them, so they merge untouched, forever.
 
-The 61 modified files are the entire cost of every future update. Each one is a file two projects edit, and `git merge` has no way to know which side is intentional. Two further files live inside an upstream package directory and carry the same risk without ever showing a conflict.
+The 123 modified paths are the entire cost of every future update. Each one is a file two projects edit, and `git merge` has no way to know which side is intentional. Nine of them are files a generator owns, which is why they are excluded from the patches and regenerated instead.
+
+The seam below is grouped by why each edit exists, because the fix differs per group.
 
 ## The consolidated inventory
 
-### Tier 1 — fork-owned (112 files, zero merge cost)
+### Tier 1 — fork-owned (zero merge cost)
 
 Paths upstream does not and will not use. Nothing here can conflict.
 
@@ -49,7 +50,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 
 `desktop/` is deliberately outside every workspace glob in `pnpm-workspace.yaml` and every tsconfig, so the shell is never a pnpm workspace member, never enters the lockfile, and never enters a project reference. Adding it under `apps/` would make it all three.
 
-### Tier 2 — the seam with upstream (63 files, the whole problem)
+### Tier 2 — the seam with upstream (the whole problem)
 
 Grouped by why the edit exists, because the fix differs per group.
 
@@ -135,7 +136,7 @@ A file that only works because of an upstream directory belongs in a fork-owned 
 
 Seven concrete failures, in order of cost.
 
-**1. There is no declared ownership boundary.** Nothing in the repository says which files are the fork's and which are upstream's. `git merge` treats all 61 modified files identically. Every upstream release replays the same 61-file negotiation from scratch, and the person doing it has to rediscover, each time, what each edit was for.
+**1. The ownership boundary was undeclared.** `local-overlay/rules.json` and the generated `INVENTORY.md` now declare it: every changed path is classified as fork-owned, seam, or generated, and a path no rule claims fails the rebuild. The remaining gap is the markers — see failure 5 — which are what make an individual conflict legible rather than what defines the boundary.
 
 **2. The repository's own extension mechanism is bypassed.** `AGENTS.md` states the rule: *"Plugins, not loop changes: new behavior goes on documented extension points"*, and `packages/bundle/*` exists so composition changes ship as patch layers rather than preset edits. The fork instead edits four upstream presets in place. A fork-owned bundle package would have delivered the same composition with zero upstream files touched.
 
@@ -143,11 +144,39 @@ Seven concrete failures, in order of cost.
 
 **4. Generated files are committed as hand edits.** T2-F is ~260 lines that a generator rewrites in seconds. Every one is a conflict that costs review attention and yields a catalog describing the previous release.
 
-**5. There is no marker convention.** Open any of the 61 files at a conflict and nothing distinguishes a deliberate fork change from upstream's own churn. `grep` cannot produce the inventory; only a diff against `upstream/master` can, and only while that remote is present and fetched.
+**5. No marker convention was ever applied.** The convention is stated in Rule 2, and `grep -rn "DSH-FORK"` returns nothing: not one Tier-2 edit carries a marker. `grep` cannot produce the inventory, and neither can a diff against `upstream/master`, because upstream/master is 1,800 commits away and the diff is mostly upstream's own churn. The mod layer's `local-overlay/INVENTORY.md` supplies the inventory mechanically; the markers remain unapplied and are what makes a conflict legible while it is being resolved.
 
-**6. New packages have no READMEs.** All ten added packages lack one, which `doc-sync` requires. The features are undocumented, so nobody can tell whether a merge broke them, and the gate that would say so is already red for an unrelated reason.
+**6. Some new packages have no READMEs.** `packages/agent-memory`, `packages/kernel`, and `packages/rlm` have none, which `doc-sync` requires. The features are undocumented, so nobody can tell whether a merge broke them, and the gate that would say so is already red.
 
 **7. Credentials rest on `.gitignore` alone.** `ds_config.json` holds a DeepSeek login password and WAF cookie; `python/kiln/runtime/ds_sessions.json` holds live session tokens. Both are ignored, and nothing matching them is tracked today — verified. But `.gitignore` is one `git add -f`, one path rename, or one merge that drops the rule away from a published secret.
+
+## The mod layer
+
+`local-overlay/` holds the fork's edits to upstream-owned files as patches. The working tree still carries those edits — that is how the fork builds — but the patch set is the machine-checkable record of them, and it is what makes an upstream update a re-application rather than a negotiation.
+
+| Path | Role |
+|---|---|
+| `local-overlay/BASE` | The pinned upstream commit the patches apply onto. Line 1 is the only line any script reads. |
+| `local-overlay/rules.json` | The single source of truth: which path belongs to which patch group, which files are generated, which paths are fork-owned. |
+| `local-overlay/patches/*.patch` | The mod. One `git apply`-able diff per subsystem, generated. |
+| `local-overlay/INVENTORY.md` | The manifest, generated: every patched path, every generated file and its command, every fork-owned path. |
+| `local-overlay/lib.mjs` | Logic the scripts share. |
+| `local-overlay/rebuild.mjs` | Regenerates `patches/` and `INVENTORY.md` from the working tree. |
+| `local-overlay/apply.mjs` | Applies the patches, or checks that they still apply to a pristine base. |
+| `local-overlay/verify.mjs` | Proves that base + patches reproduces the fork's tree exactly. |
+
+`patches/` and `INVENTORY.md` are generated. Edit `rules.json`, then rebuild; never hand-edit a patch.
+
+```sh
+node local-overlay/rebuild.mjs          # fold working-tree edits into the patches
+node local-overlay/rebuild.mjs --check  # report drift, write nothing, exit 1 on drift
+node local-overlay/apply.mjs --check    # confirm every patch applies to a pristine base
+node local-overlay/verify.mjs           # prove base + patches == the working tree
+```
+
+The two checks are not redundant. `verify.mjs` re-derives the diffs from the working tree, so it stays green even when a committed patch file has gone stale; `apply.mjs --check` reads the files that are actually on disk. Run both after touching an upstream-owned file, and run `rebuild.mjs --check` before pushing.
+
+`verify.mjs` works by building a throwaway checkout of `BASE`: it initializes a temporary repository, points its `.git/objects/info/alternates` at this checkout so base blobs resolve without copying an object database, stages every patched path through `git update-index`, checks the index out, applies the patches, and compares the result byte for byte. Nothing writes to the real repository, and a deleted symlink, a mode change, and an ordinary edit all reproduce faithfully.
 
 ## The standard
 
@@ -155,9 +184,13 @@ Seven concrete failures, in order of cost.
 
 **Tier 1, fork-owned.** A path upstream does not use. New packages, `python/kiln/`, root fork docs, `.merge-port/`. No conflict is possible. **Put everything here that can go here.**
 
-**Tier 2, seam.** An upstream file the fork must touch. Every one is listed in [the seam register](#the-seam-register) with a reason and an exit plan. Adding to this list is a decision, not a side effect.
+**Tier 2, seam.** An upstream file the fork must touch. Every one is listed in [the seam register](#the-seam-register) with a reason and an exit plan, and covered by a patch group in `local-overlay/rules.json`. Adding to this list is a decision, not a side effect.
 
 **Tier 3, upstream-owned.** Everything else. **Never edit.** An edit here is a defect in the change, not a feature of it — move it to Tier 1, or send it upstream.
+
+**Generated.** Not a fourth tier so much as an exclusion: a file a generator owns is neither patched nor merged by hand. Rule 4 governs it, and `local-overlay/rules.json` lists every one with its regeneration command.
+
+This document is the contract a maintainer reads. `local-overlay/rules.json` is the same split in the form the scripts enforce, and `local-overlay/INVENTORY.md` is the generated list of what each side currently holds. The two must agree: when they do not, the rebuild fails rather than picking a winner.
 
 ### Rule 2 — Every Tier-2 edit carries a marker
 
@@ -173,9 +206,11 @@ One line, immediately above the edit, in the file's comment syntax:
 # EXIT: move to packages/bundle/efai-kernel/cordis.patch.yml.
 ```
 
-The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `fix`, `brand`. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
+The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `rlm`, `fix`, `brand`. Use `all` only for a file the whole fork shares, such as a tsconfig or the lockfile. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
 
-After this convention lands, `grep -rn "DSH-FORK" --include='*.ts' --include='*.yml' --include='*.json' .` is the complete, always-current inventory, and every merge conflict shows the marker in its own hunk.
+The marker is what makes a conflict legible while it is being resolved: the fork's side of a hunk carries the reason it exists and the condition that retires it. It is not the inventory. `local-overlay/INVENTORY.md` is the inventory, and it is generated, so it cannot go stale the way a hand-maintained grep result does.
+
+After editing an upstream-owned file, fold the edit into its patch and re-prove the layer — `.agents/skills/dsh-harness-edit` has the exact command sequence.
 
 ### Rule 3 — Choose the mechanism in this order
 
@@ -187,7 +222,7 @@ After this convention lands, `grep -rn "DSH-FORK" --include='*.ts' --include='*.
 
 ### Rule 4 — Never hand-merge a generated file
 
-At a conflict in any file below, take **upstream's side wholesale**, then regenerate:
+`local-overlay/rules.json` is the authority for which files these are; `local-overlay/INVENTORY.md` renders the list with each file's command, and `local-overlay/rebuild.mjs` refuses to patch any of them. At a conflict in any file below, take **upstream's side wholesale**, then regenerate:
 
 ```sh
 git checkout --theirs docs/config-catalog.md docs/tool-catalog.md docs/capability-seams.md \
@@ -224,7 +259,7 @@ In `tsconfig.host.json` and `tsconfig.client.json`, put every fork entry togethe
     // DSH-FORK end
 ```
 
-Today those entries are scattered across five and three positions respectively, so each file conflicts several times instead of once. `tsconfig.base.json` needs none of this — it is generated.
+The entries are not fenced today: `tsconfig.host.json` and `tsconfig.client.json` contain no `DSH-FORK` block, so each file conflicts at every scattered insertion point instead of at one. Fencing them is a pending item, not a description of the current file. `tsconfig.base.json` needs none of this — it is generated.
 
 ### Rule 7 — The lockfile is regenerated, never merged
 
@@ -255,11 +290,13 @@ Output must be empty.
 
 ### Rule 9 — A fork package is a real package
 
-README, JSDoc on every export, tests, and an entry in the catalogs. Ten fork packages currently have no README, which keeps `doc-sync` red and hides real drift behind expected noise. A gate you have learned to ignore is not a gate.
+README, JSDoc on every export, tests, and an entry in the catalogs. `packages/agent-memory`, `packages/kernel`, and `packages/rlm` have no README, which keeps `doc-sync` red and hides real drift behind expected noise. A gate you have learned to ignore is not a gate.
 
 ## The seam register
 
 Every Tier-2 edit, its owner, and what removes it. Keep this table current; it is the exit plan.
+
+The table is the human-facing record. `local-overlay/rules.json` is the machine-readable one: it assigns each of these paths to a patch group, and `local-overlay/rebuild.mjs` fails when a changed path matches no group. A row added here without a matching rule, or a rule without a row, leaves the two records disagreeing.
 
 | # | Files | Tag | Why it is in an upstream file | Exit |
 |---|---|---|---|---|
@@ -290,13 +327,13 @@ Every Tier-2 edit, its owner, and what removes it. Keep this table current; it i
 | 25 | `client/ui-chat/src/client/{chat/ChatNodeSeat.tsx,chat/TurnProcessNodeView.tsx,contract/slots.ts,locale.ts}` + new `contract/turn-tool-summary.ts` | `brand` | the folded Turn-process row names what the Turn's tool calls did (`Created a.mjs, ran a command +53 -0`) instead of only counting them | Upstream gives the folded process row a content-derived label |
 | 26 | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | the base bundle mounts the `agent-memory-mode`/`agent-memory` rows gated by `agent-memory.enabled` (default off), and `apps/cli` must declare both packages because it is the installation dependency closure the profile module fallback mirrors | Move the bundle rows to `packages/bundle/efai-memory/cordis.patch.yml` (a fork-owned bundle applied by profile); the `apps/cli` manifest row stays until profiles resolve bundles from the checkout |
 
-If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops from 61 files to roughly 12 — and the survivors are lists and infrastructure, which conflict predictably in one place each.
+If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops to roughly a dozen files — and the survivors are lists and infrastructure, which conflict predictably in one place each.
 
 ## Updating to a new upstream release
 
 ```sh
 git fetch upstream
-git switch -c sync/upstream-$(date +%Y-%m-%d) wip/upstream-merge
+git switch -c sync/upstream-$(date +%Y-%m-%d) master
 git merge upstream/master
 ```
 
@@ -308,13 +345,18 @@ Then, in order:
 
 **3. Resolve real conflicts using the register.** Every remaining conflict should show a `DSH-FORK` marker on the fork's side. If it does not, the edit was never registered — find out what it was for, and either register it or drop it.
 
-**4. Regenerate everything.**
+**4. Re-apply the mod and regenerate everything.**
 
 ```sh
+node local-overlay/apply.mjs             # the fork's side of the seam, patch by patch
 pnpm install --no-frozen-lockfile
 pnpm run gen-tsconfig-paths
 pnpm run doc-sync
 ```
+
+A patch that no longer applies names the code upstream moved around the fork's edit. Resolve it inside that patch's subsystem, then re-run from here. When the fork's version of a file becomes upstream's version — because the change landed upstream — delete the edit from the tree and let `rebuild.mjs` drop its hunk.
+
+If the update moved the base commit, point `local-overlay/BASE` at the new upstream revision and re-run `node local-overlay/rebuild.mjs` before continuing, so the patches are keyed to what the tree actually sits on.
 
 **5. Build before testing.** Delete stranded package directories first — a package deleted upstream leaves its `lib/` and `node_modules/` behind, and until `tsdown.config.ts` carries the manifest filter, tsdown adopts the residue as a build target and fails the build under the name `@deepseek-ai/dsh-root`:
 
@@ -334,7 +376,17 @@ pnpm dsh --profile headless "read package.json and tell me the version"   # kern
 
 **7. Record what moved.** Append to `.merge-port/MERGE-STATUS.md`: the upstream range, conflicts resolved, upstream APIs that moved and how the fork was repointed, and anything deferred. The existing entry for the `47f94385 → dd6322d6` merge is the model — it is genuinely good, and it is the reason this merge was tractable at all.
 
-**8. Update this file.** New Tier-2 edits get register rows. Removed ones get deleted.
+**8. Prove the layer still round-trips.**
+
+```sh
+node local-overlay/rebuild.mjs
+node local-overlay/verify.mjs
+node local-overlay/apply.mjs --check
+```
+
+Step 8 comes after the merge is resolved, not before: until then the tree is mid-merge and the patches describe neither side.
+
+**9. Update this file.** New Tier-2 edits get register rows and a `patchGroups` entry in `local-overlay/rules.json`; removed ones get deleted from both. `INVENTORY.md` regenerates itself.
 
 ## What to fix first
 
@@ -342,10 +394,10 @@ Ordered by how much each removes from the next merge.
 
 1. **Send rows 9 and 10 upstream.** Two self-contained bug fixes; they leave the fork's diff entirely when they land.
 2. **Create `packages/bundle/efai-kernel` and `packages/bundle/efai-kiln`.** Moves rows 1 and 2 — six files, the highest-churn upstream files the fork touches — to Tier 1.
-3. **Add `DSH-FORK` markers to all 61 files.** Half a day, and it makes every subsequent merge legible.
+3. **Add `DSH-FORK` markers to the Tier-2 files.** The mod layer supplies the inventory without them; the markers are what make each individual conflict legible while it is being resolved, and no Tier-2 edit carries one today.
 4. **Fence the `tsconfig.host.json` / `tsconfig.client.json` entries.** Ten minutes; turns eight conflicts into two.
 5. **`pnpm-lock.yaml merge=ours`.** One line; removes the single largest conflicting file.
 6. **Move `ds_config.json` and `ds_sessions.json` out of the repository tree.**
-7. **Write the ten missing package READMEs.** Turns `doc-sync` back into a signal.
-8. **Fold `wip/upstream-merge` into `master`.** They are siblings off the same upstream merge, five commits apart; leaving both alive invites work to land on the wrong one.
+7. **Write the three missing package READMEs** — `packages/agent-memory`, `packages/kernel`, `packages/rlm`. Turns `doc-sync` back into a signal.
+8. **Wire `rebuild.mjs --check` into the push path**, so a stale patch set cannot reach a branch.
 9. **Move row 11** — the system-prompt identity string — to a prompt section registered by a fork plugin. One line today, but it is in a file upstream edits often.
