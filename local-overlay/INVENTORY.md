@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **121** in **21** patch(es).
+Tier-2 files: **119** in **21** patch(es).
 
 ## Patches
 
@@ -179,11 +179,9 @@ Tier-2 files: **121** in **21** patch(es).
 - `packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx`
 - `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
 
-### `patches/docs.patch` — 9 file(s)
+### `patches/docs.patch` — 7 file(s)
 
-- `docs/event-producer-consumer.i18n.yaml`
 - `docs/event-producer-consumer.md`
-- `docs/event-producer-consumer.zh.md`
 - `docs/subsystems/code-runtime.i18n.yaml`
 - `docs/subsystems/code-runtime.md`
 - `docs/subsystems/code-runtime.zh.md`
@@ -214,7 +212,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 203 paths do not exist upstream, so no patch covers them and none can conflict.
+These 217 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/bug-fix/2026-09-03-tsdown-workspace-manifest-membership.i18n.yaml`
@@ -247,6 +245,7 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/README.md`
 - `local-overlay/apply.mjs`
 - `local-overlay/lib.mjs`
+- `local-overlay/patches/agent-skills.patch`
 - `local-overlay/patches/apps.patch`
 - `local-overlay/patches/boot.patch`
 - `local-overlay/patches/build.patch`
@@ -284,6 +283,7 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-chat/src/client/contract/turn-tool-summary.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
 - `packages/client/ui-chat/tests/turn-tool-summary.client.spec.ts`
+- `packages/client/ui-dock/README.md`
 - `packages/client/ui-dock/package.json`
 - `packages/client/ui-dock/src/client/Browser.tsx`
 - `packages/client/ui-dock/src/client/Dock.tsx`
@@ -299,6 +299,7 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-dock/src/index.ts`
 - `packages/client/ui-dock/tsconfig.json`
 - `packages/client/ui-dock/tsdown.config.ts`
+- `packages/client/ui-effects/README.md`
 - `packages/client/ui-effects/package.json`
 - `packages/client/ui-effects/src/client/EffectsSettingsRow.module.css`
 - `packages/client/ui-effects/src/client/EffectsSettingsRow.tsx`
@@ -318,18 +319,22 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-general/src/client/AdvancedSection.tsx`
 - `packages/client/ui-theme/tests/flow-accent-tokens.client.spec.ts`
 - `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
+- `packages/fs/tool-notebook-edit/README.md`
 - `packages/fs/tool-notebook-edit/package.json`
 - `packages/fs/tool-notebook-edit/src/index.ts`
 - `packages/fs/tool-notebook-edit/src/invariant.ts`
 - `packages/fs/tool-notebook-edit/tests/notebook-edit.spec.ts`
 - `packages/fs/tool-notebook-edit/tsconfig.json`
+- `packages/host/sidebar-bridge/README.md`
 - `packages/host/sidebar-bridge/package.json`
 - `packages/host/sidebar-bridge/src/index.ts`
 - `packages/host/sidebar-bridge/tsconfig.json`
+- `packages/kernel/kernel-mode/README.md`
 - `packages/kernel/kernel-mode/package.json`
 - `packages/kernel/kernel-mode/src/index.ts`
 - `packages/kernel/kernel-mode/src/invariant.ts`
 - `packages/kernel/kernel-mode/tsconfig.json`
+- `packages/kernel/kernel-python/README.md`
 - `packages/kernel/kernel-python/package.json`
 - `packages/kernel/kernel-python/src/child.ts`
 - `packages/kernel/kernel-python/src/env.ts`
@@ -340,20 +345,24 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/tests/fixtures/fake-kernel.py`
 - `packages/kernel/kernel-python/tests/transport.spec.ts`
 - `packages/kernel/kernel-python/tsconfig.json`
+- `packages/kernel/kernel-rlm-context/README.md`
 - `packages/kernel/kernel-rlm-context/package.json`
 - `packages/kernel/kernel-rlm-context/src/index.ts`
 - `packages/kernel/kernel-rlm-context/src/invariant.ts`
 - `packages/kernel/kernel-rlm-context/tests/kernel-rlm-context.spec.ts`
 - `packages/kernel/kernel-rlm-context/tsconfig.json`
+- `packages/kernel/kernel/README.md`
 - `packages/kernel/kernel/package.json`
 - `packages/kernel/kernel/src/index.ts`
 - `packages/kernel/kernel/src/invariant.ts`
 - `packages/kernel/kernel/src/types.ts`
 - `packages/kernel/kernel/tsconfig.json`
+- `packages/kernel/tool-kernel/README.md`
 - `packages/kernel/tool-kernel/package.json`
 - `packages/kernel/tool-kernel/src/index.ts`
 - `packages/kernel/tool-kernel/src/invariant.ts`
 - `packages/kernel/tool-kernel/tsconfig.json`
+- `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
 - `packages/llm/llm-kiln/src/adapter.ts`
 - `packages/llm/llm-kiln/src/bridge.ts`
@@ -363,6 +372,7 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/src/protocol.ts`
 - `packages/llm/llm-kiln/tests/dsml.spec.ts`
 - `packages/llm/llm-kiln/tsconfig.json`
+- `packages/rlm/rlm-mode/README.md`
 - `packages/rlm/rlm-mode/package.json`
 - `packages/rlm/rlm-mode/src/index.ts`
 - `packages/rlm/rlm-mode/tsconfig.json`
@@ -373,11 +383,13 @@ These 203 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/rlm/rlm/src/protocol.ts`
 - `packages/rlm/rlm/tests/engine.spec.ts`
 - `packages/rlm/rlm/tsconfig.json`
+- `packages/session/command-session-info/README.md`
 - `packages/session/command-session-info/package.json`
 - `packages/session/command-session-info/src/index.ts`
 - `packages/session/command-session-info/src/invariant.ts`
 - `packages/session/command-session-info/tsconfig.json`
 - `packages/session/session-persistence-jsonl/diagnose-session.mjs`
+- `packages/web/web-browser/README.md`
 - `packages/web/web-browser/package.json`
 - `packages/web/web-browser/src/browser.ts`
 - `packages/web/web-browser/src/index.ts`
