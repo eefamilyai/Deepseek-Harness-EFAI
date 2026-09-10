@@ -291,8 +291,8 @@ describe('tokenUsage session projection', () => {
   it('resets cumulative billing when a compaction ends successfully', async () => {
     const { ctx, session } = await harness()
     startStep(session, 1, 1)
-    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
-    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
+    usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
 
     session.append('compaction/start', { compactionId: CompactionId('reset-compact'), turn: null })
     session.append('compaction/end', { compactionId: CompactionId('reset-compact'), turn: null })
@@ -303,8 +303,8 @@ describe('tokenUsage session projection', () => {
   it('does not reset cumulative billing when a compaction fails', async () => {
     const { ctx, session } = await harness()
     startStep(session, 1, 1)
-    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
-    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
+    usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
 
     session.append('compaction/start', { compactionId: CompactionId('failed-compact'), turn: null })
     session.append('compaction/end', {
@@ -357,8 +357,8 @@ describe('tokenUsageLifetime session projection', () => {
   it('keeps accumulating across a successful compaction while tokenUsage resets', async () => {
     const { ctx, session } = await harness()
     startStep(session, 1, 1)
-    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
-    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
+    usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
 
     session.append('compaction/start', { compactionId: CompactionId('lifetime-compact'), turn: null })
     session.append('compaction/end', { compactionId: CompactionId('lifetime-compact'), turn: null })
@@ -374,8 +374,8 @@ describe('tokenUsageLifetime session projection', () => {
 
     // A turn after the compaction adds to both counters.
     startStep(session, 2, 1)
-    const next = usageChunk(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
-    finalUsage(session, { inputTokens: 8, outputTokens: 2 }, 2, 1, [next])
+    usageChunk(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
+    finalUsage(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
     expect(projected(ctx, session)).toEqual({
       uncachedInputTokens: 8,
       outputTokens: 2,
@@ -397,16 +397,16 @@ describe('tokenUsageLifetime session projection', () => {
     // pre-compaction step and wrongly subtract it.
     const { ctx, session } = await harness()
     startStep(session, 1, 1)
-    const first = usageChunk(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
-    finalUsage(session, { inputTokens: 10, outputTokens: 2 }, 1, 1, [first])
+    usageChunk(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
+    finalUsage(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
 
     session.append('compaction/start', { compactionId: CompactionId('renumber-compact'), turn: null })
     session.append('compaction/end', { compactionId: CompactionId('renumber-compact'), turn: null })
 
     // Same turn/step as before the compaction, different buckets.
     startStep(session, 1, 1)
-    const second = usageChunk(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
-    finalUsage(session, { inputTokens: 7, outputTokens: 4 }, 1, 1, [second])
+    usageChunk(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
+    finalUsage(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
 
     expect(projectedLifetime(ctx, session)).toEqual({
       uncachedInputTokens: 17,
@@ -419,8 +419,8 @@ describe('tokenUsageLifetime session projection', () => {
   it('does not reset when a compaction fails', async () => {
     const { ctx, session } = await harness()
     startStep(session, 1, 1)
-    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
-    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
+    usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
 
     session.append('compaction/start', { compactionId: CompactionId('failed-lifetime'), turn: null })
     session.append('compaction/end', {

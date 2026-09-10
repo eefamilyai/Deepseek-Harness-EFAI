@@ -113,6 +113,47 @@ Depends on: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/cor
 
 Source: [`packages/core/agent-loop/src/index.ts:318`](../packages/core/agent-loop/src/index.ts)
 
+<a id="deepseek-aidsh-agent-memory"></a>
+
+## `@deepseek-ai/dsh-agent-memory`
+
+Requires: `storageDomain` · `systemPrompt` · `tools`
+
+```ts config-catalog
+export interface Config {
+  /** How many of the newest memory nodes the injected index lists. */
+  maxIndexNodes?: number
+  /** Character ceiling on the whole injected index; it is truncated to fit. */
+  maxIndexChars?: number
+  /** Character ceiling on one entry's one-line summary inside the index. */
+  maxSummaryChars?: number
+  /** Character ceiling on the full evidence stored for one memory node. */
+  maxFullChars?: number
+  /** Character ceiling on a tool result captured by the automatic observer. */
+  maxAutoRecordChars?: number
+}
+```
+
+Source: [`packages/agent-memory/agent-memory/src/index.ts:36`](../packages/agent-memory/agent-memory/src/index.ts)
+
+<a id="deepseek-aidsh-agent-memory-mode"></a>
+
+## `@deepseek-ai/dsh-agent-memory-mode`
+
+```ts config-catalog
+export interface Config {
+  /**
+   * Whether the durable memory engine mounts. On: the engine adds
+   * `memory_add`/`memory_recall`/`memory_map`, auto-records tool output, and
+   * re-injects a bounded index each turn. Off: no memory tools and no index.
+   * Takes effect on restart.
+   */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/agent-memory/agent-memory-mode/src/index.ts:18`](../packages/agent-memory/agent-memory-mode/src/index.ts)
+
 <a id="deepseek-aidsh-agent-presets"></a>
 
 ## `@deepseek-ai/dsh-agent-presets`
@@ -952,6 +993,31 @@ export interface Config {
 
 Source: [`packages/host/open-in-app/src/index.ts:50`](../packages/host/open-in-app/src/index.ts)
 
+<a id="deepseek-aidsh-host-sidebar-bridge"></a>
+
+## `@deepseek-ai/dsh-host-sidebar-bridge`
+
+Requires: `webServer`
+
+```ts config-catalog
+/** Complete config after schemastery applies defaults. */
+type ResolvedConfig = Required<Config>
+
+/** Plugin config: where the browser writes, and which shell the terminal runs. */
+export interface Config {
+  /**
+   * Directory browser_tools writes its `state.json` + screenshots to — the same
+   * `KILN_BROWSER_DIR` the kernel passes to the Python runtime. Defaults to
+   * `$KILN_BROWSER_DIR`, then `~/.dsh/browser`.
+   */
+  browserDir?: string
+  /** Shell for the sidebar terminal. Empty = the platform default (COMSPEC / $SHELL). */
+  shell?: string
+}
+```
+
+Source: [`packages/host/sidebar-bridge/src/index.ts:82`](../packages/host/sidebar-bridge/src/index.ts)
+
 <a id="deepseek-aidsh-host-webserver"></a>
 
 ## `@deepseek-ai/dsh-host-webserver`
@@ -1008,6 +1074,93 @@ export interface Config {
 ```
 
 Source: [`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
+
+<a id="deepseek-aidsh-kernel"></a>
+
+## `@deepseek-ai/dsh-kernel`
+
+```ts config-catalog
+/**
+ * Config for the kernel seam. `provider` pins which backend wins; it is optional
+ * (a single registered usable backend auto-selects). An operational override
+ * must feed this same field rather than introduce a hidden priority chain.
+ */
+export interface KernelRuntimeConfig {
+  /** Explicit kernel provider id. Omitted = auto-select when exactly one usable. */
+  readonly provider?: string
+  /** Default wall-clock budget (ms) for a cell that does not carry its own. */
+  readonly defaultTimeoutMs?: number
+}
+```
+
+Source: [`packages/kernel/kernel/src/index.ts:39`](../packages/kernel/kernel/src/index.ts)
+
+<a id="deepseek-aidsh-kernel-mode"></a>
+
+## `@deepseek-ai/dsh-kernel-mode`
+
+```ts config-catalog
+/** Plugin config: the switch, and its composition-layer default. */
+export interface Config {
+  /**
+   * Whether the persistent Python kernel is the model's way of acting on this
+   * machine. On: the `kernel` tool, and no bash/filesystem/search/jobs tools —
+   * those are function calls inside the kernel namespace instead. Off: those
+   * tools, and no kernel. Takes effect on restart.
+   */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/kernel/kernel-mode/src/index.ts:56`](../packages/kernel/kernel-mode/src/index.ts)
+
+<a id="deepseek-aidsh-kernel-python"></a>
+
+## `@deepseek-ai/dsh-kernel-python`
+
+Requires: `kernel`
+
+```ts config-catalog
+/** Plugin config: interpreter, workspace, and where mutable kernel state lands. */
+export interface Config {
+  /** Interpreter to run. Omitted = `$DSH_KERNEL_PYTHON`, then the platform probe. */
+  python?: string
+  /** Kernel working directory. Omitted = the harness working directory. */
+  cwd?: string
+  /** Directory for `subkernels.json` and other durable kernel state. Omitted = `<cwd>/.kiln_kernel_state`. */
+  stateDir?: string
+  /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
+  runtimeDir?: string
+}
+```
+
+Source: [`packages/kernel/kernel-python/src/index.ts:57`](../packages/kernel/kernel-python/src/index.ts)
+
+<a id="deepseek-aidsh-kernel-rlm-context"></a>
+
+## `@deepseek-ai/dsh-kernel-rlm-context`
+
+Requires: `kernel` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /** Skip the read-back and contribute nothing (defaults to false). */
+  disabled?: boolean
+  /**
+   * When set, contribute ONLY for this agent id. Children (in-process
+   * subagents) have different ids and are therefore skipped, preserving their
+   * clean context. Omitted = contribute for every agent (legacy, single-agent).
+   */
+  ownerAgentId?: string
+  /** Cap on rendered answer text, to keep the runtime snapshot bounded. */
+  maxAnswerChars?: number
+  /** Cap on rendered bind text per value. */
+  maxBindChars?: number
+}
+```
+
+Source: [`packages/kernel/kernel-rlm-context/src/index.ts:69`](../packages/kernel/kernel-rlm-context/src/index.ts)
 
 <a id="deepseek-aidsh-llm-deepseek"></a>
 
@@ -1095,6 +1248,58 @@ export interface DeepSeekCatalogModel {
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · [`SystemPromptUpdate`](../packages/llm/llm/src/index.ts)
 
 Source: [`packages/llm/llm-deepseek/src/index.ts:134`](../packages/llm/llm-deepseek/src/index.ts)
+
+<a id="deepseek-aidsh-llm-kiln"></a>
+
+## `@deepseek-ai/dsh-llm-kiln`
+
+Requires: `llm`
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /** Prefix applied to every Kiln provider id to form the harness route name. */
+  routePrefix?: string
+  /**
+   * Register only routes the registry reports as usable — a key present, or a
+   * keyless local endpoint. Default false: an unconfigured route stays visible
+   * so it can be selected and configured, and fails per request with the
+   * registry's own message naming the variable to set.
+   */
+  onlyConfigured?: boolean
+  /** Interpreter for the sidecar. Omitted = `$DSH_KERNEL_PYTHON`, then a platform probe. */
+  python?: string
+  /** Working directory for the sidecar. Omitted = the harness working directory. */
+  cwd?: string
+  /** Directory for the sidecar's mutable state. Omitted = `<cwd>/.kiln_kernel_state`. */
+  stateDir?: string
+  /** The `python/kiln` directory. Omitted = the copy shipped with this repo. */
+  bridgeDir?: string
+  /**
+   * DeepSeek web (ds_direct) credentials, editable from the Models page.
+   *
+   * `token` + `cookie` are the live bearer/WAF pair. The optional login fields
+   * let ds_direct refresh those credentials itself when DeepSeek rotates them,
+   * so the bridge keeps working without a new copy-paste from devtools.
+   */
+  deepseek?: {
+    /** DeepSeek web bearer token. */
+    token?: string
+    /** DeepSeek web WAF cookie. */
+    cookie?: string
+    /** Login email for automatic token refresh. */
+    email?: string
+    /** Login mobile for automatic token refresh. */
+    mobile?: string
+    /** Login area code (for mobile). */
+    areaCode?: string
+    /** Login password for automatic token refresh. */
+    password?: string
+  }
+}
+```
+
+Source: [`packages/llm/llm-kiln/src/index.ts:70`](../packages/llm/llm-kiln/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -1782,6 +1987,44 @@ export interface Config {
 ```
 
 Source: [`packages/guard/repeat-tool-reminder/src/index.ts:28`](../packages/guard/repeat-tool-reminder/src/index.ts)
+
+<a id="deepseek-aidsh-rlm"></a>
+
+## `@deepseek-ai/dsh-rlm`
+
+Requires: `llm` · `kernel` · `systemPrompt` · `tools`
+
+```ts config-catalog
+/** Plugin config (resolved under schemastery defaults). */
+export interface Config {
+  /** Cap on recursive turns when the tool does not say. */
+  maxSteps?: number
+  /** Cap on a tool-supplied max_steps (safety bound). */
+  maxMaxSteps?: number
+}
+```
+
+Source: [`packages/rlm/rlm/src/index.ts:49`](../packages/rlm/rlm/src/index.ts)
+
+<a id="deepseek-aidsh-rlm-mode"></a>
+
+## `@deepseek-ai/dsh-rlm-mode`
+
+```ts config-catalog
+/** Plugin config: the switch, and its composition-layer default. */
+export interface Config {
+  /**
+   * Whether the recursive RLM engine replaces the standalone kernel tool as the
+   * model's way of acting. On: the `kernel`, filesystem, shell, and
+   * background-job tools unmount and the model instead runs one `rlm` recursive
+   * completion. Off: the standalone `kernel` tool. Requires `kernel.enabled`.
+   * Takes effect on restart.
+   */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/rlm/rlm-mode/src/index.ts:43`](../packages/rlm/rlm-mode/src/index.ts)
 
 <a id="deepseek-aidsh-sandbox-local"></a>
 
@@ -2851,6 +3094,28 @@ export type CompletionDelivery = 'quiet' | 'wakeup'
 
 Source: [`packages/jobs/tool-jobs/src/index.ts:31`](../packages/jobs/tool-jobs/src/index.ts)
 
+<a id="deepseek-aidsh-tool-kernel"></a>
+
+## `@deepseek-ai/dsh-tool-kernel`
+
+Requires: `tools` · `kernel` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config: the per-cell budget and the output cap. */
+export interface Config {
+  /** PRIMARY cooperative budget (ms) for one cell; on expiry the cell backgrounds. Defaults to 180000. */
+  timeoutMs?: number
+  /** Cap on returned output characters for one cell. Defaults to 200000. */
+  maxOutputChars?: number
+  /** Upper bound on a model-chosen per-cell (primary) timeout (ms). Defaults to 600000. */
+  maxTimeoutMs?: number
+  /** SECONDARY budget (ms): when a backgrounded cell is force-stopped. Defaults to 1800000. */
+  backgroundTimeoutMs?: number
+}
+```
+
+Source: [`packages/kernel/tool-kernel/src/index.ts:59`](../packages/kernel/tool-kernel/src/index.ts)
+
 <a id="deepseek-aidsh-tool-lsp"></a>
 
 ## `@deepseek-ai/dsh-tool-lsp`
@@ -2870,6 +3135,24 @@ export interface Config {
 ```
 
 Source: [`packages/lsp/tool-lsp/src/index.ts:57`](../packages/lsp/tool-lsp/src/index.ts)
+
+<a id="deepseek-aidsh-tool-notebook-edit"></a>
+
+## `@deepseek-ai/dsh-tool-notebook-edit`
+
+Requires: `tools` · `fs`
+
+```ts config-catalog
+/** Configuration for the notebook editor tool. */
+export interface Config {
+  /** Maximum returned view characters before clipping (default 16000). */
+  maxOutputChars?: number
+  /** Model-facing tool description. */
+  description?: string
+}
+```
+
+Source: [`packages/fs/tool-notebook-edit/src/index.ts:494`](../packages/fs/tool-notebook-edit/src/index.ts)
 
 <a id="deepseek-aidsh-tool-present"></a>
 
@@ -2976,10 +3259,15 @@ Requires: `agents` · `tools` · `skills`
 export interface Config {
   /** Maximum normalized description length rendered in the session catalog; minimum 3. */
   catalogDescriptionMaxLength?: number
+  /**
+   * Skill names whose full body rides every catalog publication, including the
+   * republication after compaction prunes both. An empty list disables it.
+   */
+  alwaysLoadSkills?: string[]
 }
 ```
 
-Source: [`packages/skill/tool-skill/src/index.ts:61`](../packages/skill/tool-skill/src/index.ts)
+Source: [`packages/skill/tool-skill/src/index.ts:70`](../packages/skill/tool-skill/src/index.ts)
 
 <a id="deepseek-aidsh-tool-str-replace-editor"></a>
 
@@ -3284,7 +3572,35 @@ export interface Config {
 }
 ```
 
-Source: [`packages/bundle/web-app/src/index.ts:44`](../packages/bundle/web-app/src/index.ts)
+Source: [`packages/bundle/web-app/src/index.ts:45`](../packages/bundle/web-app/src/index.ts)
+
+<a id="deepseek-aidsh-web-browser"></a>
+
+## `@deepseek-ai/dsh-web-browser`
+
+Requires: `tools` · `web` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config (all defaulted). */
+export interface Config {
+  /** Timeout for a page load (ms). */
+  navigationTimeoutMs?: number
+  /** Timeout for a click/type/press (ms). */
+  actionTimeoutMs?: number
+  /** Cap on the page text captured per snapshot (chars). */
+  maxTextChars?: number
+  /** Cap on the text returned for one tool call (chars). */
+  maxOutputChars?: number
+  /** Launch Chromium headless (true) or headed (false, for debugging). */
+  headless?: boolean
+  /** `User-Agent` presented to sites. */
+  userAgent?: string
+  /** Register the browser-rendered fetch provider with `ctx.web` when present (default true). */
+  fetchProvider?: boolean
+}
+```
+
+Source: [`packages/web/web-browser/src/index.ts:42`](../packages/web/web-browser/src/index.ts)
 
 <a id="deepseek-aidsh-web-fetch-http"></a>
 
@@ -3462,6 +3778,8 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-deliverables` — requires `systemPrompt` · `connection` · `sessionQuery` · `sessionController` · `workspaceFiles` · `fs` · `sandboxPolicy` ([`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse` ([`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-native` ([`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-dock` ([`packages/client/ui-dock/src/index.ts`](../packages/client/ui-dock/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-effects` ([`packages/client/ui-effects/src/index.ts`](../packages/client/ui-effects/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-goal` ([`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-input-trigger` ([`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-jobs` ([`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts))
@@ -3495,6 +3813,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
 - `@deepseek-ai/dsh-command-feedback` — requires `commands` ([`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts))
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))
+- `@deepseek-ai/dsh-command-session-info` — requires `commands` · `sessionProjections` ([`packages/session/command-session-info/src/index.ts`](../packages/session/command-session-info/src/index.ts))
 - `@deepseek-ai/dsh-commands` ([`packages/interaction/commands/src/index.ts`](../packages/interaction/commands/src/index.ts))
 - `@deepseek-ai/dsh-cordis-client-runner` ([`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts))
 - `@deepseek-ai/dsh-deepseek-llm-api-extensions` ([`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts))

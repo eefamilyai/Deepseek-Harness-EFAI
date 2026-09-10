@@ -1,8 +1,8 @@
 diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.module.css b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
-index 492fb12f8c..29cdf9e721 100644
+index b2cb715287..6eb0f8d63c 100644
 --- a/packages/client/ui-model-selection/src/client/ModelSelect.module.css
 +++ b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
-@@ -144,6 +144,27 @@
+@@ -176,6 +176,27 @@
    margin-top: 4px;
  }
  
@@ -30,7 +30,7 @@ index 492fb12f8c..29cdf9e721 100644
  .groupTitle {
    position: sticky;
    top: 0;
-@@ -156,6 +177,24 @@
+@@ -188,6 +209,24 @@
    font-weight: 500;
  }
  
@@ -55,7 +55,7 @@ index 492fb12f8c..29cdf9e721 100644
  .option {
    box-sizing: border-box;
    display: flex;
-@@ -259,3 +298,58 @@
+@@ -291,3 +330,58 @@
    flex: 0 0 auto;
    color: var(--dsw-alias-label-tertiary);
  }
@@ -115,18 +115,18 @@ index 492fb12f8c..29cdf9e721 100644
 +  color: var(--dsw-alias-state-business-primary);
 +}
 diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.tsx b/packages/client/ui-model-selection/src/client/ModelSelect.tsx
-index e910651e86..1827b84609 100644
+index e9fc0195ef..df2524f14c 100644
 --- a/packages/client/ui-model-selection/src/client/ModelSelect.tsx
 +++ b/packages/client/ui-model-selection/src/client/ModelSelect.tsx
-@@ -17,6 +17,7 @@ import {
- } from 'react'
+@@ -18,6 +18,7 @@ import {
+ import { createPortal } from 'react-dom'
  import clsx from 'clsx'
  import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 +import type { ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
  import {
    IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-   IconWarningOutline16, Toast,
-@@ -35,6 +36,68 @@ interface EffortChoice {
+   IconDataOutline16, IconWarningOutline16, Toast,
+@@ -36,6 +37,68 @@ interface EffortChoice {
    label: string
  }
  
@@ -192,10 +192,10 @@ index e910651e86..1827b84609 100644
 +  return merged
 +}
 +
- /**
-  * Render the composer model seat.
-  * @param props - owner share (locked) + injected face (shared directory
-@@ -63,18 +126,38 @@ export function ModelSelect(
+ /** Unplaced portal card: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real (Menu primitive's measure pass). */
+ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
+ 
+@@ -69,18 +132,38 @@ export function ModelSelect(
    const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
    const id = useId()
  
@@ -237,7 +237,7 @@ index e910651e86..1827b84609 100644
    const selectedIndex = state.current === null
      ? -1
      : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
-@@ -99,6 +182,45 @@ export function ModelSelect(
+@@ -105,6 +188,45 @@ export function ModelSelect(
        })),
      ], [reasoning, t])
    const busy = state.status === 'selecting'
@@ -283,7 +283,7 @@ index e910651e86..1827b84609 100644
  
    const reload = (): void => {
      lastActionRef.current = 'load'
-@@ -118,6 +240,10 @@ export function ModelSelect(
+@@ -161,6 +283,10 @@ export function ModelSelect(
  
    const show = (): void => {
      setPane('root')
@@ -294,7 +294,7 @@ index e910651e86..1827b84609 100644
      setOpen(true)
      reload()
    }
-@@ -280,34 +406,74 @@ export function ModelSelect(
+@@ -332,34 +458,74 @@ export function ModelSelect(
                  </div>
                ))}
                <div className={clsx(css.groups, 'scrollable')}>
@@ -456,10 +456,10 @@ index 6ceee704ed..2c426d9219 100644
    return value === undefined ? undefined : value as ModelSelectionProjection
  }
 diff --git a/packages/client/ui-model-selection/src/client/locales.ts b/packages/client/ui-model-selection/src/client/locales.ts
-index 3bf0774679..2ed9373f30 100644
+index 570565ce60..9f33d2a39b 100644
 --- a/packages/client/ui-model-selection/src/client/locales.ts
 +++ b/packages/client/ui-model-selection/src/client/locales.ts
-@@ -28,6 +28,21 @@ export const zh = {
+@@ -31,6 +31,21 @@ export const zh = {
    'empty.models': '没有可用的模型。',
    'blocked.composer': '当前模型不可用，请先选择模型',
    'empty.efforts': '当前模型未提供推理等级。',
@@ -481,7 +481,7 @@ index 3bf0774679..2ed9373f30 100644
  } satisfies Record<string, string>
  
  /** The model namespace key union. */
-@@ -53,4 +68,18 @@ export const en = {
+@@ -59,4 +74,18 @@ export const en = {
    'empty.models': 'No models available.',
    'blocked.composer': 'This model is unavailable — select one to continue',
    'empty.efforts': 'This model provides no reasoning effort levels.',
@@ -501,7 +501,7 @@ index 3bf0774679..2ed9373f30 100644
 +  'account.cancel': 'Cancel',
  } satisfies Record<ModelKey, string>
 diff --git a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
-index f30c3f7f3e..4e34b45c43 100644
+index 3b8c92d8bf..7ad2816964 100644
 --- a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
 +++ b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
 @@ -1,5 +1,6 @@
@@ -532,7 +532,7 @@ index f30c3f7f3e..4e34b45c43 100644
  afterEach(cleanup)
  
  describe('ModelSelect reasoning effort', () => {
-@@ -215,3 +229,173 @@ describe('ModelSelect reasoning effort', () => {
+@@ -252,3 +266,173 @@ describe('ModelSelect reasoning effort', () => {
      expect(load).not.toHaveBeenCalled()
    })
  })

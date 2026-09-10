@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-theme
 
+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
+
 [English](README.md) | 中文
 
 ## 概述
@@ -54,6 +56,8 @@ kind: "package-reference"
 `src/styles/` 下有六张样式表，由 ui-theme 的动态客户端 entry 依次导入：`base.css`、`corner-shape.css`、`design-platform.css`、`scrollbar.css`、`gradient-shadow-text.css` 与 `shiki.css`。客户端 bundle 将其编译并注入为插件持有的全局样式，因此卸载与 HMR（热模块替换）会随 ui-theme 一同移除。`scrollbar.css` 是 `--dsw-alias-scrollbar-*` token 的唯一消费方，必须排在声明这些 token 的 `design-platform.css` 之后。
 
 `corner-shape.css` 平滑所有圆角：在 `@supports (corner-shape: superellipse(1.5))` 内定义 `--dsw-corner-shape`，并通过通配选择器应用到所有元素及其 `::before`/`::after`，因此不支持 `corner-shape` 的引擎保持普通圆弧。正圆形状——`border-radius: 50%` 的圆与胶囊半径——因超级椭圆会使其变形，须在所属组件样式表中把 `corner-shape: round` 与半径声明配对；corner-shape 样式表 spec 跨全部包样式表强制这一配对。
+
+`design-platform.css` 还声明了 `--dsw-alias-flow-*` 强调色组：为每类紧凑流内行各配一种色相——`think`、`search`、`read`、`mutate`（write 与 edit）、`shell`、`code`、`instruct`（context injection、system prompt 与 skill 行）与 `generic`（没有专门呈现的工具调用）。`DisclosureRow` 公开重新绑定接缝：某一行在自己的 `.row` 上设置 `--dsh-row-accent` 即可为前导字形与标题上色，各行再把同一个值应用到自己的 hover chevron 与分隔点。要绑定在 row 上而非外层容器——工具调用的子调用会渲染成嵌套行，绑在外层会让它们继承父行的色相。该组与表示运行状态的 `--dsw-alias-state-*` 分开，且没有任何流内色相落在 error 或 warn 色阶上，因此强调色不会被读成失败或中断的行。两套主题都在对 `--dsw-alias-bg-base` 保持 4.5:1 下限的前提下取各自表面所能承受的最高彩度：深色表面接近荧光色，浅色表面取全彩度中间调——在浅色表面上荧光值撑不起 13px 文本。
 
 `gradient-shadow-text.css` 从 `--dsh-content-font-size` 派生 `--dsh-content-font-delta`，并以该增量移动 Markdown 标题与基础文本阶梯。它同时派生低一档变量 `--dsh-content-font-size-secondary`（设置 ≤14 时为设置值 −1，>14 时为设置值 −2；默认设置下为 13 px）及配套的 `--dsh-content-font-delta-secondary`，供表格变体与比正文低一档的流内行使用。紧凑的小号文本与代码变体保持固定字号。阶梯之外，用户气泡与 composer 草稿直接读取正文字号变量对，流内行的标题及摘要读取低一档变量对。该表还持有阴影阶（`--dsw-shadow-lv*`）与 elevation token：`--dsw-elevation-stroke` 经可重绑的 `--dsw-elevation-stroke-color` 画 0.5 px 发丝描边，`--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft`（composer 专用的更大模糊、更低透明度档）在描边之上叠两层极淡柔光，因此高层级表面设 `border: 0`，不再有占布局的轮廓；派生 token 逐元素重声明，使表面对描边色的重绑真实生效。
 

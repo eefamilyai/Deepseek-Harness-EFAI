@@ -240,6 +240,15 @@ async restart(): Promise<void>
  * @returns the bound names, in the backend's order.
  */
 async names(): Promise<readonly string[]>
+
+/**
+ * Whether the resolved backend currently has a cell queued or running.
+ * Returns `false` when no backend is resolvable (no usable provider), which
+ * is the correct reading for a re-entrant guard: without a backend there is
+ * nothing to deadlock against.
+ * @returns whether a cell is queued or running on the resolved backend.
+ */
+busy(): boolean
 ```
 
 Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)

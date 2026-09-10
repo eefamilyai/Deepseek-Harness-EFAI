@@ -1,5 +1,5 @@
 diff --git a/packages/skill/tool-skill/src/index.ts b/packages/skill/tool-skill/src/index.ts
-index 222e8a0ace..8e499185b8 100644
+index 0099332fa2..ee76f5a30c 100644
 --- a/packages/skill/tool-skill/src/index.ts
 +++ b/packages/skill/tool-skill/src/index.ts
 @@ -18,6 +18,7 @@ import {
@@ -88,7 +88,7 @@ index 222e8a0ace..8e499185b8 100644
      if (injections.length === 0) return decision
      return { ...decision, messages: [...decision.messages, ...injections] }
    })
-@@ -387,6 +424,61 @@ function catalogMessage(
+@@ -388,6 +425,61 @@ function catalogMessage(
    return undefined
  }
  
@@ -100,7 +100,7 @@ index 222e8a0ace..8e499185b8 100644
 +function visibleInvokedSkillNames(agent: Agent): Set<string> {
 +  const visible = new Set(agent.session.surface.nodes)
 +  const names = new Set<string>()
-+  for (const event of agent.session.events) {
++  for (const event of agent.session.ownEvents()) {
 +    if (event.type !== 'user/message' || event.data.source.kind !== 'skill-invocation') continue
 +    if (visible.has(event.seq)) names.add(event.data.source.name)
 +  }
@@ -150,7 +150,7 @@ index 222e8a0ace..8e499185b8 100644
  function catalogDescription(value: string, maxLength: number): string {
    const normalized = value.replaceAll(/\s+/g, ' ').trim()
    return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 3)}...`
-@@ -407,6 +499,12 @@ function assertPositiveInteger(name: string, value: number, minimum = 1): void {
+@@ -408,6 +500,12 @@ function assertPositiveInteger(name: string, value: number, minimum = 1): void {
   */
  const SKILL_GESTURE = /(^|\s)\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/g
  
@@ -163,7 +163,7 @@ index 222e8a0ace..8e499185b8 100644
  /**
   * `/name` gesture tokens from the claimed user messages, deduplicated in
   * first-seen order. Every text block of direct user input is scanned; no
-@@ -424,6 +522,10 @@ function invokedSkillNames(messages: readonly UserMessage[]): string[] {
+@@ -425,6 +523,10 @@ function invokedSkillNames(messages: readonly UserMessage[]): string[] {
          const name = match[2]
          if (name !== undefined && !names.includes(name)) names.push(name)
        }
@@ -175,10 +175,10 @@ index 222e8a0ace..8e499185b8 100644
    }
    return names
 diff --git a/packages/skill/tool-skill/tests/tool-skill.spec.ts b/packages/skill/tool-skill/tests/tool-skill.spec.ts
-index 2f7ee6bbc8..97b13a35b9 100644
+index 603166de04..615b862122 100644
 --- a/packages/skill/tool-skill/tests/tool-skill.spec.ts
 +++ b/packages/skill/tool-skill/tests/tool-skill.spec.ts
-@@ -1005,6 +1005,35 @@ describe('user-explicit invocation injection', () => {
+@@ -1031,6 +1031,35 @@ describe('user-explicit invocation injection', () => {
        && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
    })
  
@@ -214,7 +214,7 @@ index 2f7ee6bbc8..97b13a35b9 100644
    it('recognizes a mid-sentence gesture but not paths, fractions, or broken boundaries', async () => {
      const { ctx, agent } = await invokeHarness()
      const decision = await proposeStep(ctx, agent, [
-@@ -1082,4 +1111,105 @@ describe('user-explicit invocation injection', () => {
+@@ -1108,4 +1137,105 @@ describe('user-explicit invocation injection', () => {
        .map(message => (message.source as { name: string }).name)
      expect(invoked).toEqual(['shared-skill'])
    })
@@ -235,7 +235,7 @@ index 2f7ee6bbc8..97b13a35b9 100644
 +      return { ctx, agent }
 +    }
 +
-+    const invocationBodies = (session: Session): string[] => session.events
++    const invocationBodies = (session: Session): string[] => session.ownEvents()
 +      .filter((event): event is Extract<SessionEvent, { type: 'user/message' }> =>
 +        event.type === 'user/message' && event.data.source.kind === 'skill-invocation')
 +      .map(event => JSON.stringify(event.data.content))
@@ -266,7 +266,7 @@ index 2f7ee6bbc8..97b13a35b9 100644
 +    it('re-injects the body after compaction prunes it from the surface', async () => {
 +      const { ctx, agent } = await alwaysLoadHarness({ alwaysLoadSkills: ['recovery-skill'] })
 +      await composePrefixForAgent(ctx, agent)
-+      const initial = agent.session.events.find(event => event.type === 'user/message'
++      const initial = agent.session.ownEvents().find(event => event.type === 'user/message'
 +        && event.data.source.kind === 'skill-invocation')
 +      if (initial === undefined) throw new Error('expected an initial injection')
 +
@@ -275,7 +275,7 @@ index 2f7ee6bbc8..97b13a35b9 100644
 +        content: [{ type: 'text', text: 'compacted history' }],
 +        source: { kind: 'plugin', plugin: 'compact' },
 +      }), {
-+        surfaceOp: { op: 'replace', start: initial.seq, end: initial.seq },
++        surfaceOp: { op: 'replace', startSeq: initial.seq, endSeq: initial.seq },
 +        sourceEventSeqs: [initial.seq],
 +      })
 +

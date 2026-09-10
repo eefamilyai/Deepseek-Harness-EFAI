@@ -1,5 +1,5 @@
 diff --git a/apps/cli/package.json b/apps/cli/package.json
-index c589218149..1fdea09aea 100644
+index 97881b4cfa..00a3569487 100644
 --- a/apps/cli/package.json
 +++ b/apps/cli/package.json
 @@ -35,6 +35,8 @@
@@ -31,7 +31,7 @@ index c589218149..1fdea09aea 100644
      "@deepseek-ai/dsh-schedule": "workspace:^",
      "@deepseek-ai/dsh-sdk-app": "workspace:^",
      "@deepseek-ai/dsh-sdk-minimal": "workspace:^",
-@@ -80,6 +89,7 @@
+@@ -81,6 +90,7 @@
      "@deepseek-ai/dsh-tool-fs-search": "workspace:^",
      "@deepseek-ai/dsh-tool-goal": "workspace:^",
      "@deepseek-ai/dsh-tool-jobs": "workspace:^",

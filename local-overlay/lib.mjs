@@ -46,6 +46,36 @@ export function readBase() {
   return line
 }
 
+/**
+ * Split a list of paths into argv-sized chunks.
+ *
+ * Windows caps a whole command line at 32 KiB, so a pathspec naming thousands
+ * of files cannot be passed in one call — which is exactly the shape an
+ * upstream update has before the patch set is regenerated, when every file
+ * upstream touched is a candidate. Chunking never splits an entry, and because
+ * the input is sorted the concatenated results stay sorted too.
+ * @param items - the paths to split.
+ * @param budget - the maximum bytes of path text per chunk.
+ * @returns consecutive slices of `items`, each small enough to pass as argv.
+ */
+export function chunked(items, budget = 24000) {
+  const chunks = []
+  let current = []
+  let size = 0
+  for (const item of items) {
+    const cost = item.length + 1
+    if (current.length > 0 && size + cost > budget) {
+      chunks.push(current)
+      current = []
+      size = 0
+    }
+    current.push(item)
+    size += cost
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
+
 /** Load and validate `rules.json`. */
 export function readRules() {
   const rules = JSON.parse(readFileSync(join(overlayDir, 'rules.json'), 'utf8'))
@@ -169,7 +199,12 @@ export function classify(records, rules) {
  */
 export function diffFor(base, paths) {
   if (paths.length === 0) return ''
-  return git(['diff', '--no-color', '--no-ext-diff', '--binary', '-M', base, '--', ...paths])
+  // One `git diff` per chunk: each file's hunks are independent, so the
+  // concatenation is the same patch the single call would have produced.
+  return chunked(paths)
+    .map(chunk => git(['diff', '--no-color', '--no-ext-diff', '--binary', '-M', base, '--', ...chunk]))
+    .filter(text => text !== '')
+    .join('')
 }
 
 /**
@@ -201,11 +236,13 @@ export function withBaseCheckout(base, paths, run) {
 
     // `--index-info` reads `<mode> SP <sha> TAB <path>` per line.
     const lines = []
-    for (const line of git(['ls-tree', '-r', base, '--', ...paths]).split('\n')) {
-      if (line.trim() === '') continue
-      const [meta, path] = line.split('\t')
-      const [mode, , sha] = meta.split(/\s+/)
-      lines.push(`${mode} ${sha}\t${path}`)
+    for (const chunk of chunked(paths)) {
+      for (const line of git(['ls-tree', '-r', base, '--', ...chunk]).split('\n')) {
+        if (line.trim() === '') continue
+        const [meta, path] = line.split('\t')
+        const [mode, , sha] = meta.split(/\s+/)
+        lines.push(`${mode} ${sha}\t${path}`)
+      }
     }
     if (lines.length > 0) {
       execFileSync('git', ['update-index', '--add', '--index-info'], { cwd: work, input: `${lines.join('\n')}\n`, encoding: 'utf8' })
@@ -226,11 +263,13 @@ export function withBaseCheckout(base, paths, run) {
  */
 export function baseTree(base, paths) {
   const entries = new Map()
-  for (const line of git(['ls-tree', '-r', base, '--', ...paths]).split('\n')) {
-    if (line.trim() === '') continue
-    const [meta, path] = line.split('\t')
-    const [mode, , sha] = meta.split(/\s+/)
-    entries.set(path, { mode, sha })
+  for (const chunk of chunked(paths)) {
+    for (const line of git(['ls-tree', '-r', base, '--', ...chunk]).split('\n')) {
+      if (line.trim() === '') continue
+      const [meta, path] = line.split('\t')
+      const [mode, , sha] = meta.split(/\s+/)
+      entries.set(path, { mode, sha })
+    }
   }
   return entries
 }

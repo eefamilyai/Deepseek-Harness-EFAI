@@ -1,5 +1,5 @@
 diff --git a/packages/bundle/base/cordis.patch.yml b/packages/bundle/base/cordis.patch.yml
-index eaa8457e88..e47db71af0 100644
+index f906ea8601..d0fe0f23f3 100644
 --- a/packages/bundle/base/cordis.patch.yml
 +++ b/packages/bundle/base/cordis.patch.yml
 @@ -107,6 +107,31 @@
@@ -34,7 +34,7 @@ index eaa8457e88..e47db71af0 100644
      - id: session-persistence-jsonl
        name: '@deepseek-ai/dsh-session-persistence-jsonl'
        config:
-@@ -249,28 +274,142 @@
+@@ -243,28 +268,142 @@
      - id: shell-env
        name: '@deepseek-ai/dsh-shell-env'
  
@@ -179,7 +179,7 @@ index eaa8457e88..e47db71af0 100644
      - id: agent-instructions
        name: '@deepseek-ai/dsh-agent-instructions'
        config:
-@@ -295,6 +434,9 @@
+@@ -289,6 +428,9 @@
      - id: command-feedback
        name: '@deepseek-ai/dsh-command-feedback'
  
@@ -189,16 +189,21 @@ index eaa8457e88..e47db71af0 100644
      - id: goal
        name: '@deepseek-ai/dsh-goal'
  
-@@ -427,6 +569,7 @@
+@@ -415,6 +557,12 @@
+         subagentProvider: spawn
+         maxRounds: 64
  
-     - id: tool-str-replace-editor
-       name: '@deepseek-ai/dsh-tool-str-replace-editor'
++    - id: tool-str-replace-editor
++      name: '@deepseek-ai/dsh-tool-str-replace-editor'
 +      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-       config:
-         maxOutputChars: 16000
- 
-@@ -467,6 +610,16 @@
-         fetch: false
++      config:
++        maxOutputChars: 16000
++
+     # Consecutive-repeat reminders on the tool chain.
+     - id: repeat-tool-reminder
+       name: '@deepseek-ai/dsh-repeat-tool-reminder'
+@@ -453,6 +601,16 @@
+         fetch: true
          searchTimeoutMs: 60000
  
 +    # A self-hosted headless browser (Playwright). The `browser` tool lets the
@@ -215,10 +220,10 @@ index eaa8457e88..e47db71af0 100644
  
      # The tool registry. Presentation mode is a deployment choice; omitting it here
 diff --git a/packages/bundle/base/package.json b/packages/bundle/base/package.json
-index b80a50fabc..b9acb0a696 100644
+index abe58f9588..3e1b2273be 100644
 --- a/packages/bundle/base/package.json
 +++ b/packages/bundle/base/package.json
-@@ -50,6 +50,7 @@
+@@ -45,6 +45,7 @@
      "@deepseek-ai/dsh-command-compact": "workspace:^",
      "@deepseek-ai/dsh-command-feedback": "workspace:^",
      "@deepseek-ai/dsh-command-goal": "workspace:^",
@@ -226,7 +231,15 @@ index b80a50fabc..b9acb0a696 100644
      "@deepseek-ai/dsh-commands": "workspace:^",
      "@deepseek-ai/dsh-compaction-basic": "workspace:^",
      "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
-@@ -120,6 +121,7 @@
+@@ -102,6 +103,7 @@
+     "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
+     "@deepseek-ai/dsh-tool-ralph": "workspace:^",
+     "@deepseek-ai/dsh-tool-skill": "workspace:^",
++    "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:^",
+     "@deepseek-ai/dsh-tool-subagent": "workspace:^",
+     "@deepseek-ai/dsh-tool-subagent-control": "workspace:^",
+     "@deepseek-ai/dsh-tool-jobs": "workspace:^",
+@@ -114,6 +116,7 @@
      "@deepseek-ai/dsh-user-approval": "workspace:^",
      "@deepseek-ai/dsh-user-questions": "workspace:^",
      "@deepseek-ai/dsh-web": "workspace:^",
@@ -235,10 +248,10 @@ index b80a50fabc..b9acb0a696 100644
      "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",
      "@deepseek-ai/dsh-workflow-worker-thread": "workspace:^",
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index 79c62a6e20..b1fa539f71 100644
+index cf4603031f..91ce7f730e 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
-@@ -123,6 +123,14 @@
+@@ -142,6 +142,14 @@
          compressionLevel: 1
          compressionThresholdBytes: 1024
  
@@ -253,7 +266,7 @@ index 79c62a6e20..b1fa539f71 100644
      # Web glue owned by this bundle: resolves the built frontend dist (an
      # assembly fact of dsh-web-app, never user config), mounts the
      # frontend-static fallback owner, registers the web-surface prompt
-@@ -177,6 +185,12 @@
+@@ -201,6 +209,12 @@
      - id: ui-theme
        name: '@deepseek-ai/dsh-client-ui-theme'
  
@@ -266,7 +279,7 @@ index 79c62a6e20..b1fa539f71 100644
      - id: locale
        name: '@deepseek-ai/dsh-client-locale'
  
-@@ -436,6 +450,14 @@
+@@ -470,6 +484,14 @@
  - id: tool-web
    disabled: true
  
@@ -282,28 +295,28 @@ index 79c62a6e20..b1fa539f71 100644
  # `dsh-agent-presets` itself and prepended as a read-only `system` root
  # (`includeShippedRoot`); `$DSH_HOME/.agent-presets` is where a person — or an
 diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
-index 0d7157e23c..2749596d8c 100644
+index 3498cb6761..3547bd1056 100644
 --- a/packages/bundle/web-app/package.json
 +++ b/packages/bundle/web-app/package.json
-@@ -64,6 +64,8 @@
+@@ -63,6 +63,8 @@
      "@deepseek-ai/dsh-client-ui-deliverables": "workspace:^",
      "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
      "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
 +    "@deepseek-ai/dsh-client-ui-dock": "workspace:^",
 +    "@deepseek-ai/dsh-client-ui-effects": "workspace:^",
-     "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:^",
      "@deepseek-ai/dsh-client-ui-goal": "workspace:^",
-     "@deepseek-ai/dsh-client-ui-layout": "workspace:^",
-@@ -99,6 +101,7 @@
-     "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
-     "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-jobs": "workspace:^",
+@@ -105,6 +107,7 @@
+     "@deepseek-ai/dsh-host-frontend-static": "workspace:^",
+     "@deepseek-ai/dsh-host-open-in-app": "workspace:^",
      "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",
 +    "@deepseek-ai/dsh-host-sidebar-bridge": "workspace:^",
      "@deepseek-ai/dsh-host-webserver": "workspace:^",
-     "@deepseek-ai/dsh-file-reference": "workspace:^",
-     "@deepseek-ai/dsh-file-reference-local": "workspace:^",
+     "@deepseek-ai/dsh-launch-environment": "workspace:^",
+     "@deepseek-ai/dsh-message-feedback": "workspace:^",
 diff --git a/packages/bundle/web-app/src/index.ts b/packages/bundle/web-app/src/index.ts
-index 4f0367a44f..b7bddf6df0 100644
+index 63edf46529..c9a75620db 100644
 --- a/packages/bundle/web-app/src/index.ts
 +++ b/packages/bundle/web-app/src/index.ts
 @@ -11,7 +11,8 @@
@@ -316,7 +329,7 @@ index 4f0367a44f..b7bddf6df0 100644
  import { createRequire } from 'node:module'
  import { dirname, join } from 'node:path'
  import { networkInterfaces } from 'node:os'
-@@ -140,6 +141,39 @@ export function resolveLanTrust(bindHost: string, extra: readonly string[]): Web
+@@ -131,6 +132,39 @@ export function resolveLanTrust(bindHost: string, extra: readonly string[]): Web
    return { lanAddresses, trustedHosts: [...lanAddresses, ...extra] }
  }
  
@@ -356,7 +369,7 @@ index 4f0367a44f..b7bddf6df0 100644
  /** Model-visible orientation and acceptance boundary for sessions created through `dsh web`. */
  function webSurfacePrompt(webUrl: string): string {
    const updateContract = 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
-@@ -227,7 +261,7 @@ export const internals: {
+@@ -218,7 +252,7 @@ export const internals: {
  
  /**
   * Mount the Web runtime: dist serving, surface prompt, the bash runtime
@@ -365,7 +378,7 @@ index 4f0367a44f..b7bddf6df0 100644
   * @param ctx - plugin context carrying the webServer service.
   * @param config - validated {@link Config}.
   */
-@@ -239,6 +273,18 @@ export function apply(ctx: Context, config: Config): void {
+@@ -230,6 +264,18 @@ export function apply(ctx: Context, config: Config): void {
    // Release dependent rows only after bind-dependent trust has been sampled once.
    ctx.provide(WEB_RUNTIME_SERVICE, runtime)
    ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
@@ -385,7 +398,7 @@ index 4f0367a44f..b7bddf6df0 100644
      ctx.inject(['systemPrompt'], (promptCtx) => {
        addHarnessSourceSection(promptCtx, SOURCE_ROOT)
 diff --git a/packages/bundle/web-app/tests/web-app.spec.ts b/packages/bundle/web-app/tests/web-app.spec.ts
-index 40e47132ca..769127a6d8 100644
+index 3e17147419..c8c9d56cba 100644
 --- a/packages/bundle/web-app/tests/web-app.spec.ts
 +++ b/packages/bundle/web-app/tests/web-app.spec.ts
 @@ -69,8 +69,10 @@ function stageDist(): string {

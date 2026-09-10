@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-theme
 
+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
+
 English | [中文](README.zh.md)
 
 ## Summary
@@ -54,6 +56,8 @@ The service owns theme and font-size state and publishes snapshots. The ui-layou
 `src/styles/` holds six sheets imported in order by ui-theme's dynamic client entry: `base.css`, `corner-shape.css`, `design-platform.css`, `scrollbar.css`, `gradient-shadow-text.css`, and `shiki.css`. The client bundle compiles and injects them as plugin-owned global styles, so unload and HMR remove them with ui-theme. `scrollbar.css` is the sole consumer of the `--dsw-alias-scrollbar-*` tokens and must follow `design-platform.css`, which declares them.
 
 `corner-shape.css` smooths every rounded corner: inside `@supports (corner-shape: superellipse(1.5))` it defines `--dsw-corner-shape` and applies it to all elements and their `::before`/`::after` through the universal selector, so engines without `corner-shape` keep circular corners. Full-round shapes — `border-radius: 50%` circles and pill radii — pair `corner-shape: round` with their radius in the owning component sheet because a superellipse deforms them; the corner-shape stylesheet spec enforces that pairing across every package stylesheet.
+
+`design-platform.css` also declares the `--dsw-alias-flow-*` accent group: one hue per compact flow-row family — `think`, `search`, `read`, `mutate` (write and edit), `shell`, `code`, `instruct` (context injection, system prompt, and the skill row), and `generic` (a tool call with no specific presentation). `DisclosureRow` publishes the rebinding seam: a row that sets `--dsh-row-accent` on its `.row` recolours the leading glyph and the title, and each row applies the same value to its hover chevron and separator dot. Bind on the row, not an outer wrapper — a tool call's subcalls render as nested rows and would inherit the parent's hue. The group sits apart from `--dsw-alias-state-*`, which means run state, and no flow hue sits on the error or warn ramps, so an accent never reads as a failed or interrupted row. Both themes take the most chromatic value their surface allows at a 4.5:1 floor against `--dsw-alias-bg-base`: near-fluorescent on dark, full-chroma mid-tones on light, where a fluorescent value cannot carry 13px text.
 
 `gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. Dense small and code variants stay fixed. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`) and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect.
 

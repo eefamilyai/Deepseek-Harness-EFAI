@@ -7,12 +7,12 @@ index 2b7a412b8f..0000000000
 -../.agents/skills
 \ No newline at end of file
 diff --git a/.gitattributes b/.gitattributes
-index e0a432111d..591037ca2a 100644
+index ac01e65042..3a52d077c6 100644
 --- a/.gitattributes
 +++ b/.gitattributes
 @@ -6,8 +6,18 @@
- # in-repo form stays LF; CRLF becomes checkout-time presentation only.
  * text=auto eol=lf
+ *.cmd text eol=crlf
  
 +# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: CRLF for *.cmd/*.bat is permanent; append at end of file only.
 +# cmd.exe misparses batch files with LF line endings (multi-line if/for blocks
@@ -30,13 +30,13 @@ index e0a432111d..591037ca2a 100644
 +# whitespace error. Exempt them from the whitespace check.
 +*.patch -whitespace
 diff --git a/.gitignore b/.gitignore
-index e2a11e6bc7..f600afea6d 100644
+index fb999f93fb..9201bdd6b1 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -31,6 +31,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-run
- python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
+@@ -34,6 +34,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
  python/**/__pycache__/
  python/**/.pytest_cache/
+ packages/**/__pycache__/
 +# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: these exclusions are permanent; append at end of file only.
 +# uv-managed bundled interpreter + deps (machine-specific; provisioned by uv sync)
 +.venv/
@@ -44,10 +44,10 @@ index e2a11e6bc7..f600afea6d 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -40,3 +44,30 @@ apps/web/dist/
- worktrees/
+@@ -44,3 +48,30 @@ worktrees/
  .agents/worktrees/
  .typert-*/
+ native/system/test/bin/
 +
 +# DeepSeek web credentials (token, WAF cookie, login password) — never commit
 +ds_config.json
@@ -76,22 +76,22 @@ index e2a11e6bc7..f600afea6d 100644
 +# Harness desktop shell: CDP discovery record, regenerated at every launch
 +.cdp-target.json
 diff --git a/README.i18n.yaml b/README.i18n.yaml
-index aca5fead6f..9639d638a9 100644
+index 904c7928d2..9639d638a9 100644
 --- a/README.i18n.yaml
 +++ b/README.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write README.md
--README.md: 9f89db3d4502dea4a0d181799164f304d4976740
--README.zh.md: aa66ef1d24a5e2165859e9337273d807dff3d070
+-README.md: 36adfe913902e75ce0673adc2cb5cb692151a291
+-README.zh.md: f6861b4c9490741b5e5f2d825a370766178dd9f6
 +README.md: 70c1aa3459bf9711e29368e8fbca5ebdf226562e
 +README.zh.md: c0653dfcb8b256f9027e7ef83ee92f5e76d46513
 diff --git a/README.md b/README.md
-index 9f89db3d45..70c1aa3459 100644
+index 36adfe9139..b0b91153ba 100644
 --- a/README.md
 +++ b/README.md
-@@ -1,63 +1,72 @@
+@@ -1,60 +1,71 @@
 -# DeepSeek Harness
 +# DeepSeek Harness EFAI
  
@@ -173,35 +173,39 @@ index 9f89db3d45..70c1aa3459 100644
 +```sh
 +./start.sh
 +```
- 
--Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
++
 +The launchers provision the bundled Python runtime, install dependencies, build once when needed, and start the Web UI at `http://127.0.0.1:3080`. Pass `--port 3100` to use another port, or `--build` to force a rebuild.
- 
--For agents, follow [AGENTS.md](AGENTS.md).
++
 +After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
  
--## License
+-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
 +## What this fork adds
-+
+ 
+-For agents, follow [AGENTS.md](AGENTS.md).
 +- A Python kernel that executes code cells through the kernel tools.
 +- A multi-provider LLM registry with account pooling.
 +- A browser tool and a sidebar host bridge.
 +- A notebook-edit tool and RLM context read-back.
- 
--[MIT](LICENSE)
++
 +## Upstream
 +
 +This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Read [HARNESS-EDITS.md](HARNESS-EDITS.md) before merging a new upstream release, so the fork's local features are not clobbered.
-+
-+## License
  
+ ## Citation
+ 
+@@ -70,6 +81,4 @@ For agents, follow [AGENTS.md](AGENTS.md).
+ 
+ ## License
+ 
+-[MIT](LICENSE)
+-
 -Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 +See [LICENSE](LICENSE).
 diff --git a/README.zh.md b/README.zh.md
-index aa66ef1d24..c0653dfcb8 100644
+index f6861b4c94..99cf2c68e1 100644
 --- a/README.zh.md
 +++ b/README.zh.md
-@@ -1,84 +1,72 @@
+@@ -1,81 +1,71 @@
 -# DeepSeek Harness
 +# DeepSeek Harness EFAI
  
@@ -293,44 +297,48 @@ index aa66ef1d24..c0653dfcb8 100644
 +```powershell
 +.\start.cmd
 +```
- 
--## 参与贡献
++
 +macOS 或 Linux：
  
--参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
+-## 参与贡献
 +```sh
 +./start.sh
 +```
  
--## 开发
+-参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
 +启动脚本会准备内置 Python 运行时、安装依赖、在需要时先构建，然后启动 Web UI，默认地址为 `http://127.0.0.1:3080`。传入 `--port 3100` 可更换端口，传入 `--build` 可强制重新构建。
  
--请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
+-## 开发
 +通过一条命令安装后，改运行 `dsh web`；加上 `--port 3100` 可更换端口。
  
--面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
+-请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
 +## 本分支新增内容
  
--## 许可证
+-面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
 +- 通过内核工具执行代码单元的 Python 内核。
 +- 带账户池化的多提供商 LLM 注册表。
 +- 浏览器工具与侧边栏主机桥接。
 +- 笔记本编辑工具与 RLM 上下文回读。
- 
--[MIT](LICENSE)
++
 +## 上游
 +
 +本分支跟踪 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。合并新的上游版本前，请先阅读 [HARNESS-EDITS.md](HARNESS-EDITS.md)，以免覆盖本分支的本地功能。
-+
-+## 许可证
  
+ ## 引用
+ 
+@@ -91,6 +81,4 @@ pnpm dsh web
+ 
+ ## 许可证
+ 
+-[MIT](LICENSE)
+-
 -第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 +见 [LICENSE](LICENSE)。
 diff --git a/package.json b/package.json
-index d947add909..8c05bc8637 100644
+index cd8264c164..4ba9a9b178 100644
 --- a/package.json
 +++ b/package.json
-@@ -74,6 +74,8 @@
+@@ -96,6 +96,8 @@
      "verify-md-links": "tsx scripts/verify-md-links.ts",
      "verify-doc-site-fragments": "tsx scripts/verify-doc-site-fragments.ts",
      "verify-public-repository-links": "tsx scripts/verify-public-repository-links.ts",

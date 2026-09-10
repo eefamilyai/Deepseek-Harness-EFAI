@@ -53,25 +53,46 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && storedEntry?.answerStep === processSpec.answerStep
     ? storedEntry
     : undefined
-  const processOpen = processEntry !== undefined
   const setOpen = useCallback((open: boolean) => {
     if (processSpec !== undefined && processSpec.answerStep !== null) {
       actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
     }
   }, [actions, processSpec])
+  // DSH-FORK(brand): the row exists for a Turn that is still running, not only
+  // after it closes. The folded window ends at the finalized answer when there
+  // is one and is otherwise open-ended, so a running Turn's row summarizes the
+  // work it has done so far rather than waiting for the Turn to finish.
+  // EXIT: upstream gives the folded process row a content-derived label.
+  const sameTurn = routedNode !== undefined
+    && processSpec !== undefined
+    && (routedNode.location.kind === 'turn' || routedNode.location.kind === 'step')
+    && routedNode.location.turn.turn === processSpec.turn
+  const turnLocation = sameTurn ? routedNode.location.turn : undefined
+  const turnClosed = turnLocation?.status === 'closed'
+  // A running Turn starts expanded so the reader watches the work land; a
+  // finalized one starts folded. Either way the reader's own toggle wins.
+  const processOpen = processEntry === undefined ? turnClosed === false : processEntry.open
+  // DSH-FORK(brand): a partially paged history withholds only the one Turn whose
+  // own `turn/start` is missing, instead of every Turn's process row. EXIT:
+  // upstream gives the folded process row a content-derived label.
+  const historyTruncatesTurn = historyIncomplete && turnLocation?.start === undefined
+  const processEndSeq = processSpec === undefined
+    ? null
+    : processSpec.answerAnchorSeq ?? Number.POSITIVE_INFINITY
   const processWindowReady = processSpec !== undefined
     && processPresentation !== undefined
     && compactTranscript
-    && processSpec.answerAnchorSeq !== null
     && processPresentation.turn === processSpec.turn
-    && processPresentation.turnClosed
-    && !historyIncomplete
+    && !historyTruncatesTurn
   const processMember = routedNode !== undefined
+    && sameTurn
     && processWindowReady
+    && processEndSeq !== null
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
     && routedNode.anchorSeq >= processSpec.processStartSeq
-    && routedNode.anchorSeq < processSpec.answerAnchorSeq
+    && routedNode.anchorSeq < processEndSeq
   const processAnswer = routedNode !== undefined
+    && sameTurn
     && processWindowReady
     && routedNode.kind === 'assistant-step'
     && routedNode.data.step === processSpec.answerStep
@@ -95,6 +116,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && foldable
     && processPresentation.compactAnswer
     && !processOpen
+  // `processOpen` already carries the default (open while running, folded once
+  // finalized), so hiding follows the resolved state and no extra Turn-status
+  // condition is needed: a reader who collapses a running Turn sees it close.
   const processHidden = controllerInactive || (foldable && processMember && !processOpen)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)

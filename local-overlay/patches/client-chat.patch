@@ -1,117 +1,62 @@
 diff --git a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
-index 00eb9fd70d..17c6e3a408 100644
+index 40e08dbaf7..a95c649add 100644
 --- a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
 +++ b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
-@@ -7,6 +7,9 @@ import {
-   decodeTurnProcess, TURN_PROCESS_INDEPENDENT_KINDS, turnProcessGeneration,
-   type TurnProcessSpec,
- } from '../contract/turn-process.ts'
-+// DSH-FORK(brand): derive what the Turn's tool calls did, for the folded row's
-+// label. EXIT: upstream gives the folded process row a content-derived label.
-+import { summarizeToolCalls, type TurnToolSummary } from '../contract/turn-tool-summary.ts'
- import { storedTurnProcessEntry } from '../stores.ts'
- import { useSearchableHidden } from './searchable-hidden.ts'
- import css from './ChatView.module.css'
-@@ -95,14 +98,19 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
-     [processSignature],
-   )
-   const nodeStore = useChat(snapshot => snapshot.nodes)
-+  // DSH-FORK(brand): a Turn folds while it is still running, and a partially
-+  // paged history withholds only the one Turn whose own `turn/start` is missing.
-+  // Upstream required closed + finalized + fully-loaded at once, which left the
-+  // row absent for most of a live session. EXIT: upstream gives the folded
-+  // process row a content-derived label.
-   const processLayoutKeys = useChat((snapshot) => {
--    if (!compactTranscript || historyIncomplete || processSpec === undefined) return EMPTY_PROCESS_KEYS
-+    if (!compactTranscript || processSpec === undefined) return EMPTY_PROCESS_KEYS
-     const current = snapshot.nodes.get(nodeKey) as ChatNode | undefined
-     const location = current?.location
-     if (current === undefined
-       || (location?.kind !== 'turn' && location?.kind !== 'step')
--      || location.turn.status !== 'closed'
-       || location.turn.turn !== processSpec.turn) return EMPTY_PROCESS_KEYS
-+    if (historyIncomplete && location.turn.start === undefined) return EMPTY_PROCESS_KEYS
-     const ownsLayout = current.kind === 'turn-process'
-       || (current.kind === 'assistant-step' && current.data.step === processSpec.answerStep)
-     return ownsLayout ? snapshot.locations.getTurn(processSpec.turn) : EMPTY_PROCESS_KEYS
-@@ -113,6 +121,19 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
-       : turnProcessLayout(processLayoutKeys, nodeStore, processSpec),
-     [nodeStore, processLayoutKeys, processSpec],
-   )
-+  // DSH-FORK(brand): the folded row names the Turn's work instead of counting
-+  // it, so it reads "Created a.mjs, ran a command +53 -0". Only root tool-call
-+  // nodes inside the process window contribute; a Turn with none keeps the
-+  // count-only label the renderer falls back to.
-+  const processSummary = useMemo<TurnToolSummary | undefined>(() => {
-+    if (processSpec === undefined || processLayoutKeys.length === 0) return undefined
-+    const roots = []
-+    for (const key of processLayoutKeys) {
-+      const candidate = nodeStore.get(key) as ChatNode | undefined
-+      if (candidate?.kind === 'tool-call') roots.push(candidate.data.root)
-+    }
-+    return roots.length === 0 ? undefined : summarizeToolCalls(roots)
-+  }, [nodeStore, processLayoutKeys, processSpec])
-   const processGeneration = useMemo(
-     () => processSpec === undefined ? undefined : turnProcessGeneration(processSpec),
-     [processSpec],
-@@ -121,7 +142,6 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
-     ? undefined
-     : storedTurnProcessEntry(state, processSpec.turn))
-   const processEntry = storedEntry?.generation === processGeneration ? storedEntry : undefined
+@@ -53,25 +53,46 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
+     && storedEntry?.answerStep === processSpec.answerStep
+     ? storedEntry
+     : undefined
 -  const processOpen = processEntry !== undefined
    const setOpen = useCallback((open: boolean) => {
-     if (processGeneration !== undefined && processSpec !== undefined) {
-       actions.setTurnProcessOpen(processSpec.turn, processGeneration, open)
-@@ -132,18 +152,29 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
-     && processSpec !== undefined
-     && (routedNode.location.kind === 'turn' || routedNode.location.kind === 'step')
-     && routedNode.location.turn.turn === processSpec.turn
--  const turnClosed = sameTurn
--    && routedNode.location.turn.status === 'closed'
+     if (processSpec !== undefined && processSpec.answerStep !== null) {
+       actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
+     }
+   }, [actions, processSpec])
 +  // DSH-FORK(brand): the row exists for a Turn that is still running, not only
 +  // after it closes. The folded window ends at the finalized answer when there
 +  // is one and is otherwise open-ended, so a running Turn's row summarizes the
 +  // work it has done so far rather than waiting for the Turn to finish.
 +  // EXIT: upstream gives the folded process row a content-derived label.
++  const sameTurn = routedNode !== undefined
++    && processSpec !== undefined
++    && (routedNode.location.kind === 'turn' || routedNode.location.kind === 'step')
++    && routedNode.location.turn.turn === processSpec.turn
 +  const turnLocation = sameTurn ? routedNode.location.turn : undefined
 +  const turnClosed = turnLocation?.status === 'closed'
 +  // A running Turn starts expanded so the reader watches the work land; a
 +  // finalized one starts folded. Either way the reader's own toggle wins.
 +  const processOpen = processEntry === undefined ? turnClosed === false : processEntry.open
++  // DSH-FORK(brand): a partially paged history withholds only the one Turn whose
++  // own `turn/start` is missing, instead of every Turn's process row. EXIT:
++  // upstream gives the folded process row a content-derived label.
 +  const historyTruncatesTurn = historyIncomplete && turnLocation?.start === undefined
 +  const processEndSeq = processSpec === undefined
 +    ? null
 +    : processSpec.answerAnchorSeq ?? Number.POSITIVE_INFINITY
    const processWindowReady = processSpec !== undefined
+     && processPresentation !== undefined
      && compactTranscript
 -    && processSpec.answerAnchorSeq !== null
--    && turnClosed
+     && processPresentation.turn === processSpec.turn
+-    && processPresentation.turnClosed
 -    && !historyIncomplete
 +    && !historyTruncatesTurn
-   const processMember = sameTurn
+   const processMember = routedNode !== undefined
++    && sameTurn
      && processWindowReady
 +    && processEndSeq !== null
      && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
      && routedNode.anchorSeq >= processSpec.processStartSeq
 -    && routedNode.anchorSeq < processSpec.answerAnchorSeq
 +    && routedNode.anchorSeq < processEndSeq
-   const processAnswer = sameTurn
+   const processAnswer = routedNode !== undefined
++    && sameTurn
      && processWindowReady
      && routedNode.kind === 'assistant-step'
-@@ -159,8 +190,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
-       foldable,
-       open: processOpen,
-       setOpen,
-+      summary: processSummary,
-     }, [
--    foldable, processGeneration, processOpen, processSpec, setOpen,
-+    foldable, processGeneration, processOpen, processSpec, processSummary, setOpen,
-   ])
-   const controllerInactive = routedNode?.kind === 'turn-process'
-     && !foldable
-@@ -168,6 +200,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
+     && routedNode.data.step === processSpec.answerStep
+@@ -95,6 +116,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
      && foldable
-     && processLayout?.compactAnswer === true
+     && processPresentation.compactAnswer
      && !processOpen
 +  // `processOpen` already carries the default (open while running, folded once
 +  // finalized), so hiding follows the resolved state and no extra Turn-status
@@ -174,10 +119,10 @@ index 37f08dc2f5..53d8984d95 100644
          ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
          : <IconContextInjectionOutline16 size={14} />}
 diff --git a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-index 2d7cbe8f07..99b99c9f22 100644
+index 489d431236..25fa5aab41 100644
 --- a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
 +++ b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-@@ -33,8 +33,23 @@
+@@ -38,8 +38,23 @@
    flex-shrink: 0;
  }
  
@@ -202,7 +147,7 @@ index 2d7cbe8f07..99b99c9f22 100644
  }
  
  .title {
-@@ -47,7 +62,7 @@
+@@ -52,7 +67,7 @@
    height: 2px;
    margin: 0 8px;
    border-radius: 1px;
@@ -211,30 +156,11 @@ index 2d7cbe8f07..99b99c9f22 100644
  }
  
  /* Think text reads the secondary tier — one step under the body size
-diff --git a/packages/client/ui-chat/src/client/chat/StatsLine.module.css b/packages/client/ui-chat/src/client/chat/StatsLine.module.css
-index 29c0bc3aab..a617a0bd9f 100644
---- a/packages/client/ui-chat/src/client/chat/StatsLine.module.css
-+++ b/packages/client/ui-chat/src/client/chat/StatsLine.module.css
-@@ -15,9 +15,11 @@
-   font-size: var(--dsh-content-font-size-secondary, 13px);
-   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
-   color: var(--dsw-alias-label-tertiary);
--  white-space: nowrap;
--  overflow: hidden;
--  text-overflow: ellipsis;
-+  /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
-+  /* Wrap instead of eliding: the token readout (and every other group) stays
-+     fully visible instead of clipping the trailing figures into an ellipsis. */
-+  white-space: normal;
-+  overflow-wrap: break-word;
- }
- 
- .sep {
 diff --git a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
-index 26c43b1793..72eda446b3 100644
+index 787c8fb7bf..f7ffbebd00 100644
 --- a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
 +++ b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
-@@ -24,6 +24,10 @@ export function SystemPromptRow({ text, t }: SystemPromptRowProps) {
+@@ -27,6 +27,10 @@ export function SystemPromptRow({ text, update = false, t }: SystemPromptRowProp
    return (
      <DisclosureRow
        className={css.root}
@@ -244,9 +170,9 @@ index 26c43b1793..72eda446b3 100644
 +      titleClassName={css.title}
        icon={<IconBrowseOutline16 size={14} />}
        chevronClassName={css.chevron}
-       title={t('message.systemPrompt')}
+       title={t(update ? 'message.systemPromptUpdate' : 'message.systemPrompt')}
 diff --git a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
-index d0e0cd92a0..3b6426b7e8 100644
+index 7c6025ca87..7e1d388eb7 100644
 --- a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
 +++ b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
 @@ -41,6 +41,61 @@
@@ -612,18 +538,18 @@ index f9210e84db..60c52220bc 100644
      </button>
    )
 diff --git a/packages/client/ui-chat/src/client/contract/slots.ts b/packages/client/ui-chat/src/client/contract/slots.ts
-index 14fe308321..26cc4905b4 100644
+index fa02cc4092..005ba21b8c 100644
 --- a/packages/client/ui-chat/src/client/contract/slots.ts
 +++ b/packages/client/ui-chat/src/client/contract/slots.ts
-@@ -15,6 +15,7 @@ import type { ToolCallId, SelectionTarget } from './store.ts'
- import type { ChatNode, ChatNodeKind } from './chat-nodes.ts'
- import type { ChatSnapshot, CommandNode, CompactionSummaryNode, ToolCallBlock } from './snapshot.ts'
+@@ -19,6 +19,7 @@ import type {
+   ChatNodeProcessSource, ChatNodeSource, ChatSnapshot, ChatTurnProcessPresentation,
+ } from './snapshot.ts'
  import type { TurnProcessSpec } from './turn-process.ts'
 +import type { TurnToolSummary } from './turn-tool-summary.ts'
  import type { TranscriptViewMode } from '../../chat-settings.ts'
  
  /** Selector hook over the current Conversation binding's Chat target. */
-@@ -78,6 +79,10 @@ export interface TurnProcessOwnerProps {
+@@ -103,6 +104,10 @@ export interface TurnProcessOwnerProps {
    readonly foldable: boolean
    readonly open: boolean
    setOpen(open: boolean): void
@@ -635,12 +561,12 @@ index 14fe308321..26cc4905b4 100644
  
  /** Full props of one keyed Chat renderer. */
 diff --git a/packages/client/ui-chat/src/client/contract/store.ts b/packages/client/ui-chat/src/client/contract/store.ts
-index f5f22a4f85..185ac028ae 100644
+index 78a248dd54..3d271bd1b2 100644
 --- a/packages/client/ui-chat/src/client/contract/store.ts
 +++ b/packages/client/ui-chat/src/client/contract/store.ts
-@@ -13,10 +13,19 @@ export interface SelectionTarget {
-   toolName?: string
- }
+@@ -3,10 +3,19 @@
+ /** Tool call identity as carried by Chat nodes. */
+ export type ToolCallId = string
  
 -/** One manually expanded Turn answer generation. */
 +// DSH-FORK(brand): `open` records the reader's explicit choice so a running
@@ -654,16 +580,16 @@ index f5f22a4f85..185ac028ae 100644
 + */
  export interface TurnProcessViewEntry {
    readonly turn: number
-   readonly generation: TurnProcessGeneration
+   readonly answerStep: number
 +  readonly open: boolean
  }
  
  /** Per-Session state shared only by the Chat view and details surface. */
 diff --git a/packages/client/ui-chat/src/client/locale.ts b/packages/client/ui-chat/src/client/locale.ts
-index f10a9ced20..c0eec5d6ab 100644
+index 5468ed9df4..5df06feee3 100644
 --- a/packages/client/ui-chat/src/client/locale.ts
 +++ b/packages/client/ui-chat/src/client/locale.ts
-@@ -74,6 +74,22 @@ export const zh = {
+@@ -67,6 +67,22 @@ export const zh = {
    'message.turnProcess.subagents.other': '{count} 个 subagent',
    'message.turnProcess.thoughtForAWhile': '已思考',
    'message.turnProcess.separator': ' · ',
@@ -686,7 +612,7 @@ index f10a9ced20..c0eec5d6ab 100644
    'message.stopped': '已停止',
    'message.branch': '在新对话中分支',
    'message.branchUnavailable': '仅可从已完成轮次的最后一条消息分支',
-@@ -191,6 +207,22 @@ export const en = {
+@@ -178,6 +194,22 @@ export const en = {
    'message.turnProcess.subagents.other': '{count} subagents',
    'message.turnProcess.thoughtForAWhile': 'Thought for a while',
    'message.turnProcess.separator': ' · ',
@@ -731,79 +657,76 @@ index 6c30b99396..413a8ff697 100644
    }
  }
 diff --git a/packages/client/ui-chat/src/client/stores.ts b/packages/client/ui-chat/src/client/stores.ts
-index be2c411f7b..05e52ca1e1 100644
+index afb99e2f5d..773a7b89d9 100644
 --- a/packages/client/ui-chat/src/client/stores.ts
 +++ b/packages/client/ui-chat/src/client/stores.ts
-@@ -35,13 +35,13 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
-     init: (): ChatStoreState => ({ selection: null, turnProcesses: [] }),
+@@ -32,13 +32,13 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
+   return defineStore({
+     init: (): ChatStoreState => ({ turnProcesses: [] }),
      actions: {
-       select: (draft, target: SelectionTarget | null) => { draft.selection = target },
 +      // DSH-FORK(brand): a close is recorded, not deleted. Deleting it would
 +      // return the Turn to its default, so a reader could never fold a running
 +      // Turn. EXIT: upstream gives the folded process row a content-derived
 +      // label.
-       setTurnProcessOpen: (draft, turn, generation, open) => {
+       setTurnProcessOpen: (draft, turn, answerStep, open) => {
          const index = draft.turnProcesses.findIndex(entry => entry.turn === turn)
 -        if (!open) {
 -          if (index >= 0) draft.turnProcesses.splice(index, 1)
 -          return
 -        }
--        const next = { turn, generation } satisfies TurnProcessViewEntry
-+        const next = { turn, generation, open } satisfies TurnProcessViewEntry
+-        const next = { turn, answerStep } satisfies TurnProcessViewEntry
++        const next = { turn, answerStep, open } satisfies TurnProcessViewEntry
          if (index < 0) draft.turnProcesses.push(next)
          else draft.turnProcesses[index] = next
        },
 diff --git a/packages/client/ui-chat/tests/chat-store.client.spec.ts b/packages/client/ui-chat/tests/chat-store.client.spec.ts
-index e0f09bfda1..ee5fb73ccb 100644
+index fb0f330821..757164ee28 100644
 --- a/packages/client/ui-chat/tests/chat-store.client.spec.ts
 +++ b/packages/client/ui-chat/tests/chat-store.client.spec.ts
-@@ -24,26 +24,31 @@ describe('createChatStore', () => {
-     expect(second.store.getSnapshot().selection).toBeNull()
-   })
+@@ -2,26 +2,28 @@ import { describe, expect, it } from 'vitest'
+ import { createChatStore } from '../src/client/stores.ts'
  
--  it('stores only manually expanded Turn-process generations', () => {
-+  it('records the reader choice for one Turn-process generation', () => {
+ describe('createChatStore', () => {
+-  it('stores only manually expanded Turn-process answers', () => {
++  it('records the reader choice for one Turn-process answer', () => {
      const store = createChatStore().create()
-     store.actions.setTurnProcessOpen(2, '2|3', true)
--    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, generation: '2|3' }])
-+    expect(store.store.getSnapshot().turnProcesses)
-+      .toEqual([{ turn: 2, generation: '2|3', open: true }])
+     store.actions.setTurnProcessOpen(2, 3, true)
+-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 3 }])
++    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 3, open: true }])
  
-     store.actions.setTurnProcessOpen(2, '2|4', true)
--    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, generation: '2|4' }])
-+    expect(store.store.getSnapshot().turnProcesses)
-+      .toEqual([{ turn: 2, generation: '2|4', open: true }])
+     store.actions.setTurnProcessOpen(2, 4, true)
+-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4 }])
++    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4, open: true }])
  
 +    // A close is a choice too: a running Turn defaults open, so only an
 +    // explicit false can distinguish "the reader folded this" from "no opinion".
-     store.actions.setTurnProcessOpen(2, '2|4', false)
+     store.actions.setTurnProcessOpen(2, 4, false)
 -    expect(store.store.getSnapshot().turnProcesses).toEqual([])
-+    expect(store.store.getSnapshot().turnProcesses)
-+      .toEqual([{ turn: 2, generation: '2|4', open: false }])
++    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4, open: false }])
    })
  
 -  it('closes only the requested Turn-process entry', () => {
 +  it('keeps each Turn-process choice independent', () => {
      const store = createChatStore().create()
-     store.actions.setTurnProcessOpen(2, '2|3', true)
--    store.actions.setTurnProcessOpen(3, '3|4', true)
-+    store.actions.setTurnProcessOpen(3, '3|4', false)
+     store.actions.setTurnProcessOpen(2, 3, true)
+-    store.actions.setTurnProcessOpen(3, 4, true)
++    store.actions.setTurnProcessOpen(3, 4, false)
  
--    store.actions.setTurnProcessOpen(2, '2|3', false)
--    store.actions.setTurnProcessOpen(9, '9|10', false)
+-    store.actions.setTurnProcessOpen(2, 3, false)
+-    store.actions.setTurnProcessOpen(9, 10, false)
 -
--    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 3, generation: '3|4' }])
+-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 3, answerStep: 4 }])
 +    expect(store.store.getSnapshot().turnProcesses).toEqual([
-+      { turn: 2, generation: '2|3', open: true },
-+      { turn: 3, generation: '3|4', open: false },
++      { turn: 2, answerStep: 3, open: true },
++      { turn: 3, answerStep: 4, open: false },
 +    ])
    })
  })
 diff --git a/packages/client/ui-chat/tests/chat-view.client.spec.tsx b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
-index 9ebacea1de..0495143c65 100644
+index c724bf7ba6..d6d7c5a17b 100644
 --- a/packages/client/ui-chat/tests/chat-view.client.spec.tsx
 +++ b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
-@@ -169,6 +169,14 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode
+@@ -179,6 +179,14 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode
    callTime: seq * 1_000 - 500,
    content: [], isError: false, subCalls: [],
  })
@@ -818,7 +741,7 @@ index 9ebacea1de..0495143c65 100644
  const runningCall = (callId: string, name = 'bash'): RunningToolCall => ({
    callId, name, argsRaw: `{"command":"cmd-${callId}"}`, turn: 2, step: 1, time: 1_000, subCalls: [],
  })
-@@ -1255,7 +1263,7 @@ describe('ChatView', () => {
+@@ -1359,7 +1367,7 @@ describe('ChatView', () => {
        turnEnds: new Map([[1, 6]]),
      })
      const view = render(<h.ChatView {...h.props} />)
@@ -827,7 +750,7 @@ index 9ebacea1de..0495143c65 100644
      expect(toggle.getAttribute('aria-expanded')).toBe('false')
      expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
      expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
-@@ -1286,7 +1294,7 @@ describe('ChatView', () => {
+@@ -1390,7 +1398,7 @@ describe('ChatView', () => {
      act(() => { h.set({
        nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
      }) })
@@ -836,7 +759,7 @@ index 9ebacea1de..0495143c65 100644
      expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
      expect(members[0]?.getAttribute('hidden')).toBeNull()
    })
-@@ -1421,7 +1429,7 @@ describe('ChatView', () => {
+@@ -1534,7 +1542,7 @@ describe('ChatView', () => {
      expect(answer?.hasAttribute('data-turn-process-answer')).toBe(false)
    })
  
@@ -845,7 +768,7 @@ index 9ebacea1de..0495143c65 100644
      const process = assistant(2, 'inspect', 1, 1)
      const h = makeHarness({
        nodes: [user(1, 'question'), process],
-@@ -1429,8 +1437,12 @@ describe('ChatView', () => {
+@@ -1542,8 +1550,12 @@ describe('ChatView', () => {
        running: true,
      })
      const view = render(<h.ChatView {...h.props} />)
@@ -859,7 +782,7 @@ index 9ebacea1de..0495143c65 100644
  
      act(() => {
        h.set({
-@@ -1445,6 +1457,73 @@ describe('ChatView', () => {
+@@ -1558,6 +1570,73 @@ describe('ChatView', () => {
      expect(processRow.getAttribute('hidden')).toBe('until-found')
    })
  
@@ -933,7 +856,7 @@ index 9ebacea1de..0495143c65 100644
    it('switches completed Turns between the persisted Normal and Compact modes', () => {
      const process = assistant(2, 'inspect', 1, 1)
      const h = makeHarness({
-@@ -1532,6 +1611,85 @@ describe('ChatView', () => {
+@@ -1645,6 +1724,85 @@ describe('ChatView', () => {
      expect(view.getByLabelText('回到底部')).toBeTruthy()
    })
  

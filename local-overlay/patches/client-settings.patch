@@ -1,44 +1,23 @@
 diff --git a/packages/client/ui-settings-general/package.json b/packages/client/ui-settings-general/package.json
-index 33dda0fa3e..42733e0cfc 100644
+index f884624c13..7a965dba72 100644
 --- a/packages/client/ui-settings-general/package.json
 +++ b/packages/client/ui-settings-general/package.json
-@@ -47,6 +47,7 @@
+@@ -43,6 +43,7 @@
    },
    "license": "MIT",
    "dependencies": {
 +    "@deepseek-ai/dsh-util-values": "workspace:^",
-     "@deepseek-ai/schemastery": "workspace:^",
-     "clsx": "^2.0.0"
+     "@deepseek-ai/schemastery": "workspace:^"
    },
-@@ -54,22 +55,23 @@
-     "@deepseek-ai/cordis": "workspace:^"
-   },
-   "devDependencies": {
-+    "@deepseek-ai/cordis": "workspace:^",
-     "@deepseek-ai/dsh-api-remotes": "workspace:^",
-     "@deepseek-ai/dsh-client-connection": "workspace:^",
-     "@deepseek-ai/dsh-client-locale": "workspace:^",
-     "@deepseek-ai/dsh-client-store": "workspace:^",
-     "@deepseek-ai/dsh-client-test-runtime": "workspace:^",
-     "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
-+    "@deepseek-ai/dsh-client-ui-renderer": "workspace:^",
-+    "@deepseek-ai/dsh-client-ui-session": "workspace:^",
-     "@deepseek-ai/dsh-client-ui-settings": "workspace:^",
-     "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
+   "peerDependencies": {
+@@ -63,6 +64,7 @@
      "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-     "@deepseek-ai/dsh-invariants": "workspace:^",
--    "@deepseek-ai/cordis": "workspace:^",
-+    "@deepseek-ai/dsh-settings": "workspace:^",
+     "@deepseek-ai/dsh-remote-mock": "workspace:^",
+     "@deepseek-ai/dsh-settings": "workspace:^",
 +    "@deepseek-ai/dsh-util-values": "workspace:^",
      "@types/react": "~18.3.1",
--    "react": "^18.2.0",
--    "@deepseek-ai/dsh-client-ui-renderer": "workspace:^",
--    "@deepseek-ai/dsh-client-ui-session": "workspace:^",
--    "@deepseek-ai/dsh-settings": "workspace:^"
-+    "react": "^18.2.0"
-   },
-   "files": [
-     "lib/index.js",
+     "clsx": "^2.0.0",
+     "react": "^18.2.0"
 diff --git a/packages/client/ui-settings-general/src/client/index.ts b/packages/client/ui-settings-general/src/client/index.ts
 index c8962ec009..7c51caca12 100644
 --- a/packages/client/ui-settings-general/src/client/index.ts
@@ -71,13 +50,13 @@ index c8962ec009..7c51caca12 100644
 +  }, AdvancedSection))
  }
 diff --git a/packages/client/ui-settings-general/src/client/locales.ts b/packages/client/ui-settings-general/src/client/locales.ts
-index c40d7f78af..4ae1d8cba6 100644
+index f03bee9680..494f650dd1 100644
 --- a/packages/client/ui-settings-general/src/client/locales.ts
 +++ b/packages/client/ui-settings-general/src/client/locales.ts
 @@ -14,6 +14,8 @@ export const zh = {
    'connection.connected': '连接成功',
    'connection.reconnect': '连接异常，点击立即重连',
-   'connection.restart': '连接中，点击立即重连',
+   'connection.restart': '连接中断，正在自动重试，点击立即重连',
 +  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
 +  'advanced.nav': '高级设置',
  } satisfies Record<string, string>
@@ -86,61 +65,66 @@ index c40d7f78af..4ae1d8cba6 100644
 @@ -33,4 +35,5 @@ export const en = {
    'connection.connected': 'Connected',
    'connection.reconnect': 'Disconnected, reconnect now',
-   'connection.restart': 'Connecting, restart now',
+   'connection.restart': 'Reconnecting automatically, reconnect now',
 +  'advanced.nav': 'Advanced',
  } satisfies Record<SettingsKey, string>
 diff --git a/packages/client/ui-settings-general/tests/apply.client.spec.ts b/packages/client/ui-settings-general/tests/apply.client.spec.ts
-index 8a0c742e43..f25b4ab888 100644
+index 10380d26d9..bc5976421b 100644
 --- a/packages/client/ui-settings-general/tests/apply.client.spec.ts
 +++ b/packages/client/ui-settings-general/tests/apply.client.spec.ts
-@@ -113,8 +113,10 @@ describe('ui-settings-general apply', () => {
-     await Promise.resolve()
-     for (const [name, component] of SEATS) {
-       expect(after.slots.entries(name)[0]!.component).toBe(component)
--      // The self-inflicted ledger notifications hit the duplicate guard.
--      expect(after.slots.entries(name)).toHaveLength(1)
-+      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
-+      // The self-inflicted ledger notifications hit the duplicate guard. The
-+      // section seat carries two: General, then this fork's Advanced section.
-+      expect(after.slots.entries(name)).toHaveLength(name === 'settings.section' ? 2 : 1)
-     }
-     await vi.waitFor(() => {
-       expect(after.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
-@@ -150,7 +152,7 @@ describe('ui-settings-general apply', () => {
+@@ -15,6 +15,8 @@ import { LOCALE_SETTINGS_NAMESPACE, LocaleSettingsSchema } from '@deepseek-ai/ds
+ import { inject } from '../src/client/index.ts'
+ import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+ import { GeneralSection } from '../src/client/GeneralSection.tsx'
++// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
++import { AdvancedSection } from '../src/client/AdvancedSection.tsx'
+ import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
+ import type { SettingsDocumentActionInjected } from '../src/client/SettingsDocumentAction.tsx'
+ 
+@@ -77,7 +79,11 @@ function actionInjectedOf(c: TestClient): SettingsDocumentActionInjected {
+ 
+ function expectSeated(c: TestClient): void {
+   for (const [name, component] of SEATS) {
+-    expect(ownEntries(c, name).map(entry => entry.component)).toEqual([component])
++    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
++    // The section seat carries two rows for this plugin: General, then this
++    // fork's Advanced section.
++    const expected = name === 'settings.section' ? [component, AdvancedSection] : [component]
++    expect(ownEntries(c, name).map(entry => entry.component)).toEqual(expected)
+   }
+ }
+ 
+@@ -149,7 +155,9 @@ describe('ui-settings-general apply', () => {
      // subscription), not re-registration.
      SEATS.forEach(([name], i) => {
-       expect(b.slots.getVersion(name)).toBe(zhVersions[i]!)
--      expect(b.slots.entries(name)).toHaveLength(1)
-+      expect(b.slots.entries(name)).toHaveLength(name === 'settings.section' ? 2 : 1)
+       expect(c.ctx.slots.getVersion(name)).toBe(zhVersions[i]!)
+-      expect(ownEntries(c, name)).toHaveLength(1)
++      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
++      // The section seat carries two of this plugin's rows: General, then Advanced.
++      expect(ownEntries(c, name)).toHaveLength(name === 'settings.section' ? 2 : 1)
      })
-     expect(resolveSlotLabel(generalEntry(b.slots)!.options.label)).toBe('General')
-     b.locale.setLocale('zh')
+     expect(generalLabel(c)).toBe('General')
+     await vi.waitFor(() => {
 diff --git a/packages/client/ui-settings-general/tests/shell.client.spec.ts b/packages/client/ui-settings-general/tests/shell.client.spec.ts
-index 8e33a75a10..0b222fe907 100644
+index 24ca33b895..8b49838b9d 100644
 --- a/packages/client/ui-settings-general/tests/shell.client.spec.ts
 +++ b/packages/client/ui-settings-general/tests/shell.client.spec.ts
-@@ -96,7 +96,10 @@ describe('ui-settings apply', () => {
-     // This package registers the General section itself; every other section
-     // arrives from a feature registrant.
-     const GENERAL = { id: 'general', order: 0, label: 'general.nav' }
--    expect(sections.getSnapshot()).toEqual([GENERAL])
-+    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
-+    // This fork registers Advanced here too, at the far end of the order.
-+    const ADVANCED = { id: 'advanced', order: 100, label: 'advanced.nav' }
-+    expect(sections.getSnapshot()).toEqual([GENERAL, ADVANCED])
-     b.slots.register({ name: 'settings.section', id: 'z', order: 20, label: 'Z' } as never, () => null)
-     // No order and no label: both projection defaults apply.
-     b.slots.register({ name: 'settings.section', id: 'a' } as never, () => null)
-@@ -105,6 +108,7 @@ describe('ui-settings apply', () => {
-       GENERAL,
-       { id: 'a', order: 0, label: '' },
-       { id: 'z', order: 20, label: 'Z' },
-+      ADVANCED,
-     ])
-     // Snapshot identity is stable until the ledger moves (uSES contract).
-     expect(sections.getSnapshot()).toBe(rows)
+@@ -39,7 +39,12 @@ const CHILD_NAMES = Object.keys(CHILD_SPECS) as Array<keyof typeof CHILD_SPECS>
+  * ui-settings-models, ui-settings-plugins, and ui-agent-preset. A plugin adding
+  * a section changes this list.
+  */
+-const PRODUCT_SECTIONS: readonly string[] = ['general', 'models', 'plugins', 'agent-presets']
++const PRODUCT_SECTIONS: readonly string[] = [
++  'general', 'models', 'plugins', 'agent-presets',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
++  // This fork registers its own Advanced section last (order 100).
++  'advanced',
++]
+ /** Onboarding steps the web-app roster registers, in coordinator order; both come from ui-settings-models. */
+ const PRODUCT_ONBOARDING: readonly { id: string; order: number }[] = [
+   { id: 'welcome-notice', order: -100 },
 diff --git a/packages/client/ui-settings-general/tsconfig.json b/packages/client/ui-settings-general/tsconfig.json
-index f72ed7ef99..5cb20dd104 100644
+index a0984445cd..9a2b896da8 100644
 --- a/packages/client/ui-settings-general/tsconfig.json
 +++ b/packages/client/ui-settings-general/tsconfig.json
 @@ -8,6 +8,9 @@

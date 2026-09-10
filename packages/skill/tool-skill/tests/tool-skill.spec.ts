@@ -1154,7 +1154,7 @@ describe('user-explicit invocation injection', () => {
       return { ctx, agent }
     }
 
-    const invocationBodies = (session: Session): string[] => session.events
+    const invocationBodies = (session: Session): string[] => session.ownEvents()
       .filter((event): event is Extract<SessionEvent, { type: 'user/message' }> =>
         event.type === 'user/message' && event.data.source.kind === 'skill-invocation')
       .map(event => JSON.stringify(event.data.content))
@@ -1185,7 +1185,7 @@ describe('user-explicit invocation injection', () => {
     it('re-injects the body after compaction prunes it from the surface', async () => {
       const { ctx, agent } = await alwaysLoadHarness({ alwaysLoadSkills: ['recovery-skill'] })
       await composePrefixForAgent(ctx, agent)
-      const initial = agent.session.events.find(event => event.type === 'user/message'
+      const initial = agent.session.ownEvents().find(event => event.type === 'user/message'
         && event.data.source.kind === 'skill-invocation')
       if (initial === undefined) throw new Error('expected an initial injection')
 
@@ -1194,7 +1194,7 @@ describe('user-explicit invocation injection', () => {
         content: [{ type: 'text', text: 'compacted history' }],
         source: { kind: 'plugin', plugin: 'compact' },
       }), {
-        surfaceOp: { op: 'replace', start: initial.seq, end: initial.seq },
+        surfaceOp: { op: 'replace', startSeq: initial.seq, endSeq: initial.seq },
         sourceEventSeqs: [initial.seq],
       })
 

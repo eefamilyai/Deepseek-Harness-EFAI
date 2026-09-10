@@ -88,6 +88,8 @@ function usageOf(event: SessionEvent): TokenUsage | undefined {
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     tokenUsage: TokenUsageState
+    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
+    tokenUsageLifetime: TokenUsageState
     contextPressure: ContextPressureState
   }
 }
@@ -108,6 +110,36 @@ const contextPressureStateSchema = z.object({
 type ContextPressureState = z.infer<typeof contextPressureStateSchema>
 
 /**
+ * Fold one usage-bearing event into the running totals (the part both usage
+ * projections share). An event that reports no usage returns the same state
+ * reference, so downstream work is zero.
+ */
+const applyUsageSample = (state: TokenUsageState, event: SessionEvent): TokenUsageState => {
+  if (event.type === 'llm/retry-started') {
+    return state.last?.turn === event.data.turn && state.last.step === event.data.step
+      ? { ...state, last: null }
+      : state
+  }
+  if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return state
+  const sample = usageOf(event)
+  if (sample === undefined) return state
+  const { turn, step } = event.data
+
+  const buckets = bucketsFrom(sample)
+  const previous = state.last !== null
+    && state.last.turn === turn
+    && state.last.step === step
+    ? state.last.buckets
+    : undefined
+  if (previous !== undefined && bucketsEqual(previous, buckets)) return state
+
+  return {
+    totals: addReplacing(state.totals, previous, buckets),
+    last: { turn, step, buckets },
+  }
+}
+
+/**
  * Token-meter's session projection unit.
  *
  * Each v2 Assistant settlement contributes the last usage sample embedded in
@@ -120,34 +152,51 @@ export const tokenUsageProjectionDefinition = {
   stateSchema: tokenUsageStateSchema,
   init: () => ({ totals: zeroBuckets(), last: null }),
   apply: (state, event) => {
-    if (event.type === 'llm/retry-started') {
-      return state.last?.turn === event.data.turn && state.last.step === event.data.step
-        ? { ...state, last: null }
-        : state
+    // DSH-FORK(kiln): a clean `compaction/end` resets this projection, which
+    // reads as the billing accrued against the CURRENT compacted conversation.
+    // For the whole-session total see `tokenUsageLifetimeProjectionDefinition`.
+    // EXIT: a provider-supplied usage projection replaces this.
+    if (event.type === 'compaction/end' && event.data.error === undefined) {
+      const t = state.totals
+      const alreadyEmpty = t.uncachedInputTokens === 0
+        && t.outputTokens === 0
+        && t.cacheReadTokens === 0
+        && t.cacheWriteTokens === 0
+      return alreadyEmpty && state.last === null
+        ? state
+        : { totals: zeroBuckets(), last: null }
     }
-    if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') {
-      return state
-    }
-    const sample = usageOf(event)
-    if (sample === undefined) return state
-    const { turn, step } = event.data
-    const usage: TokenUsage = sample
-
-    const buckets = bucketsFrom(usage)
-    const previous = state.last !== null
-      && state.last.turn === turn
-      && state.last.step === step
-      ? state.last.buckets
-      : undefined
-    if (previous !== undefined && bucketsEqual(previous, buckets)) return state
-
-    return {
-      totals: addReplacing(state.totals, previous, buckets),
-      last: { turn, step, buckets },
-    }
+    return applyUsageSample(state, event)
   },
   wire: { viewSchema: projectionSchema, view: state => state.totals },
 } satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
+
+/**
+ * Token-meter's LIFETIME usage projection unit: the same four disjoint buckets
+ * as {@link tokenUsageProjectionDefinition}, accumulated across the whole
+ * session and never zeroed by compaction. This is the "total token usage across
+ * all compactions" a session report needs.
+ *
+ * A successful compaction keeps the totals but clears the same-attempt dedup
+ * memory (`last`): compaction happens at a step boundary, and turn/step
+ * numbering can repeat in the new epoch, so a carried-over `last` could make
+ * the first post-compaction sample look like a replacement of the final
+ * pre-compaction step and wrongly subtract it. A failed compaction reports no
+ * usage and is a no-op, exactly like any other non-usage event.
+ */
+export const tokenUsageLifetimeProjectionDefinition = {
+  key: 'tokenUsageLifetime',
+  stateVersion: 1,
+  stateSchema: tokenUsageStateSchema,
+  init: () => ({ totals: zeroBuckets(), last: null }),
+  apply: (state, event) => {
+    if (event.type === 'compaction/end' && event.data.error === undefined) {
+      return state.last === null ? state : { totals: state.totals, last: null }
+    }
+    return applyUsageSample(state, event)
+  },
+  wire: { viewSchema: projectionSchema, view: state => state.totals },
+} satisfies ProjectionDefinition<'tokenUsageLifetime', TokenUsageState>
 
 /**
  * Token-meter's context-occupancy projection unit.

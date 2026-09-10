@@ -34,6 +34,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
 python/**/__pycache__/
 python/**/.pytest_cache/
 packages/**/__pycache__/
+# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: these exclusions are permanent; append at end of file only.
+# uv-managed bundled interpreter + deps (machine-specific; provisioned by uv sync)
+.venv/
+python/kiln/runtime/.venv/
 apps/web/dist/
 .artifacts/
 .dsh-build/
@@ -44,3 +48,30 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+
+# DeepSeek web credentials (token, WAF cookie, login password) — never commit
+ds_config.json
+**/ds_config.json
+.kiln_kernel_state/
+
+# Local machine recon / agent memory - never publish
+.dsh-agent-logs/
+.freebuff/
+KILN.md
+acl_scan_output.txt
+notes_output.txt
+schtasks_system_scan.tsv
+.waf-refs/
+
+
+# Runtime state that can hold live session tokens
+
+python/kiln/runtime/ds_sessions.json
+
+python/kiln/runtime/subkernels.json
+
+python/kiln/runtime/.kiln_memory/
+
+
+# Harness desktop shell: CDP discovery record, regenerated at every launch
+.cdp-target.json

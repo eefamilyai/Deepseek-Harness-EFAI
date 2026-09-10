@@ -433,7 +433,7 @@ function catalogMessage(
 function visibleInvokedSkillNames(agent: Agent): Set<string> {
   const visible = new Set(agent.session.surface.nodes)
   const names = new Set<string>()
-  for (const event of agent.session.events) {
+  for (const event of agent.session.ownEvents()) {
     if (event.type !== 'user/message' || event.data.source.kind !== 'skill-invocation') continue
     if (visible.has(event.seq)) names.add(event.data.source.name)
   }

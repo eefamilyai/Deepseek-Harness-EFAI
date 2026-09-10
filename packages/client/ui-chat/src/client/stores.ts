@@ -32,13 +32,13 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
   return defineStore({
     init: (): ChatStoreState => ({ turnProcesses: [] }),
     actions: {
+      // DSH-FORK(brand): a close is recorded, not deleted. Deleting it would
+      // return the Turn to its default, so a reader could never fold a running
+      // Turn. EXIT: upstream gives the folded process row a content-derived
+      // label.
       setTurnProcessOpen: (draft, turn, answerStep, open) => {
         const index = draft.turnProcesses.findIndex(entry => entry.turn === turn)
-        if (!open) {
-          if (index >= 0) draft.turnProcesses.splice(index, 1)
-          return
-        }
-        const next = { turn, answerStep } satisfies TurnProcessViewEntry
+        const next = { turn, answerStep, open } satisfies TurnProcessViewEntry
         if (index < 0) draft.turnProcesses.push(next)
         else draft.turnProcesses[index] = next
       },

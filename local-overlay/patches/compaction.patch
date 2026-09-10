@@ -1,18 +1,18 @@
 diff --git a/packages/compaction/command-compact/src/index.ts b/packages/compaction/command-compact/src/index.ts
-index 47657cf9b8..2d8a6adcf3 100644
+index cd31b9e0a7..3c3778240b 100644
 --- a/packages/compaction/command-compact/src/index.ts
 +++ b/packages/compaction/command-compact/src/index.ts
-@@ -4,7 +4,8 @@
-  */
+@@ -5,7 +5,8 @@
  
  import type { Context } from '@deepseek-ai/cordis'
+ import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 -import { ManualCompactionError } from '@deepseek-ai/dsh-compaction'
 +// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/compaction/compaction-basic.
 +import { ManualCompactionError, type CompactionResult } from '@deepseek-ai/dsh-compaction'
  import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
  
  export const name = 'command-compact'
-@@ -63,7 +64,7 @@ async function executeCompact(
+@@ -64,7 +65,7 @@ async function executeCompact(
      return { kind: 'error', text: USAGE }
    }
    try {
@@ -21,7 +21,7 @@ index 47657cf9b8..2d8a6adcf3 100644
      if (result === null) return { kind: 'success', text: 'No compactable history yet.' }
      return {
        kind: 'success',
-@@ -77,6 +78,26 @@ async function executeCompact(
+@@ -78,6 +79,26 @@ async function executeCompact(
    }
  }
  
@@ -49,7 +49,7 @@ index 47657cf9b8..2d8a6adcf3 100644
   * Register `/compact` for every composed human-command adapter.
   * @param ctx - context carrying the command registry and the compaction seam.
 diff --git a/packages/compaction/command-compact/tests/command-compact.spec.ts b/packages/compaction/command-compact/tests/command-compact.spec.ts
-index 97229590b7..2d17020d44 100644
+index bd312d2a99..f968b5e045 100644
 --- a/packages/compaction/command-compact/tests/command-compact.spec.ts
 +++ b/packages/compaction/command-compact/tests/command-compact.spec.ts
 @@ -101,6 +101,8 @@ async function harness(): Promise<Harness> {
@@ -61,7 +61,7 @@ index 97229590b7..2d17020d44 100644
    } as unknown as Agent
    return { ctx, compact, agent, plugin }
  }
-@@ -219,6 +221,24 @@ describe('/compact human command', () => {
+@@ -220,6 +222,24 @@ describe('/compact human command', () => {
      expect(execution.commandId).toBe(expectLastLifecycle(test, '', execution.result))
    })
  
@@ -87,7 +87,7 @@ index 97229590b7..2d17020d44 100644
      const cancelled = await harness()
      const controller = new AbortController()
 diff --git a/packages/compaction/command-compact/tests/loader-composition.spec.ts b/packages/compaction/command-compact/tests/loader-composition.spec.ts
-index 95358b0036..7959929c89 100644
+index 57367b2c7b..a77db0a198 100644
 --- a/packages/compaction/command-compact/tests/loader-composition.spec.ts
 +++ b/packages/compaction/command-compact/tests/loader-composition.spec.ts
 @@ -118,6 +118,8 @@ describe('command-compact real Loader composition', () => {
@@ -98,9 +98,9 @@ index 95358b0036..7959929c89 100644
 +      whenIdle: async () => {},
      } as unknown as Agent
      expect(context.commands.list(agent)).toContainEqual({
-       name: 'compact',
+       definitionId: '@deepseek-ai/dsh-command-compact',
 diff --git a/packages/compaction/compaction-basic/src/index.ts b/packages/compaction/compaction-basic/src/index.ts
-index dc7d7371bc..222b6416b5 100644
+index 7a6ce3daba..4037861096 100644
 --- a/packages/compaction/compaction-basic/src/index.ts
 +++ b/packages/compaction/compaction-basic/src/index.ts
 @@ -377,6 +377,12 @@ export class BasicCompactionEngine extends CompactionEngine {
@@ -117,7 +117,7 @@ index dc7d7371bc..222b6416b5 100644
              agent.session,
              this.ctx.tokenMeter.measure(agent.session),
 diff --git a/packages/compaction/compaction-basic/src/summarizer.ts b/packages/compaction/compaction-basic/src/summarizer.ts
-index e77d9ec0a0..e16c99c210 100644
+index 5fe259a756..e16c99c210 100644
 --- a/packages/compaction/compaction-basic/src/summarizer.ts
 +++ b/packages/compaction/compaction-basic/src/summarizer.ts
 @@ -1,3 +1,4 @@
@@ -186,7 +186,20 @@ index e77d9ec0a0..e16c99c210 100644
    `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
  ].join('\n')
  
-@@ -150,24 +169,42 @@ export async function summarizeWithLlm(
+@@ -76,9 +95,11 @@ const CHECKPOINT_PREAMBLE =
+  * compaction instruction is then the only novel input.
+  */
+ export interface SummarizationInput {
++  /** The conversation's own system prompt, reused for prefix-cache alignment; absent for a system-less request. */
++  readonly system?: string
+   /** The conversation's tool schemas, reused for prefix-cache alignment; absent when the request carried none. */
+   readonly tools?: readonly ToolSchema[]
+-  /** The derived system head, when present, followed by the shadowed region in surface order. */
++  /** The shadowed region, in surface order, that precedes the compaction instruction. */
+   readonly messages: readonly Message[]
+ }
+ 
+@@ -148,23 +169,42 @@ export async function summarizeWithLlm(
        source: { kind: 'plugin', plugin: 'dsh-compaction-basic' },
      }),
    ]
@@ -207,7 +220,6 @@ index e77d9ec0a0..e16c99c210 100644
      provider: target.provider,
      model: target.model,
      messages,
--    ...input.system === undefined ? {} : { system: input.system },
 -    ...input.tools === undefined ? {} : { tools: [...input.tools] },
 +    system: COMPACTION_SYSTEM,
      maxTokens: config.maxTokens,
@@ -233,7 +245,7 @@ index e77d9ec0a0..e16c99c210 100644
      throw new Error('summarization produced no text summary content')
    }
    return {
-@@ -213,12 +250,75 @@ function finishError(finish: FinishReason): Error | undefined {
+@@ -210,12 +250,75 @@ function finishError(finish: FinishReason): Error | undefined {
    }
  }
  
@@ -312,10 +324,26 @@ index e77d9ec0a0..e16c99c210 100644
 +  return fields.join(' ')
  }
 diff --git a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
-index 82eadaa71e..e1272ea31a 100644
+index bd6a48af66..7422f0a701 100644
 --- a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
 +++ b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
-@@ -1227,7 +1227,8 @@ describe('default one-shot summarizer', () => {
+@@ -1272,8 +1272,13 @@ describe('default one-shot summarizer', () => {
+     const prefix = session.deriveMessages().slice(0, system ? 3 : 2)
+     const result = await compact.compactRegion(nodes[start]!, nodes[start + 1]!, agent(session, MODEL), SIGNAL)
+ 
+-    expect(adapter.lastOptions).not.toHaveProperty('system')
+-    expect(adapter.lastOptions?.tools).toEqual(tools)
++    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/compaction/compaction-basic/src/summarizer.ts.
++    // The summarizer call replaces the conversation's own agent system
++    // prompt with a summarization-only role and withholds the replayed tool
++    // roster, so the model answers in prose instead of continuing the agent
++    // loop with a tool call. Only the message prefix is still replayed.
++    expect(adapter.lastOptions?.system ?? '').toContain('summarization engine')
++    expect(adapter.lastOptions?.tools).toBeUndefined()
+     expect(adapter.lastOptions?.messages.slice(0, -1)).toEqual(prefix)
+     expect(adapter.lastOptions?.messages.at(-1)).toMatchObject({ role: 'user' })
+     expect(result.shadowedSeqs).toEqual(nodes.slice(start, start + 2))
+@@ -1329,7 +1334,8 @@ describe('default one-shot summarizer', () => {
      expect(instruction?.type === 'text' ? instruction.text : '').toContain('## Primary Request and Intent')
    })
  
@@ -325,11 +353,11 @@ index 82eadaa71e..e1272ea31a 100644
      const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
      const tools = [{ name: 'do_thing', description: 'd', parameters: { type: 'object' } }]
      const prefix: Message = createUserMessage({
-@@ -1252,8 +1253,15 @@ describe('default one-shot summarizer', () => {
-       messages: [prefix],
+@@ -1354,8 +1360,15 @@ describe('default one-shot summarizer', () => {
+       messages: [system, prefix],
      }, agent(conversation(1), MODEL))
  
--    expect(adapter.lastOptions?.system).toBe('REPLAYED SYSTEM')
+-    expect(adapter.lastOptions).not.toHaveProperty('system')
 -    expect(adapter.lastOptions?.tools).toEqual(tools)
 +    // The conversation's own agent system prompt is replaced with a dedicated
 +    // summarizer system prompt: continuing the replayed agent role is what made
@@ -341,9 +369,9 @@ index 82eadaa71e..e1272ea31a 100644
 +    // (which yields zero text and "produced no text summary content").
 +    expect(adapter.lastOptions?.tools).toBeUndefined()
      const messages = adapter.lastOptions?.messages ?? []
-     expect(messages[0]).toEqual(prefix)
+     expect(messages.slice(0, -1)).toEqual([system, prefix])
      const last = messages.at(-1)?.content[0]
-@@ -1263,6 +1271,33 @@ describe('default one-shot summarizer', () => {
+@@ -1365,6 +1378,33 @@ describe('default one-shot summarizer', () => {
      expect(lastText).toContain('## Primary Request and Intent')
    })
  
@@ -377,15 +405,17 @@ index 82eadaa71e..e1272ea31a 100644
    it('applies the routed model policy without changing the replayed prefix', async () => {
      const { ctx, compact } = await summarizerHarness(
        [{ type: 'text', text: 'unused default summary' }],
-@@ -1301,8 +1336,10 @@ describe('default one-shot summarizer', () => {
-       provider: 'policy-summary',
+@@ -1404,7 +1444,12 @@ describe('default one-shot summarizer', () => {
        model: 'policy-summary',
        maxTokens: 222,
--      system: 'WARM SYSTEM',
      })
+-    expect(policyAdapter.lastOptions).not.toHaveProperty('system')
 +    // The dedicated summarizer system prompt replaces the replayed conversation
-+    // system prompt regardless of which routed policy selected the model.
++    // system prompt regardless of which routed policy selected the model. The
++    // replayed surface still leads with the conversation's own system message
++    // (region.ts folds it into `messages`), so only the OPTION is replaced.
 +    expect(policyAdapter.lastOptions?.system).not.toBe('WARM SYSTEM')
-     expect(policyAdapter.lastOptions?.messages[0]).toEqual(prefix)
++    expect(policyAdapter.lastOptions?.system ?? '').toContain('summarization engine')
+     expect(policyAdapter.lastOptions?.messages.slice(0, -1)).toEqual([system, prefix])
    })
  

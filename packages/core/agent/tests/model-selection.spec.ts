@@ -188,4 +188,22 @@ describe('installModelSelection()', () => {
     })
     await ctx.fiber.dispose()
   })
+
+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
+  it('adopts a scope that already declares the accessor instead of crashing on re-entry', async () => {
+    // A resume/reconnect can re-enter setup on the same agent context before the
+    // first attempt's fiber unwound; a second raw accessor declaration throws
+    // `already declared`, which failed the whole resume. The second install must
+    // be a no-op that leaves the first wiring intact.
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    const first: ModelSelectionRef = { current: { provider: 'alpha', model: 'a1' }, assembled: undefined }
+    installModelSelection(ctx, first)
+
+    const second: ModelSelectionRef = { current: { provider: 'beta', model: 'b1' }, assembled: undefined }
+    expect(() => installModelSelection(ctx, second)).not.toThrow()
+    // The original wiring still governs: the scope reads the first selection.
+    expect(ctx.modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
+    await ctx.fiber.dispose()
+  })
 })

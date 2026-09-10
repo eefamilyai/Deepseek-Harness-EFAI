@@ -1,9 +1,9 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 2634de2cdd..a1dad07a12 100644
+index 494e4f762f..1b6fbb5cdc 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -102,6 +102,10 @@
-     { "path": "./packages/client/ui-session" },
+@@ -116,6 +116,10 @@
+     { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
 -    { "path": "./apps/web" }
@@ -15,15 +15,15 @@ index 2634de2cdd..a1dad07a12 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 2d9dc3513c..e6e354e278 100644
+index c5a3f118b3..f05255abcf 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -329,6 +329,22 @@
-     { "path": "./packages/lsp/lsp" },
-     { "path": "./packages/lsp/lsp-stdio" },
+@@ -358,6 +358,22 @@
      { "path": "./packages/lsp/tool-lsp" },
--    { "path": "./apps/cli" }
-+    { "path": "./apps/cli" },
+     { "path": "./apps/cli" },
+     { "path": "./apps/desktop-host" },
+-    { "path": "./apps/desktop" }
++    { "path": "./apps/desktop" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/session/command-session-info" },
 +    { "path": "./packages/llm/llm-kiln" },
@@ -38,7 +38,7 @@ index 2d9dc3513c..e6e354e278 100644
 +    { "path": "./packages/rlm/rlm-mode" },
 +    { "path": "./packages/agent-memory/agent-memory" },
 +    { "path": "./packages/agent-memory/agent-memory-mode" },
-+    { "path": "./packages/host/sidebar-bridge" },
++    { "path": "./packages/host/sidebar-bridge" }
 +    // DSH-FORK end
    ]
  }

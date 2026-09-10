@@ -334,7 +334,7 @@ function openTerminal(ctx: Context, config: ResolvedConfig, req: IncomingMessage
     return
   }
   const stdin = handle.stdin
-  if (handle.pid === -1 || stdin === undefined) {
+  if (stdin === undefined) {
     if (ws.readyState === ws.OPEN) ws.send('\r\n[terminal failed to start: the shell did not spawn]\r\n')
     ws.close()
     return

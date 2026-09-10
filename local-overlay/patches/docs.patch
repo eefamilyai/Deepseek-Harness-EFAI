@@ -1,54 +1,54 @@
 diff --git a/docs/event-producer-consumer.md b/docs/event-producer-consumer.md
-index 0f93b10c69..6a8e62ccdc 100644
+index 31bcff64bd..8f516d221c 100644
 --- a/docs/event-producer-consumer.md
 +++ b/docs/event-producer-consumer.md
-@@ -38,9 +38,9 @@ This matrix shows which packages dispatch each harness-owned event and which pac
- | `credentials/record-updated` | `emit` | [`packages/credentials/credentials/src/types.ts:102`](../packages/credentials/credentials/src/types.ts) | [`credentials`](../packages/credentials/credentials) (`events.dispatch`) | [`authorization`](../packages/credentials/authorization) |
+@@ -40,9 +40,9 @@ This matrix shows which packages dispatch each harness-owned event and which pac
  | `credentials/reference-updated` | `emit` | [`packages/credentials/credentials/src/types.ts:90`](../packages/credentials/credentials/src/types.ts) | [`credentials`](../packages/credentials/credentials) (`events.dispatch`) | [`credentials`](../packages/credentials/credentials), `remotes` |
  | `domain/changed` | `emit` | [`packages/storage/storage-domain/src/events.ts:46`](../packages/storage/storage-domain/src/events.ts) | [`storage-domain`](../packages/storage/storage-domain) (`emit`) | [`storage-domain`](../packages/storage/storage-domain), [`workspace`](../packages/workspace/workspace), `workspace-controller` |
+ | `feedback/committed` | `parallel` | [`packages/feedback/message-feedback/src/index.ts:58`](../packages/feedback/message-feedback/src/index.ts) | [`message-feedback`](../packages/feedback/message-feedback) (`parallel`) | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) |
 -| `fs/edit-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:66`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
--| `fs/observed` | `emit` | [`packages/fs/fs/src/index.ts:76`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`emit`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`emit`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy), [`skill-filesystem`](../packages/skill/skill-filesystem) |
+-| `fs/observed` | `emit` | [`packages/fs/fs/src/index.ts:76`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`emit`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`emit`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy), [`skill-filesystem`](../packages/skill/skill-filesystem), `workspace-files` |
 -| `fs/write-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:58`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
 +| `fs/edit-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:66`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-notebook-edit`](../packages/fs/tool-notebook-edit) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
-+| `fs/observed` | `emit` | [`packages/fs/fs/src/index.ts:76`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`emit`), [`tool-notebook-edit`](../packages/fs/tool-notebook-edit) (`emit`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`emit`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy), [`skill-filesystem`](../packages/skill/skill-filesystem) |
++| `fs/observed` | `emit` | [`packages/fs/fs/src/index.ts:76`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`emit`), [`tool-notebook-edit`](../packages/fs/tool-notebook-edit) (`emit`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`emit`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy), [`skill-filesystem`](../packages/skill/skill-filesystem), `workspace-files` |
 +| `fs/write-intent` | `waterfall` | [`packages/fs/fs/src/index.ts:58`](../packages/fs/fs/src/index.ts) | [`tool-fs`](../packages/fs/tool-fs) (`waterfall`), [`tool-notebook-edit`](../packages/fs/tool-notebook-edit) (`waterfall`), [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) (`waterfall`) | [`fs-observation-policy`](../packages/fs/fs-observation-policy) |
+ | `goal/activation-changed` | `emit` | [`packages/goal/goal/src/types.ts:150`](../packages/goal/goal/src/types.ts) | [`goal`](../packages/goal/goal) (`emit`) | `remotes` |
  | `goal/changed` | `emit` | [`packages/goal/goal/src/domain.ts:114`](../packages/goal/goal/src/domain.ts) | [`goal`](../packages/goal/goal) (`emit`) | [`goal-round-driver`](../packages/goal/goal-round-driver) |
  | `llm/adapters-updated` | `emit` | [`packages/llm/llm/src/types.ts:23`](../packages/llm/llm/src/types.ts) | [`llm`](../packages/llm/llm) (`events.dispatch`) | [`acp`](../packages/acp/acp), [`llm`](../packages/llm/llm), `remotes` |
- | `llm/stream` | `waterfall` | [`packages/llm/llm/src/index.ts:67`](../packages/llm/llm/src/index.ts) | [`llm`](../packages/llm/llm) (`waterfall`) | [`agent-loop`](../packages/core/agent-loop), [`llm`](../packages/llm/llm), [`llm-replay`](../packages/test-support/llm-replay), [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy), [`session-title`](../packages/session/session-title) |
-@@ -56,14 +56,14 @@ This matrix shows which packages dispatch each harness-owned event and which pac
- | `subagent/provider-added` | `emit` | [`packages/subagent/subagent/src/index.ts:153`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`emit`) | [`subagent`](../packages/subagent/subagent), [`tool-subagent`](../packages/subagent/tool-subagent) |
- | `subagent/provider-removed` | `emit` | [`packages/subagent/subagent/src/index.ts:159`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`events.dispatch`) | [`subagent`](../packages/subagent/subagent), [`tool-subagent`](../packages/subagent/tool-subagent) |
- | `subagent/start` | `emit` | [`packages/subagent/subagent/src/index.ts:170`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`events.dispatch`) | [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`subagent`](../packages/subagent/subagent) |
--| `system-prompt/assemble` | `waterfall` | [`packages/core/system-prompt/src/index.ts:31`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`waterfall`) | [`agent`](../packages/core/agent), [`agent-presets`](../packages/preset/agent-presets), [`system-prompt`](../packages/core/system-prompt) |
-+| `system-prompt/assemble` | `waterfall` | [`packages/core/system-prompt/src/index.ts:31`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`waterfall`) | [`agent`](../packages/core/agent), [`agent-memory`](../packages/agent-memory/agent-memory), [`agent-presets`](../packages/preset/agent-presets), [`kernel-rlm-context`](../packages/kernel/kernel-rlm-context), [`system-prompt`](../packages/core/system-prompt) |
+@@ -59,14 +59,14 @@ This matrix shows which packages dispatch each harness-owned event and which pac
+ | `subagent/provider-added` | `emit` | [`packages/subagent/subagent/src/index.ts:144`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`emit`) | [`subagent`](../packages/subagent/subagent), [`tool-subagent`](../packages/subagent/tool-subagent) |
+ | `subagent/provider-removed` | `emit` | [`packages/subagent/subagent/src/index.ts:150`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`events.dispatch`) | [`subagent`](../packages/subagent/subagent), [`tool-subagent`](../packages/subagent/tool-subagent) |
+ | `subagent/start` | `emit` | [`packages/subagent/subagent/src/index.ts:161`](../packages/subagent/subagent/src/index.ts) | [`subagent`](../packages/subagent/subagent) (`events.dispatch`) | [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`subagent`](../packages/subagent/subagent) |
+-| `system-prompt/assemble` | `waterfall` | [`packages/core/system-prompt/src/index.ts:31`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`waterfall`) | [`agent`](../packages/core/agent), [`agent-presets`](../packages/preset/agent-presets), [`session-reference`](../packages/context/session-reference), [`system-prompt`](../packages/core/system-prompt) |
++| `system-prompt/assemble` | `waterfall` | [`packages/core/system-prompt/src/index.ts:31`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`waterfall`) | [`agent`](../packages/core/agent), [`agent-memory`](../packages/agent-memory/agent-memory), [`agent-presets`](../packages/preset/agent-presets), [`kernel-rlm-context`](../packages/kernel/kernel-rlm-context), [`session-reference`](../packages/context/session-reference), [`system-prompt`](../packages/core/system-prompt) |
  | `system-prompt/change` | `emit` | [`packages/core/system-prompt/src/index.ts:37`](../packages/core/system-prompt/src/index.ts) | [`system-prompt`](../packages/core/system-prompt) (`emit`) | - |
  | `tools/change` | `emit` | [`packages/core/tools/src/index.ts:199`](../packages/core/tools/src/index.ts) | [`agent-presets`](../packages/preset/agent-presets) (`emit`), [`tools`](../packages/core/tools) (`emit`) | [`tool-subagent`](../packages/subagent/tool-subagent) |
  | `tools/execute` | `waterfall` | [`packages/core/tools/src/index.ts:155`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`waterfall`) | [`session-checkpoint-policy`](../packages/session/session-checkpoint-policy), `timeout-policy` |
  | `tools/post-execute` | `waterfall` | [`packages/core/tools/src/index.ts:167`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`waterfall`) | [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`repeat-tool-reminder`](../packages/guard/repeat-tool-reminder), [`spill-policy`](../packages/spill/spill-policy), [`tool-fs-search`](../packages/fs/tool-fs-search) |
  | `tools/pre-execute` | `waterfall` | [`packages/core/tools/src/index.ts:144`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`waterfall`) | [`hooks-claude-code`](../packages/hooks/hooks-claude-code), [`hooks-codex`](../packages/hooks/hooks-codex), [`tool-jobs`](../packages/jobs/tool-jobs) |
  | `tools/ptc-dispatch-log` | `waterfall` | [`packages/core/tools/src/index.ts:181`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`waterfall`) | [`spill-policy`](../packages/spill/spill-policy) |
--| `tools/result` | `emit` | [`packages/core/tools/src/index.ts:189`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`events.dispatch`) | [`agent-instructions`](../packages/context/agent-instructions), [`subagent-in-process-driver`](../packages/subagent/subagent-in-process-driver) |
-+| `tools/result` | `emit` | [`packages/core/tools/src/index.ts:189`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`events.dispatch`) | [`agent-instructions`](../packages/context/agent-instructions), [`agent-memory`](../packages/agent-memory/agent-memory), [`subagent-in-process-driver`](../packages/subagent/subagent-in-process-driver) |
+-| `tools/result` | `emit` | [`packages/core/tools/src/index.ts:189`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`events.dispatch`) | [`agent-instructions`](../packages/context/agent-instructions), [`subagent-in-process-driver`](../packages/subagent/subagent-in-process-driver), [`tool-present`](../packages/fs/tool-present) |
++| `tools/result` | `emit` | [`packages/core/tools/src/index.ts:189`](../packages/core/tools/src/index.ts) | [`tools`](../packages/core/tools) (`events.dispatch`) | [`agent-instructions`](../packages/context/agent-instructions), [`agent-memory`](../packages/agent-memory/agent-memory), [`subagent-in-process-driver`](../packages/subagent/subagent-in-process-driver), [`tool-present`](../packages/fs/tool-present) |
  | `user-questions/request` | `waterfall` | [`packages/interaction/user-questions/src/types.ts:85`](../packages/interaction/user-questions/src/types.ts) | [`user-questions`](../packages/interaction/user-questions) (`waterfall`) | `remotes` |
- | `webserver/index-inject` | `emit` | [`packages/host/webserver/src/index.ts:34`](../packages/host/webserver/src/index.ts) | `webserver` (`emit`) | `inspector`, `modules` |
+ | `webserver/index-inject` | `emit` | [`packages/host/webserver/src/index.ts:34`](../packages/host/webserver/src/index.ts) | `webserver` (`emit`) | `connection`, `inspector`, `modules` |
  | `workflow/agent-end` | `emit` | [`packages/workflow/workflow/src/index.ts:79`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | [`tool-workflow`](../packages/workflow/tool-workflow), [`workflow`](../packages/workflow/workflow) |
 diff --git a/docs/subsystems/code-runtime.i18n.yaml b/docs/subsystems/code-runtime.i18n.yaml
-index 228ed14b56..26b3c95aaf 100644
+index 45f30b34df..d1651046ae 100644
 --- a/docs/subsystems/code-runtime.i18n.yaml
 +++ b/docs/subsystems/code-runtime.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write docs/subsystems/code-runtime.md
--code-runtime.md: 0f633df9fc657d9d80fc04df3bc8ad6fafdddcb2
--code-runtime.zh.md: 43b78ce49575741f7ae6c4e2751b63b7562fc99a
-+code-runtime.md: 25ab20bdf08f0028437ceb2c6b7355e2068f37bc
-+code-runtime.zh.md: 7587bcc92a35254957a0322cf7dec8b3b884c77d
+-code-runtime.md: 4c7fce42c363c7735d03fcb723bb5c5f1af12bb9
+-code-runtime.zh.md: f01e3bccef165a5aeb9130ac983b2e8ff63a81b0
++code-runtime.md: 87a7132794ba37c809d0722eab4dea0974111739
++code-runtime.zh.md: 108e74bedead98384c9a10e9b14a00e0e903dd7e
 diff --git a/docs/subsystems/code-runtime.md b/docs/subsystems/code-runtime.md
-index 0f633df9fc..25ab20bdf0 100644
+index 4c7fce42c3..c482c0e692 100644
 --- a/docs/subsystems/code-runtime.md
 +++ b/docs/subsystems/code-runtime.md
-@@ -188,4 +188,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
+@@ -192,4 +192,64 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
  ```
  
  Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
@@ -100,15 +100,24 @@ index 0f633df9fc..25ab20bdf0 100644
 + * @returns the bound names, in the backend's order.
 + */
 +async names(): Promise<readonly string[]>
++
++/**
++ * Whether the resolved backend currently has a cell queued or running.
++ * Returns `false` when no backend is resolvable (no usable provider), which
++ * is the correct reading for a re-entrant guard: without a backend there is
++ * nothing to deadlock against.
++ * @returns whether a cell is queued or running on the resolved backend.
++ */
++busy(): boolean
 +```
 +
 +Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)
  <!-- END GENERATED cordis-surface -->
 diff --git a/docs/subsystems/code-runtime.zh.md b/docs/subsystems/code-runtime.zh.md
-index 43b78ce495..7587bcc92a 100644
+index f01e3bccef..8f4626b447 100644
 --- a/docs/subsystems/code-runtime.zh.md
 +++ b/docs/subsystems/code-runtime.zh.md
-@@ -188,4 +188,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
+@@ -192,4 +192,64 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
  ```
  
  Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
@@ -160,27 +169,36 @@ index 43b78ce495..7587bcc92a 100644
 + * @returns the bound names, in the backend's order.
 + */
 +async names(): Promise<readonly string[]>
++
++/**
++ * Whether the resolved backend currently has a cell queued or running.
++ * Returns `false` when no backend is resolvable (no usable provider), which
++ * is the correct reading for a re-entrant guard: without a backend there is
++ * nothing to deadlock against.
++ * @returns whether a cell is queued or running on the resolved backend.
++ */
++busy(): boolean
 +```
 +
 +Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)
  <!-- END GENERATED cordis-surface -->
 diff --git a/docs/subsystems/llm-streaming.i18n.yaml b/docs/subsystems/llm-streaming.i18n.yaml
-index ea90fbb43d..73cbc82088 100644
+index 8ae88da75e..6987b0da5b 100644
 --- a/docs/subsystems/llm-streaming.i18n.yaml
 +++ b/docs/subsystems/llm-streaming.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write docs/subsystems/llm-streaming.md
--llm-streaming.md: 6867ae292d77474bcedc1466ae0ce6b1fc1c92d3
--llm-streaming.zh.md: b75e24f2e9010b4fb08c035f14bc4e91dc3971ef
-+llm-streaming.md: 592dd5ec0e819cae64708fef654c2e9529a292f2
-+llm-streaming.zh.md: 6bdac6dfe87ca55099f61be5b2b5ee6c40e73f33
+-llm-streaming.md: 77d3313b3c1a025f756e984453bd041abd7b0534
+-llm-streaming.zh.md: cac7897ab412f45bd5b5ab20c6460644f18f4ff2
++llm-streaming.md: 946ca9741a21222013b9fe2738c0ccc6338cd7ea
++llm-streaming.zh.md: c65269837c2f13ecf95aac4c550add80824b9109
 diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
-index 6867ae292d..592dd5ec0e 100644
+index 77d3313b3c..946ca9741a 100644
 --- a/docs/subsystems/llm-streaming.md
 +++ b/docs/subsystems/llm-streaming.md
-@@ -864,7 +864,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+@@ -885,7 +885,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
  
  ### `ctx.llm` — `LlmRuntime`
  
@@ -189,7 +207,7 @@ index 6867ae292d..592dd5ec0e 100644
  
  ```ts cordis-catalog
  /**
-@@ -923,6 +923,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+@@ -944,6 +944,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
   */
  async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
  
@@ -225,10 +243,10 @@ index 6867ae292d..592dd5ec0e 100644
   * Remote adapter for one draft provider interrogation.
   * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
-index b75e24f2e9..6bdac6dfe8 100644
+index cac7897ab4..c65269837c 100644
 --- a/docs/subsystems/llm-streaming.zh.md
 +++ b/docs/subsystems/llm-streaming.zh.md
-@@ -870,7 +870,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+@@ -891,7 +891,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
  
  ### `ctx.llm` — `LlmRuntime`
  
@@ -237,7 +255,7 @@ index b75e24f2e9..6bdac6dfe8 100644
  
  ```ts cordis-catalog
  /**
-@@ -929,6 +929,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+@@ -950,6 +950,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
   */
  async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
  

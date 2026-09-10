@@ -116,6 +116,8 @@ export const zh = {
   'tool.title.stopCordis': '停止 Cordis 插件',
   'tool.title.removeCordis': '移除 Cordis 插件',
   'tool.title.pwsh': 'Pwsh',
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/locale/src/locales/en.ts.
+  'tool.title.kernel': 'Python',
   'tool.title.readImage': '读取图片',
   'tool.title.grep': 'Grep',
   'tool.title.glob': 'Glob',
@@ -282,6 +284,7 @@ export const en = {
   'tool.title.stopCordis': 'Stop Cordis Plugin',
   'tool.title.removeCordis': 'Remove Cordis Plugin',
   'tool.title.pwsh': 'Pwsh',
+  'tool.title.kernel': 'Python',
   'tool.title.readImage': 'Read image',
   'tool.title.grep': 'Grep',
   'tool.title.glob': 'Glob',

@@ -228,7 +228,10 @@ export function apply(ctx: ClientContext): void {
     name: 'skills',
     order: 3,
     async candidates(session, { query, signal }) {
-      const skills = await fetchCatalog(session.sessionId)
+      // An addressed child reads its own Agent's skills, not this Session's.
+      if (sessions.subagentAddress(session.sessionId) !== undefined) return []
+      const skills = await fetchCatalog(session.sessionId).promise
+      // Superseded keystroke: the shared fetch stays warm, this caller yields.
       if (signal.aborted) return []
       const remainder = query.replace(/^skill\s*/, '')
       return skills
@@ -239,7 +242,10 @@ export function apply(ctx: ClientContext): void {
         }))
     },
     warm(session) {
-      fetchCatalog(session.sessionId).catch(() => {})
+      // Fire-and-forget scope-birth prewarm; the shared fetch reports
+      // through candidates.
+      if (sessions.subagentAddress(session.sessionId) !== undefined) return
+      fetchCatalog(session.sessionId).promise.catch(() => {})
     },
     lexicon(session) {
       return fetches.get(session.sessionId)?.settled?.map(skill => skill.name)

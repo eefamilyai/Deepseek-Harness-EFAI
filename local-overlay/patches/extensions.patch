@@ -1,8 +1,62 @@
 diff --git a/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts b/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
-index 81890bfd98..07ad25521b 100644
+index cebcefaada..5d787dc21f 100644
 --- a/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
 +++ b/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
-@@ -1527,6 +1527,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+@@ -174,7 +174,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     ],
+     replaceRisk: 'none',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.assistant-actions\', () => ctx.slots.register(\n      { name: \'conversation.chat.assistant-actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:217',
++    source: 'packages/client/ui-chat/src/client/contract/slots.ts:222',
+   },
+   {
+     key: 'conversation.chat.commandview',
+@@ -221,7 +221,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     occupants: [],
+     replaceRisk: 'none',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.commandview\', () => ctx.slots.register(\n      { name: \'conversation.chat.commandview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:205',
++    source: 'packages/client/ui-chat/src/client/contract/slots.ts:210',
+   },
+   {
+     key: 'conversation.chat.node',
+@@ -289,7 +289,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     ],
+     replaceRisk: 'shadows-shipped-ui',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.node\', () => ctx.slots.register(\n      { name: \'conversation.chat.node\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:186',
++    source: 'packages/client/ui-chat/src/client/contract/slots.ts:191',
+   },
+   {
+     key: 'conversation.chat.turnTail',
+@@ -336,7 +336,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     ],
+     replaceRisk: 'none',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.turnTail\', () => ctx.slots.register(\n      { name: \'conversation.chat.turnTail\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:211',
++    source: 'packages/client/ui-chat/src/client/contract/slots.ts:216',
+   },
+   {
+     key: 'conversation.composer',
+@@ -984,7 +984,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     ],
+     replaceRisk: 'shadows-shipped-ui',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.message.images\', () => ctx.slots.register(\n      { name: \'conversation.message.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:199',
++    source: 'packages/client/ui-chat/src/client/contract/slots.ts:204',
+   },
+   {
+     key: 'conversation.session',
+@@ -1247,6 +1247,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     slotInject: '',
+     declaredBy: 'an entry in \'conversation.session.header\' (client-ui-conversation), so it exists while that entry is mounted',
+     occupants: [
++      'client-ui-dock DockToggleHeaderAction id \'dock-toggle\'',
++      'client-ui-dock DockMenuHeaderAction id \'session-log-download\'',
+       'client-ui-open-in-app OpenInAppAction id \'open-in-app\'',
+       'session-log-export SessionLogDownloadHeaderAction id \'session-log-download\'',
+     ],
+@@ -1648,6 +1650,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
        'client-locale LanguageRow id \'language\'',
        'client-ui-chat TranscriptViewRow id \'transcript-view\'',
        'client-ui-conversation EnterBehaviorRow id \'composer-enter\'',
@@ -10,7 +64,7 @@ index 81890bfd98..07ad25521b 100644
        'client-ui-permission-presets PermissionRow id \'permission\'',
        'client-ui-theme AppearanceRow id \'appearance\'',
        'client-ui-theme FontSizeRow id \'font-size\'',
-@@ -1820,6 +1821,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+@@ -1955,6 +1958,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
      occupants: [
        'client-ui-agent-preset AgentPresetSection id \'agent-presets\'',
        'client-ui-settings-general GeneralSection id \'general\'',
@@ -19,18 +73,10 @@ index 81890bfd98..07ad25521b 100644
        'client-ui-settings-plugins PluginsSettingsSection id \'plugins\'',
      ],
 diff --git a/packages/extensions/tool-cordis/src/api-catalog.ts b/packages/extensions/tool-cordis/src/api-catalog.ts
-index c8c597a983..728e40e98a 100644
+index 54d156e221..396a4bbf37 100644
 --- a/packages/extensions/tool-cordis/src/api-catalog.ts
 +++ b/packages/extensions/tool-cordis/src/api-catalog.ts
-@@ -81,6 +81,7 @@ export interface TypeApiEntry {
- 
- /** Every harness `ctx.<key>` service, sorted by key. */
- export const SERVICE_API: readonly ServiceApiEntry[] = [
-+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the catalog is regenerated from fork-owned packages.
-   {
-     key: 'agentDefaultModel',
-     summary: 'Owns the default model selection independently of any Host or transport.',
-@@ -1094,10 +1095,41 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
+@@ -1199,10 +1199,47 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
        },
      ],
    },
@@ -63,6 +109,12 @@ index c8c597a983..728e40e98a 100644
 +        parameters: [],
 +        returns: 'the bound names, in the backend\'s order.',
 +      },
++      {
++        signature: 'busy(): boolean',
++        description: 'Whether the resolved backend currently has a cell queued or running. Returns `false` when no backend is resolvable (no usable provider), which is the correct reading for a re-entrant guard: without a backend there is nothing to deadlock against.',
++        parameters: [],
++        returns: 'whether a cell is queued or running on the resolved backend.',
++      },
 +    ],
 +  },
    {
@@ -74,7 +126,7 @@ index c8c597a983..728e40e98a 100644
      methods: [
        {
          signature: 'registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle',
-@@ -1135,6 +1167,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
+@@ -1240,6 +1277,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
          parameters: [{ name: 'settingsNs', description: 'namespace whose registered discovery serves this draft.' }, { name: 'request', description: 'the endpoint, protocol, and one-shot credential to use.' }, { name: 'signal', description: 'caller cancellation.' }],
          returns: 'the advertised models, deduplicated in endpoint order.',
        },
@@ -99,13 +151,13 @@ index c8c597a983..728e40e98a 100644
        {
          signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
          description: 'Remote adapter for one draft provider interrogation.',
-@@ -4263,6 +4313,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+@@ -4478,6 +4533,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
      name: 'JsonValue',
      declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
    },
 +  {
 +    name: 'KernelExecuteRequest',
-+    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n}',
++    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n}',
 +  },
 +  {
 +    name: 'KernelExecuteResult',
@@ -117,14 +169,14 @@ index c8c597a983..728e40e98a 100644
 +  },
 +  {
 +    name: 'KernelProvider',
-+    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n}',
++    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n    busy?(): boolean;\n}',
 +  },
    {
      name: 'KnobState',
      declaration: 'export interface KnobState {\n    preset: string | null;\n    sandbox: SandboxMode | null;\n    approval: ApprovalPolicy | null;\n}',
-@@ -4283,6 +4349,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+@@ -4498,6 +4569,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
      name: 'KvUnitDescriptor',
-     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n}',
+     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n}',
    },
 +  {
 +    name: 'LlmAccountAdder',
@@ -141,12 +193,12 @@ index c8c597a983..728e40e98a 100644
    {
      name: 'LlmAdapter',
      declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
-@@ -4345,7 +4423,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+@@ -4564,7 +4647,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
    },
    {
      name: 'LlmRuntime',
--    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
-+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortS /* …truncated — full shape in source */',
+-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions) /* …truncated — full shape in source */',
++    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async res /* …truncated — full shape in source */',
    },
    {
      name: 'LspHover',

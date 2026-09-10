@@ -1,5 +1,5 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index eaaccfcb20..1e8907ba52 100644
+index ed81fccc1f..d74695090c 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
 @@ -64,6 +64,8 @@ export const SERVICE_PAGE: Record<string, string> = {
@@ -11,7 +11,7 @@ index eaaccfcb20..1e8907ba52 100644
    commands: 'commands.md',
    compaction: 'compaction.md',
    cordisInspect: 'extensions.md',
-@@ -148,9 +150,11 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+@@ -150,9 +152,11 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
    appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
    appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
    cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -22,8 +22,8 @@ index eaaccfcb20..1e8907ba52 100644
 +  dshSettingFlag: 'not a service: boot-provided root accessor function (typeof dshSettingFlag | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
    launchEnvironment: 'not a service: launcher-provided root accessor value (LaunchEnvironmentSnapshot | undefined) — packages/util/launch-environment/README.md owns this launcher contract',
    connection: 'interface-typed (HostConnectionHandle); implementing class HostConnectionService is declared in rpc-host.ts — packages/client/connection/README.md owns the API',
-   uiRenderer: 'client-side interface-typed browser service — packages/client/ui-renderer/README.md owns the API',
-@@ -271,6 +275,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+   fileUpload: 'client-side browser upload service — packages/client/file-upload/README.md owns the API',
+@@ -281,6 +285,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmConfigurableProvider: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
@@ -33,7 +33,7 @@ index eaaccfcb20..1e8907ba52 100644
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -664,6 +671,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -700,6 +707,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-presets/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
@@ -44,10 +44,10 @@ index eaaccfcb20..1e8907ba52 100644
    ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
    ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',
 diff --git a/scripts/gen-doc-graphs.ts b/scripts/gen-doc-graphs.ts
-index 476641a581..981b7a03d3 100644
+index 6c9ee96fb9..4e7c413837 100644
 --- a/scripts/gen-doc-graphs.ts
 +++ b/scripts/gen-doc-graphs.ts
-@@ -112,10 +112,20 @@ const SERVICE_ROLES: ServiceRole[] = [
+@@ -120,10 +120,20 @@ const SERVICE_ROLES: ServiceRole[] = [
      pkg: 'llm',
      title: 'LLM adapter registry',
      mode: 'seam',
@@ -70,11 +70,11 @@ index 476641a581..981b7a03d3 100644
      key: 'deepseekLlmApiExtensions',
      pkg: 'deepseek-llm-api-extensions',
 diff --git a/scripts/gen-tool-catalog.ts b/scripts/gen-tool-catalog.ts
-index b5dea761cf..d8a6fe984e 100644
+index d8be7d7445..699718fbad 100644
 --- a/scripts/gen-tool-catalog.ts
 +++ b/scripts/gen-tool-catalog.ts
-@@ -49,6 +49,8 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
- import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
+@@ -49,6 +49,8 @@ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
+ import * as ToolPresent from '@deepseek-ai/dsh-tool-present'
  import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
  import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 +// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
@@ -91,7 +91,7 @@ index b5dea761cf..d8a6fe984e 100644
  import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
  import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
  import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
-@@ -347,6 +351,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -359,6 +363,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
    },
@@ -113,7 +113,7 @@ index b5dea761cf..d8a6fe984e 100644
    {
      pkg: '@deepseek-ai/dsh-tool-terminal',
      dir: 'tool-terminal',
-@@ -612,6 +631,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -603,6 +622,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
    },
@@ -137,7 +137,7 @@ index b5dea761cf..d8a6fe984e 100644
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
-index 3b02f00d6b..9e7b24c7d1 100644
+index 448f3be1da..903216cbda 100644
 --- a/scripts/verify-package-readme-model-experience.ts
 +++ b/scripts/verify-package-readme-model-experience.ts
 @@ -36,6 +36,12 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
@@ -166,9 +166,9 @@ index 3b02f00d6b..9e7b24c7d1 100644
 +  'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
 +  'packages/rlm/rlm-mode': { kind: 'indirect', reason: 'The row owns only the rlm.enabled setting; the engine it mounts owns the REPL prompt section and the rlm tool.' },
    'packages/code-runtime/code-runtime-worker-thread': { kind: 'indirect', reason: 'The worker backend delegates model rendering to PTC mode in dsh-tools.' },
-   'packages/code-runtime/code-runtime-python': { kind: 'indirect', reason: 'The CPython subprocess backend delegates model rendering to PTC mode in dsh-tools.' },
+   'packages/experimental/code-runtime-python': { kind: 'indirect', reason: 'Explicit source-checkout compositions delegate model rendering to PTC mode in dsh-tools.' },
    'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },
-@@ -142,6 +156,10 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+@@ -153,6 +167,10 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
    'packages/session/session-projection-cache': { kind: 'none', reason: 'The persisted cache accelerates host-side cold reads of projection state and registers nothing model-facing.' },
    'packages/session/session-stats': { kind: 'none', reason: 'The sessionStats unit folds already-logged step boundaries into a client-facing read model and registers nothing model-facing.' },
    'packages/session/session-turn-outline': { kind: 'none', reason: 'The turnOutline unit folds already-logged turn boundaries into a client-facing read model and registers nothing model-facing.' },
@@ -180,10 +180,10 @@ index 3b02f00d6b..9e7b24c7d1 100644
    'packages/session-query/session-query-sqlite': { kind: 'none', reason: 'The search backend returns hits only to callers and registers nothing model-facing.' },
    'packages/settings/settings': { kind: 'indirect', reason: 'The seam stores and resolves user settings; consumer plugins own any model-facing content fed by a value.' },
 diff --git a/tsdown.config.ts b/tsdown.config.ts
-index 5a0fcc8c78..430462aae1 100644
+index 2f24d4910e..7cad046575 100644
 --- a/tsdown.config.ts
 +++ b/tsdown.config.ts
-@@ -1,12 +1,44 @@
+@@ -1,12 +1,50 @@
 +// DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream filters manifest-less directories (upstream PR).
 +import { existsSync, readdirSync } from 'node:fs'
 +import { join } from 'node:path'
@@ -192,6 +192,12 @@ index 5a0fcc8c78..430462aae1 100644
  
 +/** Patterns for the directories the workspace build covers, one package per match. */
 +const WORKSPACE_PATTERNS = ['vendor/*', 'packages/*/*', 'apps/cli']
++
++/**
++ * The Host pass also builds the desktop shells; the Client pass selects packages
++ * that declare a browser bundle and does not cover them.
++ */
++const WORKSPACE_PATTERNS_HOST = [...WORKSPACE_PATTERNS, 'apps/desktop', 'apps/desktop-host']
 +
  function isBuildFaceClient(value: unknown): boolean {
    if (value === undefined || value === 'host') return false
@@ -228,12 +234,14 @@ index 5a0fcc8c78..430462aae1 100644
  /**
   * The ordinary workspace build consumes JavaScript emitted by the Host
   * TypeScript project and runs Typert. The Client pass selects packages that
-@@ -16,7 +48,7 @@ function isBuildFaceClient(value: unknown): boolean {
+@@ -16,9 +54,7 @@ function isBuildFaceClient(value: unknown): boolean {
  export default defineConfig(({ env }) => {
    const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
    return {
--    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
-+    workspace: WORKSPACE_PATTERNS.flatMap(workspaceDirectories),
+-    workspace: client
+-      ? ['vendor/*', 'packages/*/*', 'apps/cli']
+-      : ['vendor/*', 'packages/*/*', 'apps/cli', 'apps/desktop', 'apps/desktop-host'],
++    workspace: (client ? WORKSPACE_PATTERNS : WORKSPACE_PATTERNS_HOST).flatMap(workspaceDirectories),
      entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
      outDir: 'lib',
      format: ['esm'],

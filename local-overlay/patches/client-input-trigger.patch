@@ -1,8 +1,8 @@
 diff --git a/packages/client/ui-input-trigger/src/client/MenuView.module.css b/packages/client/ui-input-trigger/src/client/MenuView.module.css
-index 42499397b8..27c5aaa547 100644
+index cb6ff3ec3a..22560ffce8 100644
 --- a/packages/client/ui-input-trigger/src/client/MenuView.module.css
 +++ b/packages/client/ui-input-trigger/src/client/MenuView.module.css
-@@ -158,6 +158,46 @@
+@@ -192,6 +192,46 @@
    color: var(--dsw-alias-label-tertiary);
  }
  
@@ -50,15 +50,15 @@ index 42499397b8..27c5aaa547 100644
     (deepsuite Skeleton text variant: 2s color pulse; here the single
     bg-skeleton token pulses through opacity instead of a second color). */
 diff --git a/packages/client/ui-input-trigger/src/client/MenuView.tsx b/packages/client/ui-input-trigger/src/client/MenuView.tsx
-index 64be92b20a..07ec0b8ea3 100644
+index fc2bdc7cd1..4a7ecd79ed 100644
 --- a/packages/client/ui-input-trigger/src/client/MenuView.tsx
 +++ b/packages/client/ui-input-trigger/src/client/MenuView.tsx
-@@ -10,11 +10,13 @@
-  * aria-activedescendant on the listbox). A source publishing crumbs gets a
-  * breadcrumb header pinned above the scrolling list.
+@@ -12,11 +12,13 @@
+  * (a localized title), then the description right-aligned. A source publishing crumbs gets a breadcrumb
+  * header pinned above the scrolling list.
   */
--import { Fragment, useEffect, useRef, useSyncExternalStore } from 'react'
-+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
++import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
  import clsx from 'clsx'
 -import { IconChevronRightOutline14, ReferenceIcon, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
 +import { IconChevronDownOutline14, IconChevronRightOutline14, ReferenceIcon, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -69,7 +69,7 @@ index 64be92b20a..07ec0b8ea3 100644
  import type { MenuViewInjected } from './slots.ts'
  import type { MenuKey } from './locales.ts'
  
-@@ -29,6 +31,61 @@ function optionId(source: string, index: number): string {
+@@ -31,6 +33,61 @@ function optionId(source: string, index: number): string {
    return `dsh-slash-option-${source}-${index}`
  }
  
@@ -131,9 +131,9 @@ index 64be92b20a..07ec0b8ea3 100644
  /**
   * Render the candidate menu overlay entry.
   * @param props - injected face (the menu store and the pick route); `t` rides the standard locale seat.
-@@ -49,6 +106,63 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
-   // when the composer grows).
-   const maxHeight = useAnchoredMaxHeight(listRef, MAX_HEIGHT, state)
+@@ -61,6 +118,63 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
+     updateOverflowHint()
+   }, [state, maxHeight, updateOverflowHint])
    const highlight = state.open ? state.highlight : null
 +
 +  // DSH-FORK(browser): collapsible trigger-menu sections. The section holding
@@ -195,9 +195,9 @@ index 64be92b20a..07ec0b8ea3 100644
    // Focus stays in the textarea (combobox pattern), so the browser never
    // scrolls the active option into view on keyboard moves — do it here.
    useEffect(() => {
-@@ -106,83 +220,87 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
-         aria-label={t('suggestions.aria')}
+@@ -126,88 +240,105 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
          aria-activedescendant={highlight !== null ? optionId(highlight.source, highlight.index) : undefined}
+         onScroll={updateOverflowHint}
        >
 -        {state.groups.map(group => (group.status === 'ready' && group.items.length === 0)
 -          ? null
@@ -214,6 +214,9 @@ index 64be92b20a..07ec0b8ea3 100644
 +          }
 +          // Ready groups with no candidates render nothing (auto-close handles it).
 +          if (group.status === 'ready' && group.items.length === 0) return null
++          // Source names key the dictionary open-endedly: the lookup chain
++          // returns an unknown key verbatim, so an unregistered source
++          // shows its raw name — hence the cast past the typed key union.
 +          const segments = segmentsOf(group, source => t(source as MenuKey))
 +          return (
              <Fragment key={group.source}>
@@ -254,27 +257,42 @@ index 64be92b20a..07ec0b8ea3 100644
 +                            role="option"
 +                            aria-selected={active}
 +                            className={clsx(css.item, active && css.active)}
++                            // mousedown, not click: the textarea keeps focus (combobox
++                            // pattern) — preventing default stops the focus steal, and the
++                            // pick runs before any blur-driven teardown.
 +                            onMouseDown={(ev) => {
 +                              ev.preventDefault()
 +                              onPick(group.source, index)
 +                            }}
++                            // mousemove, not mouseenter: real pointer motion moves the
++                            // shared highlight; keyboard scrolling rows under a resting
++                            // pointer must not steal it back.
 +                            onMouseMove={active ? undefined : () => { onHover(group.source, index) }}
 +                          >
 +                            {item.icon !== undefined && (
 +                              <span className={css.itemIcon} aria-hidden>
-+                                <ReferenceIcon kind={item.icon} size={16} />
++                                {typeof item.icon === 'string'
++                                  ? <ReferenceIcon kind={item.icon} size={16} />
++                                  : <item.icon size={16} />}
 +                              </span>
 +                            )}
-+                            <span className={css.itemName}>{item.name}</span>
++                            <span className={css.itemName}>{item.label ?? item.name}</span>
++                            {item.label !== undefined && item.label.toLowerCase() !== item.name.toLowerCase() && (
++                              <span className={css.itemAlias}>{item.name}</span>
++                            )}
 +                            {item.description !== undefined && <span className={css.itemDescription}>{item.description}</span>}
 +                            {item.drill === true && (
 +                              <span className={css.trailing}>
++                                {/* Visual hint only: Tab drills the highlighted row (the
++                                    keyboard twin of the chevron, which owns the aria label). */}
 +                                <span className={css.drillHintText} aria-hidden>{t('drill.hint')}</span>
 +                                <kbd className={css.drillHint} aria-hidden>{t('drill.key')}</kbd>
 +                                <span
 +                                  role="button"
 +                                  aria-label={t('drill.aria')}
 +                                  className={css.drill}
++                                  // mousedown so the composer keeps focus, same as the row;
++                                  // stopPropagation keeps the row's settling pick out of it.
 +                                  onMouseDown={(ev) => {
 +                                    ev.preventDefault()
 +                                    ev.stopPropagation()
@@ -318,10 +336,15 @@ index 64be92b20a..07ec0b8ea3 100644
 -                      >
 -                        {item.icon !== undefined && (
 -                          <span className={css.itemIcon} aria-hidden>
--                            <ReferenceIcon kind={item.icon} size={16} />
+-                            {typeof item.icon === 'string'
+-                              ? <ReferenceIcon kind={item.icon} size={16} />
+-                              : <item.icon size={16} />}
 -                          </span>
 -                        )}
--                        <span className={css.itemName}>{item.name}</span>
+-                        <span className={css.itemName}>{item.label ?? item.name}</span>
+-                        {item.label !== undefined && item.label.toLowerCase() !== item.name.toLowerCase() && (
+-                          <span className={css.itemAlias}>{item.name}</span>
+-                        )}
 -                        {item.description !== undefined && <span className={css.itemDescription}>{item.description}</span>}
 -                        {item.drill === true && (
 -                          <span className={css.trailing}>
@@ -358,7 +381,7 @@ index 64be92b20a..07ec0b8ea3 100644
      </div>
    )
 diff --git a/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx b/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
-index f9912ba1f9..8062ad490d 100644
+index e2430f5670..a83a257ebc 100644
 --- a/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
 +++ b/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
 @@ -87,12 +87,20 @@ function menuShell(): HTMLElement {
@@ -384,7 +407,7 @@ index f9912ba1f9..8062ad490d 100644
  describe('MenuView', () => {
    it('renders null while closed and appears when the store opens', () => {
      const { menu, view } = mount(CLOSED)
-@@ -132,7 +140,7 @@ describe('MenuView', () => {
+@@ -152,7 +160,7 @@ describe('MenuView', () => {
      expect(screen.queryByRole('status')).toBeNull()
    })
  
@@ -393,7 +416,7 @@ index f9912ba1f9..8062ad490d 100644
      const { view } = mount(openState({
        groups: [
          { source: 'command', status: 'ready', items: [{ name: 'goal' }] },
-@@ -141,10 +149,10 @@ describe('MenuView', () => {
+@@ -161,10 +169,10 @@ describe('MenuView', () => {
          { source: 'skill', status: 'pending', items: [] },
        ],
      }))
@@ -406,7 +429,7 @@ index f9912ba1f9..8062ad490d 100644
      const { onPick } = mount(openState({
        groups: [{
          source: 'reference',
-@@ -158,8 +166,21 @@ describe('MenuView', () => {
+@@ -178,8 +186,21 @@ describe('MenuView', () => {
        highlight: { source: 'reference', index: 0 },
      }))
      expect(screen.queryByText('reference')).toBeNull()

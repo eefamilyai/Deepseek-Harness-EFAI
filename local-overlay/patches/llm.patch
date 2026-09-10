@@ -1,8 +1,8 @@
 diff --git a/packages/llm/llm/src/index.ts b/packages/llm/llm/src/index.ts
-index cdecc4c96e..268fd95b25 100644
+index 367688c0d1..4b76c43022 100644
 --- a/packages/llm/llm/src/index.ts
 +++ b/packages/llm/llm/src/index.ts
-@@ -323,6 +323,41 @@ export interface DirectoryRegistrationHandle {
+@@ -330,6 +330,41 @@ export interface DirectoryRegistrationHandle {
   * The abstract `llm` service: an adapter registry plus a streaming model-call
   * API, interceptable via the `llm/stream` waterfall.
   */
@@ -44,7 +44,7 @@ index cdecc4c96e..268fd95b25 100644
  export class LlmRuntime extends TypertRemoteService {
    private adapters = new Map<string, AdapterRegistration>()
    private directory = new Map<string, LlmConfigurableProvider>()
-@@ -330,6 +365,7 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -337,6 +372,7 @@ export class LlmRuntime extends TypertRemoteService {
      string,
      (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
    >()
@@ -52,7 +52,7 @@ index cdecc4c96e..268fd95b25 100644
  
    constructor(ctx: Context) {
      super(ctx, 'llm')
-@@ -609,6 +645,62 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -616,6 +652,62 @@ export class LlmRuntime extends TypertRemoteService {
      return models
    }
  
@@ -116,39 +116,29 @@ index cdecc4c96e..268fd95b25 100644
     * Remote adapter for one draft provider interrogation.
     * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/packages/llm/token-meter/src/index.ts b/packages/llm/token-meter/src/index.ts
-index 85742823d9..c9b07cbddb 100644
+index 2693af5913..d7cc0c283a 100644
 --- a/packages/llm/token-meter/src/index.ts
 +++ b/packages/llm/token-meter/src/index.ts
-@@ -19,7 +19,8 @@ import type {
+@@ -30,7 +30,8 @@ import type {
    TokenMeterConfig,
  } from './types.ts'
  import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 -import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
 +// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
 +import { contextPressureProjectionDefinition, tokenUsageLifetimeProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
- import { estimateContent, estimateHeader, estimateMessage, ROLE_OVERHEAD } from './estimate.ts'
+ import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
  import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
  import type { MeterSurfaceNode } from './surface-fold.ts'
-@@ -99,9 +100,14 @@ export class TokenMeter extends Service {
-     super(ctx, 'tokenMeter')
+@@ -111,6 +112,7 @@ export class TokenMeter extends Service {
      validateConfigKeys(config)
  
--    ctx.sessionProjections.register(tokenUsageProjectionDefinition)
--    ctx.sessionProjections.register(contextPressureProjectionDefinition)
--    ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
-+    // Projection registration is an optional child: compositions without the
-+    // generic registry keep the meter's standalone read shape.
-+    ctx.inject(['sessionProjections'], (projectionCtx) => {
-+      projectionCtx.sessionProjections.register(tokenUsageProjectionDefinition)
-+      projectionCtx.sessionProjections.register(tokenUsageLifetimeProjectionDefinition)
-+      projectionCtx.sessionProjections.register(contextPressureProjectionDefinition)
-+      projectionCtx.sessionProjections.register(contextBreakdownProjectionDefinition)
-+    })
+     ctx.sessionProjections.register(tokenUsageProjectionDefinition)
++    ctx.sessionProjections.register(tokenUsageLifetimeProjectionDefinition)
+     ctx.sessionProjections.register(contextPressureProjectionDefinition)
+     ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
  
-     // Readers catch up independently, while eager observation bounds ordinary
-     // read latency without creating state for sessions no consumer has read.
 diff --git a/packages/llm/token-meter/src/projection.ts b/packages/llm/token-meter/src/projection.ts
-index 5c451617e9..38c6875bd6 100644
+index 5f23d266d3..d2bd6efe41 100644
 --- a/packages/llm/token-meter/src/projection.ts
 +++ b/packages/llm/token-meter/src/projection.ts
 @@ -1,3 +1,4 @@
@@ -179,10 +169,10 @@ index 5c451617e9..38c6875bd6 100644
      contextPressure: ContextPressureProjection
      /** Heuristic system/tools/message composition of the next request. */
 diff --git a/packages/llm/token-meter/src/usage-projection.ts b/packages/llm/token-meter/src/usage-projection.ts
-index 50f336c61c..c84dd34885 100644
+index 815baff91d..dd128d271a 100644
 --- a/packages/llm/token-meter/src/usage-projection.ts
 +++ b/packages/llm/token-meter/src/usage-projection.ts
-@@ -88,6 +88,8 @@ const usageOf = (event: SessionEvent): TokenUsage | undefined =>
+@@ -88,6 +88,8 @@ function usageOf(event: SessionEvent): TokenUsage | undefined {
  declare module '@deepseek-ai/dsh-session-projection/types' {
    interface SessionProjectionStateMap {
      tokenUsage: TokenUsageState
@@ -191,23 +181,14 @@ index 50f336c61c..c84dd34885 100644
      contextPressure: ContextPressureState
    }
  }
-@@ -108,14 +110,55 @@ const contextPressureStateSchema = z.object({
+@@ -107,6 +109,36 @@ const contextPressureStateSchema = z.object({
+ 
  type ContextPressureState = z.infer<typeof contextPressureStateSchema>
  
- /**
-- * Token-meter's session projection unit.
-+ * Fold one usage-bearing event into the running totals (the part shared by
-+ * both usage projections).
-  *
-  * Usage chunks provide an early sample that survives a later request failure;
-  * an assistant message provides the final sample for the same attempt. A
-  * repeated sample replaces that attempt's earlier value instead of double
-  * counting it, while `llm/retry-started` closes the replacement slot so the
-  * retried attempt adds to the total. The single `last` slot relies on the
-- * session-log invariant that usage reports for one attempt are adjacent.
-+ * session-log invariant that usage reports for one attempt are adjacent. An
-+ * event that reports no usage returns the same state reference (zero
-+ * downstream work).
++/**
++ * Fold one usage-bearing event into the running totals (the part both usage
++ * projections share). An event that reports no usage returns the same state
++ * reference, so downstream work is zero.
 + */
 +const applyUsageSample = (state: TokenUsageState, event: SessionEvent): TokenUsageState => {
 +  if (event.type === 'llm/retry-started') {
@@ -215,19 +196,12 @@ index 50f336c61c..c84dd34885 100644
 +      ? { ...state, last: null }
 +      : state
 +  }
-+  let turn: number
-+  let step: number
-+  let usage: TokenUsage
-+  if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
-+    ;({ turn, step } = event.data)
-+    usage = event.data.chunk.usage
-+  } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
-+    ;({ turn, step, usage } = event.data)
-+  } else {
-+    return state
-+  }
++  if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return state
++  const sample = usageOf(event)
++  if (sample === undefined) return state
++  const { turn, step } = event.data
 +
-+  const buckets = bucketsFrom(usage)
++  const buckets = bucketsFrom(sample)
 +  const previous = state.last !== null
 +    && state.last.turn === turn
 +    && state.last.step === step
@@ -241,15 +215,10 @@ index 50f336c61c..c84dd34885 100644
 +  }
 +}
 +
-+/**
-+ * Token-meter's session projection unit: provider usage SINCE the last
-+ * successful compaction. Resets on a clean `compaction/end` so the value reads
-+ * as the billing accrued against the current compacted conversation. For the
-+ * whole-session total see {@link tokenUsageLifetimeProjectionDefinition}.
-  */
- export const tokenUsageProjectionDefinition = {
-   key: 'tokenUsage',
-@@ -123,38 +166,52 @@ export const tokenUsageProjectionDefinition = {
+ /**
+  * Token-meter's session projection unit.
+  *
+@@ -120,35 +152,52 @@ export const tokenUsageProjectionDefinition = {
    stateSchema: tokenUsageStateSchema,
    init: () => ({ totals: zeroBuckets(), last: null }),
    apply: (state, event) => {
@@ -257,11 +226,30 @@ index 50f336c61c..c84dd34885 100644
 -      return state.last?.turn === event.data.turn && state.last.step === event.data.step
 -        ? { ...state, last: null }
 -        : state
-+    // A compaction that ends with no `error` is a successful /compact (manual)
-+    // or the auto-compaction retry the harness runs on context overflow: the
-+    // conversation has been rewritten, so the user asked for these cumulative
-+    // totals to reset. The surface itself is already replaced by the
-+    // compaction's summary message; this only zeroes the durable billing fold.
+-    }
+-    if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') {
+-      return state
+-    }
+-    const sample = usageOf(event)
+-    if (sample === undefined) return state
+-    const { turn, step } = event.data
+-    const usage: TokenUsage = sample
+-
+-    const buckets = bucketsFrom(usage)
+-    const previous = state.last !== null
+-      && state.last.turn === turn
+-      && state.last.step === step
+-      ? state.last.buckets
+-      : undefined
+-    if (previous !== undefined && bucketsEqual(previous, buckets)) return state
+-
+-    return {
+-      totals: addReplacing(state.totals, previous, buckets),
+-      last: { turn, step, buckets },
++    // DSH-FORK(kiln): a clean `compaction/end` resets this projection, which
++    // reads as the billing accrued against the CURRENT compacted conversation.
++    // For the whole-session total see `tokenUsageLifetimeProjectionDefinition`.
++    // EXIT: a provider-supplied usage projection replaces this.
 +    if (event.type === 'compaction/end' && event.data.error === undefined) {
 +      const t = state.totals
 +      const alreadyEmpty = t.uncachedInputTokens === 0
@@ -272,38 +260,16 @@ index 50f336c61c..c84dd34885 100644
 +        ? state
 +        : { totals: zeroBuckets(), last: null }
      }
--    let turn: number
--    let step: number
--    let usage: TokenUsage
--    if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
--      ;({ turn, step } = event.data)
--      usage = event.data.chunk.usage
--    } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
--      ;({ turn, step, usage } = event.data)
--    } else {
--      return state
--    }
--
--    const buckets = bucketsFrom(usage)
--    const previous = state.last !== null
--      && state.last.turn === turn
--      && state.last.step === step
--      ? state.last.buckets
--      : undefined
--    if (previous !== undefined && bucketsEqual(previous, buckets)) return state
 +    return applyUsageSample(state, event)
-+  },
-+  wire: { viewSchema: projectionSchema, view: state => state.totals },
-+} satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
+   },
+   wire: { viewSchema: projectionSchema, view: state => state.totals },
+ } satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
  
--    return {
--      totals: addReplacing(state.totals, previous, buckets),
--      last: { turn, step, buckets },
 +/**
 + * Token-meter's LIFETIME usage projection unit: the same four disjoint buckets
 + * as {@link tokenUsageProjectionDefinition}, accumulated across the whole
-+ * session and never zeroed by compaction. This is the "total token usage
-+ * across all compactions" the session report needs.
++ * session and never zeroed by compaction. This is the "total token usage across
++ * all compactions" a session report needs.
 + *
 + * A successful compaction keeps the totals but clears the same-attempt dedup
 + * memory (`last`): compaction happens at a step boundary, and turn/step
@@ -320,20 +286,20 @@ index 50f336c61c..c84dd34885 100644
 +  apply: (state, event) => {
 +    if (event.type === 'compaction/end' && event.data.error === undefined) {
 +      return state.last === null ? state : { totals: state.totals, last: null }
-     }
++    }
 +    return applyUsageSample(state, event)
-   },
-   wire: { viewSchema: projectionSchema, view: state => state.totals },
--} satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
++  },
++  wire: { viewSchema: projectionSchema, view: state => state.totals },
 +} satisfies ProjectionDefinition<'tokenUsageLifetime', TokenUsageState>
- 
++
  /**
   * Token-meter's context-occupancy projection unit.
+  *
 diff --git a/packages/llm/token-meter/tests/token-usage-projection.spec.ts b/packages/llm/token-meter/tests/token-usage-projection.spec.ts
-index f9ce9015e3..66aa16f633 100644
+index d57d3f8d11..aed90e0e27 100644
 --- a/packages/llm/token-meter/tests/token-usage-projection.spec.ts
 +++ b/packages/llm/token-meter/tests/token-usage-projection.spec.ts
-@@ -283,6 +283,40 @@ describe('tokenUsage session projection', () => {
+@@ -287,6 +287,40 @@ describe('tokenUsage session projection', () => {
      })
    })
  
@@ -341,8 +307,8 @@ index f9ce9015e3..66aa16f633 100644
 +  it('resets cumulative billing when a compaction ends successfully', async () => {
 +    const { ctx, session } = await harness()
 +    startStep(session, 1, 1)
-+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
-+    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
++    usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
 +
 +    session.append('compaction/start', { compactionId: CompactionId('reset-compact'), turn: null })
 +    session.append('compaction/end', { compactionId: CompactionId('reset-compact'), turn: null })
@@ -353,8 +319,8 @@ index f9ce9015e3..66aa16f633 100644
 +  it('does not reset cumulative billing when a compaction fails', async () => {
 +    const { ctx, session } = await harness()
 +    startStep(session, 1, 1)
-+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
-+    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
++    usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
 +
 +    session.append('compaction/start', { compactionId: CompactionId('failed-compact'), turn: null })
 +    session.append('compaction/end', {
@@ -374,7 +340,7 @@ index f9ce9015e3..66aa16f633 100644
    it('unregisters with the token-meter fiber and restores from a JSON checkpoint', async () => {
      const { ctx, session, meterFiber } = await harness()
      startStep(session, 1, 1)
-@@ -304,6 +338,123 @@ describe('tokenUsage session projection', () => {
+@@ -308,6 +342,123 @@ describe('tokenUsage session projection', () => {
    })
  })
  
@@ -393,8 +359,8 @@ index f9ce9015e3..66aa16f633 100644
 +  it('keeps accumulating across a successful compaction while tokenUsage resets', async () => {
 +    const { ctx, session } = await harness()
 +    startStep(session, 1, 1)
-+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
-+    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
++    usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
 +
 +    session.append('compaction/start', { compactionId: CompactionId('lifetime-compact'), turn: null })
 +    session.append('compaction/end', { compactionId: CompactionId('lifetime-compact'), turn: null })
@@ -410,8 +376,8 @@ index f9ce9015e3..66aa16f633 100644
 +
 +    // A turn after the compaction adds to both counters.
 +    startStep(session, 2, 1)
-+    const next = usageChunk(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
-+    finalUsage(session, { inputTokens: 8, outputTokens: 2 }, 2, 1, [next])
++    usageChunk(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
++    finalUsage(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
 +    expect(projected(ctx, session)).toEqual({
 +      uncachedInputTokens: 8,
 +      outputTokens: 2,
@@ -433,16 +399,16 @@ index f9ce9015e3..66aa16f633 100644
 +    // pre-compaction step and wrongly subtract it.
 +    const { ctx, session } = await harness()
 +    startStep(session, 1, 1)
-+    const first = usageChunk(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
-+    finalUsage(session, { inputTokens: 10, outputTokens: 2 }, 1, 1, [first])
++    usageChunk(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
++    finalUsage(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
 +
 +    session.append('compaction/start', { compactionId: CompactionId('renumber-compact'), turn: null })
 +    session.append('compaction/end', { compactionId: CompactionId('renumber-compact'), turn: null })
 +
 +    // Same turn/step as before the compaction, different buckets.
 +    startStep(session, 1, 1)
-+    const second = usageChunk(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
-+    finalUsage(session, { inputTokens: 7, outputTokens: 4 }, 1, 1, [second])
++    usageChunk(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
++    finalUsage(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
 +
 +    expect(projectedLifetime(ctx, session)).toEqual({
 +      uncachedInputTokens: 17,
@@ -455,8 +421,8 @@ index f9ce9015e3..66aa16f633 100644
 +  it('does not reset when a compaction fails', async () => {
 +    const { ctx, session } = await harness()
 +    startStep(session, 1, 1)
-+    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
-+    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
++    usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
 +
 +    session.append('compaction/start', { compactionId: CompactionId('failed-lifetime'), turn: null })
 +    session.append('compaction/end', {

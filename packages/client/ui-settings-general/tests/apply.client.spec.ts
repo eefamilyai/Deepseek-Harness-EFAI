@@ -15,6 +15,8 @@ import { LOCALE_SETTINGS_NAMESPACE, LocaleSettingsSchema } from '@deepseek-ai/ds
 import { inject } from '../src/client/index.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
+// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
+import { AdvancedSection } from '../src/client/AdvancedSection.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from '../src/client/SettingsDocumentAction.tsx'
 
@@ -77,7 +79,11 @@ function actionInjectedOf(c: TestClient): SettingsDocumentActionInjected {
 
 function expectSeated(c: TestClient): void {
   for (const [name, component] of SEATS) {
-    expect(ownEntries(c, name).map(entry => entry.component)).toEqual([component])
+    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
+    // The section seat carries two rows for this plugin: General, then this
+    // fork's Advanced section.
+    const expected = name === 'settings.section' ? [component, AdvancedSection] : [component]
+    expect(ownEntries(c, name).map(entry => entry.component)).toEqual(expected)
   }
 }
 
@@ -149,7 +155,9 @@ describe('ui-settings-general apply', () => {
     // subscription), not re-registration.
     SEATS.forEach(([name], i) => {
       expect(c.ctx.slots.getVersion(name)).toBe(zhVersions[i]!)
-      expect(ownEntries(c, name)).toHaveLength(1)
+      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
+      // The section seat carries two of this plugin's rows: General, then Advanced.
+      expect(ownEntries(c, name)).toHaveLength(name === 'settings.section' ? 2 : 1)
     })
     expect(generalLabel(c)).toBe('General')
     await vi.waitFor(() => {

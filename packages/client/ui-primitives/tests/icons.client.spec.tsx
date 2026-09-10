@@ -17,8 +17,9 @@ const icons = Object.fromEntries(
 const iconNames = Object.keys(icons)
 
 describe('ic_ds_ icon set', () => {
-  it('exports the full icon set (46 deepsuite + 21 figma extracts + eleven product glyphs outside those sets)', () => {
-    expect(iconNames.length).toBe(78)
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/icons/index.tsx.
+  it('exports the full icon set (46 deepsuite + 21 figma extracts + twelve product glyphs outside those sets)', () => {
+    expect(iconNames.length).toBe(79)
     // The composer menu's own glyphs, pinned by name.
     expect(iconNames).toEqual(expect.arrayContaining(['IconPlanOutline14', 'IconCompactOutline16', 'IconShieldOutline16']))
   })

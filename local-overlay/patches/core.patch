@@ -1,9 +1,9 @@
 diff --git a/packages/core/agent/src/model-selection.ts b/packages/core/agent/src/model-selection.ts
-index 2cb7e4468f..885cfde9aa 100644
+index 172423afc0..6dcda26b1e 100644
 --- a/packages/core/agent/src/model-selection.ts
 +++ b/packages/core/agent/src/model-selection.ts
-@@ -37,6 +37,19 @@ export interface ModelSelectionRef {
-  * @returns Disposer for both scoped waterfall listeners.
+@@ -74,6 +74,19 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
+  * @returns Disposer for all scoped waterfall listeners.
   */
  export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
 +  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream lands the accessor re-entrancy guard (upstream PR).
@@ -22,8 +22,8 @@ index 2cb7e4468f..885cfde9aa 100644
    const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
      const selected = selection.current
      const assembled = await next()
-@@ -73,3 +86,16 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
-     disposeRequest()
+@@ -125,3 +138,16 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
+     disposeNotice()
    }
  }
 +
@@ -40,22 +40,15 @@ index 2cb7e4468f..885cfde9aa 100644
 +  }
 +}
 diff --git a/packages/core/agent/tests/model-selection.spec.ts b/packages/core/agent/tests/model-selection.spec.ts
-index 3e61060cd6..ac34afe913 100644
+index 5bddd71019..68f56778e4 100644
 --- a/packages/core/agent/tests/model-selection.spec.ts
 +++ b/packages/core/agent/tests/model-selection.spec.ts
-@@ -8,6 +8,7 @@ import {
-   type ModelSelectionRef,
- } from '../src/index.ts'
- import { ReasoningEffortId, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
-+// DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
- 
- describe('installModelSelection()', () => {
-   it('snapshots prompt variables and request routing together, then disposes both listeners', async () => {
-@@ -58,4 +59,21 @@ describe('installModelSelection()', () => {
-     )).resolves.toBe(seed)
+@@ -188,4 +188,22 @@ describe('installModelSelection()', () => {
+     })
      await ctx.fiber.dispose()
    })
 +
++  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
 +  it('adopts a scope that already declares the accessor instead of crashing on re-entry', async () => {
 +    // A resume/reconnect can re-enter setup on the same agent context before the
 +    // first attempt's fiber unwound; a second raw accessor declaration throws
@@ -74,10 +67,10 @@ index 3e61060cd6..ac34afe913 100644
 +  })
  })
 diff --git a/packages/core/system-prompt/src/index.ts b/packages/core/system-prompt/src/index.ts
-index fba1b51f50..4a2a999bf7 100644
+index d83cc4d216..f2de2b4891 100644
 --- a/packages/core/system-prompt/src/index.ts
 +++ b/packages/core/system-prompt/src/index.ts
-@@ -409,7 +409,8 @@ export class SystemPrompt extends Service {
+@@ -420,7 +420,8 @@ export class SystemPrompt extends Service {
        this.section({
          name: 'harness:identity',
          order: this.getSectionOrder('HARNESS_IDENTITY'),
@@ -88,30 +81,35 @@ index fba1b51f50..4a2a999bf7 100644
      }
      this.section({
 diff --git a/packages/core/system-prompt/tests/system-prompt.spec.ts b/packages/core/system-prompt/tests/system-prompt.spec.ts
-index 9818c50f94..68d316d45b 100644
+index 8e60ea2bec..4eccb31152 100644
 --- a/packages/core/system-prompt/tests/system-prompt.spec.ts
 +++ b/packages/core/system-prompt/tests/system-prompt.spec.ts
 @@ -12,7 +12,8 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
   * their own sections; the built-ins' behavior is pinned by its own describe.
   */
- const BUILT_IN = ['harness:identity', 'deployment:persona']
+ const BUILT_IN = ['harness:identity', 'deployment:persona-prefix', 'deployment:persona-suffix']
 -const IDENTITY = 'You are an AI agent powered by DeepSeek Harness.'
 +// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/core/system-prompt/src/index.ts.
 +const IDENTITY = 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. In large directories, use optimised ways to search through the directory.'
  const SECTION_ORDER_NAMES = [
-   'HARNESS_IDENTITY', 'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA',
+   'HARNESS_IDENTITY', 'DEPLOYMENT_PERSONA_PREFIX',
    'PLAN_POLICY', 'TEAM_POLICY', 'PTC_ONLY', 'FILE_REFERENCE', 'TOOL_BASH',
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-index 38d68deae6..2ed267a249 100644
+index c26ef3ff28..c593d831d8 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
 +++ b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-@@ -29,7 +29,8 @@ describe('gen-tool-catalog collectToolCatalog', () => {
+@@ -29,8 +29,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
        'ask_user_question', 'bash', 'bash', 'cordis_define', 'cordis_inspect_list',
        'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop',
-       'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'followup_task', 'get_goal', 'glob', 'grep',
+       'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
 -      'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
+-      'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'present', 'pwsh', 'pwsh', 'ralph',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
 +      'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'kernel',
-       'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'pwsh', 'pwsh', 'ralph',
-       'read', 'read_image', 'report', 'run_code', 'schedule_create', 'schedule_delete',
++      'list_agents', 'list_agents', 'list_subagent_models', 'lsp',
++      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
++      'notebook_edit',
++      'present', 'pwsh', 'pwsh', 'ralph',
+       'read', 'read_image', 'run_code', 'schedule_create', 'schedule_delete',
        'schedule_list', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
+       'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',

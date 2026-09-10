@@ -1,8 +1,8 @@
 diff --git a/packages/preset/agent-presets/presets/cordis/agent.cordis.yml b/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
-index 96cd7e6b09..099e57a79d 100644
+index 940a7c9e48..ae6d5212f1 100644
 --- a/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
-@@ -44,11 +44,33 @@
+@@ -45,11 +45,33 @@
  # host-plane too.
  - id: tool-bash
    name: '@deepseek-ai/dsh-tool-bash'
@@ -38,7 +38,7 @@ index 96cd7e6b09..099e57a79d 100644
  
  # ── filesystem ──────────────────────────────────────────────────────────────
  
-@@ -56,9 +78,11 @@
+@@ -57,9 +79,11 @@
  # they need no realm. The `fs` service and its policy stay in the host.
  - id: tool-fs
    name: '@deepseek-ai/dsh-tool-fs'
@@ -50,7 +50,7 @@ index 96cd7e6b09..099e57a79d 100644
    config:
      sampleOverCapGlobResults: false
  
-@@ -73,6 +97,7 @@
+@@ -74,6 +98,7 @@
  # chooses is whether its agent can collect and stop background work at all.
  - id: tool-jobs
    name: '@deepseek-ai/dsh-tool-jobs'
@@ -59,22 +59,22 @@ index 96cd7e6b09..099e57a79d 100644
  # ── goals ───────────────────────────────────────────────────────────────────
  
 diff --git a/packages/preset/agent-presets/presets/minimal/agent.cordis.yml b/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
-index 0e1f2b0f5d..0e1f94f1c5 100644
+index 549a73cba2..969d5fad55 100644
 --- a/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
 @@ -2,9 +2,18 @@
  #
  # The persona is the complete system prompt, so global identity, Web orientation,
  # tool guidance, and later assembly listeners cannot add prompt text. Runtime
--# context snapshots are suppressed for this preset, and the model composes only
--# the persistent shell (`bash` on POSIX, `pwsh` on win32) and
--# `str_replace_editor`. Context compaction is absent.
+-# context snapshots are suppressed for this preset, and the model receives only
+-# the persistent shell (`bash` on POSIX, `pwsh` on win32). Context compaction is
+-# absent.
 +# context snapshots are suppressed for this preset. Context compaction is absent.
 +#
-+# Which two tools the model composes depends on the `kernel.enabled` setting
++# Which single tool the model composes depends on the `kernel.enabled` setting
 +# (see the standard preset's header for the switch itself). ON: `kernel` alone.
-+# OFF: the persistent shell (`bash` on POSIX, `pwsh` on win32) and
-+# `str_replace_editor`, exactly as this preset shipped.
++# OFF: the persistent shell (`bash` on POSIX, `pwsh` on win32), exactly as this
++# preset ships upstream.
 +#
 +# A complete persona suppresses the kernel's own prompt section along with every
 +# other one, so under the switch the model gets the tool's description and
@@ -122,23 +122,23 @@ index 0e1f2b0f5d..0e1f94f1c5 100644
      - id: terminal-bash
        name: '@deepseek-ai/dsh-terminal-bash'
 -      disabled: !!js process.platform === 'win32'
-+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++      disabled: !!js process.platform === 'win32' || !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
        config:
          timeoutMs: 300000
  
      - id: persistent-bash
        name: '@deepseek-ai/dsh-tool-bash-persistent'
 -      disabled: !!js process.platform === 'win32'
-+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++      disabled: !!js process.platform === 'win32' || !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
        config:
          timeoutMs: 300000
          description: |-
-@@ -50,14 +82,14 @@
+@@ -49,14 +81,14 @@
  
      - id: terminal-pwsh
        name: '@deepseek-ai/dsh-terminal-bash'
 -      disabled: !!js process.platform !== 'win32'
-+      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++      disabled: !!js process.platform !== 'win32' || !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
        config:
          shellDialect: pwsh
          timeoutMs: 300000
@@ -146,28 +146,15 @@ index 0e1f2b0f5d..0e1f94f1c5 100644
      - id: persistent-pwsh
        name: '@deepseek-ai/dsh-tool-pwsh-persistent'
 -      disabled: !!js process.platform !== 'win32'
-+      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++      disabled: !!js process.platform !== 'win32' || !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
        config:
          timeoutMs: 300000
          description: |-
-@@ -79,10 +111,12 @@
-   config:
-     - id: fs-local
-       name: '@deepseek-ai/dsh-fs-local'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-       config:
-         cwd: !!js process.env.DSH_CWD ?? process.cwd()
- 
-     - id: str-replace-editor
-       name: '@deepseek-ai/dsh-tool-str-replace-editor'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-       config:
-         maxOutputChars: 16000
 diff --git a/packages/preset/agent-presets/presets/ptc/agent.cordis.yml b/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
-index 3c8406f907..2d2a12e169 100644
+index 7773f64109..afc5d3d451 100644
 --- a/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
-@@ -50,11 +50,33 @@
+@@ -51,11 +51,33 @@
  # host-plane too.
  - id: tool-bash
    name: '@deepseek-ai/dsh-tool-bash'
@@ -203,7 +190,7 @@ index 3c8406f907..2d2a12e169 100644
  
  # ── filesystem ──────────────────────────────────────────────────────────────
  
-@@ -62,9 +84,11 @@
+@@ -63,9 +85,11 @@
  # they need no realm. The `fs` service and its policy stay in the host.
  - id: tool-fs
    name: '@deepseek-ai/dsh-tool-fs'
@@ -215,7 +202,7 @@ index 3c8406f907..2d2a12e169 100644
    config:
      sampleOverCapGlobResults: false
  
-@@ -79,6 +103,7 @@
+@@ -80,6 +104,7 @@
  # chooses is whether its agent can collect and stop background work at all.
  - id: tool-jobs
    name: '@deepseek-ai/dsh-tool-jobs'
@@ -224,7 +211,7 @@ index 3c8406f907..2d2a12e169 100644
  # ── skills ──────────────────────────────────────────────────────────────────
  
 diff --git a/packages/preset/agent-presets/presets/standard/agent.cordis.yml b/packages/preset/agent-presets/presets/standard/agent.cordis.yml
-index 3916d6bf3e..efab2500f0 100644
+index b2c26e4ef0..a31103bb98 100644
 --- a/packages/preset/agent-presets/presets/standard/agent.cordis.yml
 +++ b/packages/preset/agent-presets/presets/standard/agent.cordis.yml
 @@ -1,5 +1,30 @@
@@ -258,7 +245,7 @@ index 3916d6bf3e..efab2500f0 100644
  # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
  # standing scope; every session naming it joins by scope parentage, so the
  # tools and prompt sections registered here cover each joined agent while a
-@@ -41,23 +66,53 @@
+@@ -42,23 +67,53 @@
  # never reached the model's shell at all. Both shell tools consume the host
  # registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
  # host-plane too.
@@ -314,7 +301,7 @@ index 3916d6bf3e..efab2500f0 100644
    config:
      sampleOverCapGlobResults: false
  
-@@ -70,8 +125,13 @@
+@@ -71,8 +126,13 @@
  # unavailable" while these controls sat in the catalog. The registry is keyed by
  # owning agent anyway, so one host instance serves every session. What a preset
  # chooses is whether its agent can collect and stop background work at all.

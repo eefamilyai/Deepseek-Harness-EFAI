@@ -11,18 +11,18 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 | | commit | note |
 |---|---|---|
 | Fork point | `47f943859b` | upstream merge of PR #2519, 2026-08-13 |
-| Upstream base | `dd6322d604` | `release/dsh-0.1.2-alpha.3`; recorded in `local-overlay/BASE` |
-| Upstream merge landed | `9b262d25ec` | 26 conflicts resolved; recorded in `.merge-port/MERGE-STATUS.md` |
-| `master` | merge + 86 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider |
-| `upstream/master` | `aa8262ec09` | 1,800 commits the fork does not have |
+| Upstream base | `c291e7961a` | `deepseek-harness` 0.1.5-rc.2; recorded in `local-overlay/BASE` |
+| Upstream merge landed | `0dfe2170bd` | `deepseek-harness` 0.1.5-rc.2 absorbed into the fork |
+| `master` | merge + 87 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider |
+| `upstream/master` | `c291e7961a` | 1,934 commits past the previous base |
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against the base `dd6322d604`, `master`'s surface is **311 paths** (187 added, 123 modified, 1 deleted). `local-overlay/INVENTORY.md` enumerates them from the rules that produce the patches, so it cannot drift from the tree the way a hand-written table can.
+Measured against the base `c291e7961a`, `master`'s surface is **347 paths** (221 added, 125 modified, 1 deleted). `local-overlay/INVENTORY.md` enumerates them from the rules that produce the patches, so it cannot drift from the tree the way a hand-written table can.
 
-Of the 187 added paths, all are free: upstream owns no path among them, so they merge untouched, forever.
+Of the 221 added paths, all are free: upstream owns no path among them, so they merge untouched, forever.
 
-The 123 modified paths are the entire cost of every future update. Each one is a file two projects edit, and `git merge` has no way to know which side is intentional. Nine of them are files a generator owns, which is why they are excluded from the patches and regenerated instead.
+The 125 modified paths are the entire cost of every future update: 121 are patched, and the other four are files a generator owns, which is why they are excluded from the patches and regenerated instead.
 
 The seam below is grouped by why each edit exists, because the fix differs per group.
 
@@ -34,23 +34,39 @@ Paths upstream does not and will not use. Nothing here can conflict.
 
 | What | Path | Size |
 |---|---|---|
-| Python kernel seam | `packages/kernel/{kernel,kernel-mode,kernel-python,tool-kernel}` | 20 files |
-| Kiln LLM provider registry | `packages/llm/llm-kiln` | 9 files |
-| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 25 files |
-| Browser capability | `packages/web/web-browser` | 9 files |
-| Sidebar host bridge | `packages/host/sidebar-bridge` | 3 files |
-| Client dock and effects | `packages/client/{ui-dock,ui-effects}` | 25 files |
-| Session-info command | `packages/session/command-session-info` | 4 files |
+| Python kernel seam | `packages/kernel/**` | 33 files |
+| Kiln LLM provider registry | `packages/llm/llm-kiln` | 10 files |
+| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 33 files |
+| Browser capability | `packages/web/web-browser` | 10 files |
+| Sidebar host bridge | `packages/host/sidebar-bridge` | 4 files |
+| Client dock and effects | `packages/client/{ui-dock,ui-effects}` | 31 files |
+| Session-info command | `packages/session/command-session-info` | 5 files |
 | Launchers | `start.cmd`, `start.sh` | 2 files |
 | Publish script | `upload_to_git.py` | 1 file |
 | This document | `HARNESS-EDITS.md` | 1 file |
 | Merge record | `.merge-port/**` | 2 files |
-| Agent Notes | `.agents/notes/implemented/**` | 3 files |
+| Agent Notes the fork added | `.agents/notes/implemented/**` | 7 files |
 | Windows desktop browser shell — Electron `BaseWindow` with `WebContentsView` panes, a native toolbar, and a CDP endpoint that `python/kiln/runtime/browser_tools.py` attaches to | `desktop/harness-desktop` | 8 files |
+
+Each **Size** is the count of tracked files under that row's path. The 221 fork-owned
+paths are the authority and this table is a curated selection of them, not a partition:
+`local-overlay/INVENTORY.md` lists the remaining 74: 29 under `local-overlay/` (the tooling and the
+patch set), 11 in `packages/agent-memory/`, 11 in `packages/rlm/`, 8 in `packages/client/` (ui-chat,
+ui-primitives, ui-settings-general, ui-theme, ui-tool), 6 in `packages/fs/tool-notebook-edit/`, 5 under
+`.agents/`, 3 loose root files, and 1 in `packages/session/`. The Agent Notes row is the exception to
+the section's premise — upstream owns `.agents/notes/implemented/` and keeps 926 files there; the 7
+counted are the notes the fork added, and they are fork-owned because upstream holds no file by those
+names.
 
 `desktop/` is deliberately outside every workspace glob in `pnpm-workspace.yaml` and every tsconfig, so the shell is never a pnpm workspace member, never enters the lockfile, and never enters a project reference. Adding it under `apps/` would make it all three.
 
 ### Tier 2 — the seam with upstream (the whole problem)
+
+The seam is **121 patched paths**. The groups below are a curated selection — the
+edits worth understanding before a merge — not an exhaustive partition of those 121;
+`local-overlay/INVENTORY.md` is the authority for the full list, and
+`local-overlay/rules.json` for which group owns which path. The counts in each heading
+are that group's curated membership as written, not the total for its subsystem.
 
 Grouped by why the edit exists, because the fix differs per group.
 
@@ -144,9 +160,9 @@ Seven concrete failures, in order of cost.
 
 **4. Generated files are committed as hand edits.** T2-F is ~260 lines that a generator rewrites in seconds. Every one is a conflict that costs review attention and yields a catalog describing the previous release.
 
-**5. No marker convention was ever applied.** The convention is stated in Rule 2, and `grep -rn "DSH-FORK"` returns nothing: not one Tier-2 edit carries a marker. `grep` cannot produce the inventory, and neither can a diff against `upstream/master`, because upstream/master is 1,800 commits away and the diff is mostly upstream's own churn. The mod layer's `local-overlay/INVENTORY.md` supplies the inventory mechanically; the markers remain unapplied and are what makes a conflict legible while it is being resolved.
+**5. The marker convention is applied unevenly.** Rule 2 asks every Tier-2 edit to carry a marker, and most do: `DSH-FORK` appears in 98 of the 121 patched paths. The other 23 are invisible to the convention — 5 `package.json` manifests, 5 `README.i18n.yaml` pairs, one package `tsconfig.json`, the two generated catalog modules (`packages/extensions/tool-cordis/src/api-catalog.ts`, `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`), one client spec, one client component (`packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`), and 7 `docs/` pages. The 121st path, `.claude/skills`, is the one file the fork deletes — a symlink, with nowhere to put a comment. Markers are not the inventory and cannot be: a grep cannot tell a marked edit from a marked file, and a diff against `upstream/master` is mostly upstream's own churn across 1,934 commits. `local-overlay/INVENTORY.md` supplies the inventory mechanically. What the 22 unmarked files cost is legibility at conflict time: the resolver reads a hunk with no stated reason and no exit condition.
 
-**6. Some new packages have no READMEs.** `packages/agent-memory`, `packages/kernel`, and `packages/rlm` have none, which `doc-sync` requires. The features are undocumented, so nobody can tell whether a merge broke them, and the gate that would say so is already red.
+**6. `doc-sync` is red on five gates, and the fork packages cause two of them.** `pnpm run test:docs` fails on markdown links, translation pairing, markdown wrap, package README summaries, and the documentation-standard spec. The fork's own packages drive the last two: the sixteen READMEs under `packages/kernel/*`, `packages/rlm/*`, `packages/agent-memory/*`, `packages/client/{ui-dock,ui-effects}`, `packages/host/sidebar-bridge`, `packages/web/web-browser`, `packages/llm/llm-kiln`, `packages/fs/tool-notebook-edit`, and `packages/session/command-session-info` were written without the `## Summary` heading the summaries gate requires, and without the frontmatter, Table of Contents, and Dev Note the doc-standard spec requires. The documentation exists and is detailed; it does not carry the skeleton the gates read. The cost is that five red gates hide a sixth real breakage: a genuine documentation regression lands on top of known failures and nobody notices.
 
 **7. Credentials rest on `.gitignore` alone.** `ds_config.json` holds a DeepSeek login password and WAF cookie; `python/kiln/runtime/ds_sessions.json` holds live session tokens. Both are ignored, and nothing matching them is tracked today — verified. But `.gitignore` is one `git add -f`, one path rename, or one merge that drops the rule away from a published secret.
 
@@ -335,15 +351,17 @@ If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go u
 ## Known fork debt
 
 Recorded at the v1.0.0 commit. These are real, verified gaps, not suspicions. The fork's
-own gate (`pnpm run verify-fork-overlay`), both package-README gates, and `typecheck` are
-green; `pnpm run doc-sync` is **not**, and this is why.
+own gate (`pnpm run verify-fork-overlay`) and `typecheck` are green; five `doc-sync` gates are
+**not**, and this is why.
 
-| Gate | State | Cause | Exit |
-|---|---|---|---|
-| `verify-translation-pairing` | FAIL | 16 fork package READMEs added at v1.0.0 have no `README.zh.md` pair, plus 4 pre-existing fork docs (`local-overlay/README.md`, `desktop/harness-desktop/README.md`, the kernel-rlm-context Agent Note, `python/kiln/runtime/README.ds-direct.md`). No fork package group has ever carried a bilingual pair. | Add the Chinese counterparts and record each pair, or move fork packages out of the bilingual scope. |
-| `verify-subsystem-pages` | FAIL | `packages/agent-memory`, `packages/kernel`, and `packages/rlm` are fork package groups with no group `README.md` declaring subsystem ownership. | Add one group README per fork package group. |
-| `verify-md-wrap` | FAIL | Pre-existing, on the generated `docs/tool-catalog.md`. | Regenerate or widen the wrap exemption for generated catalogs. |
-| 8 catalog/site gates | FAIL | Downstream of the above and of the fork's added packages not yet appearing in the generated catalogs. | Regenerate the catalogs once the README set is stable. |
+| Gate | Cause | Exit |
+|---|---|---|
+| `verify-translation-pairing` | 16 fork package READMEs have no `README.zh.md` pair, plus 4 fork docs (`python/kiln/runtime/README.ds-direct.md`, `README.vision-tools.md`, `local-overlay/README.md`, `HARNESS-EDITS.md`); 4 existing pairs are also out of sync (`README.md`, `docs/event-producer-consumer.md`, `docs/tool-catalog.md`). | Add counterparts; re-record with `--write`. |
+| `verify-package-readme-summaries` and the doc-standard spec | 16 fork package READMEs lack the `## Summary`, `## Table of Contents`, and Dev Note sections and YAML frontmatter the gates read. | Add the skeleton to all 16. |
+| `verify-md-links` | Seven broken relative links: four `docs/user/**` links to `README.md#run-from-source` / `#run` anchors that do not exist, one `.agents/notes/` `.zh.md` sibling, one `packages/host/sidebar-bridge/README.md` → `src/invariant.ts`. | Fix or repoint. |
+| `verify-md-wrap` | Hard-wrapped prose in the generated `docs/tool-catalog.md`. | Regenerate, or widen the wrap exemption. |
+
+`verify-subsystem-pages` also fails — `packages/agent-memory`, `packages/kernel`, and `packages/rlm` are fork package groups with no group `README.md` — but it is not one of the five `doc-sync` gates.
 
 The debt is documentation-shaped: it does not affect the built harness, the mod layer, or
 any runtime behavior. It is recorded here so a future release does not mistake a red
@@ -363,7 +381,7 @@ Then, in order:
 
 **2. Resolve the lockfile by regenerating.** Rule 7. Do not read that conflict either.
 
-**3. Resolve real conflicts using the register.** Every remaining conflict should show a `DSH-FORK` marker on the fork's side. If it does not, the edit was never registered — find out what it was for, and either register it or drop it.
+**3. Resolve real conflicts using the register.** A remaining conflict usually shows a `DSH-FORK` marker on the fork's side, carrying the reason and the `EXIT:` clause. A hunk with no marker is not proof that the edit was never registered — 22 patched paths carry none — so look the path up in `local-overlay/INVENTORY.md` before concluding anything about it.
 
 **4. Re-apply the mod and regenerate everything.**
 
@@ -414,10 +432,10 @@ Ordered by how much each removes from the next merge.
 
 1. **Send rows 9 and 10 upstream.** Two self-contained bug fixes; they leave the fork's diff entirely when they land.
 2. **Create `packages/bundle/efai-kernel` and `packages/bundle/efai-kiln`.** Moves rows 1 and 2 — six files, the highest-churn upstream files the fork touches — to Tier 1.
-3. **Add `DSH-FORK` markers to the Tier-2 files.** The mod layer supplies the inventory without them; the markers are what make each individual conflict legible while it is being resolved, and no Tier-2 edit carries one today.
+3. **Finish the marker pass.** 22 of the 121 patched paths still carry no marker; the list and the grouping are in failure 5. Each one is a conflict a resolver reads cold.
 4. **Fence the `tsconfig.host.json` / `tsconfig.client.json` entries.** Ten minutes; turns eight conflicts into two.
 5. **`pnpm-lock.yaml merge=ours`.** One line; removes the single largest conflicting file.
 6. **Move `ds_config.json` and `ds_sessions.json` out of the repository tree.**
-7. **Write the three missing package READMEs** — `packages/agent-memory`, `packages/kernel`, `packages/rlm`. Turns `doc-sync` back into a signal.
+7. **Give the sixteen fork package READMEs the required skeleton** — `## Summary`, `## Table of Contents`, the Dev Note section, and YAML frontmatter. Clears the package README summaries gate and the documentation-standard spec.
 8. **Wire `rebuild.mjs --check` into the push path**, so a stale patch set cannot reach a branch.
 9. **Move row 11** — the system-prompt identity string — to a prompt section registered by a fork plugin. One line today, but it is in a file upstream edits often.

@@ -358,6 +358,22 @@
     { "path": "./packages/lsp/tool-lsp" },
     { "path": "./apps/cli" },
     { "path": "./apps/desktop-host" },
-    { "path": "./apps/desktop" }
+    { "path": "./apps/desktop" },
+    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
+    { "path": "./packages/session/command-session-info" },
+    { "path": "./packages/llm/llm-kiln" },
+    { "path": "./packages/fs/tool-notebook-edit" },
+    { "path": "./packages/web/web-browser" },
+    { "path": "./packages/kernel/kernel" },
+    { "path": "./packages/kernel/kernel-mode" },
+    { "path": "./packages/kernel/kernel-python" },
+    { "path": "./packages/kernel/tool-kernel" },
+    { "path": "./packages/kernel/kernel-rlm-context" },
+    { "path": "./packages/rlm/rlm" },
+    { "path": "./packages/rlm/rlm-mode" },
+    { "path": "./packages/agent-memory/agent-memory" },
+    { "path": "./packages/agent-memory/agent-memory-mode" },
+    { "path": "./packages/host/sidebar-bridge" }
+    // DSH-FORK end
   ]
 }
