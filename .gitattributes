@@ -16,3 +16,7 @@
 # Pairing records are generated from the three confirmed owner-blob pairs.
 # The worktree-local installer registers the fail-closed driver command.
 *.i18n.yaml merge=dsh-translation-pairing
+
+# Patch data files are unified diffs: a leading '+ ' is content, not a
+# whitespace error. Exempt them from the whitespace check.
+*.patch -whitespace

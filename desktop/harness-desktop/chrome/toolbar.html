@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>DSH-TOOLBAR</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; }
+      body {
+        display: flex; align-items: center; gap: 6px; padding: 0 8px; box-sizing: border-box;
+        font: 12px "Segoe UI", system-ui, sans-serif; background: #1f2430; color: #e6e8ee;
+        user-select: none;
+      }
+      button {
+        width: 28px; height: 24px; border: 1px solid #3a4152; border-radius: 4px;
+        background: #2b3142; color: #e6e8ee; cursor: pointer; font-size: 13px;
+        line-height: 1; padding: 0;
+      }
+      button:hover { background: #363d52; }
+      button:disabled { opacity: .4; cursor: default; }
+      input {
+        flex: 1; height: 24px; box-sizing: border-box; border: 1px solid #3a4152;
+        border-radius: 4px; background: #161a23; color: #e6e8ee; padding: 0 8px; font-size: 12px;
+      }
+      input:focus { outline: 1px solid #4c7dff; }
+      #status { opacity: .6; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <button id="back" title="Back">&#8592;</button>
+    <button id="forward" title="Forward">&#8594;</button>
+    <button id="reload" title="Reload">&#8635;</button>
+    <input id="url" type="text" spellcheck="false" placeholder="Enter a URL and press Enter" />
+    <span id="status"></span>
+    <script src="toolbar.js"></script>
+  </body>
+</html>

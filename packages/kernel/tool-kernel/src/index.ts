@@ -184,6 +184,11 @@ export function apply(ctx: Context, config: Config): void {
       'persistent namespace. To learn every preloaded helper and how each one behaves,',
       'call `tool_help()` — with no argument it lists every tool and a one-line summary;',
       'pass a name to get its full documentation.',
+      '',
+      'Begin every cell with a single-line `#` comment stating what the script does.',
+      'That first line titles the call in the transcript, so make it a short, concrete',
+      'summary of the intent — `# Count the files under packages/`, not `# code` or a bare',
+      'restatement of the line below it. The cell body follows.',
     ].join('\n'),
   })
 
@@ -192,9 +197,10 @@ export function apply(ctx: Context, config: Config): void {
     description: 'Run Python in a persistent kernel namespace. Returns the cell\'s captured output:'
       + ' printed text plus the value of every top-level bare expression. Variables and imports'
       + ' persist across calls. Shell commands run via sh("..."); files are read and written with'
-      + ' the preloaded helpers.',
+      + ' the preloaded helpers. Start every cell with a one-line `#` comment stating what the'
+      + ' script does; that line titles the call in the transcript.',
     parameters: {
-      code: { type: 'string', required: true, description: 'The Python source to execute in the persistent namespace.' },
+      code: { type: 'string', required: true, description: 'The Python source to execute in the persistent namespace. Its first line must be a `#` comment stating what the cell does.' },
       timeoutMs: { type: 'integer', description: 'Optional per-cell timeout in milliseconds. Defaults to the configured timeoutMs and is capped by maxTimeoutMs.' },
     },
     output: {

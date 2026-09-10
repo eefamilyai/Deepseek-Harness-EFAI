@@ -66,3 +66,6 @@ python/kiln/runtime/subkernels.json
 
 python/kiln/runtime/.kiln_memory/
 
+
+# Harness desktop shell: CDP discovery record, regenerated at every launch
+.cdp-target.json

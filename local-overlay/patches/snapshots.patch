@@ -1,0 +1,26 @@
+diff --git a/snapshots/web/lifecycle-chrome/hero.expected.md b/snapshots/web/lifecycle-chrome/hero.expected.md
+index 2d9f315f43..9ff7e2aa3f 100644
+--- a/snapshots/web/lifecycle-chrome/hero.expected.md
++++ b/snapshots/web/lifecycle-chrome/hero.expected.md
+@@ -20,7 +20,7 @@
+ - button "Settings":
+   - img
+   - text: Settings
+-- text: Into the Unknown Preview
++- text: Into the Unknown
+ - button "Choose workspace":
+   - img
+   - text: workspace
+diff --git a/snapshots/web/lifecycle-chrome/plan-active.expected.md b/snapshots/web/lifecycle-chrome/plan-active.expected.md
+index 5f53d73cfd..d7a3877a1f 100644
+--- a/snapshots/web/lifecycle-chrome/plan-active.expected.md
++++ b/snapshots/web/lifecycle-chrome/plan-active.expected.md
+@@ -20,7 +20,7 @@
+ - button "Settings":
+   - img
+   - text: Settings
+-- text: Into the Unknown Preview
++- text: Into the Unknown
+ - button "Choose workspace":
+   - img
+   - text: workspace

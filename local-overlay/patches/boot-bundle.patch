@@ -1,0 +1,543 @@
+diff --git a/packages/boot/app-boot/src/index.ts b/packages/boot/app-boot/src/index.ts
+index 85e25eb641..6f325fbe29 100644
+--- a/packages/boot/app-boot/src/index.ts
++++ b/packages/boot/app-boot/src/index.ts
+@@ -24,9 +24,70 @@ declare module '@deepseek-ai/cordis' {
+   interface Context {
+     /** Harness-home path resolver available to Loader `!!js` config expressions. */
+     dshHomePath?: typeof dshHomePath
++    /** Settings-document flag reader available to Loader `!!js` config expressions. */
++    dshSettingFlag?: typeof dshSettingFlag
+   }
+ }
+ 
++/**
++ * Boot-time snapshots of the settings document, one read per resolved path.
++ *
++ * Reading once is the point, not an optimization: Loader entries evaluate their
++ * `disabled` expressions at different moments, and a document edited mid-boot
++ * would otherwise enable half a roster and disable the other half. A
++ * composition decides its shape from one consistent answer. One boot resolves
++ * one harness home, so keying by path preserves that exactly while leaving the
++ * function honest about a `$DSH_HOME` that differs between calls.
++ */
++const settingsSnapshots = new Map<string, Record<string, unknown>>()
++
++/** Read and cache `$DSH_HOME/settings.yaml`; an absent or broken document reads as empty. */
++function readSettingsDocument(): Record<string, unknown> {
++  const filename = dshHomePath('settings.yaml')
++  const cached = settingsSnapshots.get(filename)
++  if (cached !== undefined) return cached
++  let parsed: unknown
++  try {
++    parsed = yaml.load(readFileSync(filename, 'utf8'))
++  } catch {
++    // Absent, unreadable, or malformed: a composition must still boot, and it
++    // boots on the defaults its `!!js` callers pass. The settings service
++    // reports the document's real problems when it loads it for itself.
++    parsed = undefined
++  }
++  const document = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
++    ? parsed as Record<string, unknown>
++    : {}
++  settingsSnapshots.set(filename, document)
++  return document
++}
++
++/**
++ * Read one boolean from the user's settings document, for compositions whose
++ * SHAPE a setting decides.
++ *
++ * This exists for the narrow case a settings *value* cannot cover: whether a
++ * plugin is mounted at all. A tool's prompt sections, its registry entry, and
++ * its backing service come and go together with its Loader entry, so a roster
++ * chosen by a switch has to be chosen here — a plugin that mounted and then
++ * hid its own tool would leave its instructions in the system prompt,
++ * describing a tool the model cannot call.
++ *
++ * Because the read happens once at boot, a namespace using it must register
++ * with `applies: 'restart'`, which is what tells the settings UI to say so.
++ * @param path - dot-separated path into the document, e.g. `kernel.enabled`.
++ * @param fallback - the value for an absent path or a non-boolean at it.
++ * @returns the stored boolean, or `fallback`.
++ */
++export function dshSettingFlag(path: string, fallback = false): boolean {
++  let node: unknown = readSettingsDocument()
++  for (const segment of path.split('.')) {
++    if (typeof node !== 'object' || node === null || Array.isArray(node)) return fallback
++    node = (node as Record<string, unknown>)[segment]
++  }
++  return typeof node === 'boolean' ? node : fallback
++}
++
+ export {
+   composeEntries,
+   DEFAULT_PROFILE_BUNDLES,
+@@ -783,6 +844,7 @@ export async function boot(
+   try {
+     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
+     ctx.provide('dshHomePath', dshHomePath)
++    ctx.provide('dshSettingFlag', dshSettingFlag)
+     await ctx.plugin(Loader)
+     await prepare?.(ctx)
+     stage = 'plugin tree failed to load'
+diff --git a/packages/boot/app-boot/tests/app-boot.spec.ts b/packages/boot/app-boot/tests/app-boot.spec.ts
+index e5fc24aaf3..41b49f4cba 100644
+--- a/packages/boot/app-boot/tests/app-boot.spec.ts
++++ b/packages/boot/app-boot/tests/app-boot.spec.ts
+@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
+ import { Context } from '@deepseek-ai/cordis'
+ import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+ import {
+-  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot,
++  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot, dshSettingFlag,
+   FAIL_LOUD_RELEASE_TIMEOUT_MS, HARNESS_SOURCE_SECTION,
+   installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudProcess,
+ } from '../src/index.ts'
+@@ -856,3 +856,36 @@ describe('addHarnessSourceSection', () => {
+     }
+   })
+ })
++
++describe('dshSettingFlag', () => {
++  const homeWith = (document: string): string => {
++    const home = tmp()
++    writeFileSync(join(home, 'settings.yaml'), document)
++    return home
++  }
++
++  it('reads a boolean at a dotted path', () => {
++    vi.stubEnv('DSH_HOME', homeWith('kernel:\n  enabled: false\n'))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(false)
++  })
++
++  it('falls back when the path, the document, or the file is absent', () => {
++    vi.stubEnv('DSH_HOME', homeWith('other:\n  thing: 1\n'))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++    vi.stubEnv('DSH_HOME', tmp())
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++    expect(dshSettingFlag('kernel.enabled', false)).toBe(false)
++  })
++
++  it('falls back for a non-boolean value rather than coercing it', () => {
++    // A composition row turns this into a mounted-or-not decision, and
++    // `'no'` coercing to true would silently mount the opposite roster.
++    vi.stubEnv('DSH_HOME', homeWith("kernel:\n  enabled: 'no'\n"))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++  })
++
++  it('falls back when a malformed document cannot be parsed', () => {
++    vi.stubEnv('DSH_HOME', homeWith('kernel: [unclosed\n'))
++    expect(dshSettingFlag('kernel.enabled', true)).toBe(true)
++  })
++})
+diff --git a/packages/bundle/base/cordis.patch.yml b/packages/bundle/base/cordis.patch.yml
+index eaa8457e88..527daa3310 100644
+--- a/packages/bundle/base/cordis.patch.yml
++++ b/packages/bundle/base/cordis.patch.yml
+@@ -107,6 +107,31 @@
+     - id: llm-pi-ai
+       name: '@deepseek-ai/dsh-llm-pi-ai'
+ 
++    # The Kiln provider registry: sixteen presets (Anthropic, OpenAI, Gemini,
++    # OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together,
++    # Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio) plus
++    # `ds_direct`, DeepSeek's free web session. Routes are named `kiln-<id>` so
++    # they cannot collide with `deepseek-official` or the pi-ai catalog names.
++    #
++    # None of these providers has a `tools` field — ds_direct is a web chat
++    # session and cannot have one — so the harness's tool schemas reach the
++    # model as text and a tool call comes back as text: one `<tool_calls>`
++    # block, generated from and parsed against the request's own tool schemas.
++    # That single encoding is what makes a text-only route a usable agent here.
++    # No provider in the Python runtime adds a prompt of its own; the system
++    # slot carries the harness's prompt and the format statement, and nothing
++    # else.
++    #
++    # Keys are never configuration: each preset names the environment variable
++    # holding its key, resolved per request by the Python sidecar. A route with
++    # no key stays visible and selectable, and fails per request with the
++    # registry's own message naming the variable to set.
++    - id: llm-kiln
++      name: '@deepseek-ai/dsh-llm-kiln'
++      config:
++        routePrefix: kiln-
++        onlyConfigured: false
++
+     - id: session-persistence-jsonl
+       name: '@deepseek-ai/dsh-session-persistence-jsonl'
+       config:
+@@ -249,28 +274,88 @@
+     - id: shell-env
+       name: '@deepseek-ai/dsh-shell-env'
+ 
++    # ── the kernel switch ───────────────────────────────────────────────────
++    #
++    # `kernel.enabled` (default true) picks between two ways for the model to
++    # act on this machine, and the rows below read it through
++    # `dshSettingFlag('kernel.enabled', true)`.
++    #
++    #   ON  — `kernel`, a persistent Python namespace. Reading a file, editing
++    #         it, searching the tree, running a command are function calls
++    #         inside it, so the shell, filesystem, search, and background-job
++    #         rows switch OFF.
++    #   OFF — those rows switch ON and the kernel switches off.
++    #
++    # Only the rows the kernel REPLACES move. Everything the kernel cannot do —
++    # web access, skills, goals, delegation, planning, todos, asking the user —
++    # is mounted either way.
++    #
++    # `kernel-mode` owns the setting and is deliberately NOT gated by it: a
++    # switch that vanished in one of its own positions could never be flipped
++    # back. It also declares `applies: 'restart'`, because these are Loader
++    # `disabled` expressions read once at boot. That is the point rather than a
++    # limitation — a tool plugin registers its system-prompt section when it
++    # mounts, so a tool merely hidden at runtime would leave instructions in the
++    # prompt for a tool the model cannot call. Only not mounting takes both.
++    - id: kernel-mode
++      name: '@deepseek-ai/dsh-kernel-mode'
++      config:
++        enabled: true
++
+     - id: tool-bash
+       name: '@deepseek-ai/dsh-tool-bash'
+-      disabled: !!js process.platform === 'win32'
++      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+     - id: tool-pwsh
+       name: '@deepseek-ai/dsh-tool-pwsh'
+-      disabled: !!js process.platform !== 'win32'
++      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+     - id: tool-jobs
+       name: '@deepseek-ai/dsh-tool-jobs'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+     - id: fs-observation-policy
+       name: '@deepseek-ai/dsh-fs-observation-policy'
+ 
+     - id: tool-fs
+       name: '@deepseek-ai/dsh-tool-fs'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+     - id: tool-fs-search
+       name: '@deepseek-ai/dsh-tool-fs-search'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         sampleOverCapGlobResults: false
+ 
++    # The kernel seam, its Kiln-backed Python process, and the model-facing
++    # tool. The process is lazy — nothing spawns until the first cell — but the
++    # interpreter is resolved at load, so a machine without Python reports an
++    # unavailable provider at selection time rather than mid-cell.
++    - id: kernel
++      name: '@deepseek-ai/dsh-kernel'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++      config:
++        defaultTimeoutMs: 180000
++
++    - id: kernel-python
++      name: '@deepseek-ai/dsh-kernel-python'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++      config:
++        cwd: !!js process.env.DSH_KERNEL_CWD
++
++    - id: tool-kernel
++      name: '@deepseek-ai/dsh-tool-kernel'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++      config:
++        timeoutMs: 180000
++
++    # RLM context-as-variable read-back: an async system-prompt/assemble
++    # listener that reads the live kernel `answer`/binds via ctx.kernel and
++    # contributes them as runtime context the agent loop already renders.
++    - id: kernel-rlm-context
++      name: '@deepseek-ai/dsh-kernel-rlm-context'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++
+     - id: agent-instructions
+       name: '@deepseek-ai/dsh-agent-instructions'
+       config:
+@@ -295,6 +380,9 @@
+     - id: command-feedback
+       name: '@deepseek-ai/dsh-command-feedback'
+ 
++    - id: command-session-info
++      name: '@deepseek-ai/dsh-command-session-info'
++
+     - id: goal
+       name: '@deepseek-ai/dsh-goal'
+ 
+@@ -427,6 +515,7 @@
+ 
+     - id: tool-str-replace-editor
+       name: '@deepseek-ai/dsh-tool-str-replace-editor'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         maxOutputChars: 16000
+ 
+@@ -467,6 +556,16 @@
+         fetch: false
+         searchTimeoutMs: 60000
+ 
++    # A self-hosted headless browser (Playwright). The `browser` tool lets the
++    # model read a page as text and act by element ref — for JS-rendered sites
++    # and multi-step flows a plain fetch cannot handle. It needs a one-time
++    # `npx playwright install chromium`; a launch without the binary fails with
++    # that exact instruction rather than a stack trace. The browser-rendered
++    # fetch provider registers too, dormant until web_fetch is turned on and the
++    # web seam's fetchProvider is pointed at `browser`.
++    - id: web-browser
++      name: '@deepseek-ai/dsh-web-browser'
++
+     # ── rows every mode mounts, whose values each overlay may state ──────────────
+ 
+     # The tool registry. Presentation mode is a deployment choice; omitting it here
+diff --git a/packages/bundle/base/package.json b/packages/bundle/base/package.json
+index b80a50fabc..b9acb0a696 100644
+--- a/packages/bundle/base/package.json
++++ b/packages/bundle/base/package.json
+@@ -50,6 +50,7 @@
+     "@deepseek-ai/dsh-command-compact": "workspace:^",
+     "@deepseek-ai/dsh-command-feedback": "workspace:^",
+     "@deepseek-ai/dsh-command-goal": "workspace:^",
++    "@deepseek-ai/dsh-command-session-info": "workspace:^",
+     "@deepseek-ai/dsh-commands": "workspace:^",
+     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
+     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
+@@ -120,6 +121,7 @@
+     "@deepseek-ai/dsh-user-approval": "workspace:^",
+     "@deepseek-ai/dsh-user-questions": "workspace:^",
+     "@deepseek-ai/dsh-web": "workspace:^",
++    "@deepseek-ai/dsh-web-browser": "workspace:^",
+     "@deepseek-ai/dsh-web-fetch-http": "workspace:^",
+     "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",
+     "@deepseek-ai/dsh-workflow-worker-thread": "workspace:^",
+diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
+index 79c62a6e20..3f13ac52e9 100644
+--- a/packages/bundle/web-app/cordis.patch.yml
++++ b/packages/bundle/web-app/cordis.patch.yml
+@@ -123,6 +123,13 @@
+         compressionLevel: 1
+         compressionThresholdBytes: 1024
+ 
++    # Sidebar panels' host surface: a dedicated user PTY at ws /kiln/terminal and
++    # the agent's shared browser at /kiln/browser (live state.json + screenshots
++    # + drive-by-action). Self-contained over the webserver carrier; browserDir
++    # defaults to the same KILN_BROWSER_DIR the kernel hands the Python runtime.
++    - id: sidebar-bridge
++      name: '@deepseek-ai/dsh-host-sidebar-bridge'
++
+     # Web glue owned by this bundle: resolves the built frontend dist (an
+     # assembly fact of dsh-web-app, never user config), mounts the
+     # frontend-static fallback owner, registers the web-surface prompt
+@@ -177,6 +184,12 @@
+     - id: ui-theme
+       name: '@deepseek-ai/dsh-client-ui-theme'
+ 
++    - id: ui-effects
++      name: '@deepseek-ai/dsh-client-ui-effects'
++
++    - id: ui-dock
++      name: '@deepseek-ai/dsh-client-ui-dock'
++
+     - id: locale
+       name: '@deepseek-ai/dsh-client-locale'
+ 
+@@ -436,6 +449,14 @@
+ - id: tool-web
+   disabled: true
+ 
++# The kernel moves behind presets with every other model-facing tool: the seam
++# and its Python backend stay on the host plane (one interpreter probe, one
++# process owner per agent), while `tool-kernel` is what a preset mounts to give
++# its agent the cell-execution verb at all.
++
++- id: tool-kernel
++  disabled: true
++
+ # The preset roster. The shipped presets are bundled inside
+ # `dsh-agent-presets` itself and prepended as a read-only `system` root
+ # (`includeShippedRoot`); `$DSH_HOME/.agent-presets` is where a person — or an
+diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
+index 0d7157e23c..2749596d8c 100644
+--- a/packages/bundle/web-app/package.json
++++ b/packages/bundle/web-app/package.json
+@@ -64,6 +64,8 @@
+     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-dock": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-effects": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-goal": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-layout": "workspace:^",
+@@ -99,6 +101,7 @@
+     "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
+     "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
+     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",
++    "@deepseek-ai/dsh-host-sidebar-bridge": "workspace:^",
+     "@deepseek-ai/dsh-host-webserver": "workspace:^",
+     "@deepseek-ai/dsh-file-reference": "workspace:^",
+     "@deepseek-ai/dsh-file-reference-local": "workspace:^",
+diff --git a/packages/bundle/web-app/src/index.ts b/packages/bundle/web-app/src/index.ts
+index 4f0367a44f..f74f1522ff 100644
+--- a/packages/bundle/web-app/src/index.ts
++++ b/packages/bundle/web-app/src/index.ts
+@@ -11,7 +11,7 @@
+  * @module @deepseek-ai/dsh-web-app
+  */
+ 
+-import { spawn, type ChildProcess } from 'node:child_process'
++import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+ import { createRequire } from 'node:module'
+ import { dirname, join } from 'node:path'
+ import { networkInterfaces } from 'node:os'
+@@ -140,6 +140,39 @@ export function resolveLanTrust(bindHost: string, extra: readonly string[]): Web
+   return { lanAddresses, trustedHosts: [...lanAddresses, ...extra] }
+ }
+ 
++/** Git identity of this checkout, resolved once at boot for the /version route. */
++export interface VersionInfo {
++  /** Full commit hash of the checkout HEAD (40 hex chars), or 'unknown' outside a git tree. */
++  commit: string
++  /** Seven-character commit prefix for humans. */
++  short: string
++  /** Whether the working tree carries uncommitted changes relative to HEAD. */
++  dirty: boolean
++}
++
++/**
++ * Read this checkout's HEAD and dirty state without blocking the request path.
++ * A packed or vendored install has no `.git`, so every field falls back to a
++ * stable 'unknown' rather than failing the Web row.
++ * @returns the boot-time version snapshot.
++ */
++function resolveCommitVersion(): VersionInfo {
++  const unknown: VersionInfo = { commit: 'unknown', short: 'unknown', dirty: false }
++  try {
++    const commit = execFileSync('git', ['-C', SOURCE_ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
++    if (!/^[0-9a-f]{40}$/.test(commit)) return unknown
++    let dirty = false
++    try {
++      dirty = execFileSync('git', ['-C', SOURCE_ROOT, 'status', '--porcelain'], { encoding: 'utf8' }).trim() !== ''
++    } catch {
++      // Unreadable status is not a version failure; report clean rather than losing the hash.
++    }
++    return { commit, short: commit.slice(0, 7), dirty }
++  } catch {
++    return unknown
++  }
++}
++
+ /** Model-visible orientation and acceptance boundary for sessions created through `dsh web`. */
+ function webSurfacePrompt(webUrl: string): string {
+   const updateContract = 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
+@@ -227,7 +260,7 @@ export const internals: {
+ 
+ /**
+  * Mount the Web runtime: dist serving, surface prompt, the bash runtime
+- * variable, the URL line, and the default-browser handoff.
++ * variable, the URL line, a /version diagnostics route, and the default-browser handoff.
+  * @param ctx - plugin context carrying the webServer service.
+  * @param config - validated {@link Config}.
+  */
+@@ -239,6 +272,18 @@ export function apply(ctx: Context, config: Config): void {
+   // Release dependent rows only after bind-dependent trust has been sampled once.
+   ctx.provide(WEB_RUNTIME_SERVICE, runtime)
+   ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
++  // Diagnostics route: a cheap, static answer so operators and agents can
++  // confirm which commit the running Web host was built from without poking
++  // the filesystem or process table.
++  const version = resolveCommitVersion()
++  ctx.effect(() => ctx.webServer.register({
++    kind: 'exact',
++    path: '/version',
++    handler: (_req, res) => {
++      res.writeHead(200, { 'content-type': 'application/json' })
++      res.end(JSON.stringify(version))
++    },
++  }), 'web-app: /version route')
+   if (config.surfaceContext) {
+     ctx.inject(['systemPrompt'], (promptCtx) => {
+       addHarnessSourceSection(promptCtx, SOURCE_ROOT)
+diff --git a/packages/bundle/web-app/tests/web-app.spec.ts b/packages/bundle/web-app/tests/web-app.spec.ts
+index 40e47132ca..0b2a0e880c 100644
+--- a/packages/bundle/web-app/tests/web-app.spec.ts
++++ b/packages/bundle/web-app/tests/web-app.spec.ts
+@@ -69,8 +69,9 @@ function stageDist(): string {
+ }
+ 
+ /** A fake webServer capturing the fallback seat and index taps. */
+-function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown } {
++function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown; routes: () => unknown[] } {
+   let fallback: unknown
++  const routes: unknown[] = []
+   const server = {
+     host,
+     port: 4567,
+@@ -79,8 +80,15 @@ function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server:
+       return () => { fallback = undefined }
+     },
+     renderIndex: (html: string) => html,
++    register: (route: unknown) => {
++      routes.push(route)
++      return () => {
++        const index = routes.indexOf(route)
++        if (index !== -1) routes.splice(index, 1)
++      }
++    },
+   } as unknown as WebServer
+-  return { server, seat: () => fallback }
++  return { server, seat: () => fallback, routes: () => routes }
+ }
+ 
+ /** Deterministic Host Connection face for URL publication and frontend injection. */
+@@ -329,6 +337,47 @@ describe('web-app runtime glue', () => {
+     await ctx.fiber.dispose()
+   })
+ 
++  it('registers a /version route answering with the boot-time commit snapshot', async () => {
++    stageDist()
++    const ctx = new Context()
++    const { server, routes } = fakeHttpServer()
++    ctx.provide('webServer', server)
++    provideConnection(ctx)
++    apply(ctx, new Config({ openBrowser: false, printUrl: false, surfaceContext: false, trustedHosts: [] }))
++    await new Promise(resolve => setTimeout(resolve, 0))
++
++    const route = routes().find(entry => (entry as { path: string }).path === '/version')
++    expect(route).toBeDefined()
++    const captured = route as {
++      kind: string
++      handler: (req: unknown, res: {
++        writeHead: (code: number, headers: Record<string, string>) => void
++        end: (body: string) => void
++      }) => void
++    }
++    expect(captured.kind).toBe('exact')
++
++    let statusCode = 0
++    let headers: Record<string, string> = {}
++    let body = ''
++    captured.handler({}, {
++      writeHead: (code, h) => { statusCode = code; headers = h },
++      end: (chunk) => { body = chunk },
++    })
++    expect(statusCode).toBe(200)
++    expect(headers['content-type']).toBe('application/json')
++    const payload = JSON.parse(body) as { commit: string; short: string; dirty: boolean }
++    if (payload.commit === 'unknown') {
++      expect(payload.short).toBe('unknown')
++      expect(payload.dirty).toBe(false)
++    } else {
++      expect(payload.commit).toMatch(/^[0-9a-f]{40}$/)
++      expect(payload.short).toBe(payload.commit.slice(0, 7))
++      expect(typeof payload.dirty).toBe('boolean')
++    }
++    await ctx.fiber.dispose()
++  })
++
+   it('anchors the dist index on the frontend package manifest without requiring a built dist', () => {
+     // The production resolver (not the test hook): the anchor resolves on any
+     // checkout, built or not — dist existence is the fallback owner's

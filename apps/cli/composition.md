@@ -104,6 +104,16 @@ flowchart LR
   cfg --> plugin_dsh_base_kernel_python
   plugin_dsh_base_tool_kernel["tool-kernel<br/>@deepseek-ai/dsh-tool-kernel"]
   cfg --> plugin_dsh_base_tool_kernel
+  plugin_dsh_base_kernel_rlm_context["kernel-rlm-context<br/>@deepseek-ai/dsh-kernel-rlm-context"]
+  cfg --> plugin_dsh_base_kernel_rlm_context
+  plugin_dsh_base_rlm_mode["rlm-mode<br/>@deepseek-ai/dsh-rlm-mode"]
+  cfg --> plugin_dsh_base_rlm_mode
+  plugin_dsh_base_rlm["rlm<br/>@deepseek-ai/dsh-rlm"]
+  cfg --> plugin_dsh_base_rlm
+  plugin_dsh_base_agent_memory_mode["agent-memory-mode<br/>@deepseek-ai/dsh-agent-memory-mode"]
+  cfg --> plugin_dsh_base_agent_memory_mode
+  plugin_dsh_base_agent_memory["agent-memory<br/>@deepseek-ai/dsh-agent-memory"]
+  cfg --> plugin_dsh_base_agent_memory
   plugin_dsh_base_agent_instructions["agent-instructions<br/>@deepseek-ai/dsh-agent-instructions"]
   cfg --> plugin_dsh_base_agent_instructions
   plugin_dsh_base_skill["skill<br/>@deepseek-ai/dsh-skill"]
@@ -246,6 +256,11 @@ flowchart LR
 | `kernel` | `@deepseek-ai/dsh-kernel` |
 | `kernel-python` | `@deepseek-ai/dsh-kernel-python` |
 | `tool-kernel` | `@deepseek-ai/dsh-tool-kernel` |
+| `kernel-rlm-context` | `@deepseek-ai/dsh-kernel-rlm-context` |
+| `rlm-mode` | `@deepseek-ai/dsh-rlm-mode` |
+| `rlm` | `@deepseek-ai/dsh-rlm` |
+| `agent-memory-mode` | `@deepseek-ai/dsh-agent-memory-mode` |
+| `agent-memory` | `@deepseek-ai/dsh-agent-memory` |
 | `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
 | `skill` | `@deepseek-ai/dsh-skill` |
 | `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |

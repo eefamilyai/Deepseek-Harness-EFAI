@@ -167,17 +167,16 @@ interface StreamState {
  * making the client poll. The bridge reads the kernel-written `state.json` on a
  * short server-side tick and pushes a `frame` only when the `ts` stamp changes,
  * so an idle browser sends nothing and the client renders nothing. The frame is
- * a base64 image data URI of the shared Chromium (screencast JPEG, or a PNG
+ * a URL to the shared Chromium's current frame (screencast JPEG, or a PNG
  * screenshot), delivered as a change-driven push, never a client-side re-fetch
- * loop. It cannot be an iframe: the pane shows the AGENT's browser, and an
- * iframe would load the URL as the user's own separate session. `state` messages carry url/title/text without a frame so the
+ * loop; the browser fetches the bytes itself over /kiln/browser/shot. It cannot
+ * be an iframe: the pane shows the AGENT's browser, and an iframe would load
+ * the URL as the user's own separate session. `state` messages carry url/title/text without a frame so the
  * address bar and empty state stay live between navigations.
  */
 function openBrowserStream(browserDir: string, ws: WebSocket): void {
   let closed = false
   let lastTs: number | undefined
-  let lastFrameData: string | null = null
-
   const send = (obj: unknown): void => {
     if (!closed && ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj))
   }
@@ -215,15 +214,15 @@ function openBrowserStream(browserDir: string, ws: WebSocket): void {
 
     if (ts !== undefined && ts !== lastTs) {
       lastTs = ts
-      let frame: string | null = null
-      if (SHOT_NAME.test(name)) {
-        try {
-          const buf = await readFile(join(browserDir, name))
-          const mime = name.endsWith('.jpg') ? 'image/jpeg' : 'image/png'
-          lastFrameData = `data:${mime};base64,${buf.toString('base64')}`
-        } catch { /* screenshot not flushed yet; keep the last good frame */ }
-        frame = lastFrameData
-      }
+      // Hand the client a URL, not the bytes. Inlining the JPEG as base64 put
+      // it through JSON and the socket, inflating it ~33% and making the main
+      // thread parse a megabyte-scale string per frame; pointing <img> at the
+      // existing shot route lets the browser fetch, decode, and cache it off
+      // the critical path. `?v=` is the frame identity: it busts the cache
+      // exactly once per new frame and never for a repeat push.
+      const frame = SHOT_NAME.test(name)
+        ? `/kiln/browser/shot/${encodeURIComponent(name)}?v=${ts}`
+        : null
       send({ type: 'frame', ts, url, title, text_preview: text, vw, vh, screenshot: frame, tabs, active, history, headed })
     } else {
       send({ type: 'state', ts, url, title, text_preview: text, vw, vh, tabs, active, history, headed })

@@ -118,6 +118,7 @@ describe('command-compact real Loader composition', () => {
       status: 'idle',
       options: {},
       reserveTurnAdmission: () => () => undefined,
+      whenIdle: async () => {},
     } as unknown as Agent
     expect(context.commands.list(agent)).toContainEqual({
       name: 'compact',

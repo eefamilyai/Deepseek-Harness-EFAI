@@ -1,0 +1,580 @@
+diff --git a/docs/capability-seams.md b/docs/capability-seams.md
+index a6cca7fd2f..6f925f9b43 100644
+--- a/docs/capability-seams.md
++++ b/docs/capability-seams.md
+@@ -16,9 +16,14 @@ flowchart LR
+   pkg_llm_deepseek["llm-deepseek"]
+   pkg_llm["llm"]
+   svc_llm["ctx.llm<br/>LLM adapter registry"]
++  pkg_llm_kiln["llm-kiln"]
+   pkg_llm_replay["llm-replay"]
+   pkg_agent_loop["agent-loop"]
+   pkg_compaction_basic["compaction-basic"]
++  pkg_kernel["kernel"]
++  svc_kernel["ctx.kernel<br/>Persistent code-execution kernel"]
++  pkg_kernel_python["kernel-python"]
++  pkg_tool_kernel["tool-kernel"]
+   pkg_deepseek_llm_api_extensions["deepseek-llm-api-extensions"]
+   svc_deepseekLlmApiExtensions["ctx.deepseekLlmApiExtensions<br/>Official DeepSeek request extensions"]
+   pkg_session_log_deepseek["session-log-deepseek"]
+@@ -263,8 +268,11 @@ flowchart LR
+   pkg_invariants --> svc_invariants
+   pkg_jobs --> svc_jobs
+   pkg_jobs_local --> svc_jobs
++  pkg_kernel --> svc_kernel
++  pkg_kernel_python --> svc_kernel
+   pkg_llm --> svc_llm
+   pkg_llm_deepseek --> svc_llm
++  pkg_llm_kiln --> svc_llm
+   pkg_llm_pi_ai --> svc_llm
+   pkg_llm_replay --> svc_llm
+   pkg_lsp --> svc_lsp
+@@ -371,6 +379,7 @@ flowchart LR
+   svc_jobs --> pkg_tool_jobs
+   svc_jobs --> pkg_tool_subagent
+   svc_jobs --> pkg_tool_terminal
++  svc_kernel --> pkg_tool_kernel
+   svc_llm --> pkg_agent_loop
+   svc_llm --> pkg_compaction_basic
+   svc_lsp --> pkg_tool_lsp
+@@ -464,7 +473,8 @@ flowchart LR
+ | ctx key | Role | Owner | Implementations | Direct consumers | Companion plugins | Note |
+ | --- | --- | --- | --- | --- | --- | --- |
+ | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
+-| `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
++| `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-kiln`](../packages/llm/llm-kiln), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
++| `ctx.kernel` | `seam` | [`kernel`](../packages/kernel/kernel) | [`kernel-python`](../packages/kernel/kernel-python) | [`tool-kernel`](../packages/kernel/tool-kernel) | - | A backend owns one namespace that survives across calls; the tool runs a cell in it and returns the captured output. |
+ | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
+ | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |
+ | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction. |
+diff --git a/docs/config-catalog.md b/docs/config-catalog.md
+index 5d19ab42f0..ae6d9fb529 100644
+--- a/docs/config-catalog.md
++++ b/docs/config-catalog.md
+@@ -809,6 +809,31 @@ export interface Config {
+ 
+ Source: [`packages/host/frontend-static/src/index.ts:30`](../packages/host/frontend-static/src/index.ts)
+ 
++<a id="deepseek-aidsh-host-sidebar-bridge"></a>
++
++## `@deepseek-ai/dsh-host-sidebar-bridge`
++
++Requires: `webServer`
++
++```ts config-catalog
++/** Complete config after schemastery applies defaults. */
++type ResolvedConfig = Required<Config>
++
++/** Plugin config: where the browser writes, and which shell the terminal runs. */
++export interface Config {
++  /**
++   * Directory browser_tools writes its `state.json` + screenshots to — the same
++   * `KILN_BROWSER_DIR` the kernel passes to the Python runtime. Defaults to
++   * `$KILN_BROWSER_DIR`, then `~/.dsh/browser`.
++   */
++  browserDir?: string
++  /** Shell for the sidebar terminal. Empty = the platform default (COMSPEC / $SHELL). */
++  shell?: string
++}
++```
++
++Source: [`packages/host/sidebar-bridge/src/index.ts:79`](../packages/host/sidebar-bridge/src/index.ts)
++
+ <a id="deepseek-aidsh-host-webserver"></a>
+ 
+ ## `@deepseek-ai/dsh-host-webserver`
+@@ -866,6 +891,67 @@ export interface Config {
+ 
+ Source: [`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
+ 
++<a id="deepseek-aidsh-kernel"></a>
++
++## `@deepseek-ai/dsh-kernel`
++
++```ts config-catalog
++/**
++ * Config for the kernel seam. `provider` pins which backend wins; it is optional
++ * (a single registered usable backend auto-selects). An operational override
++ * must feed this same field rather than introduce a hidden priority chain.
++ */
++export interface KernelRuntimeConfig {
++  /** Explicit kernel provider id. Omitted = auto-select when exactly one usable. */
++  readonly provider?: string
++  /** Default wall-clock budget (ms) for a cell that does not carry its own. */
++  readonly defaultTimeoutMs?: number
++}
++```
++
++Source: [`packages/kernel/kernel/src/index.ts:39`](../packages/kernel/kernel/src/index.ts)
++
++<a id="deepseek-aidsh-kernel-mode"></a>
++
++## `@deepseek-ai/dsh-kernel-mode`
++
++```ts config-catalog
++/** Plugin config: the switch, and its composition-layer default. */
++export interface Config {
++  /**
++   * Whether the persistent Python kernel is the model's way of acting on this
++   * machine. On: the `kernel` tool, and no bash/filesystem/search/jobs tools —
++   * those are function calls inside the kernel namespace instead. Off: those
++   * tools, and no kernel. Takes effect on restart.
++   */
++  enabled?: boolean
++}
++```
++
++Source: [`packages/kernel/kernel-mode/src/index.ts:56`](../packages/kernel/kernel-mode/src/index.ts)
++
++<a id="deepseek-aidsh-kernel-python"></a>
++
++## `@deepseek-ai/dsh-kernel-python`
++
++Requires: `kernel`
++
++```ts config-catalog
++/** Plugin config: interpreter, workspace, and where mutable kernel state lands. */
++export interface Config {
++  /** Interpreter to run. Omitted = `$DSH_KERNEL_PYTHON`, then the platform probe. */
++  python?: string
++  /** Kernel working directory. Omitted = the harness working directory. */
++  cwd?: string
++  /** Directory for `subkernels.json` and other durable kernel state. Omitted = `<cwd>/.kiln_kernel_state`. */
++  stateDir?: string
++  /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
++  runtimeDir?: string
++}
++```
++
++Source: [`packages/kernel/kernel-python/src/index.ts:57`](../packages/kernel/kernel-python/src/index.ts)
++
+ <a id="deepseek-aidsh-llm-deepseek"></a>
+ 
+ ## `@deepseek-ai/dsh-llm-deepseek`
+@@ -947,6 +1033,58 @@ Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicy
+ 
+ Source: [`packages/llm/llm-deepseek/src/index.ts:125`](../packages/llm/llm-deepseek/src/index.ts)
+ 
++<a id="deepseek-aidsh-llm-kiln"></a>
++
++## `@deepseek-ai/dsh-llm-kiln`
++
++Requires: `llm`
++
++```ts config-catalog
++/** Plugin config. */
++export interface Config {
++  /** Prefix applied to every Kiln provider id to form the harness route name. */
++  routePrefix?: string
++  /**
++   * Register only routes the registry reports as usable — a key present, or a
++   * keyless local endpoint. Default false: an unconfigured route stays visible
++   * so it can be selected and configured, and fails per request with the
++   * registry's own message naming the variable to set.
++   */
++  onlyConfigured?: boolean
++  /** Interpreter for the sidecar. Omitted = `$DSH_KERNEL_PYTHON`, then a platform probe. */
++  python?: string
++  /** Working directory for the sidecar. Omitted = the harness working directory. */
++  cwd?: string
++  /** Directory for the sidecar's mutable state. Omitted = `<cwd>/.kiln_kernel_state`. */
++  stateDir?: string
++  /** The `python/kiln` directory. Omitted = the copy shipped with this repo. */
++  bridgeDir?: string
++  /**
++   * DeepSeek web (ds_direct) credentials, editable from the Models page.
++   *
++   * `token` + `cookie` are the live bearer/WAF pair. The optional login fields
++   * let ds_direct refresh those credentials itself when DeepSeek rotates them,
++   * so the bridge keeps working without a new copy-paste from devtools.
++   */
++  deepseek?: {
++    /** DeepSeek web bearer token. */
++    token?: string
++    /** DeepSeek web WAF cookie. */
++    cookie?: string
++    /** Login email for automatic token refresh. */
++    email?: string
++    /** Login mobile for automatic token refresh. */
++    mobile?: string
++    /** Login area code (for mobile). */
++    areaCode?: string
++    /** Login password for automatic token refresh. */
++    password?: string
++  }
++}
++```
++
++Source: [`packages/llm/llm-kiln/src/index.ts:70`](../packages/llm/llm-kiln/src/index.ts)
++
+ <a id="deepseek-aidsh-llm-pi-ai"></a>
+ 
+ ## `@deepseek-ai/dsh-llm-pi-ai`
+@@ -2692,6 +2830,28 @@ export type CompletionDelivery = 'quiet' | 'wakeup'
+ 
+ Source: [`packages/jobs/tool-jobs/src/index.ts:31`](../packages/jobs/tool-jobs/src/index.ts)
+ 
++<a id="deepseek-aidsh-tool-kernel"></a>
++
++## `@deepseek-ai/dsh-tool-kernel`
++
++Requires: `tools` · `kernel` · `systemPrompt`
++
++```ts config-catalog
++/** Plugin config: the per-cell budget and the output cap. */
++export interface Config {
++  /** PRIMARY cooperative budget (ms) for one cell; on expiry the cell backgrounds. Defaults to 180000. */
++  timeoutMs?: number
++  /** Cap on returned output characters for one cell. Defaults to 200000. */
++  maxOutputChars?: number
++  /** Upper bound on a model-chosen per-cell (primary) timeout (ms). Defaults to 600000. */
++  maxTimeoutMs?: number
++  /** SECONDARY budget (ms): when a backgrounded cell is force-stopped. Defaults to 1800000. */
++  backgroundTimeoutMs?: number
++}
++```
++
++Source: [`packages/kernel/tool-kernel/src/index.ts:59`](../packages/kernel/tool-kernel/src/index.ts)
++
+ <a id="deepseek-aidsh-tool-lsp"></a>
+ 
+ ## `@deepseek-ai/dsh-tool-lsp`
+@@ -3133,6 +3293,34 @@ export interface Config {
+ 
+ Source: [`packages/bundle/web-app/src/index.ts:44`](../packages/bundle/web-app/src/index.ts)
+ 
++<a id="deepseek-aidsh-web-browser"></a>
++
++## `@deepseek-ai/dsh-web-browser`
++
++Requires: `tools` · `web` · `systemPrompt`
++
++```ts config-catalog
++/** Plugin config (all defaulted). */
++export interface Config {
++  /** Timeout for a page load (ms). */
++  navigationTimeoutMs?: number
++  /** Timeout for a click/type/press (ms). */
++  actionTimeoutMs?: number
++  /** Cap on the page text captured per snapshot (chars). */
++  maxTextChars?: number
++  /** Cap on the text returned for one tool call (chars). */
++  maxOutputChars?: number
++  /** Launch Chromium headless (true) or headed (false, for debugging). */
++  headless?: boolean
++  /** `User-Agent` presented to sites. */
++  userAgent?: string
++  /** Register the browser-rendered fetch provider with `ctx.web` when present (default true). */
++  fetchProvider?: boolean
++}
++```
++
++Source: [`packages/web/web-browser/src/index.ts:42`](../packages/web/web-browser/src/index.ts)
++
+ <a id="deepseek-aidsh-web-fetch-http"></a>
+ 
+ ## `@deepseek-ai/dsh-web-fetch-http`
+@@ -3307,6 +3495,8 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
+ - `@deepseek-ai/dsh-client-ui-deliverables` — requires `systemPrompt` ([`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts))
+ - `@deepseek-ai/dsh-client-ui-directory-picker-browse` ([`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts))
+ - `@deepseek-ai/dsh-client-ui-directory-picker-native` ([`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts))
++- `@deepseek-ai/dsh-client-ui-dock` ([`packages/client/ui-dock/src/index.ts`](../packages/client/ui-dock/src/index.ts))
++- `@deepseek-ai/dsh-client-ui-effects` ([`packages/client/ui-effects/src/index.ts`](../packages/client/ui-effects/src/index.ts))
+ - `@deepseek-ai/dsh-client-ui-goal` ([`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts))
+ - `@deepseek-ai/dsh-client-ui-input-trigger` ([`packages/client/ui-input-trigger/src/index.ts`](../packages/client/ui-input-trigger/src/index.ts))
+ - `@deepseek-ai/dsh-client-ui-jobs` ([`packages/client/ui-jobs/src/index.ts`](../packages/client/ui-jobs/src/index.ts))
+@@ -3336,6 +3526,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
+ - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
+ - `@deepseek-ai/dsh-command-feedback` — requires `commands` ([`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts))
+ - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))
++- `@deepseek-ai/dsh-command-session-info` — requires `commands` · `sessionProjections` ([`packages/session/command-session-info/src/index.ts`](../packages/session/command-session-info/src/index.ts))
+ - `@deepseek-ai/dsh-commands` ([`packages/interaction/commands/src/index.ts`](../packages/interaction/commands/src/index.ts))
+ - `@deepseek-ai/dsh-cordis-client-runner` ([`packages/extensions/cordis-client-runner/src/index.ts`](../packages/extensions/cordis-client-runner/src/index.ts))
+ - `@deepseek-ai/dsh-deepseek-llm-api-extensions` ([`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../packages/llm/deepseek-llm-api-extensions/src/index.ts))
+diff --git a/docs/subsystems/code-runtime.i18n.yaml b/docs/subsystems/code-runtime.i18n.yaml
+index 228ed14b56..26b3c95aaf 100644
+--- a/docs/subsystems/code-runtime.i18n.yaml
++++ b/docs/subsystems/code-runtime.i18n.yaml
+@@ -2,5 +2,5 @@
+ # side as of the last confirmed-consistent state. Both languages carry equal authority;
+ # after editing either side, bring the other along and re-record with:
+ #   pnpm run verify-translation-pairing --write docs/subsystems/code-runtime.md
+-code-runtime.md: 0f633df9fc657d9d80fc04df3bc8ad6fafdddcb2
+-code-runtime.zh.md: 43b78ce49575741f7ae6c4e2751b63b7562fc99a
++code-runtime.md: 25ab20bdf08f0028437ceb2c6b7355e2068f37bc
++code-runtime.zh.md: 7587bcc92a35254957a0322cf7dec8b3b884c77d
+diff --git a/docs/subsystems/code-runtime.md b/docs/subsystems/code-runtime.md
+index 0f633df9fc..25ab20bdf0 100644
+--- a/docs/subsystems/code-runtime.md
++++ b/docs/subsystems/code-runtime.md
+@@ -188,4 +188,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
+ ```
+ 
+ Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
++
++<a id="ctxkernel--kernelruntime"></a>
++
++### `ctx.kernel` — `KernelRuntime`
++
++The persistent-kernel service, registered as `ctx.kernel` (one instance per context).
++
++Selection semantics (resolved at execution time, never order-dependent):
++
++- A configured id that is registered and `available()` → that backend.
++- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.
++- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.
++- No id configured, exactly one registered usable backend → that backend.
++- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.
++- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.
++
++```ts cordis-catalog
++/**
++ * Register a kernel backend. Throws {@link KernelError}
++ * `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a
++ * disposer; disposed with the calling fiber.
++ * @param provider - the backend; its `id` is the registry key.
++ * @returns the disposer that unregisters the backend.
++ */
++registerProvider(provider: KernelProvider): () => void
++
++/**
++ * Execute one cell in the persistent namespace. Resolves the backend at call
++ * time with the selection rules above; throws {@link KernelError} when the
++ * capability itself cannot run. A cell that raises is a *result* carrying the
++ * traceback, never a throw — the model is expected to read it and fix the code.
++ * @param request - the cell and its optional budget.
++ * @param signal - optional cancellation; an aborted cell restarts the kernel.
++ * @returns the captured output and how the cell ended.
++ */
++async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
++
++/**
++ * Discard the namespace and start a fresh kernel.
++ * @returns once the replacement kernel is ready.
++ */
++async restart(): Promise<void>
++
++/**
++ * List the names currently bound in the namespace.
++ * @returns the bound names, in the backend's order.
++ */
++async names(): Promise<readonly string[]>
++```
++
++Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)
+ <!-- END GENERATED cordis-surface -->
+diff --git a/docs/subsystems/code-runtime.zh.md b/docs/subsystems/code-runtime.zh.md
+index 43b78ce495..7587bcc92a 100644
+--- a/docs/subsystems/code-runtime.zh.md
++++ b/docs/subsystems/code-runtime.zh.md
+@@ -188,4 +188,55 @@ abstract run(request: CodeRunRequest): Promise<CodeRunResult>
+ ```
+ 
+ Source: [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)
++
++<a id="ctxkernel--kernelruntime"></a>
++
++### `ctx.kernel` — `KernelRuntime`
++
++The persistent-kernel service, registered as `ctx.kernel` (one instance per context).
++
++Selection semantics (resolved at execution time, never order-dependent):
++
++- A configured id that is registered and `available()` → that backend.
++- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.
++- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.
++- No id configured, exactly one registered usable backend → that backend.
++- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.
++- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.
++
++```ts cordis-catalog
++/**
++ * Register a kernel backend. Throws {@link KernelError}
++ * `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a
++ * disposer; disposed with the calling fiber.
++ * @param provider - the backend; its `id` is the registry key.
++ * @returns the disposer that unregisters the backend.
++ */
++registerProvider(provider: KernelProvider): () => void
++
++/**
++ * Execute one cell in the persistent namespace. Resolves the backend at call
++ * time with the selection rules above; throws {@link KernelError} when the
++ * capability itself cannot run. A cell that raises is a *result* carrying the
++ * traceback, never a throw — the model is expected to read it and fix the code.
++ * @param request - the cell and its optional budget.
++ * @param signal - optional cancellation; an aborted cell restarts the kernel.
++ * @returns the captured output and how the cell ended.
++ */
++async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
++
++/**
++ * Discard the namespace and start a fresh kernel.
++ * @returns once the replacement kernel is ready.
++ */
++async restart(): Promise<void>
++
++/**
++ * List the names currently bound in the namespace.
++ * @returns the bound names, in the backend's order.
++ */
++async names(): Promise<readonly string[]>
++```
++
++Source: [`packages/kernel/kernel/src/index.ts`](../../packages/kernel/kernel/src/index.ts)
+ <!-- END GENERATED cordis-surface -->
+diff --git a/docs/subsystems/llm-streaming.i18n.yaml b/docs/subsystems/llm-streaming.i18n.yaml
+index ea90fbb43d..73cbc82088 100644
+--- a/docs/subsystems/llm-streaming.i18n.yaml
++++ b/docs/subsystems/llm-streaming.i18n.yaml
+@@ -2,5 +2,5 @@
+ # side as of the last confirmed-consistent state. Both languages carry equal authority;
+ # after editing either side, bring the other along and re-record with:
+ #   pnpm run verify-translation-pairing --write docs/subsystems/llm-streaming.md
+-llm-streaming.md: 6867ae292d77474bcedc1466ae0ce6b1fc1c92d3
+-llm-streaming.zh.md: b75e24f2e9010b4fb08c035f14bc4e91dc3971ef
++llm-streaming.md: 592dd5ec0e819cae64708fef654c2e9529a292f2
++llm-streaming.zh.md: 6bdac6dfe87ca55099f61be5b2b5ee6c40e73f33
+diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
+index 6867ae292d..592dd5ec0e 100644
+--- a/docs/subsystems/llm-streaming.md
++++ b/docs/subsystems/llm-streaming.md
+@@ -864,7 +864,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+ 
+ ### `ctx.llm` — `LlmRuntime`
+ 
+-The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
++The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.
+ 
+ ```ts cordis-catalog
+ /**
+@@ -923,6 +923,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+  */
+ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
+ 
++/**
++ * Register the handler that tests and adds a login for one account-pooling
++ * provider route (`ds_direct` is the only one today). Mirrors
++ * {@link registerModelDiscovery}: one handler per route, released with the
++ * returned disposer. The handler owns making the new login selectable — it
++ * re-registers its own routes — so the runtime only routes the call.
++ * @param provider - the provider route that pools logins.
++ * @param add - tests a login and, on success, adds it.
++ * @returns a disposer that withdraws the handler.
++ */
++registerAccountProvider(provider: string, add: LlmAccountAdder): () => void
++
++/**
++ * The provider routes that accept account additions, for a surface to offer.
++ * @returns the registered account-provider routes, in registration order.
++ */
++listAccountProviders(): string[]
++
++/**
++ * Test a login for one account-pooling provider and, on success, make it a
++ * selectable route. The password is used only for the test and never stored
++ * or returned here — the reply is the account id and its route, or a reason.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login to test.
++ * @returns the added account and route, or the failure reason.
++ */
++async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
++
+ /**
+  * Remote adapter for one draft provider interrogation.
+  * @param settingsNs - namespace whose registered discovery serves this draft.
+diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
+index b75e24f2e9..6bdac6dfe8 100644
+--- a/docs/subsystems/llm-streaming.zh.md
++++ b/docs/subsystems/llm-streaming.zh.md
+@@ -870,7 +870,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+ 
+ ### `ctx.llm` — `LlmRuntime`
+ 
+-The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
++The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.
+ 
+ ```ts cordis-catalog
+ /**
+@@ -929,6 +929,34 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+  */
+ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
+ 
++/**
++ * Register the handler that tests and adds a login for one account-pooling
++ * provider route (`ds_direct` is the only one today). Mirrors
++ * {@link registerModelDiscovery}: one handler per route, released with the
++ * returned disposer. The handler owns making the new login selectable — it
++ * re-registers its own routes — so the runtime only routes the call.
++ * @param provider - the provider route that pools logins.
++ * @param add - tests a login and, on success, adds it.
++ * @returns a disposer that withdraws the handler.
++ */
++registerAccountProvider(provider: string, add: LlmAccountAdder): () => void
++
++/**
++ * The provider routes that accept account additions, for a surface to offer.
++ * @returns the registered account-provider routes, in registration order.
++ */
++listAccountProviders(): string[]
++
++/**
++ * Test a login for one account-pooling provider and, on success, make it a
++ * selectable route. The password is used only for the test and never stored
++ * or returned here — the reply is the account id and its route, or a reason.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login to test.
++ * @returns the added account and route, or the failure reason.
++ */
++async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
++
+ /**
+  * Remote adapter for one draft provider interrogation.
+  * @param settingsNs - namespace whose registered discovery serves this draft.
+diff --git a/docs/tool-catalog.md b/docs/tool-catalog.md
+index f69f6e3650..2338de4cf5 100644
+--- a/docs/tool-catalog.md
++++ b/docs/tool-catalog.md
+@@ -41,6 +41,7 @@ This table connects model-visible tool names to the plugin package and service s
+ | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
+ | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
+ | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
++| `@deepseek-ai/dsh-tool-kernel` | `kernel` | `ctx.tools`, `ctx.kernel`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | kernel runs one cell in a namespace that persists across calls, so it is registered exclusive (no `isConcurrencySafe`): two overlapping cells would interleave their assignments and their captured output. Whether it is mounted at all is the `kernel.enabled` setting, read once at boot. |
+ 
+ <a id="deepseek-aidsh-tool-ask-user"></a>
+ 
+@@ -2277,3 +2278,34 @@ Search the web for current information. Provide 1–4 queries in the required qu
+ Source: [`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
+ 
+ web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.
++
++<a id="deepseek-aidsh-tool-kernel"></a>
++
++## `@deepseek-ai/dsh-tool-kernel`
++
++### `kernel`
++
++Run Python in a persistent kernel namespace. Returns the cell's captured output: printed text plus the value of every top-level bare expression. Variables and imports persist across calls. Shell commands run via sh("..."); files are read and written with the preloaded helpers.
++
++```json
++{
++  "type": "object",
++  "properties": {
++    "code": {
++      "type": "string",
++      "description": "The Python source to execute in the persistent namespace."
++    },
++    "timeoutMs": {
++      "type": "integer",
++      "description": "Optional per-cell timeout in milliseconds. Defaults to the configured timeoutMs and is capped by maxTimeoutMs."
++    }
++  },
++  "required": [
++    "code"
++  ]
++}
++```
++
++Source: [`packages/kernel/tool-kernel/src/index.ts`](../packages/kernel/tool-kernel/src/index.ts)
++
++kernel runs one cell in a namespace that persists across calls, so it is registered exclusive (no `isConcurrencySafe`): two overlapping cells would interleave their assignments and their captured output. Whether it is mounted at all is the `kernel.enabled` setting, read once at boot.

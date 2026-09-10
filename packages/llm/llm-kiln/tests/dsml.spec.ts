@@ -341,6 +341,114 @@ describe('native tool-call dialects', () => {
     expect(calls(chunks, NATIVE)).toEqual([])
     expect(prose(chunks, NATIVE)).toContain('rm -rf /tmp/x')
   })
+
+  // The token is a FAMILY, not a fixed set of spellings: every case below is a
+  // shape one session produced, and each differs from a shape already handled
+  // above only by a space or by which word the model fused into the token.
+  it('reads the space-separated ` calls` / ` invoke` frame the taught words blend into', () => {
+    // The reported leak, verbatim. `</｜｜DSML｜｜ invoke>` is the load-bearing
+    // token: with no closer for the `<invoke>` the block ran to end of stream,
+    // parsed to nothing, and dumped the whole turn — code and all — as prose.
+    const chunks = [`<${P}${P}DSML${P}${P} calls>\n`
+      + '<invoke name="kernel">\n'
+      + `<${P}${P}DSML${P}${P} parameter name="code" string="true">import os\nprint(os.getcwd())\n`
+      + `</${P}${P}DSML${P}${P} parameter>\n`
+      + `</${P}${P}DSML${P}${P} invoke>\n`
+      + `</${P}${P}DSML${P}${P} calls>\n`]
+    // The closer sits on its own line, exactly as the session wrote it, so the
+    // value keeps the newline before it — the taught format's rule is that the
+    // value is the raw text between the tags.
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: 'import os\nprint(os.getcwd())\n' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('reads `parameter` fused into the token with no space', () => {
+    // The same fusion glued to the pipes. Both spellings must reach the same
+    // branch, because the model uses both within one session.
+    const chunks = [`<${P}${P}DSML${P}${P}invoke name="run_code">\n`
+      + `<${P}${P}DSML${P}${P}parameter name="code">1+1</${P}${P}DSML${P}${P}parameter>\n`
+      + `</${P}${P}DSML${P}${P}invoke>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['run_code', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('reads the tool named as the keyword inside the token', () => {
+    // `<｜｜DSML｜｜kernel>` — the token wearing the tool's own name, inside an
+    // otherwise well-formed taught wrapper, so there is no `<invoke>` at all.
+    const chunks = [`<tool_calls>\n<${P}${P}DSML${P}${P}kernel>\n`
+      + '<parameter name="code">print(1)</parameter>\n'
+      + `</${P}${P}DSML${P}${P}kernel>\n</tool_calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: 'print(1)' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('strips the space-separated frame pair even with no inner call', () => {
+    const chunks = [`<${P}${P}DSML${P}${P} calls>\n</${P}${P}DSML${P}${P} calls>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('dispatches a finished call whose `</invoke>` the model forgot', () => {
+    // The reported `</parameter> </parameter>` in pairs. The block is complete
+    // — wrapper closed, every parameter closed — and only `</invoke>` is
+    // missing, which carries nothing the arguments need. It used to parse to
+    // nothing and dump the whole block; the openers vanish into the markdown
+    // renderer as unknown tags and the closers surface, one per parameter.
+    const chunks = ['<tool_calls>\n<invoke name="web_search">\n'
+      + '<parameter name="query">deepseek</parameter>\n'
+      + '<parameter name="max_results">3</parameter>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['web_search', { query: 'deepseek', max_results: 3 }]])
+    expect(prose(chunks)).not.toContain('</parameter>')
+    expect(prose(chunks).trim()).toBe('')
+  })
+
+  it('still refuses a call whose LAST parameter never closed', () => {
+    // The truncation rule, unchanged and now measured precisely: one finished
+    // parameter followed by one cut off mid-write is a command whose end must
+    // not be invented, even though the block around it looks bounded.
+    const chunks = ['<tool_calls>\n<invoke name="web_search">\n'
+      + '<parameter name="query">deepseek</parameter>\n'
+      + '<parameter name="max_results">3']
+    expect(calls(chunks)).toEqual([])
+    expect(prose(chunks)).toContain('deepseek')
+  })
+
+  it('does not tell the model a real tool does not exist', () => {
+    // An unfinished call to a DECLARED tool drew `[no such tool]`, so the model
+    // "fixed" a name that was never wrong and re-sent the same block. The note
+    // must name the actual mistake; only a genuinely undeclared tool gets the
+    // roster note.
+    const unfinished = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">1+1</tool_calls>\n']
+    expect(calls(unfinished)).toEqual([])
+    expect(prose(unfinished)).not.toContain('no such tool')
+    expect(prose(unfinished)).toContain('unfinished tool call')
+
+    const ghost = ['<tool_calls>\n<invoke name="ghost">\n<parameter name="code">1+1</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(ghost)).toEqual([])
+    expect(prose(ghost)).toContain('no such tool')
+  })
+
+  it('drops an orphan </parameter> left after the call it belonged to', () => {
+    // Rewriting `</｜｜DSML｜｜parameter>` into the taught closer made a NEW way
+    // to leak: one closer too many, or a parameter closed after its invoke, now
+    // reaches the prose path looking like clean taught syntax. It is structure
+    // either way — the call already ran — so it must not surface as a stray tag.
+    const chunks = ['<invoke name="kernel">\n<parameter name="code">print(1)</parameter>\n</invoke>\n'
+      + `</${P}${P}DSML${P}${P} parameter>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: 'print(1)' }]])
+    expect(prose(chunks, NATIVE)).not.toContain('</parameter>')
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('refuses to pass an unplaced native token through as an argument', () => {
+    // The safety net under every spelling still unseen. A token this reader
+    // cannot place must not become the tool's argument via the unlabelled-body
+    // path — that is what fed `kernel` a cell starting with `<｜｜DSML｜｜…` and
+    // burned a turn on `SyntaxError: invalid character '｜'`.
+    const chunks = [`<invoke name="run_code">\n<${P}${P}DSML${P}${P}mystery x="1">1+1\n</invoke>\n`]
+    expect(calls(chunks, NATIVE)).toEqual([['run_code', {}]])
+    expect(prose(chunks, NATIVE)).not.toContain('SyntaxError')
+  })
 })
 
 describe('system_reminder suppression', () => {

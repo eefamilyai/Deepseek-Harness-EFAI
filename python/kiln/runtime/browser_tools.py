@@ -9,6 +9,26 @@
 #
 # Every page action persists a small state file (KILN_BROWSER_DIR/state.json)
 # plus screenshots, which the agent loop surfaces as a browser card in the UI.
+#
+# Browser preference order. When the DeepSeek Harness desktop app is running, the
+# agent drives that app's embedded Chromium over CDP instead of opening a second
+# browser, so the user and the agent share one window:
+#
+#   1. ``KILN_BROWSER_CDP_URL`` names a CDP endpoint directly (for example
+#      ``http://127.0.0.1:9222``). Setting it to 0/false/no/off/none disables
+#      attaching and discovery for the session.
+#   2. ``desktop/harness-desktop/.cdp-target.json`` — the record the desktop app
+#      writes at startup — supplies the port. It is only read while fresh: the
+#      app stamps ``closed: true`` on exit, and an age ceiling of 24 h (mtime,
+#      falling back to the record's ``ts`` field) rejects a leftover from an
+#      earlier session. The app writes this file once per session, so the ceiling
+#      has to cover a window left open all day; the short connect timeout, not the
+#      age check, is what stops a dead endpoint from stalling an action.
+#   3. Otherwise a fresh Chromium is launched exactly as before.
+#
+# Attaching is always best-effort. A refused connection, a timeout, or no
+# recognisable browser target all fall back silently to launching, and a session
+# that attached detaches on shutdown rather than closing a window the user owns.
 
 import concurrent.futures as _futures
 import json
@@ -19,6 +39,74 @@ import time
 from html.parser import HTMLParser
 
 _BROWSER_DIR = os.environ.get("KILN_BROWSER_DIR", "")
+
+# ── attaching to the desktop app's embedded browser ─────────────────────────
+# See the module docstring for the preference order and the staleness rule.
+_CDP_DISCOVERY_RELPATH = os.path.join("desktop", "harness-desktop", ".cdp-target.json")
+_CDP_MAX_AGE_S = 24 * 60 * 60
+# Short on purpose: an unreachable endpoint costs this much once, and the
+# fallback launch then proceeds normally.
+_CDP_CONNECT_TIMEOUT_MS = 3000
+# Explicit off-switches, so attaching can be vetoed without naming an endpoint.
+_CDP_OFF = ("0", "false", "no", "off", "none")
+
+
+def _repo_root():
+    """Repository root derived from this file's location. Best-effort."""
+    try:
+        here = os.path.abspath(__file__)
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(here))))
+    except Exception:
+        return ""
+
+
+def _cdp_env_endpoint():
+    """(explicit, url). ``explicit`` is True when the env var spoke at all."""
+    raw = os.environ.get("KILN_BROWSER_CDP_URL")
+    if raw is None:
+        return False, ""
+    raw = raw.strip()
+    if raw.lower() in _CDP_OFF:
+        return True, ""          # explicitly disabled
+    return True, raw
+
+
+def _cdp_discovery_mtime():
+    """Mtime of the app's discovery record, or 0.0. Never raises.
+
+    The app rewrites this file once per launch, so an mtime newer than the
+    one a failed attach was based on means a window has appeared since and
+    the attach is worth retrying.
+    """
+    try:
+        root = _repo_root()
+        if not root:
+            return 0.0
+        return os.stat(os.path.join(root, _CDP_DISCOVERY_RELPATH)).st_mtime
+    except Exception:
+        return 0.0
+
+
+def _cdp_discovery_record():
+    """The desktop app's CDP record, or None when absent, closed, or stale.
+
+    Never raises: discovery must not be able to break a normal browser action.
+    """
+    try:
+        root = _repo_root()
+        if not root:
+            return None
+        path = os.path.join(root, _CDP_DISCOVERY_RELPATH)
+        age = time.time() - os.stat(path).st_mtime
+        if age > _CDP_MAX_AGE_S or age < -300:      # negative: clock skew
+            return None
+        with open(path, encoding="utf-8") as f:
+            rec = json.load(f)
+        if not isinstance(rec, dict) or rec.get("closed") is True:
+            return None
+        return rec
+    except Exception:
+        return None
 
 # ── one dedicated thread for ALL Playwright work ─────────────────────────────
 # Playwright's sync API binds its dispatcher to the thread that started it, and
@@ -148,6 +236,26 @@ class KilnBrowser:
         self._profile_dir = (os.path.join(_BROWSER_DIR, "profile")
                              if _BROWSER_DIR else "")
         self._persistent = False      # persistent context owns its own browser
+        # Attaching to the desktop app's embedded browser over CDP. ``_attached``
+        # means the Browser belongs to the user's Electron app: shutdown must
+        # detach, never close it. ``_cdp_attempted`` keeps a failed attach from
+        # costing its timeout again on every later action.
+        self._attached = False
+        self._cdp_attempted = False
+        self._cdp_url = ""
+        self._cdp_error = ""
+        self._page_marker = None     # stamped onto every state write while attached
+        # A failed attach must not be permanent. The desktop app is often
+        # started *after* the kernel -- the kernel is long-lived, the window
+        # is not -- so treating the first refusal as final would strand this
+        # process on a private Chromium for its whole lifetime while the dock,
+        # which reads the app's state.json, kept showing the embedded view.
+        # Retry when the app rewrites its discovery record (that is the app
+        # announcing itself), or after a short backstop.
+        self._cdp_attempt_ts = 0.0
+        self._cdp_retry_after_s = 15.0
+        self._cdp_record_mtime = 0.0   # record mtime that attempt was based on
+        self._launched_ts = 0.0        # when a self-launched browser took over
 
     # ── lifecycle ──────────────────────────────────────────────
     def _ensure(self):
@@ -167,6 +275,11 @@ class KilnBrowser:
             return False, f"Playwright is not installed: {e}"
         try:
             self.pw = sync_playwright().start()
+            # Prefer the desktop app's embedded browser when it is there: the
+            # agent then drives the window the user is already looking at.
+            attached, _err = self._try_cdp_attach()
+            if attached:
+                return True, None
             launch_kw = {"headless": not self._headed,
                          "args": ["--disable-blink-features=AutomationControlled"]}
             if self._proxy:
@@ -201,10 +314,202 @@ class KilnBrowser:
             self._console = []
             self.page.on("response", lambda r: self._requests.append((r.status, r.url)))
             self.page.on("console", lambda m: self._console.append((m.type, m.text)))
+            self._launched_ts = time.time()
             self._start_screencast()
             return True, None
         except Exception as e:
             return False, f"browser launch failed: {e}"
+
+    # ── attaching to the desktop app's embedded browser ────────
+    def _cdp_candidates(self):
+        """CDP endpoints to try, in preference order. Never raises.
+
+        ``KILN_BROWSER_CDP_URL`` wins outright — an explicit endpoint is an
+        instruction, not a hint, so discovery is skipped when it is set (even
+        when it is set to an off value, which disables attaching entirely).
+        """
+        urls = []
+        explicit, url = _cdp_env_endpoint()
+        if explicit:
+            if url:
+                urls.append(url)
+            return urls
+        rec = _cdp_discovery_record()
+        if rec:
+            port = rec.get("port") or 9222
+            if isinstance(port, (int, str)) and str(port).isdigit():
+                urls.append(f"http://127.0.0.1:{int(port)}")
+        return urls
+
+    @staticmethod
+    def _page_target_id(page):
+        """The page's CDP target id, or None. Never raises.
+
+        ``Target.getTargetInfo`` on a session bound to this page reports the id
+        the desktop app records in its discovery file. That id is stable across
+        navigations, which the url and title markers are not.
+        """
+        try:
+            session = page.context.new_cdp_session(page)
+            try:
+                info = session.send("Target.getTargetInfo") or {}
+            finally:
+                try:
+                    session.detach()
+                except Exception:
+                    pass
+            return ((info.get("targetInfo") or {}).get("targetId")) or None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _pick_browser_page(contexts, title_marker, url_marker, target_id=None):
+        """The embedded browser's page, or (None, why).
+
+        A CDP attach sees every page the Electron app hosts: the toolbar, the
+        DSH UI at 127.0.0.1:3080, and the embedded browser. Driving the DSH UI
+        would type the agent's keystrokes into the harness's own chat box, so
+        the marker match is strict and the fallback is deliberately narrow: the
+        first page that is neither the DSH UI nor about:blank. If nothing
+        qualifies the attach is abandoned and a browser is launched instead.
+
+        The desktop app records the browser view's CDP target id, and that id
+        survives the view navigating away from its start page -- unlike the url
+        and title markers, which only identify the view before its first real
+        navigation. The id is tried first, then the markers.
+        """
+        pages = []
+        for ctx in contexts or []:
+            try:
+                pages.extend(ctx.pages)
+            except Exception:
+                continue
+        live = []
+        for page in pages:
+            try:
+                if page.is_closed():
+                    continue
+                live.append((page, page.url or "", (page.title() or "").strip()))
+            except Exception:
+                continue
+        if not live:
+            return None, "no pages"
+        skip = ("127.0.0.1:3080", "localhost:3080", "toolbar.html")
+        if target_id:
+            for page, url, title in live:
+                if KilnBrowser._page_target_id(page) == target_id:
+                    return page, "target"
+        for page, url, title in live:
+            if url_marker and url_marker in url:
+                return page, "url"
+        for page, url, title in live:
+            if title_marker and title_marker in title:
+                return page, "title"
+        for page, url, title in live:
+            if any(s in url for s in skip) or url in ("", "about:blank"):
+                continue
+            return page, "fallback"
+        return None, "no browser page among %d targets" % len(live)
+
+    def _try_cdp_attach(self):
+        """Attach to a running CDP endpoint instead of launching Chromium.
+
+        Returns ``(True, None)`` when attached, ``(False, reason)`` otherwise.
+        Everything here is best-effort: an unreachable endpoint, a timeout, or
+        no recognisable browser page must degrade to the normal launch, never
+        break it. A failed attempt is remembered for the process lifetime so a
+        missing desktop app does not pay this timeout on every action.
+        """
+        if self._cdp_attempted:
+            # Retry only when the app has announced a new session (its
+            # discovery record was rewritten) or after the backstop. A
+            # successful launch of our own browser clears the way on the
+            # next action once the window exists.
+            rec_mtime = _cdp_discovery_mtime()
+            fresh_record = rec_mtime > 0.0 and rec_mtime != self._cdp_record_mtime
+            if not fresh_record and (time.time() - self._cdp_attempt_ts) < self._cdp_retry_after_s:
+                return False, self._cdp_error or "already tried"
+            if self.page is not None and not self.page.is_closed():
+                # Something is already driving a real page; do not yank it.
+                return False, self._cdp_error or "already tried"
+        self._cdp_attempted = True
+        self._cdp_attempt_ts = time.time()
+        self._cdp_record_mtime = _cdp_discovery_mtime()
+        if self._headed is False and os.environ.get("KILN_BROWSER_CDP_URL") is None:
+            # Headless is an explicit request for a private browser; do not
+            # hijack the user's window instead.
+            self._cdp_error = "headless"
+            return False, self._cdp_error
+        urls = self._cdp_candidates()
+        if not urls:
+            self._cdp_error = "no CDP endpoint"
+            return False, self._cdp_error
+        marker = os.environ.get("KILN_BROWSER_CDP_TITLE", "DSH-BROWSER-VIEW")
+        for url in urls:
+            try:
+                browser = self.pw.chromium.connect_over_cdp(
+                    url, timeout=_CDP_CONNECT_TIMEOUT_MS)
+                contexts = list(browser.contexts)
+                page, why = self._pick_browser_page(
+                    contexts, marker, "browser-start",
+                    (_cdp_discovery_record() or {}).get("targetId"))
+                if page is None:
+                    self._cdp_error = f"{url}: {why}"
+                    try:
+                        browser.close()
+                    except Exception:
+                        pass
+                    continue
+                # A CDP Browser owns the pages it exposes: there is no
+                # new_context() here, the existing context is reused as-is.
+                self.browser = browser
+                self.context = next((c for c in contexts if page in list(c.pages)),
+                                    contexts[0] if contexts else None)
+                if self.context is None:
+                    self._cdp_error = f"{url}: no context"
+                    self.browser = None
+                    continue
+                self.page = page
+                self._attached = True
+                self._persistent = False
+                self._cdp_url = url
+                self._cdp_error = ""
+                self._page_marker = {"title_marker": marker, "matched_by": why,
+                                     "cdp_url": url,
+                                     "target_id": (_cdp_discovery_record() or {}).get("targetId")}
+                self._requests = []
+                self._console = []
+                try:
+                    page.on("response",
+                            lambda r: self._requests.append((r.status, r.url)))
+                    page.on("console",
+                            lambda m: self._console.append((m.type, m.text)))
+                except Exception:
+                    pass     # instrumentation is optional
+                self._start_screencast()
+                return True, None
+            except Exception as e:
+                # Includes the short connect timeout: fall through to launching.
+                self._cdp_error = f"{url}: {type(e).__name__}: {e}"
+                continue
+        return False, self._cdp_error
+
+    def _detach_cdp(self):
+        """Release a CDP attachment without closing the user's browser.
+
+        ``Browser.close()`` on a CDP connection closes the *connected* browser —
+        for the desktop app that means quitting the window the user is working
+        in. The connection is torn down by stopping Playwright instead, which
+        disconnects the client and leaves the Electron app running.
+        """
+        self._attached = False
+        self._cdp_url = ""
+        self._page_marker = None
+        self._cdp_attempted = False    # a later action may attach again
+        self._cdp_error = ""
+        self.browser = None
+        self.context = None
+        self.page = None
 
     def _start_screencast(self):
         """Stream the live viewport to ``latest.jpg`` via Playwright's CDP screencast.
@@ -243,14 +548,22 @@ class KilnBrowser:
                     return
                 base = self._last_state
                 if base is not None:
+                    # Only the fields a frame actually changes. Re-serializing
+                    # the 4 kB text_preview and 60 links at 15 fps was pure
+                    # overhead: they are identical to the last action's write.
                     st = dict(base)
                     st["ts"] = time.time()
                     st["screenshot"] = "latest.jpg"
-                    self._write_state(st)
+                    st["text_preview"] = ""
+                    st["links"] = []
+                    self._write_state(st, remember=False)
             self._screencast = self.page.screencast.start(
                 on_frame=_on_frame,
-                quality=90,
-                size={"width": 1440, "height": 900},
+                # A live view is judged in motion, not per still: 60 is visually
+                # indistinguishable here and roughly a third of the bytes of 90,
+                # which the whole pipeline (disk -> watch -> socket) pays for.
+                quality=60,
+                size={"width": 1280, "height": 720},
             )
         except Exception:
             # Screencast is best-effort: the PNG screenshot path still works.
@@ -299,6 +612,19 @@ class KilnBrowser:
         process exit quietly. Idempotent and never raises.
         """
         self._stop_screencast()
+        if self._attached:
+            # The browser belongs to the desktop app the user is working in:
+            # closing it would quit their window. Detach instead, and stop
+            # Playwright WITHOUT a browser.close() to drop the CDP connection.
+            self._detach_cdp()
+            if self.pw is not None:
+                try:
+                    self.pw.stop()
+                except Exception:
+                    pass
+            self.pw = None
+            self._persistent = False
+            return
         if self.context is not None:
             try:
                 self.context.close()
@@ -384,7 +710,12 @@ class KilnBrowser:
               # real window exists, but querying window bounds over CDP on
               # every state write would re-add the per-action latency that
               # light mode exists to avoid.
-              "headed": bool(getattr(self, "_headed", False))}
+              "headed": bool(getattr(self, "_headed", False)),
+              # Cheap bools only: the dock shows whether the agent is driving the
+              # desktop app's own window, and querying CDP here would re-add the
+              # per-action latency the light path exists to avoid.
+              "attached": bool(getattr(self, "_attached", False)),
+              "attached_url": getattr(self, "_cdp_url", "") or ""}
         try:
             if self.page is not None and not self.page.is_closed():
                 st["url"] = self.page.url
@@ -440,6 +771,8 @@ class KilnBrowser:
             st.setdefault("tabs", [])
             st.setdefault("active", -1)
             st.setdefault("history", _empty_history())
+        if self._page_marker:
+            st["marker"] = self._page_marker
         st.update(extra)
         # The live CDP screencast is the dock's authoritative feed: a one-shot
         # PNG that an action just wrote must not overwrite ``latest.jpg`` while
@@ -449,12 +782,17 @@ class KilnBrowser:
         self._write_state(st)
         return st
 
-    def _write_state(self, st):
+    def _write_state(self, st, remember=True):
         # The screencast callback runs on Playwright's dispatcher thread while
         # normal actions run on the browser worker thread; the lock keeps their
         # state.json writes from interleaving into a torn JSON document.
+        #
+        # `remember=False` is for the ~15 fps frame path: it publishes a small
+        # document without overwriting `_last_state`, so the full text/links
+        # captured by the last real action are not lost to a frame tick.
         with self._state_lock:
-            self._last_state = st
+            if remember:
+                self._last_state = st
             if not _BROWSER_DIR:
                 return
             try:

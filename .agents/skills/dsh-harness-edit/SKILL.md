@@ -48,6 +48,7 @@ Use for any change to harness source, configuration, composition, docs, tests, o
 ## Before committing
 
 - Run the narrowest owning test for the changed behavior.
+- After the whole project's changes are finished, run `start.cmd --build-only` to rebuild the Web artifacts so the edited packages are reflected in the served app.
 - Re-run `git diff` against `upstream/master` and confirm each modified file is either Tier 1 or a marked, registered Tier-2 edit.
 - If a Tier-2 edit appeared that was not planned, stop: either move it to Tier 1 / upstream, or register it with a marker and exit plan.
 - Follow `dsh-pre-push-checks` for the outgoing diff; follow `dsh-github` for the commit/push mechanics.

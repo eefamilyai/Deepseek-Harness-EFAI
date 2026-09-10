@@ -19,15 +19,15 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 
 Both branches descend from `9b262d25ec`, so upstream is fully merged into each and what separates them is ordinary work rather than a sync.
 
-Measured against `upstream/master`, `master`'s surface is **195 files** (122 added, 73 modified, 0 deleted) and `wip/upstream-merge`'s is **167** (106 added, 61 modified). The inventory below enumerates the 167; `master`'s further 28 files are its newer kernel packages and the registration entries they need, and they fall into the same groups.
+Measured against `upstream/master`, `master`'s surface is **203 files** (130 added, 73 modified, 0 deleted) and `wip/upstream-merge`'s is **175** (114 added, 61 modified). The inventory below enumerates the 175; `master`'s further 28 files are its newer kernel packages and the registration entries they need, and they fall into the same groups.
 
-Of those 106 added files, 104 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
+Of those 114 added files, 112 are free: upstream owns no path among them, so they merge untouched, forever. The other two sit inside an upstream package directory (group T2-J below) and are counted with the seam.
 
 The 61 modified files are the entire cost of every future update. Each one is a file two projects edit, and `git merge` has no way to know which side is intentional. Two further files live inside an upstream package directory and carry the same risk without ever showing a conflict.
 
 ## The consolidated inventory
 
-### Tier 1 — fork-owned (104 files, zero merge cost)
+### Tier 1 — fork-owned (112 files, zero merge cost)
 
 Paths upstream does not and will not use. Nothing here can conflict.
 
@@ -45,6 +45,9 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | This document | `HARNESS-EDITS.md` | 1 file |
 | Merge record | `.merge-port/**` | 2 files |
 | Agent Notes | `.agents/notes/implemented/**` | 3 files |
+| Windows desktop browser shell — Electron `BaseWindow` with `WebContentsView` panes, a native toolbar, and a CDP endpoint that `python/kiln/runtime/browser_tools.py` attaches to | `desktop/harness-desktop` | 8 files |
+
+`desktop/` is deliberately outside every workspace glob in `pnpm-workspace.yaml` and every tsconfig, so the shell is never a pnpm workspace member, never enters the lockfile, and never enters a project reference. Adding it under `apps/` would make it all three.
 
 ### Tier 2 — the seam with upstream (63 files, the whole problem)
 
@@ -170,7 +173,7 @@ One line, immediately above the edit, in the file's comment syntax:
 # EXIT: move to packages/bundle/efai-kernel/cordis.patch.yml.
 ```
 
-The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `fix`, `brand`. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
+The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `fix`, `brand`. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
 
 After this convention lands, `grep -rn "DSH-FORK" --include='*.ts' --include='*.yml' --include='*.json' .` is the complete, always-current inventory, and every merge conflict shows the marker in its own hunk.
 
@@ -284,6 +287,8 @@ Every Tier-2 edit, its owner, and what removes it. Keep this table current; it i
 | 22 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
 | 23 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |
 | 24 | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | mounts `rlm-mode`/`rlm` engine rows with `rlm.enabled` defaulting on; `rlm.enabled` unmounts the standalone `tool-kernel` and mounts the engine, while the subsumed shell/fs/search/jobs rows follow `kernel.enabled` | Move to `packages/bundle/efai-rlm/cordis.patch.yml` (a fork-owned bundle applied by profile) |
+| 25 | `client/ui-chat/src/client/{chat/ChatNodeSeat.tsx,chat/TurnProcessNodeView.tsx,contract/slots.ts,locale.ts}` + new `contract/turn-tool-summary.ts` | `brand` | the folded Turn-process row names what the Turn's tool calls did (`Created a.mjs, ran a command +53 -0`) instead of only counting them | Upstream gives the folded process row a content-derived label |
+| 26 | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | the base bundle mounts the `agent-memory-mode`/`agent-memory` rows gated by `agent-memory.enabled` (default off), and `apps/cli` must declare both packages because it is the installation dependency closure the profile module fallback mirrors | Move the bundle rows to `packages/bundle/efai-memory/cordis.patch.yml` (a fork-owned bundle applied by profile); the `apps/cli` manifest row stays until profiles resolve bundles from the checkout |
 
 If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops from 61 files to roughly 12 — and the survivors are lists and infrastructure, which conflict predictably in one place each.
 

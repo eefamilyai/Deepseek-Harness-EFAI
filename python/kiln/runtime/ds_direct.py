@@ -1515,8 +1515,13 @@ def _clip_body(body_msgs, budget, primed=True):
     keep = [False] * n
     used = 0
     # Pinned turns are unconditional — the user's request is never dropped.
+    # A compaction summary (kind == "compact") is equally unconditional: it is
+    # the ONLY surviving memory of the turns it replaced, so clipping it on the
+    # very re-prime that hands the model its condensed history drops the whole
+    # point of compacting and leaves the model with a fresh request and no
+    # prior context ("immediately clueless after /compact").
     for i, m in enumerate(body_msgs):
-        if m.get("pin"):
+        if m.get("pin") or m.get("kind") == "compact":
             keep[i] = True
             used += len(_msg_text(m)) + 12
     # Fill the rest newest-first with whatever still fits.

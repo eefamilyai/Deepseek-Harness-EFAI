@@ -269,6 +269,8 @@
     { "path": "./packages/kernel/kernel-rlm-context" },
     { "path": "./packages/rlm/rlm" },
     { "path": "./packages/rlm/rlm-mode" },
+    { "path": "./packages/agent-memory/agent-memory" },
+    { "path": "./packages/agent-memory/agent-memory-mode" },
     { "path": "./packages/spill/spill" },
     { "path": "./packages/spill/spill-local" },
     { "path": "./packages/spill/spill-policy" },

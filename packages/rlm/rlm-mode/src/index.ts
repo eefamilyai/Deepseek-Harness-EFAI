@@ -7,7 +7,7 @@
  * owns `kernel.enabled`. It stays mounted in BOTH positions of its own switch
  * (a switch that disappeared when off could never be turned back on), and the
  * gating itself is composition: the rows in the shipped agent presets read
- * `dshSettingFlag('rlm.enabled', true)` once at boot (`applies: 'restart'`).
+ * `dshSettingFlag('rlm.enabled', false)` once at boot (`applies: 'restart'`).
  *
  * RLM mode still needs the persistent Python kernel *seam* underneath — the
  * engine executes cells through `ctx.kernel` — so a profile that turns RLM on
@@ -36,11 +36,18 @@ export const RLM_SETTINGS_NAMESPACE = 'rlm'
 /** The document path compositions read through `dshSettingFlag`. */
 export const RLM_ENABLED_PATH = 'rlm.enabled'
 
-/** Default when the user has never touched the switch: recursive RLM engine. */
-export const RLM_ENABLED_DEFAULT = true
+/** Default when the user has never touched the switch: the standalone kernel tool (RLM off). */
+export const RLM_ENABLED_DEFAULT = false
 
 /** Plugin config: the switch, and its composition-layer default. */
 export interface Config {
+  /**
+   * Whether the recursive RLM engine replaces the standalone kernel tool as the
+   * model's way of acting. On: the `kernel`, filesystem, shell, and
+   * background-job tools unmount and the model instead runs one `rlm` recursive
+   * completion. Off: the standalone `kernel` tool. Requires `kernel.enabled`.
+   * Takes effect on restart.
+   */
   enabled?: boolean
 }
 

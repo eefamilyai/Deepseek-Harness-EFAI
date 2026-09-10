@@ -304,13 +304,18 @@
 .accountPicker {
   display: flex;
   flex-direction: column;
-  padding: 2px 8px 4px;
+  gap: 2px;
+  margin: 2px 8px 4px;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 10px;
 }
 
 .accountOption {
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 4px 8px;
   border: none;
@@ -335,7 +340,16 @@
 }
 
 .accountLabel {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.accountCheck {
+  display: grid;
+  place-items: center;
+  flex: 0 0 16px;
+  color: var(--dsw-alias-state-business-primary);
 }

@@ -1,0 +1,491 @@
+diff --git a/packages/llm/llm/src/index.ts b/packages/llm/llm/src/index.ts
+index cdecc4c96e..d0dba4d54b 100644
+--- a/packages/llm/llm/src/index.ts
++++ b/packages/llm/llm/src/index.ts
+@@ -323,6 +323,40 @@ export interface DirectoryRegistrationHandle {
+  * The abstract `llm` service: an adapter registry plus a streaming model-call
+  * API, interceptable via the `llm/stream` waterfall.
+  */
++/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
++export interface LlmAccountDraft {
++  /** Login email, when the account signs in with one. */
++  readonly email?: string
++  /** Login mobile, when the account signs in with one. */
++  readonly mobile?: string
++  /** Area code for a mobile login. */
++  readonly area_code?: string
++  /** Password, used only to test the login; never stored or returned by the runtime. */
++  readonly password: string
++}
++
++/** The outcome of adding one account: its id and new route on success, or a reason. */
++export interface LlmAccountAddResult {
++  /** Whether the login tested successfully and the account was added. */
++  readonly ok: boolean
++  /** The added login id, on success. */
++  readonly account?: string
++  /** The route now bound to that login, on success (selectable immediately). */
++  readonly route?: string
++  /** A plain failure reason, on failure — never the credential. */
++  readonly message?: string
++}
++
++/** Tests a login and, on success, makes it a selectable route for its provider. */
++export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>
++
++/**
++ * The `ctx.llm` service: the registry every model-facing capability resolves
++ * through. It holds the adapter registrations that turn a route into a live
++ * client, the configurable-provider directory a settings surface reads, the
++ * per-provider model discoveries, and the account adders that turn a tested
++ * login into a selectable route.
++ */
+ export class LlmRuntime extends TypertRemoteService {
+   private adapters = new Map<string, AdapterRegistration>()
+   private directory = new Map<string, LlmConfigurableProvider>()
+@@ -330,6 +364,7 @@ export class LlmRuntime extends TypertRemoteService {
+     string,
+     (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
+   >()
++  private accountAdders = new Map<string, LlmAccountAdder>()
+ 
+   constructor(ctx: Context) {
+     super(ctx, 'llm')
+@@ -609,6 +644,62 @@ export class LlmRuntime extends TypertRemoteService {
+     return models
+   }
+ 
++  /**
++   * Register the handler that tests and adds a login for one account-pooling
++   * provider route (`ds_direct` is the only one today). Mirrors
++   * {@link registerModelDiscovery}: one handler per route, released with the
++   * returned disposer. The handler owns making the new login selectable — it
++   * re-registers its own routes — so the runtime only routes the call.
++   * @param provider - the provider route that pools logins.
++   * @param add - tests a login and, on success, adds it.
++   * @returns a disposer that withdraws the handler.
++   */
++  registerAccountProvider(provider: string, add: LlmAccountAdder): () => void {
++    const dispose = this.ctx.effect(function* (this: LlmRuntime) {
++      if (provider.length === 0) {
++        throw new LlmError('an account provider needs a non-empty route', 'INVALID_ACCOUNT_PROVIDER')
++      }
++      if (this.accountAdders.has(provider)) {
++        throw new LlmError(`an account provider for "${provider}" is already registered`, 'DUPLICATE_ACCOUNT_PROVIDER')
++      }
++      this.accountAdders.set(provider, add)
++      yield () => {
++        this.accountAdders.delete(provider)
++      }
++    }.bind(this), 'llm.registerAccountProvider()')
++    return () => void dispose()
++  }
++
++  /**
++   * The provider routes that accept account additions, for a surface to offer.
++   * @returns the registered account-provider routes, in registration order.
++   */
++  listAccountProviders(): string[] {
++    return [...this.accountAdders.keys()]
++  }
++
++  /**
++   * Test a login for one account-pooling provider and, on success, make it a
++   * selectable route. The password is used only for the test and never stored
++   * or returned here — the reply is the account id and its route, or a reason.
++   * @param provider - the provider route that pools logins.
++   * @param account - the login to test.
++   * @returns the added account and route, or the failure reason.
++   */
++  async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult> {
++    const add = this.accountAdders.get(provider)
++    if (add === undefined) {
++      throw new LlmError(`no account provider is registered for "${provider}"`, 'NO_ACCOUNT_PROVIDER')
++    }
++    if (account.password.length === 0) {
++      throw new LlmError('an account needs a password to test the login', 'INVALID_ACCOUNT')
++    }
++    if ((account.email ?? '').length === 0 && (account.mobile ?? '').length === 0) {
++      throw new LlmError('an account needs an email or a mobile number', 'INVALID_ACCOUNT')
++    }
++    return add(account)
++  }
++
+   /**
+    * Remote adapter for one draft provider interrogation.
+    * @param settingsNs - namespace whose registered discovery serves this draft.
+diff --git a/packages/llm/token-meter/src/index.ts b/packages/llm/token-meter/src/index.ts
+index 85742823d9..def621ee8e 100644
+--- a/packages/llm/token-meter/src/index.ts
++++ b/packages/llm/token-meter/src/index.ts
+@@ -19,7 +19,7 @@ import type {
+   TokenMeterConfig,
+ } from './types.ts'
+ import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
+-import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
++import { contextPressureProjectionDefinition, tokenUsageLifetimeProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
+ import { estimateContent, estimateHeader, estimateMessage, ROLE_OVERHEAD } from './estimate.ts'
+ import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
+ import type { MeterSurfaceNode } from './surface-fold.ts'
+@@ -99,9 +99,14 @@ export class TokenMeter extends Service {
+     super(ctx, 'tokenMeter')
+     validateConfigKeys(config)
+ 
+-    ctx.sessionProjections.register(tokenUsageProjectionDefinition)
+-    ctx.sessionProjections.register(contextPressureProjectionDefinition)
+-    ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
++    // Projection registration is an optional child: compositions without the
++    // generic registry keep the meter's standalone read shape.
++    ctx.inject(['sessionProjections'], (projectionCtx) => {
++      projectionCtx.sessionProjections.register(tokenUsageProjectionDefinition)
++      projectionCtx.sessionProjections.register(tokenUsageLifetimeProjectionDefinition)
++      projectionCtx.sessionProjections.register(contextPressureProjectionDefinition)
++      projectionCtx.sessionProjections.register(contextBreakdownProjectionDefinition)
++    })
+ 
+     // Readers catch up independently, while eager observation bounds ordinary
+     // read latency without creating state for sessions no consumer has read.
+diff --git a/packages/llm/token-meter/src/projection.ts b/packages/llm/token-meter/src/projection.ts
+index 5c451617e9..4e0f69299f 100644
+--- a/packages/llm/token-meter/src/projection.ts
++++ b/packages/llm/token-meter/src/projection.ts
+@@ -67,8 +67,20 @@ export interface ContextBreakdownProjection {
+ 
+ declare module '@deepseek-ai/dsh-session-projection/types' {
+   interface SessionProjectionMap {
+-    /** Provider-reported usage accumulated across the complete durable log. */
++    /**
++     * Provider-reported usage since the last successful compaction. Zeroed
++     * when a `/compact` (manual or the context-overflow auto-retry) succeeds,
++     * so it reads as the billing accrued against the CURRENT compacted
++     * conversation — see {@link tokenUsageLifetime} for the session total.
++     */
+     tokenUsage: TokenUsageProjection
++    /**
++     * Provider-reported usage accumulated across the WHOLE session, unaffected
++     * by compaction. Same four disjoint buckets as {@link tokenUsage}; the two
++     * differ only in that this one never resets, so it is the true lifetime
++     * total across every compaction.
++     */
++    tokenUsageLifetime: TokenUsageProjection
+     /** Newest request pressure paired with the newest known route capacity. */
+     contextPressure: ContextPressureProjection
+     /** Heuristic system/tools/message composition of the next request. */
+diff --git a/packages/llm/token-meter/src/usage-projection.ts b/packages/llm/token-meter/src/usage-projection.ts
+index 50f336c61c..fe73d9b327 100644
+--- a/packages/llm/token-meter/src/usage-projection.ts
++++ b/packages/llm/token-meter/src/usage-projection.ts
+@@ -88,6 +88,7 @@ const usageOf = (event: SessionEvent): TokenUsage | undefined =>
+ declare module '@deepseek-ai/dsh-session-projection/types' {
+   interface SessionProjectionStateMap {
+     tokenUsage: TokenUsageState
++    tokenUsageLifetime: TokenUsageState
+     contextPressure: ContextPressureState
+   }
+ }
+@@ -108,14 +109,55 @@ const contextPressureStateSchema = z.object({
+ type ContextPressureState = z.infer<typeof contextPressureStateSchema>
+ 
+ /**
+- * Token-meter's session projection unit.
++ * Fold one usage-bearing event into the running totals (the part shared by
++ * both usage projections).
+  *
+  * Usage chunks provide an early sample that survives a later request failure;
+  * an assistant message provides the final sample for the same attempt. A
+  * repeated sample replaces that attempt's earlier value instead of double
+  * counting it, while `llm/retry-started` closes the replacement slot so the
+  * retried attempt adds to the total. The single `last` slot relies on the
+- * session-log invariant that usage reports for one attempt are adjacent.
++ * session-log invariant that usage reports for one attempt are adjacent. An
++ * event that reports no usage returns the same state reference (zero
++ * downstream work).
++ */
++const applyUsageSample = (state: TokenUsageState, event: SessionEvent): TokenUsageState => {
++  if (event.type === 'llm/retry-started') {
++    return state.last?.turn === event.data.turn && state.last.step === event.data.step
++      ? { ...state, last: null }
++      : state
++  }
++  let turn: number
++  let step: number
++  let usage: TokenUsage
++  if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
++    ;({ turn, step } = event.data)
++    usage = event.data.chunk.usage
++  } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
++    ;({ turn, step, usage } = event.data)
++  } else {
++    return state
++  }
++
++  const buckets = bucketsFrom(usage)
++  const previous = state.last !== null
++    && state.last.turn === turn
++    && state.last.step === step
++    ? state.last.buckets
++    : undefined
++  if (previous !== undefined && bucketsEqual(previous, buckets)) return state
++
++  return {
++    totals: addReplacing(state.totals, previous, buckets),
++    last: { turn, step, buckets },
++  }
++}
++
++/**
++ * Token-meter's session projection unit: provider usage SINCE the last
++ * successful compaction. Resets on a clean `compaction/end` so the value reads
++ * as the billing accrued against the current compacted conversation. For the
++ * whole-session total see {@link tokenUsageLifetimeProjectionDefinition}.
+  */
+ export const tokenUsageProjectionDefinition = {
+   key: 'tokenUsage',
+@@ -123,38 +165,52 @@ export const tokenUsageProjectionDefinition = {
+   stateSchema: tokenUsageStateSchema,
+   init: () => ({ totals: zeroBuckets(), last: null }),
+   apply: (state, event) => {
+-    if (event.type === 'llm/retry-started') {
+-      return state.last?.turn === event.data.turn && state.last.step === event.data.step
+-        ? { ...state, last: null }
+-        : state
++    // A compaction that ends with no `error` is a successful /compact (manual)
++    // or the auto-compaction retry the harness runs on context overflow: the
++    // conversation has been rewritten, so the user asked for these cumulative
++    // totals to reset. The surface itself is already replaced by the
++    // compaction's summary message; this only zeroes the durable billing fold.
++    if (event.type === 'compaction/end' && event.data.error === undefined) {
++      const t = state.totals
++      const alreadyEmpty = t.uncachedInputTokens === 0
++        && t.outputTokens === 0
++        && t.cacheReadTokens === 0
++        && t.cacheWriteTokens === 0
++      return alreadyEmpty && state.last === null
++        ? state
++        : { totals: zeroBuckets(), last: null }
+     }
+-    let turn: number
+-    let step: number
+-    let usage: TokenUsage
+-    if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
+-      ;({ turn, step } = event.data)
+-      usage = event.data.chunk.usage
+-    } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
+-      ;({ turn, step, usage } = event.data)
+-    } else {
+-      return state
+-    }
+-
+-    const buckets = bucketsFrom(usage)
+-    const previous = state.last !== null
+-      && state.last.turn === turn
+-      && state.last.step === step
+-      ? state.last.buckets
+-      : undefined
+-    if (previous !== undefined && bucketsEqual(previous, buckets)) return state
++    return applyUsageSample(state, event)
++  },
++  wire: { viewSchema: projectionSchema, view: state => state.totals },
++} satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
+ 
+-    return {
+-      totals: addReplacing(state.totals, previous, buckets),
+-      last: { turn, step, buckets },
++/**
++ * Token-meter's LIFETIME usage projection unit: the same four disjoint buckets
++ * as {@link tokenUsageProjectionDefinition}, accumulated across the whole
++ * session and never zeroed by compaction. This is the "total token usage
++ * across all compactions" the session report needs.
++ *
++ * A successful compaction keeps the totals but clears the same-attempt dedup
++ * memory (`last`): compaction happens at a step boundary, and turn/step
++ * numbering can repeat in the new epoch, so a carried-over `last` could make
++ * the first post-compaction sample look like a replacement of the final
++ * pre-compaction step and wrongly subtract it. A failed compaction reports no
++ * usage and is a no-op, exactly like any other non-usage event.
++ */
++export const tokenUsageLifetimeProjectionDefinition = {
++  key: 'tokenUsageLifetime',
++  stateVersion: 1,
++  stateSchema: tokenUsageStateSchema,
++  init: () => ({ totals: zeroBuckets(), last: null }),
++  apply: (state, event) => {
++    if (event.type === 'compaction/end' && event.data.error === undefined) {
++      return state.last === null ? state : { totals: state.totals, last: null }
+     }
++    return applyUsageSample(state, event)
+   },
+   wire: { viewSchema: projectionSchema, view: state => state.totals },
+-} satisfies ProjectionDefinition<'tokenUsage', TokenUsageState>
++} satisfies ProjectionDefinition<'tokenUsageLifetime', TokenUsageState>
+ 
+ /**
+  * Token-meter's context-occupancy projection unit.
+diff --git a/packages/llm/token-meter/tests/token-usage-projection.spec.ts b/packages/llm/token-meter/tests/token-usage-projection.spec.ts
+index f9ce9015e3..b9a201b304 100644
+--- a/packages/llm/token-meter/tests/token-usage-projection.spec.ts
++++ b/packages/llm/token-meter/tests/token-usage-projection.spec.ts
+@@ -283,6 +283,39 @@ describe('tokenUsage session projection', () => {
+     })
+   })
+ 
++  it('resets cumulative billing when a compaction ends successfully', async () => {
++    const { ctx, session } = await harness()
++    startStep(session, 1, 1)
++    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
++
++    session.append('compaction/start', { compactionId: CompactionId('reset-compact'), turn: null })
++    session.append('compaction/end', { compactionId: CompactionId('reset-compact'), turn: null })
++
++    expect(projected(ctx, session)).toEqual(ZERO)
++  })
++
++  it('does not reset cumulative billing when a compaction fails', async () => {
++    const { ctx, session } = await harness()
++    startStep(session, 1, 1)
++    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
++
++    session.append('compaction/start', { compactionId: CompactionId('failed-compact'), turn: null })
++    session.append('compaction/end', {
++      compactionId: CompactionId('failed-compact'),
++      turn: null,
++      error: 'provider failed',
++    })
++
++    expect(projected(ctx, session)).toEqual({
++      uncachedInputTokens: 12,
++      outputTokens: 3,
++      cacheReadTokens: 0,
++      cacheWriteTokens: 0,
++    })
++  })
++
+   it('unregisters with the token-meter fiber and restores from a JSON checkpoint', async () => {
+     const { ctx, session, meterFiber } = await harness()
+     startStep(session, 1, 1)
+@@ -304,6 +337,123 @@ describe('tokenUsage session projection', () => {
+   })
+ })
+ 
++const projectedLifetime = (ctx: Context, session: Session): TokenUsageProjection => {
++  const value = ctx.sessionProjections.snapshot(session).values.tokenUsageLifetime
++  if (value === undefined) throw new Error('tokenUsageLifetime projection is not registered')
++  return value
++}
++
++describe('tokenUsageLifetime session projection', () => {
++  it('serves zero buckets for an empty log', async () => {
++    const { ctx, session } = await harness()
++    expect(projectedLifetime(ctx, session)).toEqual(ZERO)
++  })
++
++  it('keeps accumulating across a successful compaction while tokenUsage resets', async () => {
++    const { ctx, session } = await harness()
++    startStep(session, 1, 1)
++    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3, cacheReadTokens: 5 }, 1, 1, [source])
++
++    session.append('compaction/start', { compactionId: CompactionId('lifetime-compact'), turn: null })
++    session.append('compaction/end', { compactionId: CompactionId('lifetime-compact'), turn: null })
++
++    // The since-compact counter is back to zero; the lifetime total is not.
++    expect(projected(ctx, session)).toEqual(ZERO)
++    expect(projectedLifetime(ctx, session)).toEqual({
++      uncachedInputTokens: 12,
++      outputTokens: 3,
++      cacheReadTokens: 5,
++      cacheWriteTokens: 0,
++    })
++
++    // A turn after the compaction adds to both counters.
++    startStep(session, 2, 1)
++    const next = usageChunk(session, { inputTokens: 8, outputTokens: 2 }, 2, 1)
++    finalUsage(session, { inputTokens: 8, outputTokens: 2 }, 2, 1, [next])
++    expect(projected(ctx, session)).toEqual({
++      uncachedInputTokens: 8,
++      outputTokens: 2,
++      cacheReadTokens: 0,
++      cacheWriteTokens: 0,
++    })
++    expect(projectedLifetime(ctx, session)).toEqual({
++      uncachedInputTokens: 20,
++      outputTokens: 5,
++      cacheReadTokens: 5,
++      cacheWriteTokens: 0,
++    })
++  })
++
++  it('adds a repeated turn/step after a compaction instead of replacing the pre-compaction sample', async () => {
++    // Compaction can restart turn/step numbering. The lifetime fold must clear
++    // its same-step dedup memory at the compaction boundary, or the first
++    // post-compaction sample would be mistaken for a replacement of the last
++    // pre-compaction step and wrongly subtract it.
++    const { ctx, session } = await harness()
++    startStep(session, 1, 1)
++    const first = usageChunk(session, { inputTokens: 10, outputTokens: 2 }, 1, 1)
++    finalUsage(session, { inputTokens: 10, outputTokens: 2 }, 1, 1, [first])
++
++    session.append('compaction/start', { compactionId: CompactionId('renumber-compact'), turn: null })
++    session.append('compaction/end', { compactionId: CompactionId('renumber-compact'), turn: null })
++
++    // Same turn/step as before the compaction, different buckets.
++    startStep(session, 1, 1)
++    const second = usageChunk(session, { inputTokens: 7, outputTokens: 4 }, 1, 1)
++    finalUsage(session, { inputTokens: 7, outputTokens: 4 }, 1, 1, [second])
++
++    expect(projectedLifetime(ctx, session)).toEqual({
++      uncachedInputTokens: 17,
++      outputTokens: 6,
++      cacheReadTokens: 0,
++      cacheWriteTokens: 0,
++    })
++  })
++
++  it('does not reset when a compaction fails', async () => {
++    const { ctx, session } = await harness()
++    startStep(session, 1, 1)
++    const source = usageChunk(session, { inputTokens: 12, outputTokens: 3 }, 1, 1)
++    finalUsage(session, { inputTokens: 12, outputTokens: 3 }, 1, 1, [source])
++
++    session.append('compaction/start', { compactionId: CompactionId('failed-lifetime'), turn: null })
++    session.append('compaction/end', {
++      compactionId: CompactionId('failed-lifetime'),
++      turn: null,
++      error: 'provider failed',
++    })
++
++    expect(projectedLifetime(ctx, session)).toEqual({
++      uncachedInputTokens: 12,
++      outputTokens: 3,
++      cacheReadTokens: 0,
++      cacheWriteTokens: 0,
++    })
++  })
++
++  it('restores from a JSON checkpoint at stateVersion 1', async () => {
++    const { ctx, session, meterFiber } = await harness()
++    startStep(session, 1, 1)
++    usageChunk(session, { inputTokens: 8, outputTokens: 2, cacheReadTokens: 5 }, 1, 1)
++    const checkpoint = JSON.parse(JSON.stringify(
++      ctx.sessionProjections.checkpoint(session),
++    )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
++    expect(checkpoint.tokenUsageLifetime?.ver).toBe(1)
++
++    await meterFiber.dispose()
++    expect(ctx.sessionProjections.snapshot(session).values).not.toHaveProperty('tokenUsageLifetime')
++
++    await ctx.plugin(TokenMeter)
++    expect(ctx.sessionProjections.viewCheckpoint(checkpoint).tokenUsageLifetime).toEqual({
++      uncachedInputTokens: 8,
++      outputTokens: 2,
++      cacheReadTokens: 5,
++      cacheWriteTokens: 0,
++    })
++  })
++})
++
+ const pressure = (ctx: Context, session: Session): ContextPressureProjection => {
+   const value = ctx.sessionProjections.snapshot(session).values.contextPressure
+   if (value === undefined) throw new Error('contextPressure projection is not registered')

@@ -41,6 +41,54 @@
   white-space: nowrap;
 }
 
+/* One hue per tool family, the same --dsw-alias-flow-* set the expanded rows
+   colour through (ui-tool's ToolRow, ReasoningRow, ContextInjectionRow). A
+   folded Turn then reads as a miniature of the rows it hides: what was read,
+   what was written, and what was run stay distinguishable at a glance instead
+   of collapsing into one grey sentence. */
+.phrase[data-tone='mutate'] {
+  color: var(--dsw-alias-flow-mutate);
+}
+
+.phrase[data-tone='read'] {
+  color: var(--dsw-alias-flow-read);
+}
+
+.phrase[data-tone='shell'] {
+  color: var(--dsw-alias-flow-shell);
+}
+
+.phrase[data-tone='code'] {
+  color: var(--dsw-alias-flow-code);
+}
+
+.phrase[data-tone='search'] {
+  color: var(--dsw-alias-flow-search);
+}
+
+.phrase[data-tone='instruct'] {
+  color: var(--dsw-alias-flow-instruct);
+}
+
+.phrase[data-tone='generic'] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* What the row could not print, and the line delta: secondary facts about the
+   Turn, so they stay quieter than the actions themselves. The delta keeps the
+   diff card's add/remove convention. */
+.more {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.added {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.removed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chevron {
     transition: none;

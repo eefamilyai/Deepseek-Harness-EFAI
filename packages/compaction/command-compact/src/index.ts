@@ -4,7 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { ManualCompactionError } from '@deepseek-ai/dsh-compaction'
+import { ManualCompactionError, type CompactionResult } from '@deepseek-ai/dsh-compaction'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 
 export const name = 'command-compact'
@@ -63,7 +63,7 @@ async function executeCompact(
     return { kind: 'error', text: USAGE }
   }
   try {
-    const result = await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
+    const result = await compactWhenIdle(ctx, invocation)
     if (result === null) return { kind: 'success', text: 'No compactable history yet.' }
     return {
       kind: 'success',
@@ -74,6 +74,26 @@ async function executeCompact(
     if (invocation.signal.aborted) return { kind: 'error', text: 'Compaction cancelled.' }
     if (error instanceof ManualCompactionError) return expectedFailure(error)
     throw error
+  }
+}
+
+/**
+ * Run compaction, waiting for the agent to finish its current turn first.
+ *
+ * `compactNow` requires a true idle phase and raises `busy` while the agent is
+ * mid-turn. Retrying once after `whenIdle()` lets a `/compact` typed during an
+ * active run settle behind it, mirroring how queued messages wait for the same
+ * driver to quiesce — instead of failing with "the agent is not idle".
+ */
+async function compactWhenIdle(ctx: Context, invocation: CommandInvocation): Promise<CompactionResult | null> {
+  try {
+    return await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
+  } catch (error: unknown) {
+    if (!(error instanceof ManualCompactionError) || error.code !== 'busy') throw error
+    if (invocation.signal.aborted) throw error
+    await invocation.agent.whenIdle()
+    invocation.signal.throwIfAborted()
+    return await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
   }
 }
 

@@ -49,6 +49,7 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
+import * as ToolNotebookEdit from '@deepseek-ai/dsh-tool-notebook-edit'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
@@ -348,6 +349,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-notebook-edit',
+    dir: 'tool-notebook-edit',
+    source: 'packages/fs/tool-notebook-edit/src/index.ts',
+    requires: ['ctx.tools', 'ctx.fs', 'ctx.systemPrompt'],
+    writes: ['tool/call', 'fs/write-intent for mutations', 'tool/result'],
+    async mount(ctx) {
+      // The tool injects `fs`; the bare provider is sufficient because the
+      // sandbox/observation policy changes behavior, not schema shape.
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(ToolNotebookEdit)
+    },
+    note:
+      'notebook_edit is one tool with five commands (`view`, `create`, `str_replace`, `insert`, `delete`) over Jupyter `.ipynb` files, and it is registered exclusive (no `isConcurrencySafe`): a mutating command re-reads the whole notebook and writes it back, so two overlapping edits to one file would lose one of them. Paths must be absolute, and mutations go through the mounted filesystem policy.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-terminal',

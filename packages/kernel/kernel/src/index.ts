@@ -145,6 +145,7 @@ export class KernelRuntime extends Service {
    * Returns `false` when no backend is resolvable (no usable provider), which
    * is the correct reading for a re-entrant guard: without a backend there is
    * nothing to deadlock against.
+   * @returns whether a cell is queued or running on the resolved backend.
    */
   busy(): boolean {
     try {

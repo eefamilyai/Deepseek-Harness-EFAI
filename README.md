@@ -36,6 +36,24 @@ pnpm dsh web
 
 `pnpm run build` prepares the repository artifacts; `pnpm dsh web` starts the Web UI.
 
+## Start the server
+
+Windows:
+
+```powershell
+.\start.cmd
+```
+
+macOS or Linux:
+
+```sh
+./start.sh
+```
+
+The launchers provision the bundled Python runtime, install dependencies, build once when needed, and start the Web UI at `http://127.0.0.1:3080`. Pass `--port 3100` to use another port, or `--build` to force a rebuild.
+
+After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
+
 ## What this fork adds
 
 - A Python kernel that executes code cells through the kernel tools.

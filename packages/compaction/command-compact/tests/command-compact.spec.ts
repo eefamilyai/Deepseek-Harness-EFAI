@@ -101,6 +101,7 @@ async function harness(): Promise<Harness> {
     status: 'idle',
     options: {},
     reserveTurnAdmission: () => () => undefined,
+    whenIdle: async () => {},
   } as unknown as Agent
   return { ctx, compact, agent, plugin }
 }
@@ -217,6 +218,24 @@ describe('/compact human command', () => {
     const execution = await run(test)
     expect(execution.result).toEqual({ kind: 'error', text })
     expect(execution.commandId).toBe(expectLastLifecycle(test, '', execution.result))
+  })
+
+  it('waits for a busy agent to go idle, then retries compaction', async () => {
+    const test = await harness()
+    let attempts = 0
+    test.compact.operation = () => {
+      attempts += 1
+      if (attempts === 1) return Promise.reject(new ManualCompactionError('busy', 'mid-turn'))
+      return Promise.resolve(RESULT)
+    }
+    const execution = await run(test)
+    expect(execution.result).toEqual({
+      kind: 'success',
+      text: 'Compacted 3 history items (~42 tokens).',
+      sourceEventSeq: RESULT.summarySeq,
+    })
+    expect(execution.commandId).toBe(expectLastLifecycle(test, '', execution.result))
+    expect(test.compact.calls).toHaveLength(2)
   })
 
   it('preserves cancellation and unexpected implementation failures', async () => {

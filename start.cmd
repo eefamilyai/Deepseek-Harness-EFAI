@@ -12,6 +12,7 @@ rem Usage:
 rem   start.cmd              start the web UI on the default port
 rem   start.cmd --port 3100  pass any dsh flag straight through
 rem   start.cmd --build      force a rebuild before starting
+rem   start.cmd --build-only  build, then exit without starting
 rem
 rem The first run needs `pnpm install` and a build; both are done here when the
 rem build output is missing, so a fresh checkout starts with one command.
@@ -30,8 +31,10 @@ set "DSH_GIT_COMMIT_NAME=unknown"
 set "DSH_GIT_COMMIT_SHORT=unknown"
 git rev-parse --is-inside-work-tree >nul 2>&1
 if not errorlevel 1 (
-  for /f "delims=" %%V in ('git log -1 --format=%%s') do set "DSH_GIT_COMMIT_NAME=%%V"
-  for /f "delims=" %%V in ('git rev-parse --short HEAD') do set "DSH_GIT_COMMIT_SHORT=%%V"
+  for /f "tokens=1,* delims= " %%A in ('git log -1 --pretty^=oneline') do (
+    set "DSH_GIT_COMMIT_SHORT=%%A"
+    set "DSH_GIT_COMMIT_NAME=%%B"
+  )
 )
 rem Capture one ANSI escape character so the banner can color itself without
 rem depending on a non-ASCII byte literal in the batch file. The `prompt $E`
@@ -45,6 +48,9 @@ set "DSH_ARGS="
 if "%~1"=="" goto parsed
 if /i "%~1"=="--build" (
   set "FORCE_BUILD=1"
+) else if /i "%~1"=="--build-only" (
+  set "FORCE_BUILD=1"
+  set "BUILD_ONLY=1"
 ) else (
   set "DSH_ARGS=%DSH_ARGS% %1"
 )
@@ -171,6 +177,10 @@ goto run
 :build
 echo [start] Building...
 call pnpm run build || exit /b 1
+if defined BUILD_ONLY (
+  echo [start] Build complete.
+  exit /b 0
+)
 
 :run
 rem Prefer the built CLI when it exists: source mode (`pnpm dsh web`) re-runs

@@ -7,6 +7,9 @@ import {
   decodeTurnProcess, TURN_PROCESS_INDEPENDENT_KINDS, turnProcessGeneration,
   type TurnProcessSpec,
 } from '../contract/turn-process.ts'
+// DSH-FORK(brand): derive what the Turn's tool calls did, for the folded row's
+// label. EXIT: upstream gives the folded process row a content-derived label.
+import { summarizeToolCalls, type TurnToolSummary } from '../contract/turn-tool-summary.ts'
 import { storedTurnProcessEntry } from '../stores.ts'
 import { useSearchableHidden } from './searchable-hidden.ts'
 import css from './ChatView.module.css'
@@ -113,6 +116,19 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       : turnProcessLayout(processLayoutKeys, nodeStore, processSpec),
     [nodeStore, processLayoutKeys, processSpec],
   )
+  // DSH-FORK(brand): the folded row names the Turn's work instead of counting
+  // it, so it reads "Created a.mjs, ran a command +53 -0". Only root tool-call
+  // nodes inside the process window contribute; a Turn with none keeps the
+  // count-only label the renderer falls back to.
+  const processSummary = useMemo<TurnToolSummary | undefined>(() => {
+    if (processSpec === undefined || processLayoutKeys.length === 0) return undefined
+    const roots = []
+    for (const key of processLayoutKeys) {
+      const candidate = nodeStore.get(key) as ChatNode | undefined
+      if (candidate?.kind === 'tool-call') roots.push(candidate.data.root)
+    }
+    return roots.length === 0 ? undefined : summarizeToolCalls(roots)
+  }, [nodeStore, processLayoutKeys, processSpec])
   const processGeneration = useMemo(
     () => processSpec === undefined ? undefined : turnProcessGeneration(processSpec),
     [processSpec],
@@ -159,8 +175,9 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       foldable,
       open: processOpen,
       setOpen,
+      summary: processSummary,
     }, [
-    foldable, processGeneration, processOpen, processSpec, setOpen,
+    foldable, processGeneration, processOpen, processSpec, processSummary, setOpen,
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && !foldable

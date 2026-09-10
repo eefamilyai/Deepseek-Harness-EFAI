@@ -113,6 +113,47 @@ Depends on: [`AgentOptions`](subsystems/core.md) · [`SessionId`](subsystems/cor
 
 Source: [`packages/core/agent-loop/src/index.ts:311`](../packages/core/agent-loop/src/index.ts)
 
+<a id="deepseek-aidsh-agent-memory"></a>
+
+## `@deepseek-ai/dsh-agent-memory`
+
+Requires: `storageDomain` · `systemPrompt` · `tools`
+
+```ts config-catalog
+export interface Config {
+  /** How many of the newest memory nodes the injected index lists. */
+  maxIndexNodes?: number
+  /** Character ceiling on the whole injected index; it is truncated to fit. */
+  maxIndexChars?: number
+  /** Character ceiling on one entry's one-line summary inside the index. */
+  maxSummaryChars?: number
+  /** Character ceiling on the full evidence stored for one memory node. */
+  maxFullChars?: number
+  /** Character ceiling on a tool result captured by the automatic observer. */
+  maxAutoRecordChars?: number
+}
+```
+
+Source: [`packages/agent-memory/agent-memory/src/index.ts:36`](../packages/agent-memory/agent-memory/src/index.ts)
+
+<a id="deepseek-aidsh-agent-memory-mode"></a>
+
+## `@deepseek-ai/dsh-agent-memory-mode`
+
+```ts config-catalog
+export interface Config {
+  /**
+   * Whether the durable memory engine mounts. On: the engine adds
+   * `memory_add`/`memory_recall`/`memory_map`, auto-records tool output, and
+   * re-injects a bounded index each turn. Off: no memory tools and no index.
+   * Takes effect on restart.
+   */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/agent-memory/agent-memory-mode/src/index.ts:18`](../packages/agent-memory/agent-memory-mode/src/index.ts)
+
 <a id="deepseek-aidsh-agent-presets"></a>
 
 ## `@deepseek-ai/dsh-agent-presets`
@@ -832,7 +873,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/sidebar-bridge/src/index.ts:79`](../packages/host/sidebar-bridge/src/index.ts)
+Source: [`packages/host/sidebar-bridge/src/index.ts:82`](../packages/host/sidebar-bridge/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 
@@ -951,6 +992,32 @@ export interface Config {
 ```
 
 Source: [`packages/kernel/kernel-python/src/index.ts:57`](../packages/kernel/kernel-python/src/index.ts)
+
+<a id="deepseek-aidsh-kernel-rlm-context"></a>
+
+## `@deepseek-ai/dsh-kernel-rlm-context`
+
+Requires: `kernel` · `systemPrompt`
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /** Skip the read-back and contribute nothing (defaults to false). */
+  disabled?: boolean
+  /**
+   * When set, contribute ONLY for this agent id. Children (in-process
+   * subagents) have different ids and are therefore skipped, preserving their
+   * clean context. Omitted = contribute for every agent (legacy, single-agent).
+   */
+  ownerAgentId?: string
+  /** Cap on rendered answer text, to keep the runtime snapshot bounded. */
+  maxAnswerChars?: number
+  /** Cap on rendered bind text per value. */
+  maxBindChars?: number
+}
+```
+
+Source: [`packages/kernel/kernel-rlm-context/src/index.ts:69`](../packages/kernel/kernel-rlm-context/src/index.ts)
 
 <a id="deepseek-aidsh-llm-deepseek"></a>
 
@@ -1755,6 +1822,44 @@ export interface Config {
 ```
 
 Source: [`packages/guard/repeat-tool-reminder/src/index.ts:28`](../packages/guard/repeat-tool-reminder/src/index.ts)
+
+<a id="deepseek-aidsh-rlm"></a>
+
+## `@deepseek-ai/dsh-rlm`
+
+Requires: `llm` · `kernel` · `systemPrompt` · `tools`
+
+```ts config-catalog
+/** Plugin config (resolved under schemastery defaults). */
+export interface Config {
+  /** Cap on recursive turns when the tool does not say. */
+  maxSteps?: number
+  /** Cap on a tool-supplied max_steps (safety bound). */
+  maxMaxSteps?: number
+}
+```
+
+Source: [`packages/rlm/rlm/src/index.ts:49`](../packages/rlm/rlm/src/index.ts)
+
+<a id="deepseek-aidsh-rlm-mode"></a>
+
+## `@deepseek-ai/dsh-rlm-mode`
+
+```ts config-catalog
+/** Plugin config: the switch, and its composition-layer default. */
+export interface Config {
+  /**
+   * Whether the recursive RLM engine replaces the standalone kernel tool as the
+   * model's way of acting. On: the `kernel`, filesystem, shell, and
+   * background-job tools unmount and the model instead runs one `rlm` recursive
+   * completion. Off: the standalone `kernel` tool. Requires `kernel.enabled`.
+   * Takes effect on restart.
+   */
+  enabled?: boolean
+}
+```
+
+Source: [`packages/rlm/rlm-mode/src/index.ts:43`](../packages/rlm/rlm-mode/src/index.ts)
 
 <a id="deepseek-aidsh-sandbox-local"></a>
 
@@ -2871,6 +2976,24 @@ export interface Config {
 ```
 
 Source: [`packages/lsp/tool-lsp/src/index.ts:57`](../packages/lsp/tool-lsp/src/index.ts)
+
+<a id="deepseek-aidsh-tool-notebook-edit"></a>
+
+## `@deepseek-ai/dsh-tool-notebook-edit`
+
+Requires: `tools` · `fs`
+
+```ts config-catalog
+/** Configuration for the notebook editor tool. */
+export interface Config {
+  /** Maximum returned view characters before clipping (default 16000). */
+  maxOutputChars?: number
+  /** Model-facing tool description. */
+  description?: string
+}
+```
+
+Source: [`packages/fs/tool-notebook-edit/src/index.ts:494`](../packages/fs/tool-notebook-edit/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 

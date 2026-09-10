@@ -36,6 +36,24 @@ pnpm dsh web
 
 `pnpm run build` 准备仓库产物；`pnpm dsh web` 启动 Web UI。
 
+## 启动服务器
+
+Windows：
+
+```powershell
+.\start.cmd
+```
+
+macOS 或 Linux：
+
+```sh
+./start.sh
+```
+
+启动脚本会准备内置 Python 运行时、安装依赖、在需要时先构建，然后启动 Web UI，默认地址为 `http://127.0.0.1:3080`。传入 `--port 3100` 可更换端口，传入 `--build` 可强制重新构建。
+
+通过一条命令安装后，改运行 `dsh web`；加上 `--port 3100` 可更换端口。
+
 ## 本分支新增内容
 
 - 通过内核工具执行代码单元的 Python 内核。

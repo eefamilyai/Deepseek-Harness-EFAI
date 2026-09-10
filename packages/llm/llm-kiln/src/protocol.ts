@@ -31,6 +31,14 @@ export const DSML_CLOSE = '</tool_calls>'
  * It says one thing about where output goes — inside a block it runs, outside
  * it does not — because the failure this replaces was the model believing
  * there were two action channels and picking the one that was prose.
+ *
+ * The closing rule names NO wrong format on purpose. It used to spell out the
+ * four it meant — the special-token markup by name, a `<tool_call>` JSON
+ * envelope, a tool worn as its own tag, bare JSON — and a prohibition cannot be
+ * written without writing the thing prohibited. The reader on the other side of
+ * this transport then had to grow a case for each of those exact shapes, which
+ * is not the direction of causation you want between a prompt and its parser.
+ * State the one shape that works; say only that everything else is prose.
  */
 const FORMAT = [
   '# Calling tools',
@@ -56,10 +64,9 @@ const FORMAT = [
   '  one tool at once.',
   '- A tool_calls block is the ONLY thing that executes. Everything else you write is',
   '  prose shown to the user — including fenced code blocks, which never run.',
-  '- Use exactly the block above. Do NOT fall back to any other tool-call notation you may',
-  '  have been trained on — no special-token/DSML blocks, no `<tool_call>{...}</tool_call>`,',
-  '  no naming a tool as its own tag like `<TOOL_NAME>…</TOOL_NAME>`, no bare JSON. Those',
-  '  are read as prose and the tool does not run.',
+  '- Use exactly the block above and nothing else. Any other tool-call notation your',
+  '  training may suggest is not wired to anything here: it is read as prose, shown to',
+  '  the user, and the tool does not run.',
   '- After emitting a block, stop and wait. Each result comes back as `OUTPUT:` in the',
   '  next turn. Never write, guess, or continue past a result you have not been given.',
 ].join('\n')

@@ -1,0 +1,87 @@
+# Local Overlay Manifest
+generated 2026-09-01T23:23:46.243086
+
+## Patch areas
+- `patches/apps.patch` (6241 bytes) -> 2 files: apps
+    - apps/cli/composition.md
+    - apps/cli/package.json
+- `patches/boot-bundle.patch` (24119 bytes) -> 8 files: boot-bundle
+    - packages/boot/app-boot/src/index.ts
+    - packages/boot/app-boot/tests/app-boot.spec.ts
+    - packages/bundle/base/cordis.patch.yml
+    - packages/bundle/base/package.json
+    - packages/bundle/web-app/cordis.patch.yml
+    - packages/bundle/web-app/package.json
+    - packages/bundle/web-app/src/index.ts
+    - packages/bundle/web-app/tests/web-app.spec.ts
+- `patches/client-ui.patch` (25094 bytes) -> 19 files: client-ui
+    - packages/client/locale/src/locales/en.ts
+    - packages/client/locale/src/locales/zh.ts
+    - packages/client/ui-chat/src/client/chat/StatsLine.module.css
+    - packages/client/ui-chat/src/client/markdown-labels.ts
+    - packages/client/ui-conversation/src/client/locales.ts
+    - packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css
+    - packages/client/ui-conversation/tests/skeleton.client.spec.tsx
+    - packages/client/ui-model-selection/src/client/locales.ts
+    - packages/client/ui-primitives/src/index.ts
+    - packages/client/ui-primitives/src/markdown/CodeBlock.module.css
+    - packages/client/ui-primitives/src/markdown/CodeBlock.tsx
+    - packages/client/ui-primitives/src/markdown/render.tsx
+    - packages/client/ui-settings-general/package.json
+    - packages/client/ui-settings-general/src/client/index.ts
+    - packages/client/ui-settings-general/src/client/locales.ts
+    - packages/client/ui-settings-general/tests/apply.client.spec.ts
+    - packages/client/ui-settings-general/tests/shell.client.spec.ts
+    - packages/client/ui-settings-general/tsconfig.json
+    - packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+- `patches/compaction.patch` (16544 bytes) -> 3 files: compaction
+    - packages/compaction/compaction-basic/src/index.ts
+    - packages/compaction/compaction-basic/src/summarizer.ts
+    - packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
+- `patches/core.patch` (5948 bytes) -> 5 files: core
+    - packages/core/agent/src/model-selection.ts
+    - packages/core/agent/tests/model-selection.spec.ts
+    - packages/core/system-prompt/src/index.ts
+    - packages/core/system-prompt/tests/system-prompt.spec.ts
+    - packages/core/tools/tests/gen-tool-catalog.spec.ts
+- `patches/docs.patch` (29778 bytes) -> 9 files: docs
+    - docs/capability-seams.md
+    - docs/config-catalog.md
+    - docs/subsystems/code-runtime.i18n.yaml
+    - docs/subsystems/code-runtime.md
+    - docs/subsystems/code-runtime.zh.md
+    - docs/subsystems/llm-streaming.i18n.yaml
+    - docs/subsystems/llm-streaming.md
+    - docs/subsystems/llm-streaming.zh.md
+    - docs/tool-catalog.md
+- `patches/extensions.patch` (13591 bytes) -> 2 files: extensions
+    - packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
+    - packages/extensions/tool-cordis/src/api-catalog.ts
+- `patches/llm.patch` (22363 bytes) -> 5 files: llm
+    - packages/llm/llm/src/index.ts
+    - packages/llm/token-meter/src/index.ts
+    - packages/llm/token-meter/src/projection.ts
+    - packages/llm/token-meter/src/usage-projection.ts
+    - packages/llm/token-meter/tests/token-usage-projection.spec.ts
+- `patches/lockfile.patch` (15418 bytes) -> 1 files: lockfile
+    - pnpm-lock.yaml
+- `patches/presets.patch` (14730 bytes) -> 4 files: presets
+    - packages/preset/agent-presets/presets/cordis/agent.cordis.yml
+    - packages/preset/agent-presets/presets/minimal/agent.cordis.yml
+    - packages/preset/agent-presets/presets/ptc/agent.cordis.yml
+    - packages/preset/agent-presets/presets/standard/agent.cordis.yml
+- `patches/root-meta.patch` (2851 bytes) -> 3 files: root-meta
+    - .gitattributes
+    - .gitignore
+    - THIRD_PARTY_NOTICES.md
+- `patches/scripts.patch` (6867 bytes) -> 3 files: scripts
+    - scripts/gen-cordis-catalog.ts
+    - scripts/gen-doc-graphs.ts
+    - scripts/gen-tool-catalog.ts
+- `patches/snapshots.patch` (916 bytes) -> 2 files: snapshots
+    - snapshots/web/lifecycle-chrome/hero.expected.md
+    - snapshots/web/lifecycle-chrome/plan-active.expected.md
+- `patches/tsconfig.patch` (8618 bytes) -> 3 files: tsconfig
+    - tsconfig.base.json
+    - tsconfig.client.json
+    - tsconfig.host.json

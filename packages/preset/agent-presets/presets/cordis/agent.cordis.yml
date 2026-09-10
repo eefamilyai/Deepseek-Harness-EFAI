@@ -68,7 +68,7 @@
 # bundle chain exists (see HARNESS-EDITS.md seam register).
 - id: tool-kernel
   name: '@deepseek-ai/dsh-tool-kernel'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', true)) === false
+  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
   config:
     timeoutMs: 180000
 

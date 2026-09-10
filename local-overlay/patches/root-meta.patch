@@ -1,0 +1,77 @@
+diff --git a/.gitattributes b/.gitattributes
+index e0a432111d..6c1da5883e 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -6,6 +6,11 @@
+ # in-repo form stays LF; CRLF becomes checkout-time presentation only.
+ * text=auto eol=lf
+ 
++# cmd.exe misparses batch files with LF line endings (multi-line if/for blocks
++# break into gibberish). The in-repo form stays LF; checkout presents CRLF.
++*.cmd text eol=crlf
++*.bat text eol=crlf
++
+ *.pdf binary
+ 
+ # Pairing records are generated from the three confirmed owner-blob pairs.
+diff --git a/.gitignore b/.gitignore
+index e2a11e6bc7..d25f7ea3b4 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -31,6 +31,9 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-run
+ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
+ python/**/__pycache__/
+ python/**/.pytest_cache/
++# uv-managed bundled interpreter + deps (machine-specific; provisioned by uv sync)
++.venv/
++python/kiln/runtime/.venv/
+ apps/web/dist/
+ .artifacts/
+ .dsh-build/
+@@ -40,3 +43,26 @@ apps/web/dist/
+ worktrees/
+ .agents/worktrees/
+ .typert-*/
++
++# DeepSeek web credentials (token, WAF cookie, login password) — never commit
++ds_config.json
++**/ds_config.json
++.kiln_kernel_state/
++
++# Local machine recon / agent memory - never publish
++.freebuff/
++KILN.md
++acl_scan_output.txt
++notes_output.txt
++schtasks_system_scan.tsv
++.waf-refs/
++
++
++# Runtime state that can hold live session tokens
++
++python/kiln/runtime/ds_sessions.json
++
++python/kiln/runtime/subkernels.json
++
++python/kiln/runtime/.kiln_memory/
++
+diff --git a/THIRD_PARTY_NOTICES.md b/THIRD_PARTY_NOTICES.md
+index 659018f35d..a19810ceac 100644
+--- a/THIRD_PARTY_NOTICES.md
++++ b/THIRD_PARTY_NOTICES.md
+@@ -93,6 +93,7 @@ External packages that a workspace package resolves at runtime. The tier covers
+ | [`node-pty`](https://github.com/microsoft/node-pty) | MIT |
+ | [`open`](https://github.com/sindresorhus/open) | MIT |
+ | [`picomatch`](https://github.com/micromatch/picomatch) | MIT |
++| [`playwright`](https://github.com/microsoft/playwright) | Apache-2.0 |
+ | [`react`](https://github.com/facebook/react) | MIT |
+ | [`react-dom`](https://github.com/facebook/react) | MIT |
+ | [`readable-stream`](https://github.com/nodejs/readable-stream) | MIT |
+@@ -179,7 +180,6 @@ External packages **directly declared** only by repository tooling, test infrast
+ | [`mermaid`](https://github.com/mermaid-js/mermaid) | MIT |
+ | [`oxlint`](https://github.com/oxc-project/oxc) | MIT |
+ | [`oxlint-tsgolint`](https://github.com/oxc-project/tsgolint) | MIT |
+-| [`playwright`](https://github.com/microsoft/playwright) | Apache-2.0 |
+ | [`publint`](https://github.com/publint/publint) | MIT |
+ | [`smol-toml`](https://github.com/squirrelchat/smol-toml) | BSD-3-Clause |
+ | [`spdx-expression-parse`](https://github.com/jslicense/spdx-expression-parse.js) | MIT |

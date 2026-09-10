@@ -59,6 +59,27 @@ export const SNAPSHOT_MARKER = '__KILN_KERNEL_STATE__'
 
 /** One decoded outbound frame. */
 export interface KernelFrame {
+  /**
+   * The id of the request this frame answers, echoed by the child.
+   *
+   * Frames are matched to waiters by this id rather than by arrival order.
+   * Order alone is not a correlation: one line of raw output on the channel
+   * (an `os.system` call, a subprocess inheriting stdio, a print from a
+   * non-cell thread) used to be handed to the waiting cell as its result,
+   * after which every later cell received the previous cell's frame — with
+   * nothing to detect it and nothing to recover from it. Absent on the
+   * startup and seam frames, which answer no request.
+   */
+  readonly id?: number
+  /**
+   * Set on the synthetic frame that releases a waiter when the child exits.
+   *
+   * A real cell that printed nothing produces `{ out: '', error: null }`, so
+   * without its own marker the death of the kernel is indistinguishable from
+   * a quiet success and gets reported to the model as "the cell produced no
+   * output".
+   */
+  readonly dead?: boolean
   /** Present only on the startup frame. */
   readonly ready?: boolean
   /** The engine the child selected; startup frame only. */
@@ -103,10 +124,23 @@ export class KernelChild {
   private readonly seamOut: Writable | null
   /** Set by the provider to dispatch seam requests against the current agent ctx. */
   seamHandler: ((request: SeamRequest) => void) | undefined = undefined
-  /** Frames decoded but not yet claimed by a waiter. */
-  private readonly pending: KernelFrame[] = []
-  /** Waiters queued ahead of the frames that will satisfy them. */
-  private readonly waiters: ((frame: KernelFrame) => void)[] = []
+  /** Frames that arrived before their waiter registered, keyed by request id. */
+  private readonly pending = new Map<number, KernelFrame>()
+  /** Waiters, keyed by the request id whose frame will satisfy them. */
+  private readonly waiters = new Map<number, (frame: KernelFrame) => void>()
+  /** Source of request ids; monotonic for the life of this child. */
+  private nextId = 1
+  /**
+   * Ids whose waiter was abandoned (aborted) while the cell was still running.
+   * The child will still answer them, and that answer belongs to nobody.
+   */
+  private readonly retired = new Set<number>()
+  /**
+   * Frames the channel produced that answer nothing: undecodable lines, and
+   * late frames for cells whose waiter was already abandoned. Counted rather
+   * than delivered — misdelivering one is the bug this class exists to avoid.
+   */
+  private discarded = 0
   private buffer = ''
   private exited = false
 
@@ -140,11 +174,10 @@ export class KernelChild {
     const end = (): void => {
       this.exited = true
       // Release every waiter so a caller blocked on a dead child fails fast
-      // instead of running out its whole timeout budget.
-      while (this.waiters.length > 0) {
-        const waiter = this.waiters.shift()
-        waiter?.({ out: '', error: null })
-      }
+      // instead of running out its whole timeout budget. `dead` is what marks
+      // this as a death rather than a cell that printed nothing.
+      for (const waiter of this.waiters.values()) waiter({ dead: true })
+      this.waiters.clear()
     }
     this.proc.on('exit', end)
     this.proc.on('error', end)
@@ -164,17 +197,39 @@ export class KernelChild {
       this.buffer = this.buffer.slice(index + 1)
       if (line.length > 0) {
         const frame = decodeFrame(line)
-        if (frame.seam !== undefined) this.onSeamFrame(frame.seam)
+        if (frame === undefined) this.discarded += 1
+        else if (frame.seam !== undefined) this.onSeamFrame(frame.seam)
         else this.deliver(frame)
       }
       index = this.buffer.indexOf('\n')
     }
   }
 
+  /**
+   * Route one decoded frame to the request it names.
+   *
+   * A frame naming no request (the startup `ready`) or naming one nobody is
+   * waiting for (a cell whose caller aborted, a duplicate) is dropped. The old
+   * positional queue had no way to tell those from a result, so it handed them
+   * to whichever cell happened to be waiting and shifted the channel by one
+   * for the rest of the process's life.
+   */
   private deliver(frame: KernelFrame): void {
-    const waiter = this.waiters.shift()
-    if (waiter !== undefined) waiter(frame)
-    else this.pending.push(frame)
+    const { id } = frame
+    if (id === undefined) {
+      if (frame.ready !== true) this.discarded += 1
+      return
+    }
+    const waiter = this.waiters.get(id)
+    if (waiter === undefined) {
+      // No waiter yet is legitimate only as a race we do not rely on; a frame
+      // for a retired id is not, so keep it out of anyone else's way.
+      if (this.retired.has(id)) this.discarded += 1
+      else this.pending.set(id, frame)
+      return
+    }
+    this.waiters.delete(id)
+    waiter(frame)
   }
 
   /** Dispatch a decoded seam frame to the provider's handler. */
@@ -193,29 +248,26 @@ export class KernelChild {
   }
 
   /**
-   * Await the next frame, ignoring the startup `ready` frame.
+   * Await the frame answering one request.
    *
-   * `ready` is skipped here rather than consumed at startup because a respawn
-   * races: the replacement child emits its own `ready` while the caller is
-   * already waiting for a cell result, and mistaking one for the other would
-   * shift every subsequent response by one.
+   * Nothing is skipped and nothing is taken on trust: the frame either names
+   * `id` or it is not this request's answer. That is what makes a `ready` from
+   * a racing respawn, a late frame from an abandoned cell, and a raw line from
+   * a subprocess all harmless instead of each shifting the channel by one.
+   * @param id - the id returned by {@link send} or {@link sendControl}.
    * @param signal - optional abort; rejects with the signal's reason.
-   * @returns the next result frame.
+   * @returns the frame answering `id`, or a `dead` frame if the child exits first.
    */
-  async nextFrame(signal?: AbortSignal): Promise<KernelFrame> {
-    for (;;) {
-      const frame = await this.takeFrame(signal)
-      if (frame.ready === true) continue
-      return frame
+  nextFrame(id: number, signal?: AbortSignal): Promise<KernelFrame> {
+    const buffered = this.pending.get(id)
+    if (buffered !== undefined) {
+      this.pending.delete(id)
+      return Promise.resolve(buffered)
     }
-  }
-
-  private takeFrame(signal?: AbortSignal): Promise<KernelFrame> {
-    const buffered = this.pending.shift()
-    if (buffered !== undefined) return Promise.resolve(buffered)
-    if (this.exited) return Promise.resolve({ out: '', error: null })
+    if (this.exited) return Promise.resolve({ dead: true })
     return new Promise((resolve, reject) => {
       if (signal?.aborted === true) {
+        this.retired.add(id)
         reject(abortReason(signal))
         return
       }
@@ -224,13 +276,20 @@ export class KernelChild {
         resolve(frame)
       }
       const onAbort = (): void => {
-        const at = this.waiters.indexOf(waiter)
-        if (at !== -1) this.waiters.splice(at, 1)
+        this.waiters.delete(id)
+        // The cell is still running in the child and will still answer; mark
+        // the id so that answer is dropped rather than handed to a later cell.
+        this.retired.add(id)
         reject(abortReason(signal))
       }
-      this.waiters.push(waiter)
+      this.waiters.set(id, waiter)
       signal?.addEventListener('abort', onAbort, { once: true })
     })
+  }
+
+  /** How many frames answered no live request. Non-zero means a fault worth reporting. */
+  get discardedFrames(): number {
+    return this.discarded
   }
 
   /**
@@ -245,30 +304,37 @@ export class KernelChild {
    * @param cwd - optional working directory for this cell (the chat's workspace).
    * @param backgroundTimeoutMs - optional secondary budget (force-stop a backgrounded cell).
    * @param conv - the owning conversation id; scopes durable remember()/recall() storage.
+   * @returns the request id to pass to {@link nextFrame}.
    */
-  send(code: string, timeoutMs?: number, cwd?: string, backgroundTimeoutMs?: number, conv?: string): void {
+  send(code: string, timeoutMs?: number, cwd?: string, backgroundTimeoutMs?: number, conv?: string): number {
     const hasCwd = cwd !== undefined && cwd.length > 0
     const hasConv = conv !== undefined && conv.length > 0
-    const bare = timeoutMs === undefined && backgroundTimeoutMs === undefined && !hasCwd && !hasConv
-    const payload = bare
-      ? code
-      : CELL_CTRL_PREFIX + JSON.stringify({
-        code,
-        ...timeoutMs === undefined ? {} : { timeoutMs },
-        ...backgroundTimeoutMs === undefined ? {} : { backgroundTimeoutMs },
-        ...hasCwd ? { cwd } : {},
-        ...hasConv ? { conv } : {},
-      })
+    const id = this.nextId++
+    // Always the envelope form, never bare code: the envelope is what carries
+    // the correlation id, and a cell without one cannot have its answer told
+    // apart from anything else on the channel.
+    const payload = CELL_CTRL_PREFIX + JSON.stringify({
+      id,
+      code,
+      ...timeoutMs === undefined ? {} : { timeoutMs },
+      ...backgroundTimeoutMs === undefined ? {} : { backgroundTimeoutMs },
+      ...hasCwd ? { cwd } : {},
+      ...hasConv ? { conv } : {},
+    })
     this.write(Buffer.from(payload, 'utf8').toString('base64'))
+    return id
   }
 
   /**
    * Send a control request on the channel that is never executed as code.
    * @param request - the control payload (`{ cmd: 'list_names' }` and friends).
+   * @returns the request id to pass to {@link nextFrame}.
    */
-  sendControl(request: unknown): void {
-    const payload = CTRL_PREFIX + JSON.stringify(request)
+  sendControl(request: object): number {
+    const id = this.nextId++
+    const payload = CTRL_PREFIX + JSON.stringify({ ...request, id })
     this.write(Buffer.from(payload, 'utf8').toString('base64'))
+    return id
   }
 
   private write(line: string): void {
@@ -302,22 +368,30 @@ export class KernelChild {
 }
 
 /**
- * Decode one outbound line into a frame. A line the child did not produce as
- * valid base64 JSON is a protocol break, surfaced as an error frame rather than
- * thrown out of the stdout handler where nothing could catch it.
+ * Decode one outbound line into a frame.
+ *
+ * A line that is not valid base64 JSON did not come from `send_frame`, so it is
+ * not an answer to anything and must not be treated as one. It used to be
+ * turned into an error frame and handed to the waiting cell, which consumed
+ * that cell's waiter and left its real frame to be collected by the NEXT cell —
+ * a one-line contamination that shifted every result for the rest of the
+ * session. Returning undefined lets the reader drop it and lets the waiter go
+ * on waiting for the frame that actually names it.
+ *
+ * `Buffer.from(line, 'base64')` also ignores characters outside the base64
+ * alphabet rather than failing, so plain text often decodes to plausible
+ * binary; the JSON parse is the only real check and has to be able to say no.
  * @param line - the raw stdout line, already trimmed.
- * @returns the decoded frame, or an error frame describing the break.
+ * @returns the decoded frame, or undefined when the line is not a frame.
  */
-export function decodeFrame(line: string): KernelFrame {
+export function decodeFrame(line: string): KernelFrame | undefined {
   try {
     const json = Buffer.from(line, 'base64').toString('utf8')
     const value: unknown = JSON.parse(json)
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw new Error('frame is not an object')
-    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
     return value
-  } catch (cause) {
-    return { out: '', error: `Bad frame from the Python kernel: ${String(cause)}` }
+  } catch {
+    return undefined
   }
 }
 

@@ -1,0 +1,273 @@
+diff --git a/packages/preset/agent-presets/presets/cordis/agent.cordis.yml b/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
+index 96cd7e6b09..3afea0dc67 100644
+--- a/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
++++ b/packages/preset/agent-presets/presets/cordis/agent.cordis.yml
+@@ -44,11 +44,23 @@
+ # host-plane too.
+ - id: tool-bash
+   name: '@deepseek-ai/dsh-tool-bash'
+-  disabled: !!js process.platform === 'win32'
++  disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ - id: tool-pwsh
+   name: '@deepseek-ai/dsh-tool-pwsh'
+-  disabled: !!js process.platform !== 'win32'
++  disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++
++# ── the kernel ──────────────────────────────────────────────────────────────
++
++# The model-facing tool only. The kernel SEAM and its Python backend stay on the
++# host plane: the backend owns one interpreter probe and one child process, and
++# an entry-local realm here would mean a second interpreter resolution — and a
++# second kernel — for every preset a session mounts.
++- id: tool-kernel
++  name: '@deepseek-ai/dsh-tool-kernel'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  config:
++    timeoutMs: 180000
+ 
+ # ── filesystem ──────────────────────────────────────────────────────────────
+ 
+@@ -56,9 +68,11 @@
+ # they need no realm. The `fs` service and its policy stay in the host.
+ - id: tool-fs
+   name: '@deepseek-ai/dsh-tool-fs'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ - id: tool-fs-search
+   name: '@deepseek-ai/dsh-tool-fs-search'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+   config:
+     sampleOverCapGlobResults: false
+ 
+@@ -73,6 +87,7 @@
+ # chooses is whether its agent can collect and stop background work at all.
+ - id: tool-jobs
+   name: '@deepseek-ai/dsh-tool-jobs'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ # ── goals ───────────────────────────────────────────────────────────────────
+ 
+diff --git a/packages/preset/agent-presets/presets/minimal/agent.cordis.yml b/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
+index 0e1f2b0f5d..9d85216b0b 100644
+--- a/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
++++ b/packages/preset/agent-presets/presets/minimal/agent.cordis.yml
+@@ -2,9 +2,18 @@
+ #
+ # The persona is the complete system prompt, so global identity, Web orientation,
+ # tool guidance, and later assembly listeners cannot add prompt text. Runtime
+-# context snapshots are suppressed for this preset, and the model composes only
+-# the persistent shell (`bash` on POSIX, `pwsh` on win32) and
+-# `str_replace_editor`. Context compaction is absent.
++# context snapshots are suppressed for this preset. Context compaction is absent.
++#
++# Which two tools the model composes depends on the `kernel.enabled` setting
++# (see the standard preset's header for the switch itself). ON: `kernel` alone.
++# OFF: the persistent shell (`bash` on POSIX, `pwsh` on win32) and
++# `str_replace_editor`, exactly as this preset shipped.
++#
++# A complete persona suppresses the kernel's own prompt section along with every
++# other one, so under the switch the model gets the tool's description and
++# nothing more. That is this preset's whole point, and the description carries
++# what a caller must know: the namespace persists, and the output is only what
++# the cell captured.
+ 
+ - id: persona
+   name: '@deepseek-ai/dsh-persona'
+@@ -13,6 +22,18 @@
+     complete: true
+     includeRuntimeContext: false
+ 
++# ── the kernel ──────────────────────────────────────────────────────────────
++
++# The model-facing tool only. The kernel SEAM and its Python backend stay on the
++# host plane: the backend owns one interpreter probe and one child process, and
++# an entry-local realm here would mean a second interpreter resolution — and a
++# second kernel — for every preset a session mounts.
++- id: tool-kernel
++  name: '@deepseek-ai/dsh-tool-kernel'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  config:
++    timeoutMs: 180000
++
+ # The PTY registry is an agent-owned service, so it lives in an entry-local
+ # realm. The backend still consumes the host sandbox policy and subprocess
+ # implementation, while the tool registers into this agent's scoped catalog.
+@@ -26,16 +47,17 @@
+   config:
+     - id: pty
+       name: '@deepseek-ai/dsh-terminal'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+     - id: terminal-bash
+       name: '@deepseek-ai/dsh-terminal-bash'
+-      disabled: !!js process.platform === 'win32'
++      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         timeoutMs: 300000
+ 
+     - id: persistent-bash
+       name: '@deepseek-ai/dsh-tool-bash-persistent'
+-      disabled: !!js process.platform === 'win32'
++      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         timeoutMs: 300000
+         description: |-
+@@ -79,10 +101,12 @@
+   config:
+     - id: fs-local
+       name: '@deepseek-ai/dsh-fs-local'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         cwd: !!js process.env.DSH_CWD ?? process.cwd()
+ 
+     - id: str-replace-editor
+       name: '@deepseek-ai/dsh-tool-str-replace-editor'
++      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       config:
+         maxOutputChars: 16000
+diff --git a/packages/preset/agent-presets/presets/ptc/agent.cordis.yml b/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
+index 3c8406f907..9a4683e1d6 100644
+--- a/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
++++ b/packages/preset/agent-presets/presets/ptc/agent.cordis.yml
+@@ -50,11 +50,23 @@
+ # host-plane too.
+ - id: tool-bash
+   name: '@deepseek-ai/dsh-tool-bash'
+-  disabled: !!js process.platform === 'win32'
++  disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ - id: tool-pwsh
+   name: '@deepseek-ai/dsh-tool-pwsh'
+-  disabled: !!js process.platform !== 'win32'
++  disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++
++# ── the kernel ──────────────────────────────────────────────────────────────
++
++# The model-facing tool only. The kernel SEAM and its Python backend stay on the
++# host plane: the backend owns one interpreter probe and one child process, and
++# an entry-local realm here would mean a second interpreter resolution — and a
++# second kernel — for every preset a session mounts.
++- id: tool-kernel
++  name: '@deepseek-ai/dsh-tool-kernel'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  config:
++    timeoutMs: 180000
+ 
+ # ── filesystem ──────────────────────────────────────────────────────────────
+ 
+@@ -62,9 +74,11 @@
+ # they need no realm. The `fs` service and its policy stay in the host.
+ - id: tool-fs
+   name: '@deepseek-ai/dsh-tool-fs'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ - id: tool-fs-search
+   name: '@deepseek-ai/dsh-tool-fs-search'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+   config:
+     sampleOverCapGlobResults: false
+ 
+@@ -79,6 +93,7 @@
+ # chooses is whether its agent can collect and stop background work at all.
+ - id: tool-jobs
+   name: '@deepseek-ai/dsh-tool-jobs'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ # ── skills ──────────────────────────────────────────────────────────────────
+ 
+diff --git a/packages/preset/agent-presets/presets/standard/agent.cordis.yml b/packages/preset/agent-presets/presets/standard/agent.cordis.yml
+index 3916d6bf3e..3972a38894 100644
+--- a/packages/preset/agent-presets/presets/standard/agent.cordis.yml
++++ b/packages/preset/agent-presets/presets/standard/agent.cordis.yml
+@@ -1,5 +1,30 @@
+ # The `standard` agent preset: the full coding agent, mounted once per process.
+ #
++# ── the kernel switch ───────────────────────────────────────────────────────
++#
++# `kernel.enabled` in the user's settings document picks between two rosters,
++# and several rows below read it through `dshSettingFlag('kernel.enabled', true)`.
++#
++#   ON  (default) — the model acts through `kernel`, a persistent Python
++#                   namespace. Reading a file, editing it, searching the tree,
++#                   running a command are function calls inside it, so the shell,
++#                   filesystem, search, and background-job rows switch OFF.
++#   OFF           — those rows switch ON and the kernel switches off: the
++#                   conventional roster, exactly as this preset shipped.
++#
++# Only the rows the kernel REPLACES move. Web access, delegation, skills, goals,
++# planning, todos, and asking the user are mounted either way — the kernel
++# cannot do any of them, so switching them off would cost capability and buy
++# nothing.
++#
++# The switch is read once at boot, which is why it is a Loader `disabled`
++# expression rather than a value some plugin re-reads. A tool's prompt section
++# is registered when its plugin mounts, so a tool merely hidden at runtime would
++# leave its instructions in the system prompt describing a tool the model cannot
++# call. Mounting is the only gate that takes the instructions with it. Changing
++# the switch therefore needs a restart, and `@deepseek-ai/dsh-kernel-mode`
++# declares `applies: 'restart'` so the settings UI says so.
++#
+ # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
+ # standing scope; every session naming it joins by scope parentage, so the
+ # tools and prompt sections registered here cover each joined agent while a
+@@ -41,23 +66,43 @@
+ # never reached the model's shell at all. Both shell tools consume the host
+ # registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
+ # host-plane too.
++#
++# Both rows carry two gates now: the platform one they always had, and the
++# kernel switch. `sh("...")` inside a cell is the same capability.
+ - id: tool-bash
+   name: '@deepseek-ai/dsh-tool-bash'
+-  disabled: !!js process.platform === 'win32'
++  disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ - id: tool-pwsh
+   name: '@deepseek-ai/dsh-tool-pwsh'
+-  disabled: !!js process.platform !== 'win32'
++  disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
++
++# ── the kernel ──────────────────────────────────────────────────────────────
++
++# The model-facing tool only. The kernel SEAM and its Python backend stay on the
++# host plane: the backend owns one interpreter probe and one child process, and
++# an entry-local realm here would mean a second interpreter resolution — and a
++# second kernel — for every preset a session mounts. What a preset chooses is
++# whether its agent can execute cells at all.
++- id: tool-kernel
++  name: '@deepseek-ai/dsh-tool-kernel'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
++  config:
++    timeoutMs: 180000
+ 
+ # ── filesystem ──────────────────────────────────────────────────────────────
+ 
+ # Both register into the host `tools` registry and provide nothing, so
+ # they need no realm. The `fs` service and its policy stay in the host.
++# `read_file` / `write_file` / `edit_file` and `find` / `glob` are preloaded in
++# the kernel namespace, so both rows step aside while the switch is on.
+ - id: tool-fs
+   name: '@deepseek-ai/dsh-tool-fs'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ - id: tool-fs-search
+   name: '@deepseek-ai/dsh-tool-fs-search'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+   config:
+     sampleOverCapGlobResults: false
+ 
+@@ -70,8 +115,13 @@
+ # unavailable" while these controls sat in the catalog. The registry is keyed by
+ # owning agent anyway, so one host instance serves every session. What a preset
+ # chooses is whether its agent can collect and stop background work at all.
++#
++# A cell that wants to run something long does it with `subprocess` in the
++# kernel namespace, whose lifetime is the namespace's, so this row follows the
++# shell tools off while the switch is on.
+ - id: tool-jobs
+   name: '@deepseek-ai/dsh-tool-jobs'
++  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+ 
+ # ── skills ──────────────────────────────────────────────────────────────────
+ 

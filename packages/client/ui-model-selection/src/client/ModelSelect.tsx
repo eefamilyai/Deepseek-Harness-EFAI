@@ -442,6 +442,9 @@ export function ModelSelect(
                                   onClick={() => { setAccountSelections(prev => ({ ...prev, [group.baseId]: account.provider })) }}
                                 >
                                   <span className={css.accountLabel}>{account.account === null ? group.name : account.account}</span>
+                                  <span className={css.accountCheck}>
+                                    {selected ? <IconCheckOutline16 /> : null}
+                                  </span>
                                 </button>
                               )
                             })}

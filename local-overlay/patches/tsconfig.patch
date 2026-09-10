@@ -1,0 +1,132 @@
+diff --git a/tsconfig.base.json b/tsconfig.base.json
+index 5a9bc4a4b0..f2f6936cc6 100644
+--- a/tsconfig.base.json
++++ b/tsconfig.base.json
+@@ -145,6 +145,8 @@
+       // here. The aggregates' project references (tsconfig.host.json /
+       // tsconfig.client.json) stay explicit — TS project references have no
+       // wildcard form.
++      "@deepseek-ai/dsh-host-sidebar-bridge": ["./packages/host/sidebar-bridge/src"],
++      "@deepseek-ai/dsh-host-sidebar-bridge/*": ["./packages/host/sidebar-bridge/src/*"],
+       "@deepseek-ai/dsh-host-directory-picker": ["./packages/host/directory-picker/src"],
+       "@deepseek-ai/dsh-host-directory-picker/*": ["./packages/host/directory-picker/src/*"],
+       "@deepseek-ai/dsh-host-directory-picker-browse": ["./packages/host/directory-picker-browse/src"],
+@@ -203,6 +205,10 @@
+       "@deepseek-ai/dsh-client-ui-permission-presets": ["./packages/client/ui-permission-presets/src"],
+       "@deepseek-ai/dsh-client-ui-skill": ["./packages/client/ui-skill/src"],
+       "@deepseek-ai/dsh-client-ui-subagent": ["./packages/client/ui-subagent/src"],
++      "@deepseek-ai/dsh-client-ui-dock": ["./packages/client/ui-dock/src"],
++      "@deepseek-ai/dsh-client-ui-dock/client": ["./packages/client/ui-dock/src/client/index.ts"],
++      "@deepseek-ai/dsh-client-ui-effects": ["./packages/client/ui-effects/src"],
++      "@deepseek-ai/dsh-client-ui-effects/client": ["./packages/client/ui-effects/src/client/index.ts"],
+       "@deepseek-ai/dsh-experimental-client-ui-agent-team": ["./packages/experimental/client-ui-agent-team/src"],
+       "@deepseek-ai/dsh-client-ui-settings-plugins": ["./packages/client/ui-settings-plugins/src"],
+       "@deepseek-ai/dsh-client-ui-jobs": ["./packages/client/ui-jobs/src"],
+@@ -295,6 +301,8 @@
+       "@deepseek-ai/dsh-command-feedback/invariant": ["./packages/feedback/command-feedback/src/invariant.ts"],
+       "@deepseek-ai/dsh-command-goal": ["./packages/goal/command-goal/src"],
+       "@deepseek-ai/dsh-command-goal/invariant": ["./packages/goal/command-goal/src/invariant.ts"],
++      "@deepseek-ai/dsh-command-session-info": ["./packages/session/command-session-info/src"],
++      "@deepseek-ai/dsh-command-session-info/invariant": ["./packages/session/command-session-info/src/invariant.ts"],
+       "@deepseek-ai/dsh-commands": ["./packages/interaction/commands/src"],
+       "@deepseek-ai/dsh-commands/invariant": ["./packages/interaction/commands/src/invariant.ts"],
+       "@deepseek-ai/dsh-compaction": ["./packages/compaction/compaction/src"],
+@@ -347,12 +355,22 @@
+       "@deepseek-ai/dsh-jobs/invariant": ["./packages/jobs/jobs/src/invariant.ts"],
+       "@deepseek-ai/dsh-jobs-local": ["./packages/jobs/jobs-local/src"],
+       "@deepseek-ai/dsh-jobs-local/invariant": ["./packages/jobs/jobs-local/src/invariant.ts"],
++      "@deepseek-ai/dsh-kernel": ["./packages/kernel/kernel/src"],
++      "@deepseek-ai/dsh-kernel/invariant": ["./packages/kernel/kernel/src/invariant.ts"],
++      "@deepseek-ai/dsh-kernel-mode": ["./packages/kernel/kernel-mode/src"],
++      "@deepseek-ai/dsh-kernel-mode/invariant": ["./packages/kernel/kernel-mode/src/invariant.ts"],
++      "@deepseek-ai/dsh-kernel-python": ["./packages/kernel/kernel-python/src"],
++      "@deepseek-ai/dsh-kernel-python/invariant": ["./packages/kernel/kernel-python/src/invariant.ts"],
++      "@deepseek-ai/dsh-kernel-rlm-context": ["./packages/kernel/kernel-rlm-context/src"],
++      "@deepseek-ai/dsh-kernel-rlm-context/invariant": ["./packages/kernel/kernel-rlm-context/src/invariant.ts"],
+       "@deepseek-ai/dsh-launch-environment": ["./packages/util/launch-environment/src"],
+       "@deepseek-ai/dsh-launch-environment/invariant": ["./packages/util/launch-environment/src/invariant.ts"],
+       "@deepseek-ai/dsh-llm": ["./packages/llm/llm/src"],
+       "@deepseek-ai/dsh-llm/invariant": ["./packages/llm/llm/src/invariant.ts"],
+       "@deepseek-ai/dsh-llm-deepseek": ["./packages/llm/llm-deepseek/src"],
+       "@deepseek-ai/dsh-llm-deepseek/invariant": ["./packages/llm/llm-deepseek/src/invariant.ts"],
++      "@deepseek-ai/dsh-llm-kiln": ["./packages/llm/llm-kiln/src"],
++      "@deepseek-ai/dsh-llm-kiln/invariant": ["./packages/llm/llm-kiln/src/invariant.ts"],
+       "@deepseek-ai/dsh-llm-mock-server": ["./packages/test-support/llm-mock-server/src"],
+       "@deepseek-ai/dsh-llm-mock-server/invariant": ["./packages/test-support/llm-mock-server/src/invariant.ts"],
+       "@deepseek-ai/dsh-llm-pi-ai": ["./packages/llm/llm-pi-ai/src"],
+@@ -521,8 +539,12 @@
+       "@deepseek-ai/dsh-tool-goal/invariant": ["./packages/goal/tool-goal/src/invariant.ts"],
+       "@deepseek-ai/dsh-tool-jobs": ["./packages/jobs/tool-jobs/src"],
+       "@deepseek-ai/dsh-tool-jobs/invariant": ["./packages/jobs/tool-jobs/src/invariant.ts"],
++      "@deepseek-ai/dsh-tool-kernel": ["./packages/kernel/tool-kernel/src"],
++      "@deepseek-ai/dsh-tool-kernel/invariant": ["./packages/kernel/tool-kernel/src/invariant.ts"],
+       "@deepseek-ai/dsh-tool-lsp": ["./packages/lsp/tool-lsp/src"],
+       "@deepseek-ai/dsh-tool-lsp/invariant": ["./packages/lsp/tool-lsp/src/invariant.ts"],
++      "@deepseek-ai/dsh-tool-notebook-edit": ["./packages/fs/tool-notebook-edit/src"],
++      "@deepseek-ai/dsh-tool-notebook-edit/invariant": ["./packages/fs/tool-notebook-edit/src/invariant.ts"],
+       "@deepseek-ai/dsh-tool-pwsh/invariant": ["./packages/shell/tool-pwsh/src/invariant.ts"],
+       "@deepseek-ai/dsh-tool-pwsh-persistent": ["./packages/shell/tool-pwsh-persistent/src"],
+       "@deepseek-ai/dsh-tool-pwsh-persistent/invariant": ["./packages/shell/tool-pwsh-persistent/src/invariant.ts"],
+@@ -558,6 +580,8 @@
+       "@deepseek-ai/dsh-web/invariant": ["./packages/web/web/src/invariant.ts"],
+       "@deepseek-ai/dsh-web-app": ["./packages/bundle/web-app/src"],
+       "@deepseek-ai/dsh-web-app/invariant": ["./packages/bundle/web-app/src/invariant.ts"],
++      "@deepseek-ai/dsh-web-browser": ["./packages/web/web-browser/src"],
++      "@deepseek-ai/dsh-web-browser/invariant": ["./packages/web/web-browser/src/invariant.ts"],
+       "@deepseek-ai/dsh-web-fetch-http": ["./packages/web/web-fetch-http/src"],
+       "@deepseek-ai/dsh-web-fetch-http/invariant": ["./packages/web/web-fetch-http/src/invariant.ts"],
+       "@deepseek-ai/dsh-web-search-deepseek": ["./packages/web/web-search-deepseek/src"],
+diff --git a/tsconfig.client.json b/tsconfig.client.json
+index 2634de2cdd..f26c6e31cf 100644
+--- a/tsconfig.client.json
++++ b/tsconfig.client.json
+@@ -50,6 +50,8 @@
+     { "path": "./packages/client/ui-slots" },
+     { "path": "./packages/client/ui-attachment" },
+     { "path": "./packages/client/ui-primitives" },
++    { "path": "./packages/client/ui-dock" },
++    { "path": "./packages/client/ui-effects" },
+     { "path": "./packages/client/modules" },
+     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
+     { "path": "./packages/client/hmr" },
+diff --git a/tsconfig.host.json b/tsconfig.host.json
+index 2d9dc3513c..be36023056 100644
+--- a/tsconfig.host.json
++++ b/tsconfig.host.json
+@@ -193,6 +193,7 @@
+     { "path": "./packages/goal/goal-round-driver" },
+     { "path": "./packages/goal/command-goal" },
+     { "path": "./packages/feedback/command-feedback" },
++    { "path": "./packages/session/command-session-info" },
+     { "path": "./packages/schedule/schedule" },
+     { "path": "./packages/context/time-context" },
+     { "path": "./packages/context/file-reference" },
+@@ -228,6 +229,7 @@
+     { "path": "./packages/code-runtime/code-runtime-worker-thread" },
+     { "path": "./packages/llm/llm-deepseek" },
+     { "path": "./packages/llm/llm-pi-ai" },
++    { "path": "./packages/llm/llm-kiln" },
+     { "path": "./packages/shell/bash-local" },
+     { "path": "./packages/shell/shell-env" },
+     { "path": "./packages/shell/pwsh-local" },
+@@ -257,7 +259,12 @@
+     { "path": "./packages/web/web-search-perplexity" },
+     { "path": "./packages/web/web-search-deepseek" },
+     { "path": "./packages/web/web-fetch-http" },
++    { "path": "./packages/web/web-browser" },
+     { "path": "./packages/web/tool-web" },
++    { "path": "./packages/kernel/kernel" },
++    { "path": "./packages/kernel/kernel-mode" },
++    { "path": "./packages/kernel/kernel-python" },
++    { "path": "./packages/kernel/tool-kernel" },
+     { "path": "./packages/spill/spill" },
+     { "path": "./packages/spill/spill-local" },
+     { "path": "./packages/spill/spill-policy" },
+@@ -323,6 +330,7 @@
+     { "path": "./packages/host/frontend-static" },
+     { "path": "./packages/host/plugin-inventory" },
+     { "path": "./packages/llm/plugin-package-inventory-deepseek" },
++    { "path": "./packages/host/sidebar-bridge" },
+     { "path": "./packages/host/webserver" },
+     { "path": "./packages/sdk/client" },
+     { "path": "./packages/sdk/protocol" },

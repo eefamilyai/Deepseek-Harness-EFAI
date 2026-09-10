@@ -1,0 +1,105 @@
+diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
+index eaaccfcb20..908cbc0a36 100644
+--- a/scripts/gen-cordis-catalog.ts
++++ b/scripts/gen-cordis-catalog.ts
+@@ -64,6 +64,7 @@ export const SERVICE_PAGE: Record<string, string> = {
+   shellEnv: 'shell.md',
+   clientModules: 'client-modules.md',
+   codeRuntime: 'code-runtime.md',
++  kernel: 'code-runtime.md',
+   commands: 'commands.md',
+   compaction: 'compaction.md',
+   cordisInspect: 'extensions.md',
+@@ -148,9 +149,11 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+   appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
+   appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
+   cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
++  modelSelection: 'not a service: Agent-scoped accessor value (ModelSelection | undefined) installed by an entry point — packages/core/agent/README.md owns the selection contract',
+   configuredAgentIdentities: 'not a service: launcher-provided boot-context value (ConfiguredAgentIdentities | undefined) — packages/core/agent-loop/README.md owns this launcher contract',
+   launcherSessionQueryPath: 'not a service: launcher-provided boot-context value (string | undefined) — packages/session-query/session-query-sqlite/README.md owns this launcher contract',
+   dshHomePath: 'not a service: boot-provided root accessor function (typeof dshHomePath | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
++  dshSettingFlag: 'not a service: boot-provided root accessor function (typeof dshSettingFlag | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
+   launchEnvironment: 'not a service: launcher-provided root accessor value (LaunchEnvironmentSnapshot | undefined) — packages/util/launch-environment/README.md owns this launcher contract',
+   connection: 'interface-typed (HostConnectionHandle); implementing class HostConnectionService is declared in rpc-host.ts — packages/client/connection/README.md owns the API',
+   uiRenderer: 'client-side interface-typed browser service — packages/client/ui-renderer/README.md owns the API',
+@@ -271,6 +274,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+   LlmConfigurableProvider: 'llm-streaming.md',
+   LlmModelDiscoveryRequest: 'llm-streaming.md',
+   LlmDiscoveredModel: 'llm-streaming.md',
++  LlmAccountAdder: 'llm-streaming.md',
++  LlmAccountDraft: 'llm-streaming.md',
++  LlmAccountAddResult: 'llm-streaming.md',
+   ResolvedRetryPolicy: 'llm-streaming.md',
+   Message: 'llm-streaming.md',
+   MessageSource: 'llm-streaming.md',
+@@ -664,6 +670,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+   PresetMetadata: 'preset display text is owned by packages/preset/agent-presets/README.md',
+   BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
+   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
++  KernelProvider: 'kernel backend contract is owned by packages/kernel/kernel/src/types.ts',
++  KernelExecuteRequest: 'kernel seam input is owned by packages/kernel/kernel/src/types.ts',
++  KernelExecuteResult: 'kernel seam result is owned by packages/kernel/kernel/src/types.ts',
+   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
+   ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
+   ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',
+diff --git a/scripts/gen-doc-graphs.ts b/scripts/gen-doc-graphs.ts
+index 476641a581..542cd35c06 100644
+--- a/scripts/gen-doc-graphs.ts
++++ b/scripts/gen-doc-graphs.ts
+@@ -112,10 +112,19 @@ const SERVICE_ROLES: ServiceRole[] = [
+     pkg: 'llm',
+     title: 'LLM adapter registry',
+     mode: 'seam',
+-    implementations: ['llm-deepseek', 'llm-pi-ai', 'llm-replay'],
++    implementations: ['llm-deepseek', 'llm-kiln', 'llm-pi-ai', 'llm-replay'],
+     consumers: ['agent-loop', 'compaction-basic'],
+     note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
+   },
++  {
++    key: 'kernel',
++    pkg: 'kernel',
++    title: 'Persistent code-execution kernel',
++    mode: 'seam',
++    implementations: ['kernel-python'],
++    consumers: ['tool-kernel'],
++    note: 'A backend owns one namespace that survives across calls; the tool runs a cell in it and returns the captured output.',
++  },
+   {
+     key: 'deepseekLlmApiExtensions',
+     pkg: 'deepseek-llm-api-extensions',
+diff --git a/scripts/gen-tool-catalog.ts b/scripts/gen-tool-catalog.ts
+index b5dea761cf..1422332fa0 100644
+--- a/scripts/gen-tool-catalog.ts
++++ b/scripts/gen-tool-catalog.ts
+@@ -65,6 +65,8 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
+ import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
+ import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
+ import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
++import KernelRuntime from '@deepseek-ai/dsh-kernel'
++import * as ToolKernel from '@deepseek-ai/dsh-tool-kernel'
+ import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
+ import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
+ import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
+@@ -612,6 +614,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
+     note:
+       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
+   },
++  {
++    pkg: '@deepseek-ai/dsh-tool-kernel',
++    dir: 'tool-kernel',
++    source: 'packages/kernel/tool-kernel/src/index.ts',
++    requires: ['ctx.tools', 'ctx.kernel', 'ctx.systemPrompt'],
++    writes: ['tool/call', 'tool/result'],
++    async mount(ctx) {
++      // The seam alone: the schema does not depend on which backend is
++      // registered, or on one being registered at all, and harvesting must not
++      // resolve a Python interpreter.
++      await ctx.plugin(KernelRuntime)
++      await ctx.plugin(ToolKernel)
++    },
++    note:
++      'kernel runs one cell in a namespace that persists across calls, so it is registered exclusive (no `isConcurrencySafe`): two overlapping cells would interleave their assignments and their captured output. Whether it is mounted at all is the `kernel.enabled` setting, read once at boot.',
++  },
+ ]
+ 
+ /** One package's contribution to the catalog: its schemas plus attribution. */

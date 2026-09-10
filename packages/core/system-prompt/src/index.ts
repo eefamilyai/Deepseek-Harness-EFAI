@@ -409,7 +409,7 @@ export class SystemPrompt extends Service {
       this.section({
         name: 'harness:identity',
         order: this.getSectionOrder('HARNESS_IDENTITY'),
-        text: 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development.',
+        text: 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. In large directories, use optimised ways to search through the directory.',
       })
     }
     this.section({

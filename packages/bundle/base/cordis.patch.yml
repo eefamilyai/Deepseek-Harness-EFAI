@@ -359,7 +359,7 @@
 
     # ── the RLM switch ─────────────────────────────────────────────────────
     #
-    # `rlm.enabled` (default true) is the second position of the acting-roster
+    # `rlm.enabled` (default false) is the second position of the acting-roster
     # switch. It mirrors `kernel-mode` exactly: the plugin owns only the setting
     # and stays mounted in BOTH positions so the switch can always be flipped
     # back. The engine below needs the persistent kernel seam underneath, so it
@@ -375,7 +375,7 @@
     - id: rlm-mode
       name: '@deepseek-ai/dsh-rlm-mode'
       config:
-        enabled: true
+        enabled: false
 
     # The first-party recursive RLM engine. It provides `rlm` (a one-shot tool)
     # and the `ctx.rlm` service; both consume `ctx.kernel`, so this row is
@@ -384,7 +384,31 @@
     # `kernel.enabled` gate they already had.
     - id: rlm
       name: '@deepseek-ai/dsh-rlm'
-      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) && dshSettingFlag('rlm.enabled', true))) === false
+      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) && dshSettingFlag('rlm.enabled', false))) === false
+
+    # ── agent memory (non-default) ─────────────────────────────────────────
+    #
+    # Durable, cache-friendly memory as a toggle. On, the engine adds
+    # memory_add/memory_recall/memory_map, auto-records tool output through a
+    # host-side `tools/result` observer, and re-injects a bounded index each
+    # turn. `agent-memory.enabled` (default false) is the switch, and it mirrors
+    # `kernel-mode`/`rlm-mode` exactly: the mode plugin owns only the setting and
+    # stays mounted in BOTH positions so the switch can always be flipped back,
+    # while `applies: 'restart'` matches the Loader `disabled` expression below
+    # being read once at boot.
+    #
+    # DSH-FORK(memory): a third settings namespace toggling the durable memory
+    # engine. EXIT: move to packages/bundle/efai-memory/cordis.patch.yml (a
+    # fork-owned bundle applied by profile) once the profile-boot bundle chain
+    # exists.
+    - id: agent-memory-mode
+      name: '@deepseek-ai/dsh-agent-memory-mode'
+      config:
+        enabled: false
+
+    - id: agent-memory
+      name: '@deepseek-ai/dsh-agent-memory'
+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('agent-memory.enabled', false)) === false
 
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'

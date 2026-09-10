@@ -36,6 +36,131 @@ import uuid
 
 from html.parser import HTMLParser
 
+# ── fd-1 quarantine ──────────────────────────────────────────────────────
+# The wire protocol is newline-delimited base64 on stdout, so a SINGLE raw
+# byte written to fd 1 by anything that is not send_frame desynchronises the
+# transport for the rest of the process's life: the harness reads that line as
+# the answer to the running cell, and every later cell then receives the
+# previous cell's frame. Nothing detects it and nothing recovers from it.
+#
+# Plenty of ordinary Python reaches fd 1 without going through sys.stdout:
+# os.system, any subprocess that inherits stdio, a C extension, or a print
+# from a thread that is not executing a captured cell. So fd 1 stops being the
+# protocol. It is duplicated to a private fd that only send_frame writes to,
+# and a pipe takes its place on fd 1. A daemon drains that pipe, which both
+# protects the transport and recovers output the model used to lose entirely.
+#
+# Installed here, immediately after the imports, so no module-level code can
+# contaminate the channel before the guard is up.
+_STRAY_LOCK = None
+_STRAY = []
+# Sentinel pushed through fd 1 to find out when the drain has caught up. A pipe
+# is FIFO, so once the sentinel comes back every byte the cell wrote before it
+# has already been collected — which is what lets stray output be attributed to
+# the cell that produced it instead of to whichever frame the drain thread
+# happened to be scheduled before.
+_STRAY_SYNC = "\x00KILN_FD1_SYNC\x00"
+_STRAY_SYNCED = None
+
+
+def _install_fd_quarantine():
+    """Move the protocol off fd 1. Returns the private protocol stream, or None
+    when the platform refuses, in which case send_frame falls back to fd 1 and
+    behaves exactly as it did before."""
+    global _STRAY_LOCK, _STRAY_SYNCED
+    import threading
+    _STRAY_LOCK = threading.Lock()
+    _STRAY_SYNCED = threading.Event()
+    try:
+        proto_fd = os.dup(1)
+    except Exception:
+        return None
+    try:
+        read_fd, write_fd = os.pipe()
+        os.dup2(write_fd, 1)
+        os.close(write_fd)
+    except Exception:
+        try:
+            os.close(proto_fd)
+        except Exception:
+            pass
+        return None
+
+    sync = _STRAY_SYNC.encode('utf-8')
+
+    def _drain():
+        # Must never stop while fd 1 is open: an undrained pipe fills at ~64KB
+        # and blocks the writer, which would hang a cell instead of the old
+        # failure of corrupting the protocol.
+        carry = b""
+        while True:
+            try:
+                chunk = os.read(read_fd, 65536)
+            except Exception:
+                return
+            if not chunk:
+                return
+            data = carry + chunk
+            carry = b""
+            seen_sync = sync in data
+            if seen_sync:
+                data = data.replace(sync, b"")
+            else:
+                # A sentinel can straddle a read boundary. Hold back a tail that
+                # could still be its start, so the sync is never missed; the
+                # next chunk (there is always one — every sync writes) frees it.
+                edge = data[-(len(sync) - 1):]
+                cut = edge.find(sync[:1])
+                if cut != -1:
+                    carry = edge[cut:]
+                    data = data[:len(data) - len(carry)]
+            if data:
+                with _STRAY_LOCK:
+                    _STRAY.append(data.decode('utf-8', 'replace'))
+            if seen_sync:
+                _STRAY_SYNCED.set()
+
+    threading.Thread(target=_drain, daemon=True, name='kiln-fd1-drain').start()
+    return os.fdopen(proto_fd, 'w', encoding='utf-8', newline='\n')
+
+
+_PROTO_STREAM = _install_fd_quarantine()
+
+
+def _await_stray_drain(timeout=0.25):
+    """Block until the drain thread has collected everything already written to
+    fd 1. Costs one pipe round-trip, not a sleep, so a cell that wrote nothing
+    pays almost nothing. Bounded because a wedged drain must degrade to slightly
+    misattributed output, never to a hung cell."""
+    if _STRAY_SYNCED is None or _PROTO_STREAM is None:
+        return
+    _STRAY_SYNCED.clear()
+    try:
+        os.write(1, _STRAY_SYNC.encode('utf-8'))
+    except Exception:
+        return
+    _STRAY_SYNCED.wait(timeout)
+
+
+def take_stray_output():
+    """Drain the bytes that reached the real fd 1 since the last frame.
+
+    Returned labelled rather than spliced silently into the cell's own output:
+    it arrived outside the per-thread capture, so it is not the cell's captured
+    output and should not be dressed up as it."""
+    if _STRAY_LOCK is None:
+        return ""
+    _await_stray_drain()
+    with _STRAY_LOCK:
+        if not _STRAY:
+            return ""
+        text = "".join(_STRAY)
+        del _STRAY[:]
+    text = text.strip("\r\n")
+    if not text:
+        return ""
+    return "[output written straight to the process stdout, outside any cell's capture]\n" + text
+
 
 
 
@@ -3824,6 +3949,26 @@ def _format_exc(e):
 
 def _run_cell(code):
 
+    # A cell that leaves sys.stdout rebound — an unexited redirect_stdout, a
+
+    # library that wraps the stream on import, a force-stopped cell whose
+
+    # context manager never ran __exit__ — used to silence EVERY later cell:
+
+    # the proxy was gone, so nothing reached the thread-local buffer and each
+
+    # subsequent result came back empty with no error to explain it. Restoring
+
+    # the proxy per cell keeps that blast radius to the cell that caused it.
+
+    if not isinstance(sys.stdout, _CaptureStream):
+
+        sys.stdout = _CaptureStream(_REAL_STDOUT, "out")
+
+    if not isinstance(sys.stderr, _CaptureStream):
+
+        sys.stderr = _CaptureStream(_REAL_STDERR, "err")
+
     # Capture into THIS thread's buffers (routed by the _CaptureStream proxy)
 
     # rather than swapping the process-global sys.stdout: a backgrounded cell and
@@ -4599,6 +4744,27 @@ def _flush_bg():
 
 
 
+def _join_stray(body):
+
+    """Append anything that reached the real fd 1 to a frame's output.
+
+    Before the fd-1 quarantine this text went onto the protocol channel and
+
+    broke it; now it is recovered and shown to the model instead."""
+
+    stray = take_stray_output()
+
+    if not stray:
+
+        return body
+
+    if body and not body.endswith("\n"):
+
+        body += "\n"
+
+    return body + stray + "\n"
+
+
 def _bg_watchdog():
 
     """Force-stop any background cell that passes its (generous) secondary
@@ -4716,13 +4882,17 @@ def _seam_request(op, args, timeout=30.0):
 
 def send_frame(obj):
 
-    # Straight to the real stdout, never the capture proxy: a frame is the
+    # Straight to the private protocol stream, never the capture proxy and
 
-    # protocol, not cell output, and must not land in some cell's buffer.
+    # never fd 1: a frame is the protocol, not cell output, and fd 1 is shared
 
-    _REAL_STDOUT.write(base64.b64encode(json.dumps(obj, ensure_ascii=False).encode('utf-8')).decode('ascii') + '\n')
+    # with every subprocess and C extension the cell can reach.
 
-    _REAL_STDOUT.flush()
+    stream = _PROTO_STREAM if _PROTO_STREAM is not None else _REAL_STDOUT
+
+    stream.write(base64.b64encode(json.dumps(obj, ensure_ascii=False).encode('utf-8')).decode('ascii') + '\n')
+
+    stream.flush()
 
 
 
@@ -5693,6 +5863,14 @@ while True:
 
     cell_conv = None
 
+    # The request's correlation id, echoed on the frame that answers it. The
+
+    # harness matches frames to cells by this id instead of by arrival order,
+
+    # so a stray line on the channel can no longer be read as a cell's result.
+
+    cell_id = None
+
     if code.startswith(_CELL_PREFIX):
 
         try:
@@ -5700,6 +5878,8 @@ while True:
             envelope = json.loads(code[len(_CELL_PREFIX):])
 
             code = envelope.get("code", "")
+
+            cell_id = envelope.get("id")
 
             raw_timeout = envelope.get("timeoutMs")
 
@@ -5727,7 +5907,7 @@ while True:
 
         except Exception as e:
 
-            send_frame({"out": "", "error": f"Cell envelope error: {e}"})
+            send_frame({"out": "", "error": f"Cell envelope error: {e}", "id": cell_id})
 
             continue
 
@@ -5739,13 +5919,15 @@ while True:
 
             req = json.loads(code[len(_CTRL_PREFIX):])
 
+            cell_id = req.get("id")
+
             res = _handle_ctrl(req)
 
         except Exception as e:
 
             res = {"error": "control command failed: %s" % e}
 
-        send_frame({"out": _SNAPSHOT_MARKER + json.dumps(res, ensure_ascii=False), "error": None})
+        send_frame({"out": _SNAPSHOT_MARKER + json.dumps(res, ensure_ascii=False), "error": None, "id": cell_id})
 
         continue
 
@@ -5799,7 +5981,7 @@ while True:
         # cell that completed since the last frame.
 
         _seam_fg_thread = None
-        send_frame({"out": _flush_bg() + runner.out, "error": runner.err})
+        send_frame({"out": _join_stray(_flush_bg() + runner.out), "error": runner.err, "id": cell_id})
 
     else:
 
@@ -5828,7 +6010,7 @@ while True:
 
                   % (round(primary_ms / 1000.0), runner.bg_id, round(secondary_ms / 1000.0)))
 
-        send_frame({"out": _flush_bg() + notice, "error": None, "backgrounded": True})
+        send_frame({"out": _join_stray(_flush_bg() + notice), "error": None, "backgrounded": True, "id": cell_id})
 
 
 

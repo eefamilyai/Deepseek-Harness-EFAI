@@ -169,6 +169,13 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode 
   callTime: seq * 1_000 - 500,
   content: [], isError: false, subCalls: [],
 })
+/** Settled kernel cell whose leading comment becomes the row's phrase. */
+const kernelResult = (seq: number, callId: string, comment: string): ToolResultNode => ({
+  kind: 'tool-result', seq, time: seq * 1_000, callId,
+  call: { name: 'kernel', argsRaw: JSON.stringify({ code: `${comment}\nprint(1)` }) },
+  callTime: seq * 1_000 - 500,
+  content: [], isError: false, subCalls: [],
+})
 const runningCall = (callId: string, name = 'bash'): RunningToolCall => ({
   callId, name, argsRaw: `{"command":"cmd-${callId}"}`, turn: 2, step: 1, time: 1_000, subCalls: [],
 })
@@ -1255,7 +1262,7 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 6]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 个 subagent' })
+    const toggle = view.getByRole('button', { name: '运行了命令 · 委派了 subagent' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
     expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
@@ -1286,7 +1293,7 @@ describe('ChatView', () => {
     act(() => { h.set({
       nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
     }) })
-    const renewedToggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 个 subagent' })
+    const renewedToggle = view.getByRole('button', { name: '运行了命令 · 委派了 subagent' })
     expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
     expect(members[0]?.getAttribute('hidden')).toBeNull()
   })
@@ -1530,6 +1537,34 @@ describe('ChatView', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(contextRow?.getAttribute('hidden')).toBe('until-found')
     expect(view.getByLabelText('回到底部')).toBeTruthy()
+  })
+
+  it('budgets the folded row label so it is never cut mid-word', () => {
+    const first = {
+      ...assistant(2, 'earlier reply', 1, 1),
+      blocks: [
+        { kind: 'reasoning' as const, text: 'inspect the repository' },
+        { kind: 'text' as const, text: 'earlier reply' },
+      ],
+    }
+    const h = makeHarness({
+      nodes: [
+        user(1, 'question'),
+        first,
+        kernelResult(3, 'a', '# Report working directory and top-level contents of the checkout root'),
+        kernelResult(4, 'b', '# Show working directory and top-level entries with file sizes'),
+        assistant(5, 'final answer', 1, 2),
+      ],
+      turnEnds: new Map([[1, 6]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const label = turnProcessControl(view.container)?.textContent ?? ''
+    // The leading phrase is abbreviated at a word boundary...
+    expect(label).toContain('Report working directory and top-level contents of the…')
+    // ...and what the row could not print is reported rather than silently
+    // elided, which is what used to leave a fragment like "entries wi…".
+    expect(label).toContain('还有 1 项')
+    expect(label).not.toContain('entries wi')
   })
 
   it('keeps a focused process row visible when a live Turn completes', () => {

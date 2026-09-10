@@ -1,0 +1,128 @@
+diff --git a/apps/cli/composition.md b/apps/cli/composition.md
+index 5386b94ae0..73e40682bf 100644
+--- a/apps/cli/composition.md
++++ b/apps/cli/composition.md
+@@ -48,6 +48,8 @@ flowchart LR
+   cfg --> plugin_dsh_base_credentials
+   plugin_dsh_base_llm_pi_ai["llm-pi-ai<br/>@deepseek-ai/dsh-llm-pi-ai"]
+   cfg --> plugin_dsh_base_llm_pi_ai
++  plugin_dsh_base_llm_kiln["llm-kiln<br/>@deepseek-ai/dsh-llm-kiln"]
++  cfg --> plugin_dsh_base_llm_kiln
+   plugin_dsh_base_session_persistence_jsonl["session-persistence-jsonl<br/>@deepseek-ai/dsh-session-persistence-jsonl"]
+   cfg --> plugin_dsh_base_session_persistence_jsonl
+   plugin_dsh_base_attachment_local["attachment-local<br/>@deepseek-ai/dsh-attachment-local"]
+@@ -82,6 +84,8 @@ flowchart LR
+   cfg --> plugin_dsh_base_permission
+   plugin_dsh_base_shell_env["shell-env<br/>@deepseek-ai/dsh-shell-env"]
+   cfg --> plugin_dsh_base_shell_env
++  plugin_dsh_base_kernel_mode["kernel-mode<br/>@deepseek-ai/dsh-kernel-mode"]
++  cfg --> plugin_dsh_base_kernel_mode
+   plugin_dsh_base_tool_bash["tool-bash<br/>@deepseek-ai/dsh-tool-bash"]
+   cfg --> plugin_dsh_base_tool_bash
+   plugin_dsh_base_tool_pwsh["tool-pwsh<br/>@deepseek-ai/dsh-tool-pwsh"]
+@@ -94,6 +98,12 @@ flowchart LR
+   cfg --> plugin_dsh_base_tool_fs
+   plugin_dsh_base_tool_fs_search["tool-fs-search<br/>@deepseek-ai/dsh-tool-fs-search"]
+   cfg --> plugin_dsh_base_tool_fs_search
++  plugin_dsh_base_kernel["kernel<br/>@deepseek-ai/dsh-kernel"]
++  cfg --> plugin_dsh_base_kernel
++  plugin_dsh_base_kernel_python["kernel-python<br/>@deepseek-ai/dsh-kernel-python"]
++  cfg --> plugin_dsh_base_kernel_python
++  plugin_dsh_base_tool_kernel["tool-kernel<br/>@deepseek-ai/dsh-tool-kernel"]
++  cfg --> plugin_dsh_base_tool_kernel
+   plugin_dsh_base_agent_instructions["agent-instructions<br/>@deepseek-ai/dsh-agent-instructions"]
+   cfg --> plugin_dsh_base_agent_instructions
+   plugin_dsh_base_skill["skill<br/>@deepseek-ai/dsh-skill"]
+@@ -108,6 +118,8 @@ flowchart LR
+   cfg --> plugin_dsh_base_commands
+   plugin_dsh_base_command_feedback["command-feedback<br/>@deepseek-ai/dsh-command-feedback"]
+   cfg --> plugin_dsh_base_command_feedback
++  plugin_dsh_base_command_session_info["command-session-info<br/>@deepseek-ai/dsh-command-session-info"]
++  cfg --> plugin_dsh_base_command_session_info
+   plugin_dsh_base_goal["goal<br/>@deepseek-ai/dsh-goal"]
+   cfg --> plugin_dsh_base_goal
+   plugin_dsh_base_goal_round_driver["goal-round-driver<br/>@deepseek-ai/dsh-goal-round-driver"]
+@@ -170,6 +182,8 @@ flowchart LR
+   cfg --> plugin_dsh_base_web_fetch_http
+   plugin_dsh_base_tool_web["tool-web<br/>@deepseek-ai/dsh-tool-web"]
+   cfg --> plugin_dsh_base_tool_web
++  plugin_dsh_base_web_browser["web-browser<br/>@deepseek-ai/dsh-web-browser"]
++  cfg --> plugin_dsh_base_web_browser
+   plugin_dsh_base_tools["tools<br/>@deepseek-ai/dsh-tools"]
+   cfg --> plugin_dsh_base_tools
+   plugin_dsh_base_system_prompt["system-prompt<br/>@deepseek-ai/dsh-system-prompt"]
+@@ -204,6 +218,7 @@ flowchart LR
+ | `settings` | `@deepseek-ai/dsh-settings-file` |
+ | `credentials` | `@deepseek-ai/dsh-credentials-local` |
+ | `llm-pi-ai` | `@deepseek-ai/dsh-llm-pi-ai` |
++| `llm-kiln` | `@deepseek-ai/dsh-llm-kiln` |
+ | `session-persistence-jsonl` | `@deepseek-ai/dsh-session-persistence-jsonl` |
+ | `attachment-local` | `@deepseek-ai/dsh-attachment-local` |
+ | `session-query-sqlite` | `@deepseek-ai/dsh-session-query-sqlite` |
+@@ -221,12 +236,16 @@ flowchart LR
+ | `approval` | `@deepseek-ai/dsh-user-approval` |
+ | `permission` | `@deepseek-ai/dsh-permission-presets` |
+ | `shell-env` | `@deepseek-ai/dsh-shell-env` |
++| `kernel-mode` | `@deepseek-ai/dsh-kernel-mode` |
+ | `tool-bash` | `@deepseek-ai/dsh-tool-bash` |
+ | `tool-pwsh` | `@deepseek-ai/dsh-tool-pwsh` |
+ | `tool-jobs` | `@deepseek-ai/dsh-tool-jobs` |
+ | `fs-observation-policy` | `@deepseek-ai/dsh-fs-observation-policy` |
+ | `tool-fs` | `@deepseek-ai/dsh-tool-fs` |
+ | `tool-fs-search` | `@deepseek-ai/dsh-tool-fs-search` |
++| `kernel` | `@deepseek-ai/dsh-kernel` |
++| `kernel-python` | `@deepseek-ai/dsh-kernel-python` |
++| `tool-kernel` | `@deepseek-ai/dsh-tool-kernel` |
+ | `agent-instructions` | `@deepseek-ai/dsh-agent-instructions` |
+ | `skill` | `@deepseek-ai/dsh-skill` |
+ | `skill-filesystem` | `@deepseek-ai/dsh-skill-filesystem` |
+@@ -234,6 +253,7 @@ flowchart LR
+ | `tool-skill` | `@deepseek-ai/dsh-tool-skill` |
+ | `commands` | `@deepseek-ai/dsh-commands` |
+ | `command-feedback` | `@deepseek-ai/dsh-command-feedback` |
++| `command-session-info` | `@deepseek-ai/dsh-command-session-info` |
+ | `goal` | `@deepseek-ai/dsh-goal` |
+ | `goal-round-driver` | `@deepseek-ai/dsh-goal-round-driver` |
+ | `command-goal` | `@deepseek-ai/dsh-command-goal` |
+@@ -265,6 +285,7 @@ flowchart LR
+ | `web-search-deepseek` | `@deepseek-ai/dsh-web-search-deepseek` |
+ | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` |
+ | `tool-web` | `@deepseek-ai/dsh-tool-web` |
++| `web-browser` | `@deepseek-ai/dsh-web-browser` |
+ | `tools` | `@deepseek-ai/dsh-tools` |
+ | `system-prompt` | `@deepseek-ai/dsh-system-prompt` |
+ | `agent-loop` | `@deepseek-ai/dsh-agent-loop` |
+diff --git a/apps/cli/package.json b/apps/cli/package.json
+index c589218149..51ad85ef35 100644
+--- a/apps/cli/package.json
++++ b/apps/cli/package.json
+@@ -54,7 +54,11 @@
+     "@deepseek-ai/dsh-hooks-claude-code": "workspace:^",
+     "@deepseek-ai/dsh-hooks-codex": "workspace:^",
+     "@deepseek-ai/dsh-jobs-local": "workspace:^",
++    "@deepseek-ai/dsh-kernel": "workspace:^",
++    "@deepseek-ai/dsh-kernel-mode": "workspace:^",
++    "@deepseek-ai/dsh-kernel-python": "workspace:^",
+     "@deepseek-ai/dsh-launch-environment": "workspace:^",
++    "@deepseek-ai/dsh-llm-kiln": "workspace:^",
+     "@deepseek-ai/dsh-mcp-client": "workspace:^",
+     "@deepseek-ai/dsh-persona": "workspace:^",
+     "@deepseek-ai/dsh-plan-mode": "workspace:^",
+@@ -80,6 +84,7 @@
+     "@deepseek-ai/dsh-tool-fs-search": "workspace:^",
+     "@deepseek-ai/dsh-tool-goal": "workspace:^",
+     "@deepseek-ai/dsh-tool-jobs": "workspace:^",
++    "@deepseek-ai/dsh-tool-kernel": "workspace:^",
+     "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
+     "@deepseek-ai/dsh-tool-pwsh-persistent": "workspace:^",
+     "@deepseek-ai/dsh-tool-ralph": "workspace:^",
+@@ -97,7 +102,8 @@
+     "@deepseek-ai/schemastery": "workspace:^",
+     "commander": "^15.0.0",
+     "js-yaml": "^4.2.0",
+-    "node-addon-require-builtin": "^0.1.4"
++    "node-addon-require-builtin": "^0.1.4",
++    "@deepseek-ai/dsh-kernel-rlm-context": "workspace:^"
+   },
+   "devDependencies": {
+     "@agentclientprotocol/sdk": "1.4.0",

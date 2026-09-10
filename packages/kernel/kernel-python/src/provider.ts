@@ -149,8 +149,8 @@ export class KilnKernelProvider implements KernelProvider {
       // exactly like `cwd`. Without a live agent the conversation key is
       // absent and the Python side falls back to standalone behavior.
       const conv = conversationOf(request.agentCtx)
-      child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
-      const outcome = await this.awaitCell(child, request, signal, request.agentCtx)
+      const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
+      const outcome = await this.awaitCell(child, id, request, signal, request.agentCtx)
       if (outcome.kind === 'ok') {
         return { output: outcome.output, outcome: 'ok' as const, restarted: false }
       }
@@ -169,6 +169,7 @@ export class KilnKernelProvider implements KernelProvider {
    */
   private async awaitCell(
     child: KernelChild,
+    id: number,
     request: KernelExecuteRequest,
     signal?: AbortSignal,
     agentCtx?: KernelExecuteRequest['agentCtx'],
@@ -194,11 +195,12 @@ export class KilnKernelProvider implements KernelProvider {
     const timer = setTimeout(() => { budget.abort(new KernelAbortError('timeout')) }, safetyCeilingOf(request))
     timer.unref()
     try {
-      const frame = await child.nextFrame(budget.signal)
-      // A dead child resolves waiters with an empty frame rather than hanging;
-      // an empty frame from a live child is a cell that genuinely printed
-      // nothing, so the liveness check is what tells the two apart.
-      if (child.dead) return { kind: 'crashed' }
+      const frame = await child.nextFrame(id, budget.signal)
+      // A dead child resolves waiters with a `dead` frame rather than hanging.
+      // It carries its own marker because an empty frame from a live child is
+      // a cell that genuinely printed nothing, and reporting a dead kernel as
+      // "the cell produced no output" is the worst available reading of it.
+      if (frame.dead === true || child.dead) return { kind: 'crashed' }
       return { kind: 'ok', output: joinCellOutput(frame.out ?? '', frame.error ?? null) }
     } catch (reason) {
       return { kind: reason instanceof KernelAbortError ? reason.kind : 'cancelled' }
@@ -225,8 +227,8 @@ export class KilnKernelProvider implements KernelProvider {
   async names(): Promise<readonly string[]> {
     return this.serialize(async () => {
       const child = this.ensureChild()
-      child.sendControl({ cmd: 'list_names' })
-      const result = parseControlResult(await child.nextFrame())
+      const id = child.sendControl({ cmd: 'list_names' })
+      const result = parseControlResult(await child.nextFrame(id))
       if (typeof result !== 'object' || result === null) return []
       const { names } = result as { names?: unknown }
       if (!Array.isArray(names)) return []
