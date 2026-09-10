@@ -480,6 +480,22 @@ describe('system_reminder suppression', () => {
     expect(prose(chunks)).toBe('hi\n')
   })
 
+  it('keeps the framing tag visible when the model merely names it in a sentence', () => {
+    // A model DISCUSSING the framing writes the tag inline, not as a block
+    // delimiter. Suppressing from an inline mention deleted the whole rest of
+    // the answer with no trace on either side, so the mention stays prose.
+    const chunks = ['The tag `<system-reminder>` above is the proof, and here is the rest of my answer.\n']
+    expect(prose(chunks)).toBe('The tag `<system-reminder>` above is the proof, and here is the rest of my answer.\n')
+  }
+
+  it('still suppresses a block opener that shares its line with leading prose', () => {
+    // The gate is on the opener's own position, so prose BEFORE a block opener
+    // keeps the suppression: only the mention inside a sentence is prose.
+    const chunks = ['Sure.\n<system-reminder>\nrecited prompt\n</system-reminder>\nanswer\n']
+    expect(prose(chunks)).toBe('Sure.\nanswer\n')
+    expect(prose(chunks)).not.toContain('recited')
+  }
+
   it('suppresses to the end of the turn when the span is never closed', () => {
     const chunks = ['<system_reminder>\nYou are an AI agent...\nblah blah the whole prompt\n']
     expect(prose(chunks)).toBe('')

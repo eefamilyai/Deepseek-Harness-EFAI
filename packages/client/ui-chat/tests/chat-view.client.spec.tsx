@@ -1539,6 +1539,31 @@ describe('ChatView', () => {
     expect(view.getByLabelText('回到底部')).toBeTruthy()
   })
 
+  it('colours each folded phrase by its tool family and separates the verb', () => {
+    const h = makeHarness({
+      nodes: [
+        user(1, 'question'),
+        kernelResult(2, 'a', '# Repeat the read-only listing of the working directory top level'),
+        toolResult(3, 'b', 'write'),
+        toolResult(4, 'c', 'read'),
+        assistant(5, 'final answer', 1, 2),
+      ],
+      turnEnds: new Map([[1, 6]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const control = turnProcessControl(view.container)!
+    const tones = [...control.querySelectorAll<HTMLElement>('[data-tone]')]
+      .map(span => span.getAttribute('data-tone'))
+    // One hue per family, so the folded line stays a miniature of the expanded
+    // rows it hides: a kernel cell reads as code, a write as a mutation.
+    expect(tones).toContain('code')
+    expect(tones).toContain('mutate')
+    expect(tones).toContain('read')
+    // A kernel comment is already a capitalised sentence, so the verb needs a
+    // separator in front of it; "ran Repeat the ..." read as one broken word.
+    expect(control.textContent).toContain('ran: Repeat the read-only listing')
+  })
+
   it('budgets the folded row label so it is never cut mid-word', () => {
     const first = {
       ...assistant(2, 'earlier reply', 1, 1),
