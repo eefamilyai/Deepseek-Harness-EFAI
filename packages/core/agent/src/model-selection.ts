@@ -37,6 +37,7 @@ export interface ModelSelectionRef {
  * @returns Disposer for both scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream lands the accessor re-entrancy guard (upstream PR).
   // Declaring an accessor twice on one scope is a hard cordis error, and a
   // resume or reconnect can re-enter setup on the SAME agent context before the
   // previous attempt's fiber has unwound its accessor — which crashed the whole

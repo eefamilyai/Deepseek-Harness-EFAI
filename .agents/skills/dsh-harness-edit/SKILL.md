@@ -14,6 +14,35 @@ Two artifacts make that cost bounded, and both must stay current:
 
 Read `HARNESS-EDITS.md` before touching anything. It is fork-owned, so it never conflicts. This skill is the operating procedure; `HARNESS-EDITS.md` and `rules.json` are authoritative when they disagree with it.
 
+## Make the edit a mod, not a source change
+
+This is the skill's whole purpose, so it is the first decision, not the last. Every
+fork edit is either a **mod** — a patch the overlay carries and reapplies — or a
+**source change** that the next upstream release must be reconciled by hand. Prefer
+the mod. Reach for direct source editing only when no mod can express the change,
+and then only with a marker and an exit plan.
+
+Ask these in order and stop at the first that works. Each step is strictly cheaper
+to maintain than the one below it.
+
+| # | Ask | If yes, the edit is |
+|---|---|---|
+| 1 | Can this be a **new fork-owned package** registered on a documented extension point? | Tier 1. Zero merge cost, forever. |
+| 2 | Can this ship as a **fork-owned bundle** (`packages/bundle/efai-<feature>/cordis.patch.yml`) applied by profile? | Tier 1. Composition never touches upstream presets. |
+| 3 | Is this a **settings value** that varies per deployment? | Tier 1. It is `Config`; `AGENTS.md` forbids hardcoded tunables. |
+| 4 | Is this a **bug in upstream code**, or something upstream would plausibly accept? | An **upstream PR**. Keep a local copy in `.merge-port/upstream-prs/<name>.patch` with a register row, and delete the local delta when it lands. |
+| 5 | None of the above. | A **marked Tier-2 edit**: smallest possible hunk, `DSH-FORK` marker, `EXIT:` clause, seam-register row, `patchGroups` entry. |
+
+Steps 1–4 produce a change upstream can never conflict with. Step 5 is the only one
+that costs a conflict resolution on every release, so it is the last resort and not
+the default.
+
+**A mod is not a smaller source change; it is a different artifact.** The working
+tree still carries the edit — that is how the fork builds — but `patches/*.patch` is
+what a future release reapplies. An edit that only exists in the working tree is not
+a mod, and it will be lost at the next merge. Run the three-command sequence below
+before you consider the edit finished.
+
 ## When this skill applies
 
 Apply it to any change to harness source, composition, configuration, docs, tests, snapshots, or scripts.
@@ -89,6 +118,11 @@ export function dshSettingFlag(...) { ... }
 /* DSH-FORK(browser): collapsed provider groups. EXIT: upstream adopts provider collapse. */
 ```
 
+A marker must use the **host file's own comment syntax**. A `//` marker in a file whose
+comment character is `#` is not a comment — `.gitattributes` parses it as an attribute
+name and warns, and `.gitignore` parses it as a live ignore pattern. Both silently do
+the wrong thing. Check the lead character against the file type before writing it.
+
 The tag in parentheses names the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `rlm`, `fix`, `brand`, or `all` for repository-wide infrastructure. `fix` marks an upstream bug carried as a fork delta, and those are the rows to send upstream first.
 
 The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax, so write down the exit even when it is remote.
@@ -100,6 +134,21 @@ git diff "$(head -1 local-overlay/BASE)" -- <path>
 ```
 
 The marker appears in the fork's side of the hunk.
+
+### Where a marker cannot go
+
+Most Tier-2 files take a marker. Some cannot, and forcing one breaks a gate. These are
+the exceptions measured against this tree, not guesses:
+
+| Class | Why no marker | What covers it instead |
+|---|---|---|
+| `*.json` manifests (`package.json`, `tsconfig.json`) | JSON has no comment syntax. | The `patchGroups` entry and the patch itself. |
+| A bilingual pair's `README.md` / `README.zh.md` | Each side's git blob hash is recorded in the sibling `README.i18n.yaml`; editing one side without re-recording breaks `verify-translation-pairing`. | Mark **both** sides, then re-record with `pnpm run verify-translation-pairing --write <path>`. |
+| A generated file (`rules.json` `generated`) | A generator rewrites it; a marker is erased on the next run. | Nothing. Take upstream's side and regenerate. |
+| A file whose only diff is deletions | There is no added line to put a marker above. | The `patchGroups` entry. |
+
+For a bilingual pair, marking both sides and re-recording is the correct move — a marker
+on one side alone is a gate failure, and no marker at all is a missing exit plan.
 
 ## The overlay scripts
 

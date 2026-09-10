@@ -1,12 +1,13 @@
 diff --git a/packages/client/ui-primitives/src/DisclosureRow.module.css b/packages/client/ui-primitives/src/DisclosureRow.module.css
-index fed453f345..ba50b6bbdc 100644
+index fed453f345..7a78f3dc2d 100644
 --- a/packages/client/ui-primitives/src/DisclosureRow.module.css
 +++ b/packages/client/ui-primitives/src/DisclosureRow.module.css
-@@ -4,7 +4,13 @@
+@@ -4,7 +4,14 @@
     (--dsh-content-font-size-secondary: one step under the body — setting −1 at
     ≤14, setting −2 above), and the row height, leading box, and glyph edge
     shift by the body px delta so the icon keeps its optical share of the
 -   line. */
++   /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream ships a disclosure row. */
 +   line.
 +
 +   Family accent rebinding contract: a consumer that sets --dsh-row-accent on
@@ -17,7 +18,7 @@ index fed453f345..ba50b6bbdc 100644
  
  .root {
    display: flex;
-@@ -38,7 +44,7 @@
+@@ -38,7 +45,7 @@
    padding: 0;
    border: none;
    background: none;
@@ -26,7 +27,7 @@ index fed453f345..ba50b6bbdc 100644
  }
  
  /* Flow-row glyphs render at 14px inside the 16px box; the CSS edge overrides
-@@ -80,5 +86,5 @@ button.leading {
+@@ -80,5 +87,5 @@ button.leading {
    flex: none;
    font-size: var(--dsh-content-font-size-secondary, 13px);
    line-height: calc(24px + var(--dsh-content-font-delta, 0px));
@@ -34,13 +35,14 @@ index fed453f345..ba50b6bbdc 100644
 +  color: var(--dsh-row-accent, var(--dsw-alias-label-secondary));
  }
 diff --git a/packages/client/ui-primitives/src/icons/index.tsx b/packages/client/ui-primitives/src/icons/index.tsx
-index b2d52182cf..9456844637 100644
+index b2d52182cf..7b084c2af9 100644
 --- a/packages/client/ui-primitives/src/icons/index.tsx
 +++ b/packages/client/ui-primitives/src/icons/index.tsx
-@@ -853,6 +853,29 @@ export const IconSparkle16 = ({ size = 16, className }: IconProps) => (
+@@ -853,6 +853,30 @@ export const IconSparkle16 = ({ size = 16, className }: IconProps) => (
    </svg>
  )
  
++// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream ships the flow-row glyphs.
 +/** braces_16 (code tool-row leading glyph; hand-authored `{ }` at the family
 + *  stroke weight. Not the `</>` form — IconInspectOutline12 already carries
 + *  that shape as the trajectory affordance, and both appear on one expanded
@@ -68,22 +70,31 @@ index b2d52182cf..9456844637 100644
  export const IconInspectOutline12 = ({ size = 12, className }: IconProps) => (
    <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
 diff --git a/packages/client/ui-primitives/src/index.ts b/packages/client/ui-primitives/src/index.ts
-index c5f88e5eee..11c7890e79 100644
+index c5f88e5eee..4e86e1cb8a 100644
 --- a/packages/client/ui-primitives/src/index.ts
 +++ b/packages/client/ui-primitives/src/index.ts
-@@ -53,6 +53,7 @@ export type {
+@@ -53,6 +53,8 @@ export type {
    WebBlockProps, WebSearchBlockProps, WebFetchBlockProps, WebSourceView, WebBlockLabels,
  } from './WebBlock.tsx'
  export { CodeBlock } from './markdown/CodeBlock.tsx'
++// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream exports the disclosure row.
 +export { requestRunInTerminal, RUN_IN_TERMINAL_EVENT } from './terminal-bridge.ts'
  export type { CodeBlockProps } from './markdown/CodeBlock.tsx'
  export { JsonBlock } from './markdown/JsonBlock.tsx'
  export { MarkdownText } from './markdown/MarkdownText.tsx'
 diff --git a/packages/client/ui-primitives/src/markdown/CodeBlock.module.css b/packages/client/ui-primitives/src/markdown/CodeBlock.module.css
-index f1beebe5f8..b7adb76c8c 100644
+index f1beebe5f8..42c0948795 100644
 --- a/packages/client/ui-primitives/src/markdown/CodeBlock.module.css
 +++ b/packages/client/ui-primitives/src/markdown/CodeBlock.module.css
-@@ -55,9 +55,26 @@
+@@ -35,6 +35,7 @@
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
++  /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/markdown/CodeBlock.tsx. */
+   gap: 12px;
+   font: var(--dsl-code-block-banner-font);
+   border-top-left-radius: var(--dsl-code-block-border-radius);
+@@ -55,9 +56,26 @@
  .action {
    display: flex;
    align-items: center;
@@ -110,7 +121,7 @@ index f1beebe5f8..b7adb76c8c 100644
  .copyButton {
    background-color: rgb(255 255 255 / 0);
    border: none;
-@@ -68,6 +85,11 @@
+@@ -68,6 +86,11 @@
    font: inherit;
  }
  
@@ -123,18 +134,19 @@ index f1beebe5f8..b7adb76c8c 100644
    font: var(--dsl-code-block-content-font);
    padding: 16px;
 diff --git a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
-index 5ba93069dd..eeb1b96502 100644
+index 5ba93069dd..7c08eb9390 100644
 --- a/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
 +++ b/packages/client/ui-primitives/src/markdown/CodeBlock.tsx
-@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore
+@@ -2,6 +2,8 @@ import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore
  import type { ReactNode } from 'react'
  import clsx from 'clsx'
  import { writeClipboard } from '../clipboard.ts'
++// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream adopts the fork's code-block chrome.
 +import { IconCheckOutline14, IconCopyOutline16, IconDownloadOutline16, IconPlayOutline16 } from '../icons/index.tsx'
  import {
    StreamingHighlightSession, grammarLoadCount, highlightToHtml, subscribeGrammarLoaded,
  } from './highlight.ts'
-@@ -29,6 +30,61 @@ export interface CodeBlockProps {
+@@ -29,6 +31,61 @@ export interface CodeBlockProps {
    copyLabel: string
    /** Copy-button label during the post-copy confirmation window. */
    copiedLabel: string
@@ -196,7 +208,7 @@ index 5ba93069dd..eeb1b96502 100644
  }
  
  /**
-@@ -57,7 +113,7 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
+@@ -57,7 +114,7 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
    )
  }
  
@@ -205,7 +217,7 @@ index 5ba93069dd..eeb1b96502 100644
    const trimmed = code.endsWith('\n') ? code.slice(0, -1) : code
    const rootRef = useRef<HTMLDivElement>(null)
    const highlighting = useViewportHighlighting(rootRef, lang)
-@@ -141,6 +197,14 @@ export function CodeBlock({ code, lang, streaming, className, copyLabel, copiedL
+@@ -141,6 +198,14 @@ export function CodeBlock({ code, lang, streaming, className, copyLabel, copiedL
    )
    const [copied, setCopied] = useState(false)
  
@@ -220,7 +232,7 @@ index 5ba93069dd..eeb1b96502 100644
    const onCopy = useCallback(() => {
      if (copied) return
      /* v8 ignore next -- both arms always mount a <pre>; trimmed is the
-@@ -170,9 +234,22 @@ export function CodeBlock({ code, lang, streaming, className, copyLabel, copiedL
+@@ -170,9 +235,22 @@ export function CodeBlock({ code, lang, streaming, className, copyLabel, copiedL
      <div ref={rootRef} className={clsx(css.block, 'md-code-block', className)}>
        <div className={css.bannerWrap}>
          <div className={css.banner}>
@@ -246,13 +258,14 @@ index 5ba93069dd..eeb1b96502 100644
              </button>
            </div>
 diff --git a/packages/client/ui-primitives/src/markdown/render.tsx b/packages/client/ui-primitives/src/markdown/render.tsx
-index 950d85be52..cc9a550604 100644
+index 950d85be52..1d30b71a21 100644
 --- a/packages/client/ui-primitives/src/markdown/render.tsx
 +++ b/packages/client/ui-primitives/src/markdown/render.tsx
-@@ -33,6 +33,12 @@ export interface MarkdownCodeLabels {
+@@ -33,6 +33,13 @@ export interface MarkdownCodeLabels {
    copyLabel: string
    /** Copy-button label during the post-copy confirmation window. */
    copiedLabel: string
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream adopts the fork's markdown rendering.
 +  /** Run-button label. Absent hides the Run button. */
 +  runLabel?: string | undefined
 +  /** Download-button label. Absent hides the Download button. */
@@ -262,7 +275,7 @@ index 950d85be52..cc9a550604 100644
  }
  
  /** Localized chrome for a Markdown document. */
-@@ -343,6 +349,9 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
+@@ -343,6 +350,9 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
        streaming={context.streaming}
        copyLabel={context.labels.code.copyLabel}
        copiedLabel={context.labels.code.copiedLabel}
@@ -273,13 +286,14 @@ index 950d85be52..cc9a550604 100644
    )
  }
 diff --git a/packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts b/packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts
-index 52bb220b7e..755ad3d022 100644
+index 52bb220b7e..02db6d27f6 100644
 --- a/packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts
 +++ b/packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts
-@@ -36,6 +36,18 @@ describe('DisclosureRow.module.css font-size axis', () => {
+@@ -36,6 +36,19 @@ describe('DisclosureRow.module.css font-size axis', () => {
      ]))
    })
  
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/DisclosureRow.module.css.
 +  it('routes the glyph and title colors through the family-accent rebind', () => {
 +    // Every flow row (tool calls, think, context, system prompt) recolours
 +    // itself by setting --dsh-row-accent above the row; unset must leave both
@@ -296,15 +310,16 @@ index 52bb220b7e..755ad3d022 100644
      // StateDot marks itself with data-state; the :not filter keeps the status
      // mark at its fixed figma size while text-furniture icons follow the text.
 diff --git a/packages/client/ui-primitives/tests/icons.client.spec.tsx b/packages/client/ui-primitives/tests/icons.client.spec.tsx
-index e29bb2ce14..1b9a9c7773 100644
+index e29bb2ce14..0b89d52890 100644
 --- a/packages/client/ui-primitives/tests/icons.client.spec.tsx
 +++ b/packages/client/ui-primitives/tests/icons.client.spec.tsx
-@@ -17,8 +17,8 @@ const icons = Object.fromEntries(
+@@ -17,8 +17,9 @@ const icons = Object.fromEntries(
  const iconNames = Object.keys(icons)
  
  describe('ic_ds_ icon set', () => {
 -  it('exports the full icon set (46 deepsuite + 21 figma extracts + seven product glyphs outside those sets)', () => {
 -    expect(iconNames.length).toBe(74)
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/icons/index.tsx.
 +  it('exports the full icon set (46 deepsuite + 21 figma extracts + eight product glyphs outside those sets)', () => {
 +    expect(iconNames.length).toBe(75)
    })

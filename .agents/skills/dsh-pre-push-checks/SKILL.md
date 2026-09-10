@@ -24,6 +24,54 @@ pnpm --silent run change-scope --base <verified-base-ref>
 
 The command never guesses or fetches a base. Supply the ref verified from current remote or stack state; use `--head <ref>` when inspecting a commit other than `HEAD`. Its versioned JSON records committed paths relative to the resolved merge base, while staged, unstaged, and untracked paths describe the current worktree. After merging a changed base, rerun the report, reassess which behavior the combined scope can affect, and rerun only checks invalidated by the merge.
 
+<!-- DSH-FORK(all): the fork's own commit and push obligations. Upstream's skills cannot know about local-overlay/, the DSH-FORK marker, or verify-fork-overlay. EXIT: permanent fork delta. -->
+
+### This fork's own gate
+
+The checks above are the upstream harness's. This repository is a fork, and it
+has one gate upstream does not: `pnpm run verify-fork-overlay`. Run it whenever
+the outgoing change touches a file **upstream also owns** — a Tier-2 seam edit.
+
+```sh
+pnpm run verify-fork-overlay     # rebuild --check, verify, apply --check
+```
+
+It proves three things no other check does:
+
+- `rebuild --check` — `local-overlay/patches/*.patch` describes the current tree,
+  so the mod layer is not stale.
+- `verify.mjs` — base + patches reproduces the working tree byte for byte.
+- `apply.mjs --check` — the committed patch files still apply to a pristine base.
+
+The pre-commit and pre-push hooks do not run it. A push without it can publish a
+patch set that no longer matches the tree, which is what silently breaks the next
+upstream merge.
+
+Classify the outgoing paths first; only a Tier-2 path needs this gate:
+
+```sh
+git diff --name-status -M "$(head -1 local-overlay/BASE)"
+```
+
+When a path is Tier-2 and has no `DSH-FORK` marker, the edit is not finished.
+Every Tier-2 edit carries **three** obligations, all of which must be present in the
+outgoing diff, and a fourth for the commit that introduces them:
+
+| Obligation | Where |
+|---|---|
+| `DSH-FORK` marker comment naming a concrete `EXIT:` clause | in the edited file, next to the change |
+| `patchGroups` entry covering the path | `local-overlay/rules.json` |
+| Seam-register row | `HARNESS-EDITS.md` |
+
+An unmasked Tier-2 path, a path no `patchGroup` claims, or a marked file with no
+register row each fails a different gate; see
+[dsh-harness-edit](../dsh-harness-edit/SKILL.md) for the full procedure and
+`HARNESS-EDITS.md` for the current seam register.
+
+Two Tier-2 files cannot carry a marker at all — `package.json` and `tsconfig*.json`
+— because JSON has no comment syntax. They are marked by their `patchGroups` entry
+and seam-register row alone. Do not "fix" them by adding a sibling marker file.
+
 ## Select relevant evidence
 
 There is no universal local baseline beyond the hooks. Every behavior change needs the narrowest available test or purpose-built check that would fail for its regression; add broader checks only for surfaces the diff actually reaches.

@@ -87,6 +87,7 @@ function menuShell(): HTMLElement {
   return shell
 }
 
+// DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-input-trigger/src/client/MenuView.tsx.
 /** The collapsible heading toggle buttons, in document order (text without the chevron glyph). */
 function titles(container: HTMLElement): string[] {
   return [...container.querySelectorAll('button[data-trigger-heading]')]

@@ -81,6 +81,7 @@ export interface TypeApiEntry {
 
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the catalog is regenerated from fork-owned packages.
   {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',

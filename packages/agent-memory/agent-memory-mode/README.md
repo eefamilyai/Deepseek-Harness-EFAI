@@ -1,25 +1,15 @@
 # @deepseek-ai/dsh-agent-memory-mode
 
-The on/off switch for the first-party durable memory engine
-([`@deepseek-ai/dsh-agent-memory`](../agent-memory)).
+The on/off switch for the first-party durable memory engine ([`@deepseek-ai/dsh-agent-memory`](../agent-memory)).
 
-This package owns exactly one thing: the `agent-memory.enabled` setting. It
-mounts the engine when the setting is true and nothing when it is false; the
-gating itself is composition, in
-`packages/bundle/base/cordis.patch.yml`.
+This package owns exactly one thing: the `agent-memory.enabled` setting. It mounts the engine when the setting is true and nothing when it is false; the gating itself is composition, in `packages/bundle/base/cordis.patch.yml`.
 
-It mirrors `@deepseek-ai/dsh-kernel-mode` and `@deepseek-ai/dsh-rlm-mode`
-deliberately:
+It mirrors `@deepseek-ai/dsh-kernel-mode` and `@deepseek-ai/dsh-rlm-mode` deliberately:
 
-- the switch plugin is **not** gated by its own setting, because a switch that
-  vanished when switched off could never be switched back on, and
-- the setting declares `applies: 'restart'`, because the `disabled` expression
-  that reads it is evaluated once at boot.
+- the switch plugin is **not** gated by its own setting, because a switch that vanished when switched off could never be switched back on, and
+- the setting declares `applies: 'restart'`, because the `disabled` expression that reads it is evaluated once at boot.
 
-Mounting is a Loader fact, and Loader facts are decided at boot. Hiding a tool
-at runtime is not the same as not mounting it: a mounted plugin has already
-contributed its system-prompt section, so a merely-hidden engine would leave the
-model reading instructions for tools it cannot call. Not mounting takes both.
+Mounting is a Loader fact, and Loader facts are decided at boot. Hiding a tool at runtime is not the same as not mounting it: a mounted plugin has already contributed its system-prompt section, so a merely-hidden engine would leave the model reading instructions for tools it cannot call. Not mounting takes both.
 
 ```yaml
 - id: agent-memory-mode
@@ -28,6 +18,20 @@ model reading instructions for tools it cannot call. Not mounting takes both.
     enabled: true
 ```
 
-It is a fork-owned package (`packages/agent-memory/agent-memory-mode`), so it
-touches no upstream file. See `HARNESS-EDITS.md` for the fork's tier rules; this
-package is Tier 1.
+## Model Experience
+
+Indirectly, through the memory engine it mounts, which owns the injected index and the memory tools.
+
+#### KV Cache effect
+
+No direct invalidation; the engine it mounts owns any request-prefix changes.
+
+## Known Limitations and Deferred Work
+
+These limits define what this package does not provide. They are current package constraints, not a roadmap.
+
+- **A change requires a restart** - the setting declares `applies: 'restart'`, so toggling it mid-session does not mount or unmount the engine.
+- **The switch owns no model surface of its own** - it contributes no prompt section, tool, or schema; every model-visible effect belongs to the engine it gates.
+- **Off by default** - a composition that never sets `agent-memory.enabled` gets no durable memory at all.
+
+It is a fork-owned package (`packages/agent-memory/agent-memory-mode`), so it touches no upstream file. See `HARNESS-EDITS.md` for the fork's tier rules; this package is Tier 1.

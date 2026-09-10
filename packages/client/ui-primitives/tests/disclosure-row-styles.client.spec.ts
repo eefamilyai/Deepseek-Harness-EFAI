@@ -36,6 +36,7 @@ describe('DisclosureRow.module.css font-size axis', () => {
     ]))
   })
 
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/DisclosureRow.module.css.
   it('routes the glyph and title colors through the family-accent rebind', () => {
     // Every flow row (tool calls, think, context, system prompt) recolours
     // itself by setting --dsh-row-accent above the row; unset must leave both

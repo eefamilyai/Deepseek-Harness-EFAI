@@ -50,8 +50,6 @@
     { "path": "./packages/client/ui-slots" },
     { "path": "./packages/client/ui-attachment" },
     { "path": "./packages/client/ui-primitives" },
-    { "path": "./packages/client/ui-dock" },
-    { "path": "./packages/client/ui-effects" },
     { "path": "./packages/client/modules" },
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
     { "path": "./packages/client/hmr" },
@@ -104,6 +102,10 @@
     { "path": "./packages/client/ui-session" },
     { "path": "./packages/client/web" },
     { "path": "./packages/context/file-reference" },
-    { "path": "./apps/web" }
+    { "path": "./apps/web" },
+    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
+    { "path": "./packages/client/ui-dock" },
+    { "path": "./packages/client/ui-effects" },
+    // DSH-FORK end
   ]
 }

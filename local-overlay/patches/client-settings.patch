@@ -40,19 +40,20 @@ index 33dda0fa3e..42733e0cfc 100644
    "files": [
      "lib/index.js",
 diff --git a/packages/client/ui-settings-general/src/client/index.ts b/packages/client/ui-settings-general/src/client/index.ts
-index c8962ec009..b3e5ffb5ce 100644
+index c8962ec009..7c51caca12 100644
 --- a/packages/client/ui-settings-general/src/client/index.ts
 +++ b/packages/client/ui-settings-general/src/client/index.ts
-@@ -26,6 +26,8 @@ import type {
+@@ -26,6 +26,9 @@ import type {
  import { SettingsRoot } from './SettingsRoot.tsx'
  import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
  import { GeneralSection } from './GeneralSection.tsx'
++// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: kernel-mode registers the section itself.
 +import { AdvancedSection } from './AdvancedSection.tsx'
 +import type { AdvancedSectionInjected } from './AdvancedSection.tsx'
  import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
  import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
  import { SettingsDocumentStore } from './settings-document-store.ts'
-@@ -180,4 +182,16 @@ export function apply(ctx: ClientContext): void {
+@@ -180,4 +183,16 @@ export function apply(ctx: ClientContext): void {
      locale: NS,
      children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
    }, GeneralSection))
@@ -70,40 +71,42 @@ index c8962ec009..b3e5ffb5ce 100644
 +  }, AdvancedSection))
  }
 diff --git a/packages/client/ui-settings-general/src/client/locales.ts b/packages/client/ui-settings-general/src/client/locales.ts
-index c40d7f78af..1b1119d69e 100644
+index c40d7f78af..4ae1d8cba6 100644
 --- a/packages/client/ui-settings-general/src/client/locales.ts
 +++ b/packages/client/ui-settings-general/src/client/locales.ts
-@@ -14,6 +14,7 @@ export const zh = {
+@@ -14,6 +14,8 @@ export const zh = {
    'connection.connected': '连接成功',
    'connection.reconnect': '连接异常，点击立即重连',
    'connection.restart': '连接中，点击立即重连',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
 +  'advanced.nav': '高级设置',
  } satisfies Record<string, string>
  
  /** The settings namespace key union. */
-@@ -33,4 +34,5 @@ export const en = {
+@@ -33,4 +35,5 @@ export const en = {
    'connection.connected': 'Connected',
    'connection.reconnect': 'Disconnected, reconnect now',
    'connection.restart': 'Connecting, restart now',
 +  'advanced.nav': 'Advanced',
  } satisfies Record<SettingsKey, string>
 diff --git a/packages/client/ui-settings-general/tests/apply.client.spec.ts b/packages/client/ui-settings-general/tests/apply.client.spec.ts
-index 8a0c742e43..e5069051ac 100644
+index 8a0c742e43..f25b4ab888 100644
 --- a/packages/client/ui-settings-general/tests/apply.client.spec.ts
 +++ b/packages/client/ui-settings-general/tests/apply.client.spec.ts
-@@ -113,8 +113,9 @@ describe('ui-settings-general apply', () => {
+@@ -113,8 +113,10 @@ describe('ui-settings-general apply', () => {
      await Promise.resolve()
      for (const [name, component] of SEATS) {
        expect(after.slots.entries(name)[0]!.component).toBe(component)
 -      // The self-inflicted ledger notifications hit the duplicate guard.
 -      expect(after.slots.entries(name)).toHaveLength(1)
++      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
 +      // The self-inflicted ledger notifications hit the duplicate guard. The
 +      // section seat carries two: General, then this fork's Advanced section.
 +      expect(after.slots.entries(name)).toHaveLength(name === 'settings.section' ? 2 : 1)
      }
      await vi.waitFor(() => {
        expect(after.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
-@@ -150,7 +151,7 @@ describe('ui-settings-general apply', () => {
+@@ -150,7 +152,7 @@ describe('ui-settings-general apply', () => {
      // subscription), not re-registration.
      SEATS.forEach(([name], i) => {
        expect(b.slots.getVersion(name)).toBe(zhVersions[i]!)
@@ -113,21 +116,22 @@ index 8a0c742e43..e5069051ac 100644
      expect(resolveSlotLabel(generalEntry(b.slots)!.options.label)).toBe('General')
      b.locale.setLocale('zh')
 diff --git a/packages/client/ui-settings-general/tests/shell.client.spec.ts b/packages/client/ui-settings-general/tests/shell.client.spec.ts
-index 8e33a75a10..513ea52c72 100644
+index 8e33a75a10..0b222fe907 100644
 --- a/packages/client/ui-settings-general/tests/shell.client.spec.ts
 +++ b/packages/client/ui-settings-general/tests/shell.client.spec.ts
-@@ -96,7 +96,9 @@ describe('ui-settings apply', () => {
+@@ -96,7 +96,10 @@ describe('ui-settings apply', () => {
      // This package registers the General section itself; every other section
      // arrives from a feature registrant.
      const GENERAL = { id: 'general', order: 0, label: 'general.nav' }
 -    expect(sections.getSnapshot()).toEqual([GENERAL])
++    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
 +    // This fork registers Advanced here too, at the far end of the order.
 +    const ADVANCED = { id: 'advanced', order: 100, label: 'advanced.nav' }
 +    expect(sections.getSnapshot()).toEqual([GENERAL, ADVANCED])
      b.slots.register({ name: 'settings.section', id: 'z', order: 20, label: 'Z' } as never, () => null)
      // No order and no label: both projection defaults apply.
      b.slots.register({ name: 'settings.section', id: 'a' } as never, () => null)
-@@ -105,6 +107,7 @@ describe('ui-settings apply', () => {
+@@ -105,6 +108,7 @@ describe('ui-settings apply', () => {
        GENERAL,
        { id: 'a', order: 0, label: '' },
        { id: 'z', order: 20, label: 'Z' },
@@ -150,14 +154,15 @@ index f72ed7ef99..5cb20dd104 100644
        "path": "../../../vendor/cordis"
      },
 diff --git a/packages/client/ui-settings/src/client/settings-scope.ts b/packages/client/ui-settings/src/client/settings-scope.ts
-index e795ef4afc..44a12359c8 100644
+index e795ef4afc..1de64d56d1 100644
 --- a/packages/client/ui-settings/src/client/settings-scope.ts
 +++ b/packages/client/ui-settings/src/client/settings-scope.ts
-@@ -29,10 +29,18 @@ import type {} from '@deepseek-ai/dsh-api-remotes/types'
+@@ -29,10 +29,19 @@ import type {} from '@deepseek-ai/dsh-api-remotes/types'
  // never — the owning package's client-safe, type-only subpath supplies the
  // cordis `Events` entry (and with it the branded `SettingsNamespace`).
  import type {} from '@deepseek-ai/dsh-settings/types'
 -import type { SettingsSchemaService } from './schema.ts'
++// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the kernel switch reads settings through the public scope.
 +import type { SchemaNode, SettingsSchemaService } from './schema.ts'
  import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from './settings-contract.ts'
  import { SettingsDescribeMirror, type SettingsDescribeFace } from './settings-mirror.ts'
@@ -173,7 +178,7 @@ index e795ef4afc..44a12359c8 100644
  /**
   * One namespace's derived view over the shared describe mirror, plus that
   * namespace's serialized Host writes. Writes carry the latest known namespace
-@@ -51,6 +59,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
+@@ -51,6 +60,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
     * its fence from here first.
     */
    private pendingRevision: number | undefined
@@ -185,7 +190,7 @@ index e795ef4afc..44a12359c8 100644
  
    /**
     * @param ctx - the providing plugin's context, whose `remote.settings`
-@@ -187,7 +200,22 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
+@@ -187,7 +201,22 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
        })
        return
      }
@@ -209,7 +214,7 @@ index e795ef4afc..44a12359c8 100644
      this.store.update((draft) => {
        draft.revision = view.revision
        draft.base = view.base
-@@ -206,7 +234,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
+@@ -206,7 +235,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
      if (typeof view.value !== 'object' || view.value === null || Array.isArray(view.value)) return undefined
      let failure: string | undefined
      try {

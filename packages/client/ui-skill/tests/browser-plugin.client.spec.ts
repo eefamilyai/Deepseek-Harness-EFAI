@@ -63,6 +63,7 @@ function providePresentation(ctx: Context): PresentationCapture {
 async function bench(list: ListFn, addressed?: SessionId) {
   const ctx = new Context()
   let captured: InputTriggerSource | undefined
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-skill/src/client/index.ts.
   let atCaptured: InputTriggerSource | undefined
   ctx.provide('inputTriggers', {
     registerSource: (src: InputTriggerSource) => {

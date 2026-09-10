@@ -358,14 +358,15 @@ index 64be92b20a..07ec0b8ea3 100644
      </div>
    )
 diff --git a/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx b/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
-index f9912ba1f9..f9087ef308 100644
+index f9912ba1f9..8062ad490d 100644
 --- a/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
 +++ b/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
-@@ -87,12 +87,19 @@ function menuShell(): HTMLElement {
+@@ -87,12 +87,20 @@ function menuShell(): HTMLElement {
    return shell
  }
  
 -/** The non-interactive group title rows (role=presentation), in document order. */
++// DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-input-trigger/src/client/MenuView.tsx.
 +/** The collapsible heading toggle buttons, in document order (text without the chevron glyph). */
  function titles(container: HTMLElement): string[] {
 -  return [...container.querySelectorAll('div[role="presentation"][data-source]')]
@@ -383,7 +384,7 @@ index f9912ba1f9..f9087ef308 100644
  describe('MenuView', () => {
    it('renders null while closed and appears when the store opens', () => {
      const { menu, view } = mount(CLOSED)
-@@ -132,7 +139,7 @@ describe('MenuView', () => {
+@@ -132,7 +140,7 @@ describe('MenuView', () => {
      expect(screen.queryByRole('status')).toBeNull()
    })
  
@@ -392,7 +393,7 @@ index f9912ba1f9..f9087ef308 100644
      const { view } = mount(openState({
        groups: [
          { source: 'command', status: 'ready', items: [{ name: 'goal' }] },
-@@ -141,10 +148,10 @@ describe('MenuView', () => {
+@@ -141,10 +149,10 @@ describe('MenuView', () => {
          { source: 'skill', status: 'pending', items: [] },
        ],
      }))
@@ -405,7 +406,7 @@ index f9912ba1f9..f9087ef308 100644
      const { onPick } = mount(openState({
        groups: [{
          source: 'reference',
-@@ -158,8 +165,21 @@ describe('MenuView', () => {
+@@ -158,8 +166,21 @@ describe('MenuView', () => {
        highlight: { source: 'reference', index: 0 },
      }))
      expect(screen.queryByText('reference')).toBeNull()

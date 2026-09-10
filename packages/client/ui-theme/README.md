@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-theme
 
+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
+
 English | [中文](README.zh.md)
 
 ## Summary

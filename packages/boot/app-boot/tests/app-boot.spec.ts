@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import {
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/boot/app-boot/src/index.ts.
   addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot, dshSettingFlag,
   FAIL_LOUD_RELEASE_TIMEOUT_MS, HARNESS_SOURCE_SECTION,
   installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudProcess,

@@ -88,6 +88,7 @@ const usageOf = (event: SessionEvent): TokenUsage | undefined =>
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     tokenUsage: TokenUsageState
+    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
     tokenUsageLifetime: TokenUsageState
     contextPressure: ContextPressureState
   }

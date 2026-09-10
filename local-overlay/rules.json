@@ -138,6 +138,13 @@
       "paths": [
         "docs/"
       ]
+    },
+    {
+      "name": "agent-skills",
+      "paths": [
+        ".agents/skills/dsh-code-review/",
+        ".agents/skills/dsh-pre-push-checks/"
+      ]
     }
   ],
   "generated": [

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-model-selection/src/client/ModelSelect.tsx.
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'

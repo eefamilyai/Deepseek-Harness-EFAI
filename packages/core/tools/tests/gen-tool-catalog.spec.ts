@@ -29,6 +29,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
       'ask_user_question', 'bash', 'bash', 'cordis_define', 'cordis_inspect_list',
       'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop',
       'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'followup_task', 'get_goal', 'glob', 'grep',
+      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
       'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'kernel',
       'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'pwsh', 'pwsh', 'ralph',
       'read', 'read_image', 'report', 'run_code', 'schedule_create', 'schedule_delete',

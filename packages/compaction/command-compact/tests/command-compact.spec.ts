@@ -101,6 +101,7 @@ async function harness(): Promise<Harness> {
     status: 'idle',
     options: {},
     reserveTurnAdmission: () => () => undefined,
+    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/compaction/command-compact/src/index.ts.
     whenIdle: async () => {},
   } as unknown as Agent
   return { ctx, compact, agent, plugin }

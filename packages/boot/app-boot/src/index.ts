@@ -24,6 +24,7 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Harness-home path resolver available to Loader `!!js` config expressions. */
     dshHomePath?: typeof dshHomePath
+    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream ships a settings reader in the !!js scope.
     /** Settings-document flag reader available to Loader `!!js` config expressions. */
     dshSettingFlag?: typeof dshSettingFlag
   }

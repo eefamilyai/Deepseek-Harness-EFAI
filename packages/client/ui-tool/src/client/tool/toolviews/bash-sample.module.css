@@ -84,6 +84,7 @@
   cursor: pointer;
 }
 
+/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 /* This row replicates the DisclosureRow structure rather than composing it
    (see the TODO on .leading below), so it rebinds the shell family accent
    itself instead of inheriting ToolRow's `[data-variant='bash']` rule — that

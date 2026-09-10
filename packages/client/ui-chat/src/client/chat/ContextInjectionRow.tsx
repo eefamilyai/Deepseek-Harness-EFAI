@@ -37,6 +37,7 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
   return (
     <DisclosureRow
       className={css.root}
+      // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row.
       rowClassName={css.row}
       leadingClassName={css.leading}
       titleClassName={css.title}

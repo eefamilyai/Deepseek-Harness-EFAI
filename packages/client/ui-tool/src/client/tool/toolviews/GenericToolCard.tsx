@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import {
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this view.
   IconApiOutline14, IconBracesOutline16, IconBrowseOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallOwnerProps, ToolTreeProps } from '../../contract/slots.ts'

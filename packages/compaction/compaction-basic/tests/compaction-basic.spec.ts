@@ -1227,6 +1227,7 @@ describe('default one-shot summarizer', () => {
     expect(instruction?.type === 'text' ? instruction.text : '').toContain('## Primary Request and Intent')
   })
 
+  // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/compaction/compaction-basic/src/summarizer.ts.
   it('replays the conversation prefix, overrides the system prompt, withholds tools, and appends the instruction as the final message', async () => {
     const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
     const tools = [{ name: 'do_thing', description: 'd', parameters: { type: 'object' } }]

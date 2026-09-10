@@ -283,6 +283,7 @@ describe('tokenUsage session projection', () => {
     })
   })
 
+  // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/llm/token-meter/src/usage-projection.ts.
   it('resets cumulative billing when a compaction ends successfully', async () => {
     const { ctx, session } = await harness()
     startStep(session, 1, 1)

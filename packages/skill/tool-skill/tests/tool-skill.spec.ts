@@ -1005,6 +1005,7 @@ describe('user-explicit invocation injection', () => {
       && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
   })
 
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/skill/tool-skill/src/index.ts.
   it('injects a user-invocable skill named by an @skill <name> token', async () => {
     const { ctx, agent } = await invokeHarness()
     const decision = await proposeStep(ctx, agent, [gesture('@skill hidden-demo do the thing')])

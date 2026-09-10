@@ -4,6 +4,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/compaction/compaction-basic.
 import { ManualCompactionError, type CompactionResult } from '@deepseek-ai/dsh-compaction'
 import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands'
 

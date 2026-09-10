@@ -6,6 +6,7 @@
 # in-repo form stays LF; CRLF becomes checkout-time presentation only.
 * text=auto eol=lf
 
+# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: CRLF for *.cmd/*.bat is permanent; append at end of file only.
 # cmd.exe misparses batch files with LF line endings (multi-line if/for blocks
 # break into gibberish). The in-repo form stays LF; checkout presents CRLF.
 *.cmd text eol=crlf

@@ -35,6 +35,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/markdown/CodeBlock.tsx. */
   gap: 12px;
   font: var(--dsl-code-block-banner-font);
   border-top-left-radius: var(--dsl-code-block-border-radius);

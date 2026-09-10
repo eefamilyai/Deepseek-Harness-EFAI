@@ -7,6 +7,7 @@ export const en = {
   'close': 'Close',
   'copy': 'Copy',
   'copied': 'Copied',
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned locale overlay owns these verbs.
   'run': 'Run',
   'download': 'Download',
   'copy.failed': 'Copy failed',

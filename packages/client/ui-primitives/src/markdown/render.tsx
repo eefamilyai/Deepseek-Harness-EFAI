@@ -33,6 +33,7 @@ export interface MarkdownCodeLabels {
   copyLabel: string
   /** Copy-button label during the post-copy confirmation window. */
   copiedLabel: string
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream adopts the fork's markdown rendering.
   /** Run-button label. Absent hides the Run button. */
   runLabel?: string | undefined
   /** Download-button label. Absent hides the Download button. */

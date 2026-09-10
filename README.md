@@ -1,5 +1,7 @@
 # DeepSeek Harness EFAI
 
+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
+
 English | [中文](README.zh.md)
 
 **DeepSeek Harness EFAI** is a community fork of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). It keeps the upstream everything-is-a-plugin architecture and adds a Python kernel, a multi-provider LLM registry, browser tools, a sidebar surface, and a notebook-edit tool.

@@ -5,6 +5,7 @@ export const zh = {
   'close': '关闭',
   'copy': '复制',
   'copied': '复制成功',
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned locale overlay owns these verbs.
   'run': '运行',
   'download': '下载',
   'copy.failed': '复制失败',

@@ -1,3 +1,4 @@
+// DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream filters manifest-less directories (upstream PR).
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineConfig } from 'tsdown'

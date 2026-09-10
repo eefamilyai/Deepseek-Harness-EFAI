@@ -8,6 +8,7 @@ import {
   type ModelSelectionRef,
 } from '../src/index.ts'
 import { ReasoningEffortId, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
+// DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
 
 describe('installModelSelection()', () => {
   it('snapshots prompt variables and request routing together, then disposes both listeners', async () => {

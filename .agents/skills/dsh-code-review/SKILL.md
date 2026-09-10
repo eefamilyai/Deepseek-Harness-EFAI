@@ -28,6 +28,64 @@ description: Use when reviewing a pull request in the deepseek-harness repo — 
 6. **Required evidence exists.** Verify the author ran the [relevant local checks](../../../AGENTS.md#run-relevant-checks-locally) for the diff and that CI covers the exhaustive matrix; review the semantic gaps neither can detect.
 7. **Client UI copy is locale-owned.** Reject product text embedded in JSX, templates, helper returns, accessibility attributes, or primitive defaults. Require typed dictionary keys, the standard `t` seat or explicit localized props, `verify-client-ui-i18n`, and behavior evidence in each affected locale; preserve user/model/wire data and code tokens verbatim.
 
+<!-- DSH-FORK(all): the fork's own commit and push obligations. Upstream's skills cannot know about local-overlay/, the DSH-FORK marker, or verify-fork-overlay. EXIT: permanent fork delta. -->
+
+## Reviewing a change in this fork
+
+`origin` is `eefamilyai/Deepseek-Harness-EFAI`; `upstream` is
+`deepseek-ai/deepseek-harness`. The fork carries local features on a codebase
+upstream rewrites continuously, so a change here has a review dimension upstream
+review does not have: **what does it cost at the next upstream merge?**
+
+Classify every changed path with git, not memory. The recorded base is the
+authority:
+
+```sh
+git diff --name-status -M "$(head -1 local-overlay/BASE)"
+```
+
+- **Added paths are Tier 1.** Upstream owns no path among them, so they can never
+  conflict. Nothing further to check.
+- **Modified upstream-owned paths are Tier 2** — the seam. Each one is a recurring
+  merge cost, and it must carry three things:
+  1. a `DSH-FORK` marker on the line above the edit, with an `EXIT:` clause;
+  2. a `patchGroups` entry in `local-overlay/rules.json` claiming the path;
+  3. a matching row in the seam register in `HARNESS-EDITS.md`.
+
+An unmasked Tier-2 edit is a blocking finding: it will be re-litigated by hand at
+every release. So is a `DSH-FORK` marker with no exit plan, because an edit with
+no exit is a permanent tax that nobody wrote down.
+
+Ask these of any Tier-2 edit, in order:
+
+- **Could it be Tier 1 instead?** A fork-owned package on a documented extension
+  point, or a fork-owned bundle (`packages/bundle/efai-<feature>/cordis.patch.yml`),
+  costs nothing forever. `dsh-harness-edit` owns the full decision order.
+- **Is it a bug in upstream code?** Then it belongs upstream as a PR, kept locally
+  only until it lands. `HARNESS-EDITS.md` Rule 5 owns this, and rows 9 and 10 are
+  the two outstanding examples.
+- **Is the hunk the smallest that expresses the change?** A large hunk in an
+  upstream file is a large conflict.
+
+### Prove the mod layer
+
+A review of a Tier-2 change is incomplete without this, because it is the only
+evidence that the patch set still describes the tree:
+
+```sh
+pnpm run verify-fork-overlay
+```
+
+A stale patch set passes every upstream check and fails at the next merge, which
+is exactly the failure this fork's contract exists to prevent. Treat a failing
+gate as a blocking finding.
+
+### What not to flag
+
+Do not review `HARNESS-EDITS.md`, `local-overlay/**`, `.agents/skills/**`, or
+`.merge-port/**` against upstream conventions. They are fork-owned; upstream has
+no counterpart to compare them to, and their conventions are this fork's.
+
 ## Manual checks
 
 - **Intent and interface contracts:** trace both sides of every changed interface. Confirm the implementation matches the PR and any Agent Note, including errors, cancellation, ownership, and disposal.

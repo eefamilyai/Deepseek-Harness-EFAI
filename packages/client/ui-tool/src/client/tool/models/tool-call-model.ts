@@ -51,6 +51,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   write: 'write',
   edit: 'edit',
   run_code: 'code',
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
   kernel: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',

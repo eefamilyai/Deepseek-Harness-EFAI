@@ -134,6 +134,7 @@
   min-width: 0;
 }
 
+/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns the sidebar chrome. */
 /* The whale carries the brand blue while the name beside it stays on the text
    ink, which is the real lockup — blue mark, dark wordmark. The figma note on
    .brand above governs the NAME slot only; the mark was never the black half

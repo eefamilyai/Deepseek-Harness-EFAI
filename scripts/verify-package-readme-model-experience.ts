@@ -36,6 +36,12 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   'packages/util/launch-environment': 'The package only resolves host environment values; model-facing consumers own any rendered use.',
   'packages/util/workspace-path': 'The package only formats Workspace paths for browser UI; it never constructs model input.',
   'packages/util/values': 'The package only validates, snapshots, compares, freezes, or rejects caller-owned values; consumers own every model-facing use.',
+  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
+  // audited allowlists must name them; without entries the gate rejects a correct README.
+  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
+  'packages/client/ui-dock': 'Browser-side dock overlay; it mounts a private React root and header slots, and the sidebar bridge behind it owns the shared-browser and user-shell endpoints.',
+  'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
+  'packages/host/sidebar-bridge': 'The host HTTP/WebSocket carrier for the dock panels; it serves browser state and a user shell and registers nothing model-facing.',
 }
 
 /**
@@ -52,6 +58,14 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
   'packages/code-runtime/code-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
   'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
+  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
+  // audited allowlists must name them; without entries the gate rejects a correct README.
+  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
+  'packages/agent-memory/agent-memory-mode': { kind: 'indirect', reason: 'The row owns only the agentMemory.enabled setting; the memory engine it gates owns the injected index and the memory tools.' },
+  'packages/kernel/kernel': { kind: 'indirect', reason: 'The Service Definition delegates model rendering to dsh-tool-kernel, exactly as dsh-web delegates to dsh-tool-web.' },
+  'packages/kernel/kernel-mode': { kind: 'indirect', reason: 'The row owns only the kernel.enabled setting; the composition rows it gates own which roster, prompt sections, and tools the model receives.' },
+  'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
+  'packages/rlm/rlm-mode': { kind: 'indirect', reason: 'The row owns only the rlm.enabled setting; the engine it mounts owns the REPL prompt section and the rlm tool.' },
   'packages/code-runtime/code-runtime-worker-thread': { kind: 'indirect', reason: 'The worker backend delegates model rendering to PTC mode in dsh-tools.' },
   'packages/code-runtime/code-runtime-python': { kind: 'indirect', reason: 'The CPython subprocess backend delegates model rendering to PTC mode in dsh-tools.' },
   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },
@@ -142,6 +156,10 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/session/session-projection-cache': { kind: 'none', reason: 'The persisted cache accelerates host-side cold reads of projection state and registers nothing model-facing.' },
   'packages/session/session-stats': { kind: 'none', reason: 'The sessionStats unit folds already-logged step boundaries into a client-facing read model and registers nothing model-facing.' },
   'packages/session/session-turn-outline': { kind: 'none', reason: 'The turnOutline unit folds already-logged turn boundaries into a client-facing read model and registers nothing model-facing.' },
+  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
+  // audited allowlists must name them; without entries the gate rejects a correct README.
+  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
+  'packages/session/command-session-info': { kind: 'none', reason: 'The /sessioninfo command is operator-facing and read-only; it registers no prompt, tool, schema, or session event.' },
   'packages/session-query/session-query': { kind: 'none', reason: 'The trusted query service exposes cloned records only to callers and registers nothing model-facing.' },
   'packages/session-query/session-query-sqlite': { kind: 'none', reason: 'The search backend returns hits only to callers and registers nothing model-facing.' },
   'packages/settings/settings': { kind: 'indirect', reason: 'The seam stores and resolves user settings; consumer plugins own any model-facing content fed by a value.' },

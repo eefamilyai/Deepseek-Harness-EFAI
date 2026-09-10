@@ -235,13 +235,14 @@ index b80a50fabc..b9acb0a696 100644
      "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",
      "@deepseek-ai/dsh-workflow-worker-thread": "workspace:^",
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index 79c62a6e20..3f13ac52e9 100644
+index 79c62a6e20..b1fa539f71 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
-@@ -123,6 +123,13 @@
+@@ -123,6 +123,14 @@
          compressionLevel: 1
          compressionThresholdBytes: 1024
  
++    # DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: move to a fork-owned bundle applied by profile.
 +    # Sidebar panels' host surface: a dedicated user PTY at ws /kiln/terminal and
 +    # the agent's shared browser at /kiln/browser (live state.json + screenshots
 +    # + drive-by-action). Self-contained over the webserver carrier; browserDir
@@ -252,7 +253,7 @@ index 79c62a6e20..3f13ac52e9 100644
      # Web glue owned by this bundle: resolves the built frontend dist (an
      # assembly fact of dsh-web-app, never user config), mounts the
      # frontend-static fallback owner, registers the web-surface prompt
-@@ -177,6 +184,12 @@
+@@ -177,6 +185,12 @@
      - id: ui-theme
        name: '@deepseek-ai/dsh-client-ui-theme'
  
@@ -265,7 +266,7 @@ index 79c62a6e20..3f13ac52e9 100644
      - id: locale
        name: '@deepseek-ai/dsh-client-locale'
  
-@@ -436,6 +449,14 @@
+@@ -436,6 +450,14 @@
  - id: tool-web
    disabled: true
  
@@ -302,19 +303,20 @@ index 0d7157e23c..2749596d8c 100644
      "@deepseek-ai/dsh-file-reference": "workspace:^",
      "@deepseek-ai/dsh-file-reference-local": "workspace:^",
 diff --git a/packages/bundle/web-app/src/index.ts b/packages/bundle/web-app/src/index.ts
-index 4f0367a44f..f74f1522ff 100644
+index 4f0367a44f..b7bddf6df0 100644
 --- a/packages/bundle/web-app/src/index.ts
 +++ b/packages/bundle/web-app/src/index.ts
-@@ -11,7 +11,7 @@
+@@ -11,7 +11,8 @@
   * @module @deepseek-ai/dsh-web-app
   */
  
 -import { spawn, type ChildProcess } from 'node:child_process'
++// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: a fork-owned bundle mounts these rows.
 +import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
  import { createRequire } from 'node:module'
  import { dirname, join } from 'node:path'
  import { networkInterfaces } from 'node:os'
-@@ -140,6 +140,39 @@ export function resolveLanTrust(bindHost: string, extra: readonly string[]): Web
+@@ -140,6 +141,39 @@ export function resolveLanTrust(bindHost: string, extra: readonly string[]): Web
    return { lanAddresses, trustedHosts: [...lanAddresses, ...extra] }
  }
  
@@ -354,7 +356,7 @@ index 4f0367a44f..f74f1522ff 100644
  /** Model-visible orientation and acceptance boundary for sessions created through `dsh web`. */
  function webSurfacePrompt(webUrl: string): string {
    const updateContract = 'The client-plugin HMR receiver is active, but client-plugin changes reload without a refresh only while '
-@@ -227,7 +260,7 @@ export const internals: {
+@@ -227,7 +261,7 @@ export const internals: {
  
  /**
   * Mount the Web runtime: dist serving, surface prompt, the bash runtime
@@ -363,7 +365,7 @@ index 4f0367a44f..f74f1522ff 100644
   * @param ctx - plugin context carrying the webServer service.
   * @param config - validated {@link Config}.
   */
-@@ -239,6 +272,18 @@ export function apply(ctx: Context, config: Config): void {
+@@ -239,6 +273,18 @@ export function apply(ctx: Context, config: Config): void {
    // Release dependent rows only after bind-dependent trust has been sampled once.
    ctx.provide(WEB_RUNTIME_SERVICE, runtime)
    ctx.plugin(FrontendStatic, { distIndex: internals.resolveDistIndex() })
@@ -383,21 +385,22 @@ index 4f0367a44f..f74f1522ff 100644
      ctx.inject(['systemPrompt'], (promptCtx) => {
        addHarnessSourceSection(promptCtx, SOURCE_ROOT)
 diff --git a/packages/bundle/web-app/tests/web-app.spec.ts b/packages/bundle/web-app/tests/web-app.spec.ts
-index 40e47132ca..0b2a0e880c 100644
+index 40e47132ca..769127a6d8 100644
 --- a/packages/bundle/web-app/tests/web-app.spec.ts
 +++ b/packages/bundle/web-app/tests/web-app.spec.ts
-@@ -69,8 +69,9 @@ function stageDist(): string {
+@@ -69,8 +69,10 @@ function stageDist(): string {
  }
  
  /** A fake webServer capturing the fallback seat and index taps. */
 -function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown } {
++// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/bundle/web-app/src/index.ts.
 +function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown; routes: () => unknown[] } {
    let fallback: unknown
 +  const routes: unknown[] = []
    const server = {
      host,
      port: 4567,
-@@ -79,8 +80,15 @@ function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server:
+@@ -79,8 +81,15 @@ function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server:
        return () => { fallback = undefined }
      },
      renderIndex: (html: string) => html,
@@ -414,7 +417,7 @@ index 40e47132ca..0b2a0e880c 100644
  }
  
  /** Deterministic Host Connection face for URL publication and frontend injection. */
-@@ -329,6 +337,47 @@ describe('web-app runtime glue', () => {
+@@ -329,6 +338,47 @@ describe('web-app runtime glue', () => {
      await ctx.fiber.dispose()
    })
  

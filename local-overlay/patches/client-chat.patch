@@ -44,13 +44,14 @@ index 00eb9fd70d..a57adffdd5 100644
    const controllerInactive = routedNode?.kind === 'turn-process'
      && !foldable
 diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
-index 788322535c..c90f123541 100644
+index 788322535c..8f7524ad58 100644
 --- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
 +++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
-@@ -9,8 +9,23 @@
+@@ -9,8 +9,24 @@
    padding-bottom: 4px;
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* Instruction material's seat in the flow-row accent set (--dsw-alias-flow-*,
 +   design-platform.css), shared with the skill row: an injected instruction
 +   file, a skill catalog, a recalled session, and the complete system prompt
@@ -72,7 +73,7 @@ index 788322535c..c90f123541 100644
  }
  
  /* Separator and producer name beside the role title: ToolRow's summary geometry,
-@@ -21,7 +36,7 @@
+@@ -21,7 +37,7 @@
    height: 2px;
    margin: 0 8px;
    border-radius: 1px;
@@ -82,13 +83,14 @@ index 788322535c..c90f123541 100644
  
  .source {
 diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
-index 37f08dc2f5..6ba40d5d3a 100644
+index 37f08dc2f5..53d8984d95 100644
 --- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
 +++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
-@@ -37,6 +37,9 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
+@@ -37,6 +37,10 @@ export function ContextInjectionRow({ content, source, provenance, form, t }: Co
    return (
      <DisclosureRow
        className={css.root}
++      // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row.
 +      rowClassName={css.row}
 +      leadingClassName={css.leading}
 +      titleClassName={css.title}
@@ -96,13 +98,14 @@ index 37f08dc2f5..6ba40d5d3a 100644
          ? <span data-context-recall-icon><ReferenceIcon kind="session" /></span>
          : <IconContextInjectionOutline16 size={14} />}
 diff --git a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-index 2d7cbe8f07..80fe6525a8 100644
+index 2d7cbe8f07..99b99c9f22 100644
 --- a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
 +++ b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-@@ -33,8 +33,22 @@
+@@ -33,8 +33,23 @@
    flex-shrink: 0;
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* Think's seat in the flow-row accent set (--dsw-alias-flow-*,
 +   design-platform.css): one rebind carries the glyph and the title through
 +   DisclosureRow's contract, matching what ui-tool's ToolRow gives each tool
@@ -123,7 +126,7 @@ index 2d7cbe8f07..80fe6525a8 100644
  }
  
  .title {
-@@ -47,7 +61,7 @@
+@@ -47,7 +62,7 @@
    height: 2px;
    margin: 0 8px;
    border-radius: 1px;
@@ -133,16 +136,17 @@ index 2d7cbe8f07..80fe6525a8 100644
  
  /* Think text reads the secondary tier — one step under the body size
 diff --git a/packages/client/ui-chat/src/client/chat/StatsLine.module.css b/packages/client/ui-chat/src/client/chat/StatsLine.module.css
-index 29c0bc3aab..efaec0455a 100644
+index 29c0bc3aab..a617a0bd9f 100644
 --- a/packages/client/ui-chat/src/client/chat/StatsLine.module.css
 +++ b/packages/client/ui-chat/src/client/chat/StatsLine.module.css
-@@ -15,9 +15,10 @@
+@@ -15,9 +15,11 @@
    font-size: var(--dsh-content-font-size-secondary, 13px);
    line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
    color: var(--dsw-alias-label-tertiary);
 -  white-space: nowrap;
 -  overflow: hidden;
 -  text-overflow: ellipsis;
++  /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +  /* Wrap instead of eliding: the token readout (and every other group) stays
 +     fully visible instead of clipping the trailing figures into an ellipsis. */
 +  white-space: normal;
@@ -151,13 +155,14 @@ index 29c0bc3aab..efaec0455a 100644
  
  .sep {
 diff --git a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
-index 26c43b1793..d4bcebecf5 100644
+index 26c43b1793..72eda446b3 100644
 --- a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
 +++ b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
-@@ -24,6 +24,9 @@ export function SystemPromptRow({ text, t }: SystemPromptRowProps) {
+@@ -24,6 +24,10 @@ export function SystemPromptRow({ text, t }: SystemPromptRowProps) {
    return (
      <DisclosureRow
        className={css.root}
++      // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row.
 +      rowClassName={css.row}
 +      leadingClassName={css.leading}
 +      titleClassName={css.title}
@@ -165,13 +170,14 @@ index 26c43b1793..d4bcebecf5 100644
        chevronClassName={css.chevron}
        title={t('message.systemPrompt')}
 diff --git a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
-index d0e0cd92a0..338ce8a44e 100644
+index d0e0cd92a0..3b6426b7e8 100644
 --- a/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
 +++ b/packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css
-@@ -41,6 +41,60 @@
+@@ -41,6 +41,61 @@
    white-space: nowrap;
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* One hue per tool family, the same --dsw-alias-flow-* set the expanded rows
 +   colour through (ui-tool's ToolRow, ReasoningRow, ContextInjectionRow). A
 +   folded Turn then reads as a miniature of the rows it hides: what was read,
@@ -603,17 +609,18 @@ index f10a9ced20..c0eec5d6ab 100644
    'message.branch': 'Branch into a new conversation',
    'message.branchUnavailable': 'Available only on the last message of a completed turn',
 diff --git a/packages/client/ui-chat/src/client/markdown-labels.ts b/packages/client/ui-chat/src/client/markdown-labels.ts
-index 6c30b99396..0149f49fef 100644
+index 6c30b99396..413a8ff697 100644
 --- a/packages/client/ui-chat/src/client/markdown-labels.ts
 +++ b/packages/client/ui-chat/src/client/markdown-labels.ts
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
  /** Localized copy adapters for Cordis-free Markdown primitives. */
  
++// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns these labels.
 +import { requestRunInTerminal } from '@deepseek-ai/dsh-client-ui-primitives'
  import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
  import type { ChatViewSlotProps } from './contract/slots.ts'
  
-@@ -10,7 +11,7 @@ import type { ChatViewSlotProps } from './contract/slots.ts'
+@@ -10,7 +12,7 @@ import type { ChatViewSlotProps } from './contract/slots.ts'
   */
  export function markdownLabels(t: ChatViewSlotProps['t']): MarkdownLabels {
    return {
@@ -623,13 +630,14 @@ index 6c30b99396..0149f49fef 100644
    }
  }
 diff --git a/packages/client/ui-chat/tests/chat-view.client.spec.tsx b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
-index 9ebacea1de..cfa9f1c233 100644
+index 9ebacea1de..f5e40dfde7 100644
 --- a/packages/client/ui-chat/tests/chat-view.client.spec.tsx
 +++ b/packages/client/ui-chat/tests/chat-view.client.spec.tsx
-@@ -169,6 +169,13 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode
+@@ -169,6 +169,14 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode
    callTime: seq * 1_000 - 500,
    content: [], isError: false, subCalls: [],
  })
++// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-chat/src/client/chat.
 +/** Settled kernel cell whose leading comment becomes the row's phrase. */
 +const kernelResult = (seq: number, callId: string, comment: string): ToolResultNode => ({
 +  kind: 'tool-result', seq, time: seq * 1_000, callId,
@@ -640,7 +648,7 @@ index 9ebacea1de..cfa9f1c233 100644
  const runningCall = (callId: string, name = 'bash'): RunningToolCall => ({
    callId, name, argsRaw: `{"command":"cmd-${callId}"}`, turn: 2, step: 1, time: 1_000, subCalls: [],
  })
-@@ -1255,7 +1262,7 @@ describe('ChatView', () => {
+@@ -1255,7 +1263,7 @@ describe('ChatView', () => {
        turnEnds: new Map([[1, 6]]),
      })
      const view = render(<h.ChatView {...h.props} />)
@@ -649,7 +657,7 @@ index 9ebacea1de..cfa9f1c233 100644
      expect(toggle.getAttribute('aria-expanded')).toBe('false')
      expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
      expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
-@@ -1286,7 +1293,7 @@ describe('ChatView', () => {
+@@ -1286,7 +1294,7 @@ describe('ChatView', () => {
      act(() => { h.set({
        nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
      }) })
@@ -658,7 +666,7 @@ index 9ebacea1de..cfa9f1c233 100644
      expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
      expect(members[0]?.getAttribute('hidden')).toBeNull()
    })
-@@ -1532,6 +1539,85 @@ describe('ChatView', () => {
+@@ -1532,6 +1540,85 @@ describe('ChatView', () => {
      expect(view.getByLabelText('回到底部')).toBeTruthy()
    })
  

@@ -64,6 +64,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   shellEnv: 'shell.md',
   clientModules: 'client-modules.md',
   codeRuntime: 'code-runtime.md',
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
   kernel: 'code-runtime.md',
   commands: 'commands.md',
   compaction: 'compaction.md',

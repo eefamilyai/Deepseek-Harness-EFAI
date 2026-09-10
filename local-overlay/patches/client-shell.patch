@@ -1,16 +1,17 @@
 diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
-index 296f95b33a..8ddfc4a1c5 100644
+index 296f95b33a..5bfb853253 100644
 --- a/packages/client/ui-conversation/src/client/locales.ts
 +++ b/packages/client/ui-conversation/src/client/locales.ts
-@@ -103,6 +103,7 @@ export const zh = {
+@@ -103,6 +103,8 @@ export const zh = {
    'tool.title.stopCordis': '停止 Cordis 插件',
    'tool.title.removeCordis': '移除 Cordis 插件',
    'tool.title.pwsh': 'Pwsh',
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/locale/src/locales/en.ts.
 +  'tool.title.kernel': 'Python',
    'tool.title.grep': 'Grep',
    'tool.title.glob': 'Glob',
    'tool.title.webSearch': '网页搜索',
-@@ -253,6 +254,7 @@ export const en = {
+@@ -253,6 +255,7 @@ export const en = {
    'tool.title.stopCordis': 'Stop Cordis Plugin',
    'tool.title.removeCordis': 'Remove Cordis Plugin',
    'tool.title.pwsh': 'Pwsh',
@@ -74,16 +75,17 @@ index 6c4820ed4f..6f72dd63f2 100644
          <div className={css.body}>
            {/* The composer remains mounted outside this component. */}
 diff --git a/packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css b/packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css
-index 983c168ec1..79be66a534 100644
+index 983c168ec1..2d6a793d5f 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css
 +++ b/packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css
-@@ -23,12 +23,10 @@
+@@ -23,12 +23,11 @@
    overflow: visible;
  }
  
 -/* figma 34:10411: fish + title, gap 10, centered; 26/32 wt500. The preview
 -   badge is a product addition outside that source: a mono superscript pill
 -   riding the title's top-right. */
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns the hero chrome. */
 +/* figma 34:10411: fish + title, gap 10, centered; 26/32 wt500. */
  .headline {
    display: grid;
@@ -92,7 +94,7 @@ index 983c168ec1..79be66a534 100644
    column-gap: 10px;
    align-items: center;
    justify-content: center;
-@@ -43,23 +41,6 @@
+@@ -43,23 +42,6 @@
    grid-column: 2;
  }
  
@@ -117,14 +119,15 @@ index 983c168ec1..79be66a534 100644
  /* Keep hover detection on a stationary box while the mark moves within it;
     hover rules target the hitbox so a slot-occupant mark swims too. */
 diff --git a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
-index 3abf6f1381..7bc99290c2 100644
+index 3abf6f1381..086684fb98 100644
 --- a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
 +++ b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
-@@ -310,11 +310,11 @@ function mount(
+@@ -310,11 +310,12 @@ function mount(
  }
  
  describe('Hero chrome', () => {
 -  it('renders the English preview badge through the hero locale seat', () => {
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-conversation/src/client/skeleton.
 +  it('omits the preview badge from the hero chrome', () => {
      const renderSlot = vi.fn<HeroShellProps['renderSlot']>(() => null)
      const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={renderSlot} />)
@@ -134,7 +137,7 @@ index 3abf6f1381..7bc99290c2 100644
      expect(renderSlot).toHaveBeenCalledOnce()
      expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
      const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
-@@ -441,7 +441,6 @@ describe('ConversationRoot resident composer', () => {
+@@ -441,7 +442,6 @@ describe('ConversationRoot resident composer', () => {
      expect(host).not.toBeNull()
      expect(header?.getAttribute('aria-hidden')).toBe('true')
      expect(b.view.getByText('探索未至之境')).toBeTruthy()
@@ -143,7 +146,7 @@ index 3abf6f1381..7bc99290c2 100644
      // The same machine-backed textarea is live in the hero, and the
      // persistence mirror stays bound (ConversationSession mounts chrome-hidden
 diff --git a/packages/client/ui-sidebar/README.i18n.yaml b/packages/client/ui-sidebar/README.i18n.yaml
-index d65e6ac8f6..f75df19678 100644
+index d65e6ac8f6..84e0f1b4cc 100644
 --- a/packages/client/ui-sidebar/README.i18n.yaml
 +++ b/packages/client/ui-sidebar/README.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -152,13 +155,22 @@ index d65e6ac8f6..f75df19678 100644
  #   pnpm run verify-translation-pairing --write packages/client/ui-sidebar/README.md
 -README.md: 64f75a46a7e372fcf96cdd0594ef694ee2c59bce
 -README.zh.md: 16708765480bdb5c4190a67e85bc7f5aad48fad0
-+README.md: 86f5b38242b23e5b14cab57a724190fc9771b027
-+README.zh.md: f0f4549f6080626cb5946c426493cc954828033f
++README.md: 0e25ed96b4f418e013486d41d70b36db0b9350c2
++README.zh.md: dcd18438a10e66725c189f71dd2b4a71831eed3f
 diff --git a/packages/client/ui-sidebar/README.md b/packages/client/ui-sidebar/README.md
-index 64f75a46a7..86f5b38242 100644
+index 64f75a46a7..0e25ed96b4 100644
 --- a/packages/client/ui-sidebar/README.md
 +++ b/packages/client/ui-sidebar/README.md
-@@ -29,7 +29,7 @@ The sidebar is the navigation shell: users see the brand, start new sessions, co
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-sidebar
+ 
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
++
+ English | [中文](README.zh.md)
+ 
+ ## Summary
+@@ -29,7 +31,7 @@ The sidebar is the navigation shell: users see the brand, start new sessions, co
  
  ### Brand and New Session
  
@@ -168,10 +180,19 @@ index 64f75a46a7..86f5b38242 100644
  ### Collapse behavior
  
 diff --git a/packages/client/ui-sidebar/README.zh.md b/packages/client/ui-sidebar/README.zh.md
-index 1670876548..f0f4549f60 100644
+index 1670876548..dcd18438a1 100644
 --- a/packages/client/ui-sidebar/README.zh.md
 +++ b/packages/client/ui-sidebar/README.zh.md
-@@ -29,7 +29,7 @@ kind: "package-reference"
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-sidebar
+ 
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
++
+ [English](README.md) | 中文
+ 
+ ## 概述
+@@ -29,7 +31,7 @@ kind: "package-reference"
  
  ### 品牌与 New Session
  
@@ -181,13 +202,14 @@ index 1670876548..f0f4549f60 100644
  ### 折叠行为
  
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
-index d472581e43..5bdcf551f7 100644
+index d472581e43..0793d387e4 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
 +++ b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
-@@ -134,6 +134,15 @@
+@@ -134,6 +134,16 @@
    min-width: 0;
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns the sidebar chrome. */
 +/* The whale carries the brand blue while the name beside it stays on the text
 +   ink, which is the real lockup — blue mark, dark wordmark. The figma note on
 +   .brand above governs the NAME slot only; the mark was never the black half
@@ -200,7 +222,7 @@ index d472581e43..5bdcf551f7 100644
  .brandMark {
    flex: none;
    display: inline-flex;
-@@ -159,21 +168,24 @@
+@@ -159,21 +169,24 @@
    white-space: nowrap;
  }
  
@@ -227,7 +249,7 @@ index d472581e43..5bdcf551f7 100644
  }
  
  .iconButton {
-@@ -227,19 +239,24 @@
+@@ -227,19 +240,24 @@
    color: var(--dsw-alias-label-primary);
  }
  
@@ -260,7 +282,7 @@ index d472581e43..5bdcf551f7 100644
  }
  
 diff --git a/packages/client/ui-skill/README.i18n.yaml b/packages/client/ui-skill/README.i18n.yaml
-index acedab1603..b144cf5c7b 100644
+index acedab1603..6d1a4dff50 100644
 --- a/packages/client/ui-skill/README.i18n.yaml
 +++ b/packages/client/ui-skill/README.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -269,13 +291,22 @@ index acedab1603..b144cf5c7b 100644
  #   pnpm run verify-translation-pairing --write packages/client/ui-skill/README.md
 -README.md: de564bd533f6cec83bb0a55e6ebfa687fa716ee9
 -README.zh.md: 2408a29b83befd68785f7e7feccc588b6372a6fb
-+README.md: d3815d6da48ca4d4ef236418954a813710d62ee5
-+README.zh.md: 006c9bd9227c6713fe8b4f9b1ab809c8da703fc6
++README.md: 7b8b9d262f8c7fc1bb6e46133aad0825e264b100
++README.zh.md: 52ab6f28aa0e8ab11c530900c0beb5e94903478b
 diff --git a/packages/client/ui-skill/README.md b/packages/client/ui-skill/README.md
-index de564bd533..d3815d6da4 100644
+index de564bd533..7b8b9d262f 100644
 --- a/packages/client/ui-skill/README.md
 +++ b/packages/client/ui-skill/README.md
-@@ -33,7 +33,7 @@ Ordinary-session candidates come from the `skills/list` Remote; the host serves
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-skill
+ 
++<!-- DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
++
+ English | [中文](README.zh.md)
+ 
+ ## Summary
+@@ -33,7 +35,7 @@ Ordinary-session candidates come from the `skills/list` Remote; the host serves
  
  ### The skill tool row
  
@@ -285,10 +316,19 @@ index de564bd533..d3815d6da4 100644
  -----
  
 diff --git a/packages/client/ui-skill/README.zh.md b/packages/client/ui-skill/README.zh.md
-index 2408a29b83..006c9bd922 100644
+index 2408a29b83..52ab6f28aa 100644
 --- a/packages/client/ui-skill/README.zh.md
 +++ b/packages/client/ui-skill/README.zh.md
-@@ -33,7 +33,7 @@ kind: "package-reference"
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-skill
+ 
++<!-- DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
++
+ [English](README.md) | 中文
+ 
+ ## 概述
+@@ -33,7 +35,7 @@ kind: "package-reference"
  
  ### skill 工具行
  
@@ -298,13 +338,14 @@ index 2408a29b83..006c9bd922 100644
  -----
  
 diff --git a/packages/client/ui-skill/src/client/SkillRow.module.css b/packages/client/ui-skill/src/client/SkillRow.module.css
-index 05c3388aa9..66526a7dc5 100644
+index 05c3388aa9..ffef8e464c 100644
 --- a/packages/client/ui-skill/src/client/SkillRow.module.css
 +++ b/packages/client/ui-skill/src/client/SkillRow.module.css
-@@ -38,6 +38,15 @@
+@@ -38,6 +38,16 @@
    90%, 100% { left: 100%; }
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* This row builds its own chrome instead of composing DisclosureRow, so it
 +   rebinds --dsh-row-accent itself and applies it to the four parts the shared
 +   chrome would have. The hue is the instruct family (--dsw-alias-flow-*,
@@ -317,7 +358,7 @@ index 05c3388aa9..66526a7dc5 100644
  .leading {
    position: relative;
    flex: none;
-@@ -47,11 +56,11 @@
+@@ -47,11 +57,11 @@
    align-items: center;
    justify-content: center;
    margin-right: 6px;
@@ -331,7 +372,7 @@ index 05c3388aa9..66526a7dc5 100644
  }
  
  .iconIdle {
-@@ -80,7 +89,7 @@
+@@ -80,7 +90,7 @@
    flex: none;
    font-size: 14px;
    line-height: 24px;
@@ -340,7 +381,7 @@ index 05c3388aa9..66526a7dc5 100644
  }
  
  .separator {
-@@ -89,7 +98,7 @@
+@@ -89,7 +99,7 @@
    height: 2px;
    border-radius: 1px;
    margin: 0 8px;
@@ -401,14 +442,15 @@ index 44712b7286..35250019aa 100644
 +  ctx.effect(() => inputTriggers.registerSource(atSource), 'ui-skill: @skills source')
  }
 diff --git a/packages/client/ui-skill/tests/browser-plugin.client.spec.ts b/packages/client/ui-skill/tests/browser-plugin.client.spec.ts
-index 1c812e460e..83fcf19226 100644
+index 1c812e460e..8478d202b7 100644
 --- a/packages/client/ui-skill/tests/browser-plugin.client.spec.ts
 +++ b/packages/client/ui-skill/tests/browser-plugin.client.spec.ts
-@@ -63,7 +63,14 @@ function providePresentation(ctx: Context): PresentationCapture {
+@@ -63,7 +63,15 @@ function providePresentation(ctx: Context): PresentationCapture {
  async function bench(list: ListFn, addressed?: SessionId) {
    const ctx = new Context()
    let captured: InputTriggerSource | undefined
 -  ctx.provide('inputTriggers', { registerSource: (src: InputTriggerSource) => { captured = src; return () => {} } })
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-skill/src/client/index.ts.
 +  let atCaptured: InputTriggerSource | undefined
 +  ctx.provide('inputTriggers', {
 +    registerSource: (src: InputTriggerSource) => {
@@ -420,7 +462,7 @@ index 1c812e460e..83fcf19226 100644
    ctx.provide('sessions', {
      subagentAddress: (id: SessionId) => id === addressed
        ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
-@@ -72,7 +79,7 @@ async function bench(list: ListFn, addressed?: SessionId) {
+@@ -72,7 +80,7 @@ async function bench(list: ListFn, addressed?: SessionId) {
    const remote = new TestRemote(ctx, { skills: { list } })
    providePresentation(ctx)
    await ctx.plugin({ inject: [...inject], apply }).await()
@@ -429,7 +471,7 @@ index 1c812e460e..83fcf19226 100644
  }
  
  const CATALOG: SkillRow[] = [
-@@ -378,3 +385,31 @@ describe('user-only marking', () => {
+@@ -378,3 +386,31 @@ describe('user-only marking', () => {
      ])
    })
  })
@@ -462,7 +504,7 @@ index 1c812e460e..83fcf19226 100644
 +  })
 +})
 diff --git a/packages/client/ui-theme/README.i18n.yaml b/packages/client/ui-theme/README.i18n.yaml
-index 376749a4f8..6e55e48816 100644
+index 376749a4f8..060116006a 100644
 --- a/packages/client/ui-theme/README.i18n.yaml
 +++ b/packages/client/ui-theme/README.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -471,13 +513,22 @@ index 376749a4f8..6e55e48816 100644
  #   pnpm run verify-translation-pairing --write packages/client/ui-theme/README.md
 -README.md: 32ec60edb39b30afdb9b54804e62302cdc58e531
 -README.zh.md: ab17910ab9cec4e1ff519af0922ee27034a6fa7c
-+README.md: 7e3312b6b453c21d303fb8d3abb19f5d0e5d8787
-+README.zh.md: e48f2377fcbc5cdc7f09dbb9ca2cc40126983db7
++README.md: 089d65f9c6bc8bf96f55ce547e28f566c3db2004
++README.zh.md: 418d4c9d96c571b2f384db53009b47b770367018
 diff --git a/packages/client/ui-theme/README.md b/packages/client/ui-theme/README.md
-index 32ec60edb3..7e3312b6b4 100644
+index 32ec60edb3..089d65f9c6 100644
 --- a/packages/client/ui-theme/README.md
 +++ b/packages/client/ui-theme/README.md
-@@ -53,6 +53,8 @@ The service owns theme and font-size state and publishes snapshots. The ui-layou
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-theme
+ 
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
++
+ English | [中文](README.zh.md)
+ 
+ ## Summary
+@@ -53,6 +55,8 @@ The service owns theme and font-size state and publishes snapshots. The ui-layou
  
  `src/styles/` holds five sheets imported in order by ui-theme's dynamic client entry: `base.css`, `design-platform.css`, `scrollbar.css`, `gradient-shadow-text.css`, and `shiki.css`. The client bundle compiles and injects them as plugin-owned global styles, so unload and HMR remove them with ui-theme. `scrollbar.css` is the sole consumer of the `--dsw-alias-scrollbar-*` tokens and must follow `design-platform.css`, which declares them.
  
@@ -487,10 +538,19 @@ index 32ec60edb3..7e3312b6b4 100644
  
  ### Scrollbar rebinding
 diff --git a/packages/client/ui-theme/README.zh.md b/packages/client/ui-theme/README.zh.md
-index ab17910ab9..e48f2377fc 100644
+index ab17910ab9..418d4c9d96 100644
 --- a/packages/client/ui-theme/README.zh.md
 +++ b/packages/client/ui-theme/README.zh.md
-@@ -53,6 +53,8 @@ kind: "package-reference"
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-theme
+ 
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
++
+ [English](README.md) | 中文
+ 
+ ## 概述
+@@ -53,6 +55,8 @@ kind: "package-reference"
  
  `src/styles/` 下有五张样式表，由 ui-theme 的动态客户端 entry 依次导入：`base.css`、`design-platform.css`、`scrollbar.css`、`gradient-shadow-text.css` 与 `shiki.css`。客户端 bundle 将其编译并注入为插件持有的全局样式，因此卸载与 HMR 会随 ui-theme 一同移除。`scrollbar.css` 是 `--dsw-alias-scrollbar-*` token 的唯一消费方，必须排在声明这些 token 的 `design-platform.css` 之后。
  
@@ -500,13 +560,14 @@ index ab17910ab9..e48f2377fc 100644
  
  ### 滚动条重新绑定
 diff --git a/packages/client/ui-theme/src/styles/design-platform.css b/packages/client/ui-theme/src/styles/design-platform.css
-index 5dd0948769..60d9be0a8c 100644
+index 5dd0948769..9e66043470 100644
 --- a/packages/client/ui-theme/src/styles/design-platform.css
 +++ b/packages/client/ui-theme/src/styles/design-platform.css
-@@ -1,6 +1,21 @@
+@@ -1,6 +1,22 @@
  /* Figma font-weight 510 (an SF Pro variable-font weight) always renders as
     font-weight: 500 in this UI — non-variable webfonts snap intermediate
 -   weights unpredictably across platforms. */
++   /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's flow-row accent tokens move to a fork-owned theme layer. */
 +   weights unpredictably across platforms.
 +
 +   The --dsw-alias-flow-* group and the saturated steps feeding it (blue-350/700,
@@ -526,7 +587,7 @@ index 5dd0948769..60d9be0a8c 100644
  body {
    --dsw-static-amber-100: rgb(254, 245, 231);
    --dsw-static-amber-400: rgb(247, 173, 49);
-@@ -9,16 +24,20 @@ body {
+@@ -9,16 +25,20 @@ body {
    --dsw-static-amber-900: rgb(39, 36, 31);
    --dsw-static-blue-100: rgb(219, 234, 254);
    --dsw-static-blue-300: rgb(147, 197, 253);
@@ -547,7 +608,7 @@ index 5dd0948769..60d9be0a8c 100644
    --dsw-static-deepseek-100: rgb(228, 237, 253);
    --dsw-static-deepseek-200: rgb(211, 226, 255);
    --dsw-static-deepseek-300: rgb(183, 200, 254);
-@@ -31,9 +50,13 @@ body {
+@@ -31,9 +51,13 @@ body {
    --dsw-static-deepseek-800: rgb(52, 65, 91);
    --dsw-static-deepseek-900: rgb(40, 49, 66);
    --dsw-static-green-100: rgb(230, 250, 237);
@@ -561,7 +622,7 @@ index 5dd0948769..60d9be0a8c 100644
    --dsw-static-neutral-00: rgb(255, 255, 255);
    --dsw-static-neutral-1000: rgb(0, 0, 0);
    --dsw-static-neutral-100: rgb(245, 245, 245);
-@@ -69,12 +92,20 @@ body {
+@@ -69,12 +93,20 @@ body {
    --dsw-static-neutral-bluish-875: rgb(35, 35, 36);
    --dsw-static-neutral-bluish-900: rgb(27, 27, 28);
    --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
@@ -582,7 +643,7 @@ index 5dd0948769..60d9be0a8c 100644
  }
  
  body[data-ds-dark-theme] {
-@@ -85,16 +116,20 @@ body[data-ds-dark-theme] {
+@@ -85,16 +117,20 @@ body[data-ds-dark-theme] {
    --dsw-static-amber-900: rgb(39, 36, 31);
    --dsw-static-blue-100: rgb(219, 234, 254);
    --dsw-static-blue-300: rgb(147, 197, 253);
@@ -603,7 +664,7 @@ index 5dd0948769..60d9be0a8c 100644
    --dsw-static-deepseek-100: rgb(228, 237, 253);
    --dsw-static-deepseek-200: rgb(211, 226, 255);
    --dsw-static-deepseek-300: rgb(183, 200, 254);
-@@ -107,9 +142,13 @@ body[data-ds-dark-theme] {
+@@ -107,9 +143,13 @@ body[data-ds-dark-theme] {
    --dsw-static-deepseek-800: rgb(52, 65, 91);
    --dsw-static-deepseek-900: rgb(40, 49, 66);
    --dsw-static-green-100: rgb(230, 250, 237);
@@ -617,7 +678,7 @@ index 5dd0948769..60d9be0a8c 100644
    --dsw-static-neutral-00: rgb(255, 255, 255);
    --dsw-static-neutral-1000: rgb(0, 0, 0);
    --dsw-static-neutral-100: rgb(245, 245, 245);
-@@ -145,12 +184,20 @@ body[data-ds-dark-theme] {
+@@ -145,12 +185,20 @@ body[data-ds-dark-theme] {
    --dsw-static-neutral-bluish-875: rgb(35, 35, 36);
    --dsw-static-neutral-bluish-900: rgb(27, 27, 28);
    --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
@@ -638,7 +699,7 @@ index 5dd0948769..60d9be0a8c 100644
  }
  
  body {
-@@ -193,6 +240,14 @@ body {
+@@ -193,6 +241,14 @@ body {
    --dsw-alias-button-tool-bar-fill-invisible: rgba(31, 31, 31, 0.36);
    --dsw-alias-button-tool-bar-fill: rgba(84, 85, 87, 0.5);
    --dsw-alias-button-tool-bar-hover: rgba(84, 85, 87, 0.6);
@@ -653,7 +714,7 @@ index 5dd0948769..60d9be0a8c 100644
    --dsw-alias-interactive-bg-active: rgba(38, 49, 72, 0.1);
    --dsw-alias-interactive-bg-hover-accent: rgba(38, 49, 72, 0.14);
    --dsw-alias-interactive-bg-hover-danger: rgba(236, 19, 19, 0.05);
-@@ -285,6 +340,14 @@ body[data-ds-dark-theme] {
+@@ -285,6 +341,14 @@ body[data-ds-dark-theme] {
    --dsw-alias-button-tool-bar-fill-invisible: rgba(31, 31, 31, 0.36);
    --dsw-alias-button-tool-bar-fill: rgba(84, 85, 87, 0.5);
    --dsw-alias-button-tool-bar-hover: rgba(84, 85, 87, 0.6);
@@ -669,7 +730,7 @@ index 5dd0948769..60d9be0a8c 100644
    --dsw-alias-interactive-bg-hover-accent: rgba(255, 255, 255, 0.24);
    --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15);
 diff --git a/packages/client/ui-tool/README.i18n.yaml b/packages/client/ui-tool/README.i18n.yaml
-index 72b50c937d..6939b74802 100644
+index 72b50c937d..78bd0d11f7 100644
 --- a/packages/client/ui-tool/README.i18n.yaml
 +++ b/packages/client/ui-tool/README.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -678,13 +739,22 @@ index 72b50c937d..6939b74802 100644
  #   pnpm run verify-translation-pairing --write packages/client/ui-tool/README.md
 -README.md: 895274748d8ee5b7bece16e5b76836966cc52663
 -README.zh.md: f4cf11cabdb94f45c9b11e7f7538ad5042a791e6
-+README.md: f522b20596d35d2d3af89cde7c5a66a2250db7f6
-+README.zh.md: 2cd5a0de60a375b11ef4f79dfa1d337fca985de7
++README.md: ad76cdc0c9e5c004920535ce217fd927785279b7
++README.zh.md: 4aa956b00723cbf53d9fd391048fa1c6365d67d2
 diff --git a/packages/client/ui-tool/README.md b/packages/client/ui-tool/README.md
-index 895274748d..f522b20596 100644
+index 895274748d..ad76cdc0c9 100644
 --- a/packages/client/ui-tool/README.md
 +++ b/packages/client/ui-tool/README.md
-@@ -43,7 +43,7 @@ The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the frozen `blo
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-tool
+ 
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
++
+ English | [中文](README.zh.md)
+ 
+ ## Summary
+@@ -43,7 +45,7 @@ The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the frozen `blo
  
  ### Built-in views
  
@@ -694,10 +764,19 @@ index 895274748d..f522b20596 100644
  -----
  
 diff --git a/packages/client/ui-tool/README.zh.md b/packages/client/ui-tool/README.zh.md
-index f4cf11cabd..2cd5a0de60 100644
+index f4cf11cabd..4aa956b007 100644
 --- a/packages/client/ui-tool/README.zh.md
 +++ b/packages/client/ui-tool/README.zh.md
-@@ -43,7 +43,7 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
+@@ -5,6 +5,8 @@ kind: "package-reference"
+ 
+ # @deepseek-ai/dsh-client-ui-tool
+ 
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
++
+ [English](README.md) | 中文
+ 
+ ## 概述
+@@ -43,7 +45,7 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
  
  ### 内置视图
  
@@ -707,13 +786,14 @@ index f4cf11cabd..2cd5a0de60 100644
  -----
  
 diff --git a/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css b/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css
-index 2f344ac0dd..57f51b1b31 100644
+index 2f344ac0dd..f664f579dd 100644
 --- a/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css
 +++ b/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css
-@@ -46,23 +46,69 @@
+@@ -46,23 +46,70 @@
    flex-shrink: 0;
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* Family accent (--dsw-alias-flow-*, design-platform.css): the leading glyph,
 +   the title, the hover chevron, and the separator dot carry one hue per row
 +   family, so a scrolled transcript indexes by colour. The summary keeps its
@@ -787,7 +867,7 @@ index 2f344ac0dd..57f51b1b31 100644
  }
  
  .title {
-@@ -75,7 +121,7 @@
+@@ -75,7 +122,7 @@
    height: 2px;
    border-radius: 1px;
    margin: 0 8px;
@@ -797,18 +877,19 @@ index 2f344ac0dd..57f51b1b31 100644
  
  .summary {
 diff --git a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-index c0dd19358d..2343201fe6 100644
+index c0dd19358d..bd3dddb0b6 100644
 --- a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
 +++ b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-@@ -51,6 +51,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
+@@ -51,6 +51,8 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
    write: 'write',
    edit: 'edit',
    run_code: 'code',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
 +  kernel: 'code',
    cordis_package_inspect: 'read',
    cordis_runtime_inspect: 'read',
    // The three run-control verbs take one package id and produce a receipt, so
-@@ -64,6 +65,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
+@@ -64,6 +66,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
  
  /** Tool-owned titles that refine a generic row variant without replacing it. */
  const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
@@ -817,18 +898,19 @@ index c0dd19358d..2343201fe6 100644
    cordis_runtime_inspect: 'tool.title.inspect',
    cordis_run: 'tool.title.runCordis',
 diff --git a/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx b/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
-index 726395d00c..1ed73374c9 100644
+index 726395d00c..b3d4f17c70 100644
 --- a/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
 +++ b/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
-@@ -1,6 +1,6 @@
+@@ -1,6 +1,7 @@
  import type { ReactNode } from 'react'
  import {
 -  IconApiOutline14, IconBrowseOutline16, IconCodeOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this view.
 +  IconApiOutline14, IconBracesOutline16, IconBrowseOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
  } from '@deepseek-ai/dsh-client-ui-primitives'
  import type { ToolCallOwnerProps, ToolTreeProps } from '../../contract/slots.ts'
  import { readCardModel } from '../models/read-card-model.ts'
-@@ -18,7 +18,7 @@ const VARIANT_ICONS: Record<ToolRowVariant, ReactNode> = {
+@@ -18,7 +19,7 @@ const VARIANT_ICONS: Record<ToolRowVariant, ReactNode> = {
    bash: <IconApiOutline14 size={14} />,
    write: <IconEditOutline16 size={14} />,
    edit: <IconEditOutline16 size={14} />,
@@ -838,13 +920,14 @@ index 726395d00c..1ed73374c9 100644
  }
  
 diff --git a/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css b/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css
-index 4c1d7b18b0..e65cc683fa 100644
+index 4c1d7b18b0..34bec6cebd 100644
 --- a/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css
 +++ b/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css
-@@ -84,7 +84,12 @@
+@@ -84,7 +84,13 @@
    cursor: pointer;
  }
  
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* This row replicates the DisclosureRow structure rather than composing it
 +   (see the TODO on .leading below), so it rebinds the shell family accent
 +   itself instead of inheriting ToolRow's `[data-variant='bash']` rule — that
@@ -854,7 +937,7 @@ index 4c1d7b18b0..e65cc683fa 100644
    position: relative; /* sweep-glare overlay anchor */
    overflow: hidden;
    display: flex;
-@@ -125,7 +130,7 @@
+@@ -125,7 +131,7 @@
    align-items: center;
    justify-content: center;
    margin-right: 6px;
@@ -863,7 +946,7 @@ index 4c1d7b18b0..e65cc683fa 100644
  }
  
  /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
-@@ -141,7 +146,7 @@
+@@ -141,7 +147,7 @@
  }
  
  .chevron {
@@ -872,7 +955,7 @@ index 4c1d7b18b0..e65cc683fa 100644
  }
  
  /* Hover preview on the expandable row: the idle icon crossfades (100ms) into
-@@ -172,7 +177,7 @@
+@@ -172,7 +178,7 @@
    flex: none;
    font-size: var(--dsh-content-font-size-secondary, 13px);
    line-height: calc(24px + var(--dsh-content-font-delta, 0px));
@@ -881,7 +964,7 @@ index 4c1d7b18b0..e65cc683fa 100644
  }
  
  .sep {
-@@ -181,7 +186,7 @@
+@@ -181,7 +187,7 @@
    height: 2px;
    border-radius: 1px;
    margin: 0 8px;

@@ -5,6 +5,8 @@ kind: "package-reference"
 
 # @deepseek-ai/dsh-client-ui-sidebar
 
+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this. -->
+
 [English](README.md) | 中文
 
 ## 概述

@@ -169,6 +169,7 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode 
   callTime: seq * 1_000 - 500,
   content: [], isError: false, subCalls: [],
 })
+// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-chat/src/client/chat.
 /** Settled kernel cell whose leading comment becomes the row's phrase. */
 const kernelResult = (seq: number, callId: string, comment: string): ToolResultNode => ({
   kind: 'tool-result', seq, time: seq * 1_000, callId,

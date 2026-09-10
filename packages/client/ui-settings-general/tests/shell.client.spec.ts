@@ -96,6 +96,7 @@ describe('ui-settings apply', () => {
     // This package registers the General section itself; every other section
     // arrives from a feature registrant.
     const GENERAL = { id: 'general', order: 0, label: 'general.nav' }
+    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
     // This fork registers Advanced here too, at the far end of the order.
     const ADVANCED = { id: 'advanced', order: 100, label: 'advanced.nav' }
     expect(sections.getSnapshot()).toEqual([GENERAL, ADVANCED])

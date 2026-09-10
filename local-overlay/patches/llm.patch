@@ -1,11 +1,12 @@
 diff --git a/packages/llm/llm/src/index.ts b/packages/llm/llm/src/index.ts
-index cdecc4c96e..d0dba4d54b 100644
+index cdecc4c96e..268fd95b25 100644
 --- a/packages/llm/llm/src/index.ts
 +++ b/packages/llm/llm/src/index.ts
-@@ -323,6 +323,40 @@ export interface DirectoryRegistrationHandle {
+@@ -323,6 +323,41 @@ export interface DirectoryRegistrationHandle {
   * The abstract `llm` service: an adapter registry plus a streaming model-call
   * API, interceptable via the `llm/stream` waterfall.
   */
++// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream exposes account registration on LlmRuntime.
 +/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
 +export interface LlmAccountDraft {
 +  /** Login email, when the account signs in with one. */
@@ -43,7 +44,7 @@ index cdecc4c96e..d0dba4d54b 100644
  export class LlmRuntime extends TypertRemoteService {
    private adapters = new Map<string, AdapterRegistration>()
    private directory = new Map<string, LlmConfigurableProvider>()
-@@ -330,6 +364,7 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -330,6 +365,7 @@ export class LlmRuntime extends TypertRemoteService {
      string,
      (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
    >()
@@ -51,7 +52,7 @@ index cdecc4c96e..d0dba4d54b 100644
  
    constructor(ctx: Context) {
      super(ctx, 'llm')
-@@ -609,6 +644,62 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -609,6 +645,62 @@ export class LlmRuntime extends TypertRemoteService {
      return models
    }
  
@@ -115,19 +116,20 @@ index cdecc4c96e..d0dba4d54b 100644
     * Remote adapter for one draft provider interrogation.
     * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/packages/llm/token-meter/src/index.ts b/packages/llm/token-meter/src/index.ts
-index 85742823d9..def621ee8e 100644
+index 85742823d9..c9b07cbddb 100644
 --- a/packages/llm/token-meter/src/index.ts
 +++ b/packages/llm/token-meter/src/index.ts
-@@ -19,7 +19,7 @@ import type {
+@@ -19,7 +19,8 @@ import type {
    TokenMeterConfig,
  } from './types.ts'
  import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
 -import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
++// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
 +import { contextPressureProjectionDefinition, tokenUsageLifetimeProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
  import { estimateContent, estimateHeader, estimateMessage, ROLE_OVERHEAD } from './estimate.ts'
  import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
  import type { MeterSurfaceNode } from './surface-fold.ts'
-@@ -99,9 +99,14 @@ export class TokenMeter extends Service {
+@@ -99,9 +100,14 @@ export class TokenMeter extends Service {
      super(ctx, 'tokenMeter')
      validateConfigKeys(config)
  
@@ -146,10 +148,15 @@ index 85742823d9..def621ee8e 100644
      // Readers catch up independently, while eager observation bounds ordinary
      // read latency without creating state for sessions no consumer has read.
 diff --git a/packages/llm/token-meter/src/projection.ts b/packages/llm/token-meter/src/projection.ts
-index 5c451617e9..4e0f69299f 100644
+index 5c451617e9..38c6875bd6 100644
 --- a/packages/llm/token-meter/src/projection.ts
 +++ b/packages/llm/token-meter/src/projection.ts
-@@ -67,8 +67,20 @@ export interface ContextBreakdownProjection {
+@@ -1,3 +1,4 @@
++// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
+ /**
+  * Pure client-safe token-projection vocabulary.
+  *
+@@ -67,8 +68,20 @@ export interface ContextBreakdownProjection {
  
  declare module '@deepseek-ai/dsh-session-projection/types' {
    interface SessionProjectionMap {
@@ -172,18 +179,19 @@ index 5c451617e9..4e0f69299f 100644
      contextPressure: ContextPressureProjection
      /** Heuristic system/tools/message composition of the next request. */
 diff --git a/packages/llm/token-meter/src/usage-projection.ts b/packages/llm/token-meter/src/usage-projection.ts
-index 50f336c61c..fe73d9b327 100644
+index 50f336c61c..c84dd34885 100644
 --- a/packages/llm/token-meter/src/usage-projection.ts
 +++ b/packages/llm/token-meter/src/usage-projection.ts
-@@ -88,6 +88,7 @@ const usageOf = (event: SessionEvent): TokenUsage | undefined =>
+@@ -88,6 +88,8 @@ const usageOf = (event: SessionEvent): TokenUsage | undefined =>
  declare module '@deepseek-ai/dsh-session-projection/types' {
    interface SessionProjectionStateMap {
      tokenUsage: TokenUsageState
++    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
 +    tokenUsageLifetime: TokenUsageState
      contextPressure: ContextPressureState
    }
  }
-@@ -108,14 +109,55 @@ const contextPressureStateSchema = z.object({
+@@ -108,14 +110,55 @@ const contextPressureStateSchema = z.object({
  type ContextPressureState = z.infer<typeof contextPressureStateSchema>
  
  /**
@@ -241,7 +249,7 @@ index 50f336c61c..fe73d9b327 100644
   */
  export const tokenUsageProjectionDefinition = {
    key: 'tokenUsage',
-@@ -123,38 +165,52 @@ export const tokenUsageProjectionDefinition = {
+@@ -123,38 +166,52 @@ export const tokenUsageProjectionDefinition = {
    stateSchema: tokenUsageStateSchema,
    init: () => ({ totals: zeroBuckets(), last: null }),
    apply: (state, event) => {
@@ -322,13 +330,14 @@ index 50f336c61c..fe73d9b327 100644
  /**
   * Token-meter's context-occupancy projection unit.
 diff --git a/packages/llm/token-meter/tests/token-usage-projection.spec.ts b/packages/llm/token-meter/tests/token-usage-projection.spec.ts
-index f9ce9015e3..b9a201b304 100644
+index f9ce9015e3..66aa16f633 100644
 --- a/packages/llm/token-meter/tests/token-usage-projection.spec.ts
 +++ b/packages/llm/token-meter/tests/token-usage-projection.spec.ts
-@@ -283,6 +283,39 @@ describe('tokenUsage session projection', () => {
+@@ -283,6 +283,40 @@ describe('tokenUsage session projection', () => {
      })
    })
  
++  // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/llm/token-meter/src/usage-projection.ts.
 +  it('resets cumulative billing when a compaction ends successfully', async () => {
 +    const { ctx, session } = await harness()
 +    startStep(session, 1, 1)
@@ -365,7 +374,7 @@ index f9ce9015e3..b9a201b304 100644
    it('unregisters with the token-meter fiber and restores from a JSON checkpoint', async () => {
      const { ctx, session, meterFiber } = await harness()
      startStep(session, 1, 1)
-@@ -304,6 +337,123 @@ describe('tokenUsage session projection', () => {
+@@ -304,6 +338,123 @@ describe('tokenUsage session projection', () => {
    })
  })
  

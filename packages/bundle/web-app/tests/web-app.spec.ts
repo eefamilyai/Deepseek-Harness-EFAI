@@ -69,6 +69,7 @@ function stageDist(): string {
 }
 
 /** A fake webServer capturing the fallback seat and index taps. */
+// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/bundle/web-app/src/index.ts.
 function fakeHttpServer(host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): { server: WebServer; seat: () => unknown; routes: () => unknown[] } {
   let fallback: unknown
   const routes: unknown[] = []

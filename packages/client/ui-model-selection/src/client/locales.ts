@@ -28,6 +28,7 @@ export const zh = {
   'empty.models': '没有可用的模型。',
   'blocked.composer': '当前模型不可用，请先选择模型',
   'empty.efforts': '当前模型未提供推理等级。',
+  // DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: upstream ships account-route copy.
   'provider.accounts': '{count} 个账号',
   'provider.models': '{count} 个模型',
   'provider.noModels': '未查询到模型',

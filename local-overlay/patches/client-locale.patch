@@ -1,24 +1,26 @@
 diff --git a/packages/client/locale/src/locales/en.ts b/packages/client/locale/src/locales/en.ts
-index 70ce31598c..d7cb2edf17 100644
+index 70ce31598c..093f55207b 100644
 --- a/packages/client/locale/src/locales/en.ts
 +++ b/packages/client/locale/src/locales/en.ts
-@@ -7,6 +7,8 @@ export const en = {
+@@ -7,6 +7,9 @@ export const en = {
    'close': 'Close',
    'copy': 'Copy',
    'copied': 'Copied',
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned locale overlay owns these verbs.
 +  'run': 'Run',
 +  'download': 'Download',
    'copy.failed': 'Copy failed',
    'copy.value': 'Copy value',
    'copy.json': 'Copy JSON',
 diff --git a/packages/client/locale/src/locales/zh.ts b/packages/client/locale/src/locales/zh.ts
-index 30cee308d5..bbd95d6915 100644
+index 30cee308d5..a53f4a0f7e 100644
 --- a/packages/client/locale/src/locales/zh.ts
 +++ b/packages/client/locale/src/locales/zh.ts
-@@ -5,6 +5,8 @@ export const zh = {
+@@ -5,6 +5,9 @@ export const zh = {
    'close': '关闭',
    'copy': '复制',
    'copied': '复制成功',
++  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned locale overlay owns these verbs.
 +  'run': '运行',
 +  'download': '下载',
    'copy.failed': '复制失败',

@@ -26,6 +26,7 @@ import type {
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
+// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: kernel-mode registers the section itself.
 import { AdvancedSection } from './AdvancedSection.tsx'
 import type { AdvancedSectionInjected } from './AdvancedSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'

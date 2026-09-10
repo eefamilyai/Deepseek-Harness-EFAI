@@ -377,6 +377,7 @@ export class BasicCompactionEngine extends CompactionEngine {
         const operationSignal = AbortSignal.any([agentSignal, signal])
         try {
           operationSignal.throwIfAborted()
+          // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a fork-owned compaction provider supplies this.
           // Land the model-free tool-result prune first, exactly as the
           // automatic pressure/overflow path does, so a manual /compact on a
           // near-full conversation summarizes trimmed tool output rather than

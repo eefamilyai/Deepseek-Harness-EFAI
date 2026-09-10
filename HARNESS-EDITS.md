@@ -326,8 +326,27 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 24 | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | mounts `rlm-mode`/`rlm` engine rows with `rlm.enabled` defaulting on; `rlm.enabled` unmounts the standalone `tool-kernel` and mounts the engine, while the subsumed shell/fs/search/jobs rows follow `kernel.enabled` | Move to `packages/bundle/efai-rlm/cordis.patch.yml` (a fork-owned bundle applied by profile) |
 | 25 | `client/ui-chat/src/client/{chat/ChatNodeSeat.tsx,chat/TurnProcessNodeView.tsx,contract/slots.ts,locale.ts}` + new `contract/turn-tool-summary.ts` | `brand` | the folded Turn-process row names what the Turn's tool calls did (`Created a.mjs, ran a command +53 -0`) instead of only counting them | Upstream gives the folded process row a content-derived label |
 | 26 | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | the base bundle mounts the `agent-memory-mode`/`agent-memory` rows gated by `agent-memory.enabled` (default off), and `apps/cli` must declare both packages because it is the installation dependency closure the profile module fallback mirrors | Move the bundle rows to `packages/bundle/efai-memory/cordis.patch.yml` (a fork-owned bundle applied by profile); the `apps/cli` manifest row stays until profiles resolve bundles from the checkout |
+| 27 | `.agents/skills/dsh-code-review/SKILL.md`, `.agents/skills/dsh-pre-push-checks/SKILL.md` | `all` | upstream's review and pre-push skills cannot know about this fork: the tier split, the `DSH-FORK` marker, `local-overlay/`, or the `verify-fork-overlay` gate. Each carries one added section plus its marker. | Permanent fork delta: the upstream skills would need a fork-extensibility mechanism for these sections to move out. |
+| 28 | `scripts/verify-package-readme-model-experience.ts` | `all` | the fork ships package READMEs for fork-owned packages, so the audited `NO_MODEL_EXPERIENCE_SECTION` / `SENTENCE_MODEL_EXPERIENCE` allowlists must name them; without entries the gate rejects a correct README. | Upstream accepts a model-experience declaration inside each package manifest, so the allowlists stop being a central file. |
 
 If rows 1, 2, 4, 5, 8, and 11 move to fork-owned packages and rows 9 and 10 go upstream, the seam drops to roughly a dozen files — and the survivors are lists and infrastructure, which conflict predictably in one place each.
+
+## Known fork debt
+
+Recorded at the v1.0.0 commit. These are real, verified gaps, not suspicions. The fork's
+own gate (`pnpm run verify-fork-overlay`), both package-README gates, and `typecheck` are
+green; `pnpm run doc-sync` is **not**, and this is why.
+
+| Gate | State | Cause | Exit |
+|---|---|---|---|
+| `verify-translation-pairing` | FAIL | 16 fork package READMEs added at v1.0.0 have no `README.zh.md` pair, plus 4 pre-existing fork docs (`local-overlay/README.md`, `desktop/harness-desktop/README.md`, the kernel-rlm-context Agent Note, `python/kiln/runtime/README.ds-direct.md`). No fork package group has ever carried a bilingual pair. | Add the Chinese counterparts and record each pair, or move fork packages out of the bilingual scope. |
+| `verify-subsystem-pages` | FAIL | `packages/agent-memory`, `packages/kernel`, and `packages/rlm` are fork package groups with no group `README.md` declaring subsystem ownership. | Add one group README per fork package group. |
+| `verify-md-wrap` | FAIL | Pre-existing, on the generated `docs/tool-catalog.md`. | Regenerate or widen the wrap exemption for generated catalogs. |
+| 8 catalog/site gates | FAIL | Downstream of the above and of the fork's added packages not yet appearing in the generated catalogs. | Regenerate the catalogs once the README set is stable. |
+
+The debt is documentation-shaped: it does not affect the built harness, the mod layer, or
+any runtime behavior. It is recorded here so a future release does not mistake a red
+`doc-sync` for a broken fork.
 
 ## Updating to a new upstream release
 

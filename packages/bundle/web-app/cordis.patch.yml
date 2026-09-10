@@ -123,6 +123,7 @@
         compressionLevel: 1
         compressionThresholdBytes: 1024
 
+    # DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: move to a fork-owned bundle applied by profile.
     # Sidebar panels' host surface: a dedicated user PTY at ws /kiln/terminal and
     # the agent's shared browser at /kiln/browser (live state.json + screenshots
     # + drive-by-action). Self-contained over the webserver carrier; browserDir

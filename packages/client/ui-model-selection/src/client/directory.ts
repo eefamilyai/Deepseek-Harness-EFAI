@@ -46,6 +46,7 @@ export class ModelDirectory {
   private generation = 0
   private disposed = false
   private resolved = false
+  // DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: upstream groups account routes itself.
   /** Last user-selected model; preferred over a lagging durable projection. */
   private lastSelected: ModelSelection | null = null
   private readonly unsubscribeCatalog: () => void

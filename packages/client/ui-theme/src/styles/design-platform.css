@@ -1,5 +1,6 @@
 /* Figma font-weight 510 (an SF Pro variable-font weight) always renders as
    font-weight: 500 in this UI — non-variable webfonts snap intermediate
+   /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's flow-row accent tokens move to a fork-owned theme layer. */
    weights unpredictably across platforms.
 
    The --dsw-alias-flow-* group and the saturated steps feeding it (blue-350/700,

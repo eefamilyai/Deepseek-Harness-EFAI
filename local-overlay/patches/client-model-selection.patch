@@ -397,19 +397,20 @@ index e910651e86..1827b84609 100644
                    )
                  })}
 diff --git a/packages/client/ui-model-selection/src/client/directory.ts b/packages/client/ui-model-selection/src/client/directory.ts
-index 6ceee704ed..d99db5263a 100644
+index 6ceee704ed..2c426d9219 100644
 --- a/packages/client/ui-model-selection/src/client/directory.ts
 +++ b/packages/client/ui-model-selection/src/client/directory.ts
-@@ -46,6 +46,8 @@ export class ModelDirectory {
+@@ -46,6 +46,9 @@ export class ModelDirectory {
    private generation = 0
    private disposed = false
    private resolved = false
++  // DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: upstream groups account routes itself.
 +  /** Last user-selected model; preferred over a lagging durable projection. */
 +  private lastSelected: ModelSelection | null = null
    private readonly unsubscribeCatalog: () => void
    private readonly unsubscribeSelection: () => void
  
-@@ -105,6 +107,11 @@ export class ModelDirectory {
+@@ -105,6 +108,11 @@ export class ModelDirectory {
        this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
        throw new Error(`session.selectModel failed: ${result.error.code}: ${result.error.message}`)
      }
@@ -421,7 +422,7 @@ index 6ceee704ed..d99db5263a 100644
      this.store.update((s) => { s.status = 'ready'; s.error = null })
      this.syncInputs()
    }
-@@ -159,7 +166,17 @@ export class ModelDirectory {
+@@ -159,7 +167,17 @@ export class ModelDirectory {
        })
        return
      }
@@ -440,7 +441,7 @@ index 6ceee704ed..d99db5263a 100644
      this.resolved = true
      this.store.set({
        current,
-@@ -174,6 +191,13 @@ export class ModelDirectory {
+@@ -174,6 +192,13 @@ export class ModelDirectory {
    }
  }
  
@@ -455,13 +456,14 @@ index 6ceee704ed..d99db5263a 100644
    return value === undefined ? undefined : value as ModelSelectionProjection
  }
 diff --git a/packages/client/ui-model-selection/src/client/locales.ts b/packages/client/ui-model-selection/src/client/locales.ts
-index 3bf0774679..9254a65b65 100644
+index 3bf0774679..2ed9373f30 100644
 --- a/packages/client/ui-model-selection/src/client/locales.ts
 +++ b/packages/client/ui-model-selection/src/client/locales.ts
-@@ -28,6 +28,20 @@ export const zh = {
+@@ -28,6 +28,21 @@ export const zh = {
    'empty.models': '没有可用的模型。',
    'blocked.composer': '当前模型不可用，请先选择模型',
    'empty.efforts': '当前模型未提供推理等级。',
++  // DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: upstream ships account-route copy.
 +  'provider.accounts': '{count} 个账号',
 +  'provider.models': '{count} 个模型',
 +  'provider.noModels': '未查询到模型',
@@ -479,7 +481,7 @@ index 3bf0774679..9254a65b65 100644
  } satisfies Record<string, string>
  
  /** The model namespace key union. */
-@@ -53,4 +67,18 @@ export const en = {
+@@ -53,4 +68,18 @@ export const en = {
    'empty.models': 'No models available.',
    'blocked.composer': 'This model is unavailable — select one to continue',
    'empty.efforts': 'This model provides no reasoning effort levels.',
@@ -499,17 +501,18 @@ index 3bf0774679..9254a65b65 100644
 +  'account.cancel': 'Cancel',
  } satisfies Record<ModelKey, string>
 diff --git a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
-index f30c3f7f3e..f888616199 100644
+index f30c3f7f3e..4e34b45c43 100644
 --- a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
 +++ b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
-@@ -1,5 +1,5 @@
+@@ -1,5 +1,6 @@
  // @vitest-environment jsdom
 -import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
++// DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-model-selection/src/client/ModelSelect.tsx.
 +import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
  import { afterEach, describe, expect, it, vi } from 'vitest'
  import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
  import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-@@ -50,6 +50,19 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
+@@ -50,6 +51,19 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
    }
  }
  
@@ -529,7 +532,7 @@ index f30c3f7f3e..f888616199 100644
  afterEach(cleanup)
  
  describe('ModelSelect reasoning effort', () => {
-@@ -215,3 +228,173 @@ describe('ModelSelect reasoning effort', () => {
+@@ -215,3 +229,173 @@ describe('ModelSelect reasoning effort', () => {
      expect(load).not.toHaveBeenCalled()
    })
  })

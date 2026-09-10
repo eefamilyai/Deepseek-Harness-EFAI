@@ -1,3 +1,4 @@
+// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a fork-owned compaction provider supplies this.
 /**
  * Default one-shot summarization and durable checkpoint framing.
  *

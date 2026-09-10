@@ -53,6 +53,7 @@ export type {
   WebBlockProps, WebSearchBlockProps, WebFetchBlockProps, WebSourceView, WebBlockLabels,
 } from './WebBlock.tsx'
 export { CodeBlock } from './markdown/CodeBlock.tsx'
+// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream exports the disclosure row.
 export { requestRunInTerminal, RUN_IN_TERMINAL_EVENT } from './terminal-bridge.ts'
 export type { CodeBlockProps } from './markdown/CodeBlock.tsx'
 export { JsonBlock } from './markdown/JsonBlock.tsx'

@@ -7,6 +7,70 @@ description: Use for any GitHub operation in the deepseek-harness repo — commi
 
 Operate GitHub through the repo's own conventions. `AGENTS.md` owns the allowed merge-forward and rebase histories; the git hooks are intentionally narrow (pre-commit lint/whitespace/vendor guard, pre-push incremental typecheck), so do not rely on them for correctness.
 
+## This repository is a fork — read this before any commit
+
+`origin` is `eefamilyai/Deepseek-Harness-EFAI`; `upstream` is
+`deepseek-ai/deepseek-harness`. The fork carries local features on a codebase
+upstream rewrites continuously, so a commit here has a second obligation the
+general git rules above do not cover: **it must not make the next upstream merge
+harder.**
+
+- **Push to `origin`. Never push to `upstream`.** A push to `upstream` is an
+  attempt to write to someone else's repository.
+- **`master` is the only long-lived branch.** Do not open a PR branch in this
+  fork; the fork's history is linear on `master`.
+- **Never `--force` `master`.** `master` is a shared, published branch here, not
+  a review branch.
+
+### Before committing a change that touches harness source
+
+A change to a file **upstream also owns** is a Tier-2 seam edit, and it needs the
+three things `dsh-harness-edit` defines: a `DSH-FORK` marker, an `EXIT:` clause,
+and a `patchGroups` entry in `local-overlay/rules.json`. A change to a
+fork-owned path needs none of that.
+
+Read [dsh-harness-edit](../dsh-harness-edit/SKILL.md) before the first edit, not
+after. Classify the path with git rather than memory:
+
+```sh
+git diff --name-status -M "$(head -1 local-overlay/BASE)"
+```
+
+Then, before committing, prove the mod layer still round-trips:
+
+```sh
+node local-overlay/rebuild.mjs        # fold the edit into its patch
+pnpm run verify-fork-overlay          # rebuild --check, verify, apply --check
+```
+
+`verify-fork-overlay` is this fork's own gate. It is not part of the upstream
+suite and the pre-commit hook does not run it. A commit that edits an
+upstream-owned file without it can carry a patch set that no longer describes
+the tree, which is exactly the state that breaks the next upstream update.
+
+### Commit subject
+
+State the behavior change, and name the tier when the change is a seam edit, so
+the log itself records which commits carry merge cost:
+
+```
+feat(kernel): add the RLM context read-back seam
+
+Tier 2 — marker + EXIT in packages/boot/app-boot/src/index.ts;
+patchGroups entry in local-overlay/rules.json.
+```
+
+### Credentials
+
+Rule 8 of `HARNESS-EDITS.md` owns this. The scan must be empty before every push
+in this fork specifically, because `ds_config.json` and
+`python/kiln/runtime/ds_sessions.json` are fork-local files that hold real
+secrets and live in this tree:
+
+```sh
+git ls-files | grep -iE 'ds_config|ds_sessions|subkernels\.json|\.env$|KILN\.md'
+```
+
 ## Repository and state first
 
 ```sh

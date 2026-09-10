@@ -1,11 +1,12 @@
 diff --git a/packages/core/agent/src/model-selection.ts b/packages/core/agent/src/model-selection.ts
-index 2cb7e4468f..bdfedbc9ea 100644
+index 2cb7e4468f..885cfde9aa 100644
 --- a/packages/core/agent/src/model-selection.ts
 +++ b/packages/core/agent/src/model-selection.ts
-@@ -37,6 +37,18 @@ export interface ModelSelectionRef {
+@@ -37,6 +37,19 @@ export interface ModelSelectionRef {
   * @returns Disposer for both scoped waterfall listeners.
   */
  export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
++  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream lands the accessor re-entrancy guard (upstream PR).
 +  // Declaring an accessor twice on one scope is a hard cordis error, and a
 +  // resume or reconnect can re-enter setup on the SAME agent context before the
 +  // previous attempt's fiber has unwound its accessor — which crashed the whole
@@ -21,7 +22,7 @@ index 2cb7e4468f..bdfedbc9ea 100644
    const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
      const selected = selection.current
      const assembled = await next()
-@@ -73,3 +85,16 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
+@@ -73,3 +86,16 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
      disposeRequest()
    }
  }
@@ -39,10 +40,18 @@ index 2cb7e4468f..bdfedbc9ea 100644
 +  }
 +}
 diff --git a/packages/core/agent/tests/model-selection.spec.ts b/packages/core/agent/tests/model-selection.spec.ts
-index 3e61060cd6..261c46bd57 100644
+index 3e61060cd6..ac34afe913 100644
 --- a/packages/core/agent/tests/model-selection.spec.ts
 +++ b/packages/core/agent/tests/model-selection.spec.ts
-@@ -58,4 +58,21 @@ describe('installModelSelection()', () => {
+@@ -8,6 +8,7 @@ import {
+   type ModelSelectionRef,
+ } from '../src/index.ts'
+ import { ReasoningEffortId, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
++// DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
+ 
+ describe('installModelSelection()', () => {
+   it('snapshots prompt variables and request routing together, then disposes both listeners', async () => {
+@@ -58,4 +59,21 @@ describe('installModelSelection()', () => {
      )).resolves.toBe(seed)
      await ctx.fiber.dispose()
    })
@@ -65,40 +74,43 @@ index 3e61060cd6..261c46bd57 100644
 +  })
  })
 diff --git a/packages/core/system-prompt/src/index.ts b/packages/core/system-prompt/src/index.ts
-index fba1b51f50..6e241dbc0b 100644
+index fba1b51f50..4a2a999bf7 100644
 --- a/packages/core/system-prompt/src/index.ts
 +++ b/packages/core/system-prompt/src/index.ts
-@@ -409,7 +409,7 @@ export class SystemPrompt extends Service {
+@@ -409,7 +409,8 @@ export class SystemPrompt extends Service {
        this.section({
          name: 'harness:identity',
          order: this.getSectionOrder('HARNESS_IDENTITY'),
 -        text: 'You are an AI agent powered by DeepSeek Harness.',
++        // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork plugin registers the identity as a prompt section.
 +        text: 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. In large directories, use optimised ways to search through the directory.',
        })
      }
      this.section({
 diff --git a/packages/core/system-prompt/tests/system-prompt.spec.ts b/packages/core/system-prompt/tests/system-prompt.spec.ts
-index 9818c50f94..254ca30363 100644
+index 9818c50f94..68d316d45b 100644
 --- a/packages/core/system-prompt/tests/system-prompt.spec.ts
 +++ b/packages/core/system-prompt/tests/system-prompt.spec.ts
-@@ -12,7 +12,7 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
+@@ -12,7 +12,8 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
   * their own sections; the built-ins' behavior is pinned by its own describe.
   */
  const BUILT_IN = ['harness:identity', 'deployment:persona']
 -const IDENTITY = 'You are an AI agent powered by DeepSeek Harness.'
++// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/core/system-prompt/src/index.ts.
 +const IDENTITY = 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. In large directories, use optimised ways to search through the directory.'
  const SECTION_ORDER_NAMES = [
    'HARNESS_IDENTITY', 'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA',
    'PLAN_POLICY', 'TEAM_POLICY', 'PTC_ONLY', 'FILE_REFERENCE', 'TOOL_BASH',
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-index 38d68deae6..5006e99cab 100644
+index 38d68deae6..2ed267a249 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
 +++ b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-@@ -29,7 +29,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
+@@ -29,7 +29,8 @@ describe('gen-tool-catalog collectToolCatalog', () => {
        'ask_user_question', 'bash', 'bash', 'cordis_define', 'cordis_inspect_list',
        'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop',
        'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'followup_task', 'get_goal', 'glob', 'grep',
 -      'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
++      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
 +      'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'kernel',
        'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'pwsh', 'pwsh', 'ralph',
        'read', 'read_image', 'report', 'run_code', 'schedule_create', 'schedule_delete',

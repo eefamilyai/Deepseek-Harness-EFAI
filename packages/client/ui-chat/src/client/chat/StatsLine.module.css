@@ -15,6 +15,7 @@
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   color: var(--dsw-alias-label-tertiary);
+  /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
   /* Wrap instead of eliding: the token readout (and every other group) stays
      fully visible instead of clipping the trailing figures into an ellipsis. */
   white-space: normal;

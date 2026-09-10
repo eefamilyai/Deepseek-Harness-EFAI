@@ -35,8 +35,11 @@ The full maps (`SECTION_ORDERS`, `CONTEXT_ORDERS`, `PERSONA_SECTION`) are in
 2. **Fork source seam** (what the harness ships). `core/system-prompt/src/index.ts` is
    Tier 2, seam register row 11, tag `brand`.
    - Load `dsh-harness-edit`, follow `HARNESS-EDITS.md`.
+   - Place a `DSH-FORK` marker on the change with a concrete `EXIT:` clause — the
+     condition under which the fork delta can be dropped.
    - Edit BOTH the source file and `local-overlay/patches/core.patch` (the patch is the
      source of truth for the diff; `node local-overlay/apply.mjs` reapplies it).
+   - Register the path in `local-overlay/rules.json` `patchGroups` if no group claims it.
    - Keep `packages/core/system-prompt/tests/system-prompt.spec.ts` `IDENTITY` constant
      byte-identical to the runtime string.
 
@@ -48,6 +51,19 @@ fixed `harness:identity` opener is suppressed only by an effective `complete: tr
 - `git diff --stat` minimal; `git diff --check` clean.
 - Source string == spec `IDENTITY` constant.
 - Preset: `agentPresets.standingKeyFor(id)`; never treat roster `broken` as validation.
+- The seam edit is not proven until the fork's own gate passes. The pre-commit and
+  pre-push hooks do not run it, so a seam edit can pass every upstream check while
+  leaving the patch set stale:
+
+```sh
+pnpm run verify-fork-overlay     # rebuild --check, verify, apply --check
+```
+
+  `rebuild --check` proves `local-overlay/patches/*.patch` still describes the tree,
+  `verify.mjs` proves base + patches reproduces the worktree byte for byte, and
+  `apply.mjs --check` proves the committed patches still apply to a pristine base.
+  A system-prompt seam edit that changed the source without regenerating
+  `core.patch` passes typecheck and fails `verify-fork-overlay`.
 
 ## Do not touch
 

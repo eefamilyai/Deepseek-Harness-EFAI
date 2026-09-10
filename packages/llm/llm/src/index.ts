@@ -323,6 +323,7 @@ export interface DirectoryRegistrationHandle {
  * The abstract `llm` service: an adapter registry plus a streaming model-call
  * API, interceptable via the `llm/stream` waterfall.
  */
+// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream exposes account registration on LlmRuntime.
 /** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
 export interface LlmAccountDraft {
   /** Login email, when the account signs in with one. */

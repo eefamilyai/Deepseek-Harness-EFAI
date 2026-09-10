@@ -1,16 +1,17 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index eaaccfcb20..908cbc0a36 100644
+index eaaccfcb20..1e8907ba52 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
-@@ -64,6 +64,7 @@ export const SERVICE_PAGE: Record<string, string> = {
+@@ -64,6 +64,8 @@ export const SERVICE_PAGE: Record<string, string> = {
    shellEnv: 'shell.md',
    clientModules: 'client-modules.md',
    codeRuntime: 'code-runtime.md',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
 +  kernel: 'code-runtime.md',
    commands: 'commands.md',
    compaction: 'compaction.md',
    cordisInspect: 'extensions.md',
-@@ -148,9 +149,11 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+@@ -148,9 +150,11 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
    appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
    appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
    cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -22,7 +23,7 @@ index eaaccfcb20..908cbc0a36 100644
    launchEnvironment: 'not a service: launcher-provided root accessor value (LaunchEnvironmentSnapshot | undefined) — packages/util/launch-environment/README.md owns this launcher contract',
    connection: 'interface-typed (HostConnectionHandle); implementing class HostConnectionService is declared in rpc-host.ts — packages/client/connection/README.md owns the API',
    uiRenderer: 'client-side interface-typed browser service — packages/client/ui-renderer/README.md owns the API',
-@@ -271,6 +274,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+@@ -271,6 +275,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmConfigurableProvider: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
@@ -32,7 +33,7 @@ index eaaccfcb20..908cbc0a36 100644
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -664,6 +670,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -664,6 +671,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-presets/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
@@ -43,14 +44,15 @@ index eaaccfcb20..908cbc0a36 100644
    ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
    ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',
 diff --git a/scripts/gen-doc-graphs.ts b/scripts/gen-doc-graphs.ts
-index 476641a581..542cd35c06 100644
+index 476641a581..981b7a03d3 100644
 --- a/scripts/gen-doc-graphs.ts
 +++ b/scripts/gen-doc-graphs.ts
-@@ -112,10 +112,19 @@ const SERVICE_ROLES: ServiceRole[] = [
+@@ -112,10 +112,20 @@ const SERVICE_ROLES: ServiceRole[] = [
      pkg: 'llm',
      title: 'LLM adapter registry',
      mode: 'seam',
 -    implementations: ['llm-deepseek', 'llm-pi-ai', 'llm-replay'],
++    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
 +    implementations: ['llm-deepseek', 'llm-kiln', 'llm-pi-ai', 'llm-replay'],
      consumers: ['agent-loop', 'compaction-basic'],
      note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
@@ -68,18 +70,19 @@ index 476641a581..542cd35c06 100644
      key: 'deepseekLlmApiExtensions',
      pkg: 'deepseek-llm-api-extensions',
 diff --git a/scripts/gen-tool-catalog.ts b/scripts/gen-tool-catalog.ts
-index b5dea761cf..ec529dfc13 100644
+index b5dea761cf..d8a6fe984e 100644
 --- a/scripts/gen-tool-catalog.ts
 +++ b/scripts/gen-tool-catalog.ts
-@@ -49,6 +49,7 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
+@@ -49,6 +49,8 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
  import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
  import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
  import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
++// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
 +import * as ToolNotebookEdit from '@deepseek-ai/dsh-tool-notebook-edit'
  import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
  import TerminalSessionService from '@deepseek-ai/dsh-terminal'
  import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
-@@ -65,6 +66,8 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
+@@ -65,6 +67,8 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
  import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
  import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
  import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
@@ -88,7 +91,7 @@ index b5dea761cf..ec529dfc13 100644
  import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
  import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
  import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
-@@ -347,6 +350,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -347,6 +351,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
    },
@@ -110,7 +113,7 @@ index b5dea761cf..ec529dfc13 100644
    {
      pkg: '@deepseek-ai/dsh-tool-terminal',
      dir: 'tool-terminal',
-@@ -612,6 +630,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -612,6 +631,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
    },
@@ -133,11 +136,55 @@ index b5dea761cf..ec529dfc13 100644
  ]
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
+diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
+index 3b02f00d6b..9e7b24c7d1 100644
+--- a/scripts/verify-package-readme-model-experience.ts
++++ b/scripts/verify-package-readme-model-experience.ts
+@@ -36,6 +36,12 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
+   'packages/util/launch-environment': 'The package only resolves host environment values; model-facing consumers own any rendered use.',
+   'packages/util/workspace-path': 'The package only formats Workspace paths for browser UI; it never constructs model input.',
+   'packages/util/values': 'The package only validates, snapshots, compares, freezes, or rejects caller-owned values; consumers own every model-facing use.',
++  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
++  // audited allowlists must name them; without entries the gate rejects a correct README.
++  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
++  'packages/client/ui-dock': 'Browser-side dock overlay; it mounts a private React root and header slots, and the sidebar bridge behind it owns the shared-browser and user-shell endpoints.',
++  'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
++  'packages/host/sidebar-bridge': 'The host HTTP/WebSocket carrier for the dock panels; it serves browser state and a user shell and registers nothing model-facing.',
+ }
+ 
+ /**
+@@ -52,6 +58,14 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+   'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
+   'packages/code-runtime/code-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
+   'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
++  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
++  // audited allowlists must name them; without entries the gate rejects a correct README.
++  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
++  'packages/agent-memory/agent-memory-mode': { kind: 'indirect', reason: 'The row owns only the agentMemory.enabled setting; the memory engine it gates owns the injected index and the memory tools.' },
++  'packages/kernel/kernel': { kind: 'indirect', reason: 'The Service Definition delegates model rendering to dsh-tool-kernel, exactly as dsh-web delegates to dsh-tool-web.' },
++  'packages/kernel/kernel-mode': { kind: 'indirect', reason: 'The row owns only the kernel.enabled setting; the composition rows it gates own which roster, prompt sections, and tools the model receives.' },
++  'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
++  'packages/rlm/rlm-mode': { kind: 'indirect', reason: 'The row owns only the rlm.enabled setting; the engine it mounts owns the REPL prompt section and the rlm tool.' },
+   'packages/code-runtime/code-runtime-worker-thread': { kind: 'indirect', reason: 'The worker backend delegates model rendering to PTC mode in dsh-tools.' },
+   'packages/code-runtime/code-runtime-python': { kind: 'indirect', reason: 'The CPython subprocess backend delegates model rendering to PTC mode in dsh-tools.' },
+   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },
+@@ -142,6 +156,10 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+   'packages/session/session-projection-cache': { kind: 'none', reason: 'The persisted cache accelerates host-side cold reads of projection state and registers nothing model-facing.' },
+   'packages/session/session-stats': { kind: 'none', reason: 'The sessionStats unit folds already-logged step boundaries into a client-facing read model and registers nothing model-facing.' },
+   'packages/session/session-turn-outline': { kind: 'none', reason: 'The turnOutline unit folds already-logged turn boundaries into a client-facing read model and registers nothing model-facing.' },
++  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
++  // audited allowlists must name them; without entries the gate rejects a correct README.
++  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
++  'packages/session/command-session-info': { kind: 'none', reason: 'The /sessioninfo command is operator-facing and read-only; it registers no prompt, tool, schema, or session event.' },
+   'packages/session-query/session-query': { kind: 'none', reason: 'The trusted query service exposes cloned records only to callers and registers nothing model-facing.' },
+   'packages/session-query/session-query-sqlite': { kind: 'none', reason: 'The search backend returns hits only to callers and registers nothing model-facing.' },
+   'packages/settings/settings': { kind: 'indirect', reason: 'The seam stores and resolves user settings; consumer plugins own any model-facing content fed by a value.' },
 diff --git a/tsdown.config.ts b/tsdown.config.ts
-index 5a0fcc8c78..ee06dfabc0 100644
+index 5a0fcc8c78..430462aae1 100644
 --- a/tsdown.config.ts
 +++ b/tsdown.config.ts
-@@ -1,12 +1,43 @@
+@@ -1,12 +1,44 @@
++// DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream filters manifest-less directories (upstream PR).
 +import { existsSync, readdirSync } from 'node:fs'
 +import { join } from 'node:path'
  import { defineConfig } from 'tsdown'
@@ -181,7 +228,7 @@ index 5a0fcc8c78..ee06dfabc0 100644
  /**
   * The ordinary workspace build consumes JavaScript emitted by the Host
   * TypeScript project and runs Typert. The Client pass selects packages that
-@@ -16,7 +47,7 @@ function isBuildFaceClient(value: unknown): boolean {
+@@ -16,7 +48,7 @@ function isBuildFaceClient(value: unknown): boolean {
  export default defineConfig(({ env }) => {
    const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
    return {

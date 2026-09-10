@@ -27,13 +27,14 @@ index 222e8a0ace..af7db02051 100644
    }
    return names
 diff --git a/packages/skill/tool-skill/tests/tool-skill.spec.ts b/packages/skill/tool-skill/tests/tool-skill.spec.ts
-index 2f7ee6bbc8..50d44b613d 100644
+index 2f7ee6bbc8..6361cc74f5 100644
 --- a/packages/skill/tool-skill/tests/tool-skill.spec.ts
 +++ b/packages/skill/tool-skill/tests/tool-skill.spec.ts
-@@ -1005,6 +1005,34 @@ describe('user-explicit invocation injection', () => {
+@@ -1005,6 +1005,35 @@ describe('user-explicit invocation injection', () => {
        && (message.source as { name?: string }).name === 'shared-skill')).toBe(true)
    })
  
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/skill/tool-skill/src/index.ts.
 +  it('injects a user-invocable skill named by an @skill <name> token', async () => {
 +    const { ctx, agent } = await invokeHarness()
 +    const decision = await proposeStep(ctx, agent, [gesture('@skill hidden-demo do the thing')])

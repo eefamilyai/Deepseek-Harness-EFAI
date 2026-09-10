@@ -1,5 +1,7 @@
 # DeepSeek Harness EFAI
 
+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
+
 [English](README.md) | 中文
 
 **DeepSeek Harness EFAI** 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）的社区分支。它保留上游“一切皆插件”的架构，并新增 Python 内核、多提供商 LLM 注册表、浏览器工具、侧边栏桥接，以及笔记本编辑工具。

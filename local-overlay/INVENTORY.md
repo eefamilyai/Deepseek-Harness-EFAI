@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **116** in **20** patch(es).
+Tier-2 files: **121** in **21** patch(es).
 
 ## Patches
 
@@ -27,11 +27,12 @@ Tier-2 files: **116** in **20** patch(es).
 - `tsconfig.client.json`
 - `tsconfig.host.json`
 
-### `patches/build.patch` — 4 file(s)
+### `patches/build.patch` — 5 file(s)
 
 - `scripts/gen-cordis-catalog.ts`
 - `scripts/gen-doc-graphs.ts`
 - `scripts/gen-tool-catalog.ts`
+- `scripts/verify-package-readme-model-experience.ts`
 - `tsdown.config.ts`
 
 ### `patches/apps.patch` — 1 file(s)
@@ -178,15 +179,22 @@ Tier-2 files: **116** in **20** patch(es).
 - `packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx`
 - `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
 
-### `patches/docs.patch` — 7 file(s)
+### `patches/docs.patch` — 9 file(s)
 
+- `docs/event-producer-consumer.i18n.yaml`
 - `docs/event-producer-consumer.md`
+- `docs/event-producer-consumer.zh.md`
 - `docs/subsystems/code-runtime.i18n.yaml`
 - `docs/subsystems/code-runtime.md`
 - `docs/subsystems/code-runtime.zh.md`
 - `docs/subsystems/llm-streaming.i18n.yaml`
 - `docs/subsystems/llm-streaming.md`
 - `docs/subsystems/llm-streaming.zh.md`
+
+### `patches/agent-skills.patch` — 2 file(s)
+
+- `.agents/skills/dsh-code-review/SKILL.md`
+- `.agents/skills/dsh-pre-push-checks/SKILL.md`
 
 ## Regenerated, never patched
 

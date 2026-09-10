@@ -853,6 +853,7 @@ export const IconSparkle16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
+// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream ships the flow-row glyphs.
 /** braces_16 (code tool-row leading glyph; hand-authored `{ }` at the family
  *  stroke weight. Not the `</>` form — IconInspectOutline12 already carries
  *  that shape as the trajectory affordance, and both appear on one expanded

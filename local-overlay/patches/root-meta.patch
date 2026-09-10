@@ -7,13 +7,14 @@ index 2b7a412b8f..0000000000
 -../.agents/skills
 \ No newline at end of file
 diff --git a/.gitattributes b/.gitattributes
-index e0a432111d..63a1f96803 100644
+index e0a432111d..591037ca2a 100644
 --- a/.gitattributes
 +++ b/.gitattributes
-@@ -6,8 +6,17 @@
+@@ -6,8 +6,18 @@
  # in-repo form stays LF; CRLF becomes checkout-time presentation only.
  * text=auto eol=lf
  
++# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: CRLF for *.cmd/*.bat is permanent; append at end of file only.
 +# cmd.exe misparses batch files with LF line endings (multi-line if/for blocks
 +# break into gibberish). The in-repo form stays LF; checkout presents CRLF.
 +*.cmd text eol=crlf
@@ -29,20 +30,21 @@ index e0a432111d..63a1f96803 100644
 +# whitespace error. Exempt them from the whitespace check.
 +*.patch -whitespace
 diff --git a/.gitignore b/.gitignore
-index e2a11e6bc7..8fcbf96160 100644
+index e2a11e6bc7..f600afea6d 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -31,6 +31,9 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-run
+@@ -31,6 +31,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-run
  python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
  python/**/__pycache__/
  python/**/.pytest_cache/
++# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: these exclusions are permanent; append at end of file only.
 +# uv-managed bundled interpreter + deps (machine-specific; provisioned by uv sync)
 +.venv/
 +python/kiln/runtime/.venv/
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -40,3 +43,30 @@ apps/web/dist/
+@@ -40,3 +44,30 @@ apps/web/dist/
  worktrees/
  .agents/worktrees/
  .typert-*/
@@ -74,7 +76,7 @@ index e2a11e6bc7..8fcbf96160 100644
 +# Harness desktop shell: CDP discovery record, regenerated at every launch
 +.cdp-target.json
 diff --git a/README.i18n.yaml b/README.i18n.yaml
-index aca5fead6f..ea6991d38a 100644
+index aca5fead6f..9639d638a9 100644
 --- a/README.i18n.yaml
 +++ b/README.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -83,38 +85,40 @@ index aca5fead6f..ea6991d38a 100644
  #   pnpm run verify-translation-pairing --write README.md
 -README.md: 9f89db3d4502dea4a0d181799164f304d4976740
 -README.zh.md: aa66ef1d24a5e2165859e9337273d807dff3d070
-+README.md: e5aa8561dc684d99590582f52af4c35e2f0e649d
-+README.zh.md: 0cbe5f9e2c787ffc355da1c8768a13c426acadc2
++README.md: 70c1aa3459bf9711e29368e8fbca5ebdf226562e
++README.zh.md: c0653dfcb8b256f9027e7ef83ee92f5e76d46513
 diff --git a/README.md b/README.md
-index 9f89db3d45..53355eeb0f 100644
+index 9f89db3d45..70c1aa3459 100644
 --- a/README.md
 +++ b/README.md
-@@ -1,63 +1,70 @@
+@@ -1,63 +1,72 @@
 -# DeepSeek Harness
 +# DeepSeek Harness EFAI
  
- English | [中文](README.zh.md)
- 
+-English | [中文](README.zh.md)
+-
 -DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
-+**DeepSeek Harness EFAI** is a community fork of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). It keeps the upstream everything-is-a-plugin architecture and adds a Python kernel, a multi-provider LLM registry, browser tools, a sidebar surface, and a notebook-edit tool.
- 
+-
 -It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
-+The fork's full change contract lives in [HARNESS-EDITS.md](HARNESS-EDITS.md).
- 
+-
 -Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
-+## Install
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
  
 -## Developer preview
-+### One command
++English | [中文](README.zh.md)
  
 -DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
--
++**DeepSeek Harness EFAI** is a community fork of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). It keeps the upstream everything-is-a-plugin architecture and adds a Python kernel, a multi-provider LLM registry, browser tools, a sidebar surface, and a notebook-edit tool.
+ 
 -Review the [safety notice](SAFETY.md) before running the project.
--
++The fork's full change contract lives in [HARNESS-EDITS.md](HARNESS-EDITS.md).
+ 
 -## Run
--
++## Install
+ 
 -### Run from `npm`
--
++### One command
+ 
 -Install `Node.js`, then run:
 +macOS or Linux:
  
@@ -125,12 +129,12 @@ index 9f89db3d45..53355eeb0f 100644
  
 -The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
 +Windows PowerShell:
- 
--### Run from source
++
 +```powershell
 +irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.ps1 | iex
 +```
-+
+ 
+-### Run from source
 +The installer clones the fork to `~/.deepseek-harness` (Windows: `%USERPROFILE%\.deepseek-harness`), installs and builds, and adds `dsh` and `dsh-update` to `PATH`. Run the same command again to update in place.
  
 -To run from a repository checkout:
@@ -148,83 +152,85 @@ index 9f89db3d45..53355eeb0f 100644
  
 -`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 +`pnpm run build` prepares the repository artifacts; `pnpm dsh web` starts the Web UI.
-+
-+## Start the server
-+
-+Windows:
-+
-+```powershell
-+.\start.cmd
-+```
-+
-+macOS or Linux:
  
 -## Community and support
-+```sh
-+./start.sh
-+```
++## Start the server
  
 -- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
 -- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
 -- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
-+The launchers provision the bundled Python runtime, install dependencies, build once when needed, and start the Web UI at `http://127.0.0.1:3080`. Pass `--port 3100` to use another port, or `--build` to force a rebuild.
++Windows:
  
 -## Contributing
-+After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
++```powershell
++.\start.cmd
++```
  
 -See [CONTRIBUTING.md](CONTRIBUTING.md).
-+## What this fork adds
++macOS or Linux:
  
 -## Development
++```sh
++./start.sh
++```
+ 
+-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
++The launchers provision the bundled Python runtime, install dependencies, build once when needed, and start the Web UI at `http://127.0.0.1:3080`. Pass `--port 3100` to use another port, or `--build` to force a rebuild.
+ 
+-For agents, follow [AGENTS.md](AGENTS.md).
++After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
+ 
+-## License
++## What this fork adds
++
 +- A Python kernel that executes code cells through the kernel tools.
 +- A multi-provider LLM registry with account pooling.
 +- A browser tool and a sidebar host bridge.
 +- A notebook-edit tool and RLM context read-back.
  
--Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
-+## Upstream
- 
--For agents, follow [AGENTS.md](AGENTS.md).
-+This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Read [HARNESS-EDITS.md](HARNESS-EDITS.md) before merging a new upstream release, so the fork's local features are not clobbered.
- 
- ## License
- 
 -[MIT](LICENSE)
--
++## Upstream
++
++This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Read [HARNESS-EDITS.md](HARNESS-EDITS.md) before merging a new upstream release, so the fork's local features are not clobbered.
++
++## License
+ 
 -Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 +See [LICENSE](LICENSE).
 diff --git a/README.zh.md b/README.zh.md
-index aa66ef1d24..a07dedc33d 100644
+index aa66ef1d24..c0653dfcb8 100644
 --- a/README.zh.md
 +++ b/README.zh.md
-@@ -1,84 +1,70 @@
+@@ -1,84 +1,72 @@
 -# DeepSeek Harness
 +# DeepSeek Harness EFAI
  
- [English](README.md) | 中文
- 
+-[English](README.md) | 中文
+-
 -DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
-+**DeepSeek Harness EFAI** 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）的社区分支。它保留上游“一切皆插件”的架构，并新增 Python 内核、多提供商 LLM 注册表、浏览器工具、侧边栏桥接，以及笔记本编辑工具。
- 
+-
 -它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
-+本分支的完整改动契约见 [HARNESS-EDITS.md](HARNESS-EDITS.md)。
- 
+-
 -文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
-+## 安装
++<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
  
 -## 开发者预览
+-
+-DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来将出现破坏兼容性的变更。**
++[English](README.md) | 中文
+ 
+-运行本项目前，请阅读[安全说明](SAFETY.zh.md)。
++**DeepSeek Harness EFAI** 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）的社区分支。它保留上游“一切皆插件”的架构，并新增 Python 内核、多提供商 LLM 注册表、浏览器工具、侧边栏桥接，以及笔记本编辑工具。
+ 
+-<a id="run"></a>
++本分支的完整改动契约见 [HARNESS-EDITS.md](HARNESS-EDITS.md)。
+ 
+-## 运行
++## 安装
+ 
+-### 通过 `npm` 运行
 +### 一条命令
  
--DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来将出现破坏兼容性的变更。**
--
--运行本项目前，请阅读[安全说明](SAFETY.zh.md)。
--
--<a id="run"></a>
--
--## 运行
--
--### 通过 `npm` 运行
--
 -安装 `Node.js`，然后运行：
 +macOS 或 Linux：
  

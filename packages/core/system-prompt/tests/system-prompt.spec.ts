@@ -12,6 +12,7 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
  * their own sections; the built-ins' behavior is pinned by its own describe.
  */
 const BUILT_IN = ['harness:identity', 'deployment:persona']
+// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/core/system-prompt/src/index.ts.
 const IDENTITY = 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. In large directories, use optimised ways to search through the directory.'
 const SECTION_ORDER_NAMES = [
   'HARNESS_IDENTITY', 'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA',

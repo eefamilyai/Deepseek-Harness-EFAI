@@ -4,6 +4,7 @@
    (--dsh-content-font-size-secondary: one step under the body — setting −1 at
    ≤14, setting −2 above), and the row height, leading box, and glyph edge
    shift by the body px delta so the icon keeps its optical share of the
+   /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream ships a disclosure row. */
    line.
 
    Family accent rebinding contract: a consumer that sets --dsh-row-accent on

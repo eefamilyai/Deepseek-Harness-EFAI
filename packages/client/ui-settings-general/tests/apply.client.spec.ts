@@ -113,6 +113,7 @@ describe('ui-settings-general apply', () => {
     await Promise.resolve()
     for (const [name, component] of SEATS) {
       expect(after.slots.entries(name)[0]!.component).toBe(component)
+      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
       // The self-inflicted ledger notifications hit the duplicate guard. The
       // section seat carries two: General, then this fork's Advanced section.
       expect(after.slots.entries(name)).toHaveLength(name === 'settings.section' ? 2 : 1)

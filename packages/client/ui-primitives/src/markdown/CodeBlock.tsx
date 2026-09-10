@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore 
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import { writeClipboard } from '../clipboard.ts'
+// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream adopts the fork's code-block chrome.
 import { IconCheckOutline14, IconCopyOutline16, IconDownloadOutline16, IconPlayOutline16 } from '../icons/index.tsx'
 import {
   StreamingHighlightSession, grammarLoadCount, highlightToHtml, subscribeGrammarLoaded,

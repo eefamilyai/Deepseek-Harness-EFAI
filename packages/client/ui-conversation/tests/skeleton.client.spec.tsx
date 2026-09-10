@@ -310,6 +310,7 @@ function mount(
 }
 
 describe('Hero chrome', () => {
+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-conversation/src/client/skeleton.
   it('omits the preview badge from the hero chrome', () => {
     const renderSlot = vi.fn<HeroShellProps['renderSlot']>(() => null)
     const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={renderSlot} />)

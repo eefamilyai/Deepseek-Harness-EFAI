@@ -46,6 +46,7 @@
   flex-shrink: 0;
 }
 
+/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 /* Family accent (--dsw-alias-flow-*, design-platform.css): the leading glyph,
    the title, the hover chevron, and the separator dot carry one hue per row
    family, so a scrolled transcript indexes by colour. The summary keeps its

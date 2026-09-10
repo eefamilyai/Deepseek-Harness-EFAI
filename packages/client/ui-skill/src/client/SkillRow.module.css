@@ -38,6 +38,7 @@
   90%, 100% { left: 100%; }
 }
 
+/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 /* This row builds its own chrome instead of composing DisclosureRow, so it
    rebinds --dsh-row-accent itself and applies it to the four parts the shared
    chrome would have. The hue is the instruct family (--dsw-alias-flow-*,

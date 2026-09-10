@@ -1,3 +1,4 @@
+// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
 /**
  * Pure client-safe token-projection vocabulary.
  *

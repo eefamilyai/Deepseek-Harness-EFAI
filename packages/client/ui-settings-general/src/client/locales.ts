@@ -14,6 +14,7 @@ export const zh = {
   'connection.connected': '连接成功',
   'connection.reconnect': '连接异常，点击立即重连',
   'connection.restart': '连接中，点击立即重连',
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
   'advanced.nav': '高级设置',
 } satisfies Record<string, string>
 

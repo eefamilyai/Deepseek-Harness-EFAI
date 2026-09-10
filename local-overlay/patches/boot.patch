@@ -1,11 +1,12 @@
 diff --git a/packages/boot/app-boot/src/index.ts b/packages/boot/app-boot/src/index.ts
-index 85e25eb641..6f325fbe29 100644
+index 85e25eb641..8fc57ed9fb 100644
 --- a/packages/boot/app-boot/src/index.ts
 +++ b/packages/boot/app-boot/src/index.ts
-@@ -24,9 +24,70 @@ declare module '@deepseek-ai/cordis' {
+@@ -24,9 +24,71 @@ declare module '@deepseek-ai/cordis' {
    interface Context {
      /** Harness-home path resolver available to Loader `!!js` config expressions. */
      dshHomePath?: typeof dshHomePath
++    // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream ships a settings reader in the !!js scope.
 +    /** Settings-document flag reader available to Loader `!!js` config expressions. */
 +    dshSettingFlag?: typeof dshSettingFlag
    }
@@ -73,7 +74,7 @@ index 85e25eb641..6f325fbe29 100644
  export {
    composeEntries,
    DEFAULT_PROFILE_BUNDLES,
-@@ -783,6 +844,7 @@ export async function boot(
+@@ -783,6 +845,7 @@ export async function boot(
    try {
      ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
      ctx.provide('dshHomePath', dshHomePath)
@@ -82,19 +83,20 @@ index 85e25eb641..6f325fbe29 100644
      await prepare?.(ctx)
      stage = 'plugin tree failed to load'
 diff --git a/packages/boot/app-boot/tests/app-boot.spec.ts b/packages/boot/app-boot/tests/app-boot.spec.ts
-index e5fc24aaf3..41b49f4cba 100644
+index e5fc24aaf3..3e436c6fff 100644
 --- a/packages/boot/app-boot/tests/app-boot.spec.ts
 +++ b/packages/boot/app-boot/tests/app-boot.spec.ts
-@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
+@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
  import { Context } from '@deepseek-ai/cordis'
  import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
  import {
 -  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot,
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/boot/app-boot/src/index.ts.
 +  addHarnessSourceSection, assertEntriesActivated, assertEntriesLoaded, boot, dshSettingFlag,
    FAIL_LOUD_RELEASE_TIMEOUT_MS, HARNESS_SOURCE_SECTION,
    installFailLoud, loadEnv, loadLayeredEnv, loadOverlayPatches, resolveConfigPath, type FailLoudProcess,
  } from '../src/index.ts'
-@@ -856,3 +856,36 @@ describe('addHarnessSourceSection', () => {
+@@ -856,3 +857,36 @@ describe('addHarnessSourceSection', () => {
      }
    })
  })

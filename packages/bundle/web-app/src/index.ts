@@ -11,6 +11,7 @@
  * @module @deepseek-ai/dsh-web-app
  */
 
+// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: a fork-owned bundle mounts these rows.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
