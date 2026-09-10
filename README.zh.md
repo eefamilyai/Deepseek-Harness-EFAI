@@ -67,6 +67,18 @@ macOS 或 Linux：
 
 本分支跟踪 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。合并新的上游版本前，请先阅读 [HARNESS-EDITS.md](HARNESS-EDITS.md)，以免覆盖本分支的本地功能。
 
+## 引用
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
+
 ## 许可证
 
 见 [LICENSE](LICENSE)。

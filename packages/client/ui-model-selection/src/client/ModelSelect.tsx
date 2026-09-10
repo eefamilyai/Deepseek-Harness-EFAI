@@ -12,15 +12,15 @@
  * card; the in-menu strip with Retry remains the catalog-load surface.
  */
 import {
-  useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
-  type KeyboardEvent, type FocusEvent,
+  useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
+  type CSSProperties, type KeyboardEvent, type FocusEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-  IconWarningOutline16, Toast,
+  IconDataOutline16, IconWarningOutline16, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -36,67 +36,8 @@ interface EffortChoice {
   label: string
 }
 
-// DSH-FORK(browser): fold account-bound provider routes (`kiln-deepseek@one`,
-// `kiln-deepseek@two`) under their base provider so the dropdown shows one
-// provider header plus an account picker instead of one header per account.
-// EXIT: upstream adopts account grouping in ModelSelect.
-interface AccountChoice {
-  readonly provider: string
-  readonly account: string | null
-}
-
-interface MergedGroup {
-  readonly baseId: string
-  readonly name: string
-  readonly models: readonly ModelCatalogModel[]
-  readonly accounts: readonly AccountChoice[]
-}
-
-function mergeGroups(groups: readonly ModelProviderGroup[]): readonly MergedGroup[] {
-  const baseById = new Map<string, ModelProviderGroup>()
-  const accountsByBase = new Map<string, ModelProviderGroup[]>()
-  for (const group of groups) {
-    if (group.id.includes('@')) {
-      const baseId = group.id.slice(0, group.id.indexOf('@'))
-      const list = accountsByBase.get(baseId)
-      if (list === undefined) accountsByBase.set(baseId, [group])
-      else list.push(group)
-    } else {
-      baseById.set(group.id, group)
-    }
-  }
-
-  const merged: MergedGroup[] = []
-  for (const group of groups) {
-    if (group.id.includes('@')) {
-      // A route whose base provider is absent is not an account route; render
-      // it as its own group exactly as the unmerged list would.
-      if (!baseById.has(group.id.slice(0, group.id.indexOf('@')))) {
-        merged.push({
-          baseId: group.id,
-          name: group.name,
-          models: group.models,
-          accounts: [{ provider: group.id, account: null }],
-        })
-      }
-      continue
-    }
-    const accounts = accountsByBase.get(group.id) ?? []
-    const baseChoice = { provider: group.id, account: null } satisfies AccountChoice
-    merged.push({
-      baseId: group.id,
-      name: group.name,
-      models: group.models,
-      accounts: accounts.length === 0
-        ? [baseChoice]
-        : [baseChoice, ...accounts.map(account => ({
-          provider: account.id,
-          account: account.id.slice(group.id.length + 1),
-        }))],
-    })
-  }
-  return merged
-}
+/** Unplaced portal card: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real (Menu primitive's measure pass). */
+const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /**
  * Render the composer model seat.
@@ -123,41 +64,23 @@ export function ModelSelect(
   const toastSeq = useRef(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [menuPos, setMenuPos] = useState<CSSProperties | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
 
-  const mergedGroups = useMemo(() => mergeGroups(state.groups), [state.groups])
-  // The account route each merged group currently targets, keyed by base id;
-  // defaults to the account owning the current selection, else the base route.
-  const [accountSelections, setAccountSelections] = useState<Readonly<Record<string, string>>>({})
-
-  // The route each merged group targets: an explicit account pick overrides,
-  // then the account owning the current selection, then the base route.
-  const resolvedProvider = useMemo(() => {
-    const resolved: Record<string, string> = {}
-    for (const group of mergedGroups) {
-      const first = group.accounts[0]?.provider ?? group.baseId
-      resolved[group.baseId] = accountSelections[group.baseId]
-        ?? group.accounts.find(account => account.provider === state.current?.provider)?.provider
-        ?? first
-    }
-    return resolved
-  }, [mergedGroups, accountSelections, state.current?.provider])
-
-  // One choice per base model, resolved through the currently selected account
-  // so keyboard navigation, the selected check mark, and `choose` all agree.
-  const choices = useMemo(() => mergedGroups.flatMap(group =>
+  const choices = useMemo(() => state.groups.flatMap(group =>
     group.models.map(model => ({
       group,
       model,
       selection: {
-        provider: resolvedProvider[group.baseId] ?? group.baseId,
+        provider: group.id,
         model: model.id,
         ...model.reasoning?.defaultEffort === undefined
           ? {}
           : { reasoningEffort: model.reasoning.defaultEffort },
       } satisfies ModelSelection,
-    }))), [mergedGroups, resolvedProvider])
+    }))), [state.groups])
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -182,45 +105,6 @@ export function ModelSelect(
       })),
     ], [reasoning, t])
   const busy = state.status === 'selecting'
-  // DSH-FORK(browser): collapsible provider groups in the model pane, with
-  // the provider owning the current selection expanded by default and every
-  // other provider collapsed.
-  // EXIT: upstream adopts per-provider collapse in ModelSelect.
-  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set())
-  // True once the user has expressed a manual preference during this open;
-  // until then the default collapse follows the current selection so a late
-  // catalog arrival does not re-expand providers the user already collapsed.
-  const manualCollapseRef = useRef(false)
-
-  // Default collapse: every merged base group except the one owning the
-  // current selection starts minimized.
-  const defaultCollapsed = useMemo(() => {
-    const currentBase = state.current?.provider?.split('@')[0]
-    return new Set(mergedGroups.map(group => group.baseId).filter(id => id !== currentBase))
-  }, [mergedGroups, state.current?.provider])
-
-  const toggleGroup = (groupId: string): void => {
-    manualCollapseRef.current = true
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(groupId)) next.delete(groupId)
-      else next.add(groupId)
-      return next
-    })
-  }
-
-  // While the model pane is open and no manual preference exists, keep the
-  // collapse set in step with the default (groups may load after the pane
-  // opens, and the current selection may change from elsewhere).
-  useEffect(() => {
-    if (!open || manualCollapseRef.current) return
-    setCollapsedGroups((prev) => {
-      const same = prev.size === defaultCollapsed.size
-        && [...defaultCollapsed].every(id => prev.has(id))
-      return same ? prev : defaultCollapsed
-    })
-  }, [open, defaultCollapsed])
-
 
   const reload = (): void => {
     lastActionRef.current = 'load'
@@ -230,20 +114,53 @@ export function ModelSelect(
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: MouseEvent): void => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      // The portaled card is outside the trigger subtree; check both.
+      if (rootRef.current?.contains(event.target as Node) === true) return
+      if (menuRef.current?.contains(event.target as Node) === true) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', closeOutside)
     return () => { document.removeEventListener('mousedown', closeOutside) }
   }, [open])
 
+  // Portaled placement (the Menu primitive's portal rules: fixed from the
+  // anchor rect, measured before paint, clamped inside the viewport): above
+  // the trigger, right edges aligned. Depends on pane and directory state
+  // because pane switches and async catalog loads resize the card.
+  /* jscpd:ignore-start -- deliberate mirror of ui-primitives useAnchoredPosition:
+     that hook only places from the anchor's LEFT edge, while this card aligns
+     right edges (x = rect.right - width), so the measure-and-clamp plumbing repeats. */
+  useLayoutEffect(() => {
+    if (!open) { setMenuPos(null); return }
+    const place = (): void => {
+      /* v8 ignore next 2 -- the trigger ref is attached whenever the menu is open. */
+      const rect = triggerRef.current?.getBoundingClientRect()
+      if (rect === undefined) return
+      const MARGIN = 12
+      const lw = menuRef.current?.offsetWidth ?? 0
+      const lh = menuRef.current?.offsetHeight ?? 0
+      let x = rect.right - lw
+      let y = rect.top - 8 - lh
+      if (lw > 0) x = Math.min(Math.max(x, MARGIN), window.innerWidth - lw - MARGIN)
+      if (lh > 0) y = Math.min(Math.max(y, MARGIN), window.innerHeight - lh - MARGIN)
+      setMenuPos({ left: x, top: y })
+    }
+    // First run measures the hidden pre-render (same commit as `open`), so
+    // the card lands placed before anything paints.
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, pane, state])
+  /* jscpd:ignore-end */
+
   if (!available) return null
 
   const show = (): void => {
     setPane('root')
-    manualCollapseRef.current = false
-    setCollapsedGroups(defaultCollapsed)
-    // A fresh open re-derives each group's account from the current selection.
-    setAccountSelections({})
     setOpen(true)
     reload()
   }
@@ -278,7 +195,10 @@ export function ModelSelect(
   }
 
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
-    if (event.relatedTarget instanceof Node && rootRef.current?.contains(event.relatedTarget)) return
+    if (event.relatedTarget instanceof Node && (
+      rootRef.current?.contains(event.relatedTarget) === true
+      || menuRef.current?.contains(event.relatedTarget) === true
+    )) return
     close()
   }
 
@@ -358,15 +278,21 @@ export function ModelSelect(
           }
         }}
       >
+        <IconDataOutline16 className={css.triggerIcon} size={16} />
         <span className={css.triggerLabel}>{modelLabel}</span>
         {effortLabel !== undefined && <span className={css.triggerEffort}>{effortLabel}</span>}
         <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />
       </button>
 
-      {open && (
+      {/* Portaled to body (Menu primitive's portal mode) so the sidebar and
+          column overflow clips cannot crop the card; synthetic events still
+          bubble through this React subtree, keeping onKeyDown/onBlur live. */}
+      {open && createPortal(
         <div
+          ref={menuRef}
           id={`${id}-menu`}
           className={css.menu}
+          style={menuPos ?? MEASURE_STYLE}
           role="menu"
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
@@ -406,74 +332,34 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
-                {mergedGroups.map((group) => {
-                  const headingId = `${id}-${group.baseId}`
-                  const resolved = resolvedProvider[group.baseId]
-                  const expanded = !collapsedGroups.has(group.baseId)
+                {state.groups.map((group) => {
+                  const headingId = `${id}-${group.id}`
                   return (
-                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.baseId}>
-                      <button
-                        type="button"
-                        className={clsx(css.groupTitle, css.groupToggle)}
-                        id={headingId}
-                        aria-expanded={expanded}
-                        aria-controls={`${id}-group-${group.baseId}`}
-                        onClick={() => { toggleGroup(group.baseId) }}
-                      >
-                        <IconChevronDownOutline14
-                          className={clsx(css.groupChevron, !expanded && css.groupChevronCollapsed)}
-                        />
-                        <span className={css.groupName}>{group.name}</span>
-                      </button>
-                      <div id={`${id}-group-${group.baseId}`} hidden={!expanded}>
-                        {group.accounts.length > 1 && (
-                          <div role="group" aria-label={`${group.name} accounts`} className={css.accountPicker}>
-                            {group.accounts.map((account) => {
-                              const selected = resolved === account.provider
-                              return (
-                                <button
-                                  ref={itemRef()}
-                                  type="button"
-                                  role="menuitemradio"
-                                  aria-checked={selected}
-                                  className={clsx(css.accountOption, selected && css.selected)}
-                                  key={account.provider}
-                                  disabled={busy}
-                                  onClick={() => { setAccountSelections(prev => ({ ...prev, [group.baseId]: account.provider })) }}
-                                >
-                                  <span className={css.accountLabel}>{account.account === null ? group.name : account.account}</span>
-                                  <span className={css.accountCheck}>
-                                    {selected ? <IconCheckOutline16 /> : null}
-                                  </span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                        {group.models.map((model) => {
-                          const selected = state.current?.provider === resolved && state.current?.model === model.id
-                          return (
-                            <button
-                              ref={itemRef()}
-                              type="button"
-                              role="menuitemradio"
-                              aria-checked={selected}
-                              className={clsx(css.option, selected && css.selected)}
-                              key={model.id}
-                              title={model.name}
-                              disabled={busy}
-                              onClick={() => { choose({ provider: resolved ?? group.baseId, model: model.id }) }}
-                            >
-                              <span className={css.optionCopy}>
-                                <span className={css.modelName}>{model.name}</span>
-                              </span>
-                              <span className={css.check}>
-                                {selected ? <IconCheckOutline16 /> : null}
-                              </span>
-                            </button>
-                          )
-                        })}
-                      </div>
+                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
+                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
+                      {group.models.map((model) => {
+                        const selected = state.current?.provider === group.id && state.current.model === model.id
+                        return (
+                          <button
+                            ref={itemRef()}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            className={clsx(css.option, selected && css.selected)}
+                            key={model.id}
+                            title={model.name}
+                            disabled={busy}
+                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                          >
+                            <span className={css.optionCopy}>
+                              <span className={css.modelName}>{model.name}</span>
+                            </span>
+                            <span className={css.check}>
+                              {selected ? <IconCheckOutline16 /> : null}
+                            </span>
+                          </button>
+                        )
+                      })}
                     </section>
                   )
                 })}
@@ -515,7 +401,8 @@ export function ModelSelect(
                 ))}
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
       {toast !== null && (
         <Toast

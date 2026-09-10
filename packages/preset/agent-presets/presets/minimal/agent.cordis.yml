@@ -1,48 +1,17 @@
-# The `minimal` agent preset: a fixed-prompt, two-tool coding-agent composition.
+# The `minimal` agent preset: a fixed-prompt, single-tool coding-agent composition.
 #
 # The persona is the complete system prompt, so global identity, Web orientation,
 # tool guidance, and later assembly listeners cannot add prompt text. Runtime
-# context snapshots are suppressed for this preset. Context compaction is absent.
-#
-# Which two tools the model composes depends on the `kernel.enabled` setting
-# (see the standard preset's header for the switch itself). ON: `kernel` alone.
-# OFF: the persistent shell (`bash` on POSIX, `pwsh` on win32) and
-# `str_replace_editor`, exactly as this preset shipped.
-#
-# A complete persona suppresses the kernel's own prompt section along with every
-# other one, so under the switch the model gets the tool's description and
-# nothing more. That is this preset's whole point, and the description carries
-# what a caller must know: the namespace persists, and the output is only what
-# the cell captured.
+# context snapshots are suppressed for this preset, and the model receives only
+# the persistent shell (`bash` on POSIX, `pwsh` on win32). Context compaction is
+# absent.
 
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: You are a helpful software engineer assistant.
+    prefix: You are a helpful software engineer assistant.
     complete: true
     includeRuntimeContext: false
-
-# ── the kernel ──────────────────────────────────────────────────────────────
-
-# The model-facing tool only. The kernel SEAM and its Python backend stay on the
-# host plane: the backend owns one interpreter probe and one child process, and
-# an entry-local realm here would mean a second interpreter resolution — and a
-# second kernel — for every preset a session mounts.
-# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
-# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
-# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
-# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
-# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
-# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
-# is the sole acting surface, while kernel-off cleanly restores the shell roster.
-# EXIT: move these gates and the switch rows into a fork-owned
-# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
-# bundle chain exists (see HARNESS-EDITS.md seam register).
-- id: tool-kernel
-  name: '@deepseek-ai/dsh-tool-kernel'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
-  config:
-    timeoutMs: 180000
 
 # The PTY registry is an agent-owned service, so it lives in an entry-local
 # realm. The backend still consumes the host sandbox policy and subprocess
@@ -57,24 +26,22 @@
   config:
     - id: pty
       name: '@deepseek-ai/dsh-terminal'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: terminal-bash
       name: '@deepseek-ai/dsh-terminal-bash'
-      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform === 'win32'
       config:
         timeoutMs: 300000
 
     - id: persistent-bash
       name: '@deepseek-ai/dsh-tool-bash-persistent'
-      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform === 'win32'
       config:
         timeoutMs: 300000
         description: |-
           Run commands in a bash shell
           * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
-          * You don't have access to the internet via this tool.
-          * You do have access to a mirror of common linux and python packages via apt and pip.
+          * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.
           * State is persistent across command calls and discussions with the user.
           * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
           * Please avoid commands that may produce a very large amount of output.
@@ -82,14 +49,14 @@
 
     - id: terminal-pwsh
       name: '@deepseek-ai/dsh-terminal-bash'
-      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform !== 'win32'
       config:
         shellDialect: pwsh
         timeoutMs: 300000
 
     - id: persistent-pwsh
       name: '@deepseek-ai/dsh-tool-pwsh-persistent'
-      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform !== 'win32'
       config:
         timeoutMs: 300000
         description: |-
@@ -100,23 +67,3 @@
           * Use native Windows paths (C:\...) and $env:NAME variables; this is PowerShell, not bash.
           * Please avoid commands that may produce a very large amount of output.
           * Please run long lived commands in the background, e.g. 'Start-Job' or start a server with Start-Process.
-
-# The bare local filesystem shadows the host's sandboxed provider only for this
-# preset. The editor shares that realm and requires absolute paths.
-- id: filesystem
-  name: cordis:group
-  group: true
-  isolate:
-    fs: true
-  config:
-    - id: fs-local
-      name: '@deepseek-ai/dsh-fs-local'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-      config:
-        cwd: !!js process.env.DSH_CWD ?? process.cwd()
-
-    - id: str-replace-editor
-      name: '@deepseek-ai/dsh-tool-str-replace-editor'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-      config:
-        maxOutputChars: 16000

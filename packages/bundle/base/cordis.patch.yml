@@ -76,7 +76,7 @@
       name: '@deepseek-ai/dsh-agent-default-model'
       config:
         provider: deepseek-official
-        model: deepseek-v4-flash
+        model: deepseek-flash
 
     - id: jobs
       name: '@deepseek-ai/dsh-jobs-local'
@@ -106,31 +106,6 @@
     # document.
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
-
-    # The Kiln provider registry: sixteen presets (Anthropic, OpenAI, Gemini,
-    # OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together,
-    # Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio) plus
-    # `ds_direct`, DeepSeek's free web session. Routes are named `kiln-<id>` so
-    # they cannot collide with `deepseek-official` or the pi-ai catalog names.
-    #
-    # None of these providers has a `tools` field — ds_direct is a web chat
-    # session and cannot have one — so the harness's tool schemas reach the
-    # model as text and a tool call comes back as text: one `<tool_calls>`
-    # block, generated from and parsed against the request's own tool schemas.
-    # That single encoding is what makes a text-only route a usable agent here.
-    # No provider in the Python runtime adds a prompt of its own; the system
-    # slot carries the harness's prompt and the format statement, and nothing
-    # else.
-    #
-    # Keys are never configuration: each preset names the environment variable
-    # holding its key, resolved per request by the Python sidecar. A route with
-    # no key stays visible and selectable, and fails per request with the
-    # registry's own message naming the variable to set.
-    - id: llm-kiln
-      name: '@deepseek-ai/dsh-llm-kiln'
-      config:
-        routePrefix: kiln-
-        onlyConfigured: false
 
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -165,7 +140,7 @@
 
     # Durable KV storage: the storage hub, the json backend, and the
     # schema-validated domain form over them. Session-layer persistence (the
-    # projection cache below; workspace and message-feedback in web layers)
+    # projection cache below; workspace in web layers)
     # routes through this stack, so it belongs to the shared base.
     - id: storage
       name: '@deepseek-ai/dsh-storage'
@@ -190,14 +165,8 @@
         writeEveryEvents: 200
         writeIntervalMs: 5000
 
-    # Session telemetry defaults to feedback-gated sharing: FEEDBACK_ONLY
-    # uploads only when the user records /feedback, releasing the session
-    # records since the last handoff through that event (a resumed session
-    # shares only its current lifecycle). DSH_TELEMETRY_MODE overrides to
-    # FULL or DISABLED; uploading mirrors session-log records onto OTLP/HTTP
-    # logs with no session-telemetry/record redaction rule, so exports are
-    # the raw captured copy. The deployment stance, env seams, and follow-ups
-    # are pinned in the feedback-gated-default Agent Note.
+    # OTel releases a Session-log prefix only after explicit user feedback,
+    # regardless of model provider. Ordinary activity never triggers capture.
     # DSH_TELEMETRY_OTLP_URL overrides the production endpoint. A non-empty
     # DSH_TELEMETRY_DISABLED — any value, including '0'/'false' — opts the
     # process out (the launchers patch the row disabled; config cannot disable
@@ -274,141 +243,27 @@
     - id: shell-env
       name: '@deepseek-ai/dsh-shell-env'
 
-    # ── the kernel switch ───────────────────────────────────────────────────
-    #
-    # `kernel.enabled` (default true) picks between two ways for the model to
-    # act on this machine, and the rows below read it through
-    # `dshSettingFlag('kernel.enabled', true)`.
-    #
-    #   ON  — `kernel`, a persistent Python namespace. Reading a file, editing
-    #         it, searching the tree, running a command are function calls
-    #         inside it, so the shell, filesystem, search, and background-job
-    #         rows switch OFF.
-    #   OFF — those rows switch ON and the kernel switches off.
-    #
-    # Only the rows the kernel REPLACES move. Everything the kernel cannot do —
-    # web access, skills, goals, delegation, planning, todos, asking the user —
-    # is mounted either way.
-    #
-    # `kernel-mode` owns the setting and is deliberately NOT gated by it: a
-    # switch that vanished in one of its own positions could never be flipped
-    # back. It also declares `applies: 'restart'`, because these are Loader
-    # `disabled` expressions read once at boot. That is the point rather than a
-    # limitation — a tool plugin registers its system-prompt section when it
-    # mounts, so a tool merely hidden at runtime would leave instructions in the
-    # prompt for a tool the model cannot call. Only not mounting takes both.
-    - id: kernel-mode
-      name: '@deepseek-ai/dsh-kernel-mode'
-      config:
-        enabled: true
-
     - id: tool-bash
       name: '@deepseek-ai/dsh-tool-bash'
-      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform === 'win32'
 
     - id: tool-pwsh
       name: '@deepseek-ai/dsh-tool-pwsh'
-      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform !== 'win32'
 
     - id: tool-jobs
       name: '@deepseek-ai/dsh-tool-jobs'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: fs-observation-policy
       name: '@deepseek-ai/dsh-fs-observation-policy'
 
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: tool-fs-search
       name: '@deepseek-ai/dsh-tool-fs-search'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         sampleOverCapGlobResults: false
-
-    # The kernel seam, its Kiln-backed Python process, and the model-facing
-    # tool. The process is lazy — nothing spawns until the first cell — but the
-    # interpreter is resolved at load, so a machine without Python reports an
-    # unavailable provider at selection time rather than mid-cell.
-    - id: kernel
-      name: '@deepseek-ai/dsh-kernel'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
-      config:
-        defaultTimeoutMs: 180000
-
-    - id: kernel-python
-      name: '@deepseek-ai/dsh-kernel-python'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
-      config:
-        cwd: !!js process.env.DSH_KERNEL_CWD
-
-    - id: tool-kernel
-      name: '@deepseek-ai/dsh-tool-kernel'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
-      config:
-        timeoutMs: 180000
-
-    # RLM context-as-variable read-back: an async system-prompt/assemble
-    # listener that reads the live kernel `answer`/binds via ctx.kernel and
-    # contributes them as runtime context the agent loop already renders. The
-    # RLM engine itself reads `parseRlmDump` from this same package.
-    - id: kernel-rlm-context
-      name: '@deepseek-ai/dsh-kernel-rlm-context'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
-
-    # ── the RLM switch ─────────────────────────────────────────────────────
-    #
-    # `rlm.enabled` (default false) is the second position of the acting-roster
-    # switch. It mirrors `kernel-mode` exactly: the plugin owns only the setting
-    # and stays mounted in BOTH positions so the switch can always be flipped
-    # back. The engine below needs the persistent kernel seam underneath, so it
-    # mounts only when BOTH `kernel.enabled` and `rlm.enabled` are true. The
-    # standalone `tool-kernel` row unmounts under RLM in the shipped presets;
-    # the other subsumed rows follow `kernel.enabled` alone (RLM requires
-    # the kernel, so RLM-on still removes them transitively).
-    #
-    # DSH-FORK(rlm): a second settings namespace turning the model's acting
-    # tool from the standalone kernel into the recursive RLM engine.
-    # EXIT: move to packages/bundle/efai-rlm/cordis.patch.yml (a fork-owned
-    # bundle applied by profile) once the profile-boot bundle chain exists.
-    - id: rlm-mode
-      name: '@deepseek-ai/dsh-rlm-mode'
-      config:
-        enabled: false
-
-    # The first-party recursive RLM engine. It provides `rlm` (a one-shot tool)
-    # and the `ctx.rlm` service; both consume `ctx.kernel`, so this row is
-    # gated by BOTH switches. The presets unmount `tool-kernel` under RLM (a
-    # negated `rlm.enabled` gate) and leave the other subsumed rows on the
-    # `kernel.enabled` gate they already had.
-    - id: rlm
-      name: '@deepseek-ai/dsh-rlm'
-      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) && dshSettingFlag('rlm.enabled', false))) === false
-
-    # ── agent memory (non-default) ─────────────────────────────────────────
-    #
-    # Durable, cache-friendly memory as a toggle. On, the engine adds
-    # memory_add/memory_recall/memory_map, auto-records tool output through a
-    # host-side `tools/result` observer, and re-injects a bounded index each
-    # turn. `agent-memory.enabled` (default false) is the switch, and it mirrors
-    # `kernel-mode`/`rlm-mode` exactly: the mode plugin owns only the setting and
-    # stays mounted in BOTH positions so the switch can always be flipped back,
-    # while `applies: 'restart'` matches the Loader `disabled` expression below
-    # being read once at boot.
-    #
-    # DSH-FORK(memory): a third settings namespace toggling the durable memory
-    # engine. EXIT: move to packages/bundle/efai-memory/cordis.patch.yml (a
-    # fork-owned bundle applied by profile) once the profile-boot bundle chain
-    # exists.
-    - id: agent-memory-mode
-      name: '@deepseek-ai/dsh-agent-memory-mode'
-      config:
-        enabled: false
-
-    - id: agent-memory
-      name: '@deepseek-ai/dsh-agent-memory'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('agent-memory.enabled', false)) === false
 
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'
@@ -433,9 +288,6 @@
 
     - id: command-feedback
       name: '@deepseek-ai/dsh-command-feedback'
-
-    - id: command-session-info
-      name: '@deepseek-ai/dsh-command-session-info'
 
     - id: goal
       name: '@deepseek-ai/dsh-goal'
@@ -502,9 +354,9 @@
         backgroundMode: continuable
 
     # Fork omits model selection so provider/model stay equal to the parent and
-    # the inherited history remains eligible for KV Cache reuse. It stays one-shot
-    # because a continuable child's `report` tool and prompt section precede that
-    # history and invalidate the same prefix.
+    # the inherited history remains eligible for KV Cache reuse. This base row
+    # stays one-shot; preset layers may select continuable mode without adding a
+    # child-only system-prompt section or tool schema ahead of that history.
     # See .agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md
     # and .agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md.
     - id: tool-subagent-fork
@@ -513,10 +365,6 @@
         provider: fork
         toolName: subagent_fork
         backgroundMode: one-shot
-
-    # Optional direct-child return channel; absent from roots and one-shot agents.
-    - id: tool-subagent-report
-      name: '@deepseek-ai/dsh-tool-subagent-report'
 
     - id: workflow-worker-thread
       name: '@deepseek-ai/dsh-workflow-worker-thread'
@@ -567,12 +415,6 @@
         subagentProvider: spawn
         maxRounds: 64
 
-    - id: tool-str-replace-editor
-      name: '@deepseek-ai/dsh-tool-str-replace-editor'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
-      config:
-        maxOutputChars: 16000
-
     # Consecutive-repeat reminders on the tool chain.
     - id: repeat-tool-reminder
       name: '@deepseek-ai/dsh-repeat-tool-reminder'
@@ -580,9 +422,10 @@
         thresholds: [3, 5, 8]
         argumentsPreviewChars: 500
 
-    # Every mode enables the stable model-facing web_search tool. The Web app's
-    # per-agent presets additionally enable web_fetch; other products opt in by
-    # overriding tool-web. DeepSeek search resolves the same DEEPSEEK_API_KEY
+    # The shared base enables the stable model-facing web_search and web_fetch
+    # tools. The Web app disables this host row and composes both tools per agent
+    # preset; products with a stricter network policy override tool-web. DeepSeek
+    # search resolves the same DEEPSEEK_API_KEY
     # credential the Models page manages for chat, at each search; its Messages
     # endpoint is separate from the chat-completions endpoint, so it takes its own
     # base-URL override. Anonymous fetch accepts only public HTTP(S) destinations,
@@ -607,18 +450,8 @@
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'
       config:
-        fetch: false
+        fetch: true
         searchTimeoutMs: 60000
-
-    # A self-hosted headless browser (Playwright). The `browser` tool lets the
-    # model read a page as text and act by element ref — for JS-rendered sites
-    # and multi-step flows a plain fetch cannot handle. It needs a one-time
-    # `npx playwright install chromium`; a launch without the binary fails with
-    # that exact instruction rather than a stack trace. The browser-rendered
-    # fetch provider registers too, dormant until web_fetch is turned on and the
-    # web seam's fetchProvider is pointed at `browser`.
-    - id: web-browser
-      name: '@deepseek-ai/dsh-web-browser'
 
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 
@@ -632,7 +465,7 @@
     - id: system-prompt
       name: '@deepseek-ai/dsh-system-prompt'
       config:
-        persona: ''
+        personaPrefix: ''
 
     # Agents created at startup. The base stays empty; raw overlays may create
     # agents, while Web creates sessions on client request.

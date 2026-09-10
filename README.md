@@ -67,6 +67,18 @@ After a one-command install, run `dsh web` instead; add `--port 3100` to change 
 
 This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Read [HARNESS-EDITS.md](HARNESS-EDITS.md) before merging a new upstream release, so the fork's local features are not clobbered.
 
+## Citation
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
+
 ## License
 
 See [LICENSE](LICENSE).
