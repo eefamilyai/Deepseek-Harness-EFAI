@@ -29,13 +29,16 @@ if (-not (Have node)) { Die 'Node.js is required (^22.19 or >=24). See https://n
 
 # The workspace declares node ^22.19 || >=24; an older runtime fails deep in
 # the build with an unhelpful error, so check it here where the message helps.
-$nodeCheck = @'
-const [maj, min] = process.versions.node.split(".").map(Number)
-const ok = maj >= 24 || (maj === 22 && min >= 19)
-if (!ok) { console.error(`Node ${process.versions.node} is too old; this needs ^22.19 or >=24.`); process.exit(1) }
-'@
-node -e $nodeCheck
-if ($LASTEXITCODE -ne 0) { Die 'Node version unsupported.' }
+# Windows PowerShell 5.1 strips embedded double quotes when it builds a native
+# command line, so `node -e $script` would deliver split(.) and die on a syntax
+# error. Parse the version here instead; PowerShell needs no child process.
+$nodeVersion = ([string](& node --version)).Trim() -replace '^v', ''
+$nodeParts   = $nodeVersion.Split('.')
+$nodeMajor   = [int]$nodeParts[0]
+$nodeMinor   = if ($nodeParts.Count -gt 1) { [int]($nodeParts[1] -replace '\D.*$', '') } else { 0 }
+if (-not ($nodeMajor -ge 24 -or ($nodeMajor -eq 22 -and $nodeMinor -ge 19))) {
+  Die "Node $nodeVersion is too old; this needs ^22.19 or >=24."
+}
 
 if (-not (Have pnpm)) {
   Say 'pnpm not found - enabling it through corepack...'
