@@ -234,7 +234,10 @@ export function apply(ctx: Context, config: Config): void {
           timeoutMs: boundedTimeoutMs,
           backgroundTimeoutMs,
           ...cwd !== undefined ? { cwd } : {},
-          ...exec.agent !== undefined ? { agentCtx: exec.agent.ctx } : {},
+          // Both halves of the agent identity travel: the scoped Context reaches
+          // the capability seams, and the Agent itself is the domain subject the
+          // kernel's Python seam needs (subagent parentage, goals, tool ownership).
+          ...exec.agent !== undefined ? { agentCtx: exec.agent.ctx, agent: exec.agent } : {},
         },
         exec.signal,
       )

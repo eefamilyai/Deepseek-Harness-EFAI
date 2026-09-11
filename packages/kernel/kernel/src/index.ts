@@ -18,6 +18,7 @@ import { KernelError } from './types.ts'
 
 export { KernelError } from './types.ts'
 export type {
+  KernelAgent,
   KernelErrorCode,
   KernelExecuteRequest,
   KernelExecuteResult,

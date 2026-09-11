@@ -12,6 +12,25 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 
+/**
+ * Minimal structural view of the Agent that owns a cell.
+ *
+ * The full `Agent` interface lives in `@deepseek-ai/dsh-agent`, which this
+ * seam package deliberately does not depend on: `ctx.kernel` is a
+ * provider-neutral capability, and a backend that only needs to name the owner
+ * must not pull in the agent runtime to do it. The shape here is the part the
+ * seam actually reads — the owner's identity and its Session — and a real
+ * `Agent` satisfies it structurally. The object is never a copy: backends pass
+ * the exact live Agent through to seams that take it as an authority
+ * credential.
+ */
+export interface KernelAgent {
+  /** The owning agent's id, which is also its Session id. */
+  readonly id: string
+  /** The owning Session. `id` is the durable conversation key. */
+  readonly session: { readonly id: string }
+}
+
 /** One cell submitted to the kernel. */
 export interface KernelExecuteRequest {
   /** The Python source of the cell. Executed in the persistent namespace. */
@@ -43,8 +62,21 @@ export interface KernelExecuteRequest {
    * can reach the harness's real capability seams (`ctx.fs`, `ctx.shell`, …)
    * that live on the agent scope. Absent for a direct or synthetic dispatch
    * with no owning agent.
+   *
+   * This context selects services and owns effects; it is NOT a locator for
+   * the agent itself. See {@link agent} for that.
    */
   readonly agentCtx?: Context
+  /**
+   * The agent on whose behalf the cell runs, threaded explicitly.
+   *
+   * A backend cannot recover this from {@link agentCtx}: `Context` carries no
+   * reverse Agent property, and a seam frame is dispatched from a child-process
+   * event callback, outside the initiator `AsyncLocalStorage` boundary. The
+   * owning Agent is therefore stated at the point that owns it, exactly as
+   * `ToolExecution.agent` does. Absent for a direct or synthetic dispatch.
+   */
+  readonly agent?: KernelAgent
 }
 
 /**

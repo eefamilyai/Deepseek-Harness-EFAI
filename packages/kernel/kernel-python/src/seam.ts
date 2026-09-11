@@ -18,6 +18,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { KernelAgent } from '@deepseek-ai/dsh-kernel'
 
 /** One Python→TS seam request, decoded from a `seam` frame. */
 export interface SeamRequest {
@@ -196,15 +197,39 @@ function goalsOf(ctx: Context | undefined): GoalsSeamShape | undefined {
   return c === undefined || c === null ? undefined : c as GoalsSeamShape
 }
 
-function currentAgent(ctx: Context | undefined): unknown {
-  return (ctx as Context & { agent?: unknown }).agent
-}
-
 /** Tool registry shapes the kernel consumes, mirrored from `packages/core/tools/src/index.ts`. */
 interface ToolSchemaShape { readonly name: string; readonly description: string; readonly parameters: Record<string, unknown> }
+
+/**
+ * One tool call handed to `ctx.tools.execute`. `callId` is a plain string here
+ * because the registry's `ToolCallId` is a branded string — the same value at
+ * run time — and this package does not depend on `dsh-llm` at run time. The
+ * kernel mints `<request id>`, which is already unique per seam round trip.
+ *
+ * `parent` is deliberately absent: it is an opaque registry-owned token the
+ * kernel has no way to obtain, so a `mode: 'ptc'` deployment denies a direct
+ * native dispatch. That denial is actionable and names the route to take, so
+ * the kernel reports it rather than silently degrading.
+ */
+interface ToolCallExecShape {
+  readonly callId: string
+  readonly name: string
+  readonly arguments: unknown
+  readonly agent?: unknown
+  readonly signal?: AbortSignal
+}
+/** The registry's normalized outcome, reduced to what crosses the seam. */
+interface ToolCallResultShape {
+  readonly isError: boolean
+  readonly value?: unknown
+  readonly content?: readonly { readonly type: string; readonly text?: string }[]
+  readonly meta?: unknown
+  readonly error?: { readonly message?: string; readonly info?: { readonly name?: string; readonly code?: string } }
+}
 interface ToolsSeamShape {
   schemas(scope?: unknown): ToolSchemaShape[]
   get(name: string, scope?: unknown): ToolSchemaShape | undefined
+  execute(exec: ToolCallExecShape): Promise<ToolCallResultShape>
 }
 
 function toolsOf(ctx: Context | undefined): ToolsSeamShape | undefined {
@@ -299,16 +324,17 @@ function subprocessOf(ctx: Context | undefined): SubprocessSeamShape | undefined
 /** Dispatch one seam request against the current cell's agent-scoped ctx. */
 export async function dispatchSeam(
   agentCtx: Context | undefined,
+  agent: KernelAgent | undefined,
   request: SeamRequest,
   signal?: AbortSignal,
 ): Promise<SeamResponse> {
   if (request.op.startsWith('fs.')) return dispatchFs(agentCtx, request, signal)
   if (request.op === 'shell.run') return dispatchShell(agentCtx, request, signal)
   if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)
-  if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, request, signal)
-  if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, request, signal)
-  if (request.op.startsWith('rlm.')) return dispatchRlm(agentCtx, request, signal)
-  if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, request)
+  if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, agent, request, signal)
+  if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, agent, request, signal)
+  if (request.op.startsWith('rlm.')) return dispatchRlm(agentCtx, agent, request, signal)
+  if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, agent, request, signal)
   if (request.op.startsWith('sessions.')) return dispatchSessions(agentCtx, request)
   if (request.op.startsWith('skills.')) return dispatchSkills(agentCtx, request, signal)
   if (request.op.startsWith('subprocess.')) return dispatchSubprocess(agentCtx, request, signal)
@@ -410,6 +436,7 @@ async function dispatchShell(
 
 async function dispatchSubagents(
   agentCtx: Context | undefined,
+  agent: KernelAgent | undefined,
   request: SeamRequest,
   signal?: AbortSignal,
 ): Promise<SeamResponse> {
@@ -421,9 +448,8 @@ async function dispatchSubagents(
   }
   // Children/descendants discovery resolves the current agent's own session id.
   if (request.op === 'subagents.children' || request.op === 'subagents.descendants') {
-    const parent = (agentCtx as Context & { agent?: unknown }).agent
-    const sessionId = (parent as { session?: { id?: unknown } } | undefined)?.session?.id
-    if (sessionId === undefined) return unavailable(request.id, 'ctx.agent.session is not available for this agent')
+    const sessionId = agent?.session?.id
+    if (sessionId === undefined) return unavailable(request.id, 'no owning agent session is available for this cell')
     try {
       const items = request.op === 'subagents.children'
         ? await subagents.listChildren(sessionId, signal)
@@ -436,9 +462,9 @@ async function dispatchSubagents(
   if (request.op !== 'subagents.start') return unavailable(request.id, `unknown seam operation: ${request.op}`)
   const prompt = typeof args.prompt === 'string' ? args.prompt : undefined
   if (prompt === undefined) return failed(request.id, new Error('subagents.start requires a string "prompt" argument'))
-  const parent = (agentCtx as Context & { agent?: unknown }).agent
-  if (parent === undefined || parent === null) {
-    return unavailable(request.id, 'ctx.agent is not available for this agent')
+  const parent = agent
+  if (parent === undefined) {
+    return unavailable(request.id, 'no owning agent is available for this cell')
   }
   let provider = typeof args.provider === 'string' && args.provider.length > 0 ? args.provider : undefined
   if (provider === undefined) {
@@ -472,6 +498,7 @@ async function dispatchSubagents(
 
 async function dispatchRlm(
   agentCtx: Context | undefined,
+  agent: KernelAgent | undefined,
   request: SeamRequest,
   signal?: AbortSignal,
 ): Promise<SeamResponse> {
@@ -484,8 +511,8 @@ async function dispatchRlm(
   if (request.op !== 'rlm.llm_batch') return unavailable(request.id, `unknown seam operation: ${request.op}`)
   const subagents = subagentsOf(agentCtx)
   if (subagents === undefined) return unavailable(request.id, 'ctx.subagents is not mounted for this agent')
-  const parent = (agentCtx as Context & { agent?: unknown }).agent
-  if (parent === undefined || parent === null) return unavailable(request.id, 'ctx.agent is not available for this agent')
+  const parent = agent
+  if (parent === undefined) return unavailable(request.id, 'no owning agent is available for this cell')
   const prompts = Array.isArray(args.prompts)
     ? args.prompts.filter((entry): entry is string => typeof entry === 'string')
     : []
@@ -529,14 +556,14 @@ async function dispatchRlm(
 
 function dispatchGoals(
   agentCtx: Context | undefined,
+  agent: KernelAgent | undefined,
   request: SeamRequest,
   signal?: AbortSignal,
 ): SeamResponse {
   void signal
   const goals = goalsOf(agentCtx)
   if (goals === undefined) return unavailable(request.id, 'ctx.goals is not mounted for this agent')
-  const agent = currentAgent(agentCtx)
-  if (agent === undefined || agent === null) return unavailable(request.id, 'ctx.agent is not available for this agent')
+  if (agent === undefined) return unavailable(request.id, 'no owning agent is available for this cell')
   const args = asArgs(request.args)
 
   if (request.op === 'goals.get' || request.op === 'goals.disarm') {
@@ -596,7 +623,12 @@ function dispatchGoals(
   }
 }
 
-function dispatchTools(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
+async function dispatchTools(
+  agentCtx: Context | undefined,
+  agent: KernelAgent | undefined,
+  request: SeamRequest,
+  signal?: AbortSignal,
+): Promise<SeamResponse> {
   const tools = toolsOf(agentCtx)
   if (tools === undefined) return unavailable(request.id, 'ctx.tools is not mounted for this agent')
   const args = asArgs(request.args)
@@ -622,7 +654,60 @@ function dispatchTools(agentCtx: Context | undefined, request: SeamRequest): Sea
     }
   }
 
-  return unavailable(request.id, `unknown seam operation: ${request.op}`)
+  if (request.op !== 'tools.call') return unavailable(request.id, `unknown seam operation: ${request.op}`)
+
+  // The kernel's whole point in reaching this op: one harness tool, executed
+  // through the SAME registry pipeline a model call traverses — pre-execute
+  // policy, approval, guards, the tool body, post-execute, output validation.
+  // Going around `ctx.tools.execute` (calling a tool's `execute` directly)
+  // would skip every one of those, so it is deliberately not done.
+  const name = typeof args.name === 'string' ? args.name : undefined
+  if (name === undefined || name.length === 0) {
+    return failed(request.id, new Error('tools.call requires a non-empty string "name" argument'))
+  }
+  // Default to `{}` rather than requiring an object: a tool whose schema
+  // declares no required properties is legitimately callable with nothing.
+  const callArgs = args.arguments === undefined || args.arguments === null ? {} : args.arguments
+  // A stable per-request call id. The registry logs it and derives the root
+  // call id from it; it needs to be unique per call, not globally meaningful.
+  const callId = `kernel:${request.id}`
+  const owner = agent
+  try {
+    const result = await tools.execute({
+      callId,
+      name,
+      arguments: callArgs,
+      ...owner !== undefined ? { agent: owner } : {},
+      // `signal` is REQUIRED by the registry, which fuses it with the caller's
+      // own so replacement cannot detach caller cancellation. A seam request
+      // that carried none still needs a real one — an already-aborted or
+      // never-aborted controller — not `undefined`.
+      signal: signal ?? new AbortController().signal,
+    })
+    // Project the normalized outcome down to lossless JSON. `value` is the
+    // canonical lossless-JSON result — the closest analogue to what a `run_code`
+    // program receives — and `content` is the model-facing rendering, kept so
+    // the kernel can show a caller exactly what the model would have seen.
+    // `isError` and the structured `error` survive so Python can raise.
+    const content = Array.isArray(result.content)
+      ? result.content.map(block => ({ type: block.type, ...block.text !== undefined ? { text: block.text } : {} }))
+      : []
+    return ok(request.id, result.isError
+      ? {
+        isError: true,
+        content,
+        ...result.error !== undefined ? { error: result.error } : {},
+        ...result.meta !== undefined ? { meta: result.meta } : {},
+      }
+      : {
+        isError: false,
+        value: result.value,
+        content,
+        ...result.meta !== undefined ? { meta: result.meta } : {},
+      })
+  } catch (error) {
+    return failed(request.id, error)
+  }
 }
 
 function dispatchSessions(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {

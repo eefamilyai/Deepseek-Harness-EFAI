@@ -3003,6 +3003,179 @@ def tool_schema(name, scope=None, timeout=15.0):
     return seam.get("value")
 
 
+class ToolCallError(RuntimeError):
+    """A harness tool call that settled as an error.
+
+    Mirrors the `ToolCallError` the PTC-mode Python SDK declares, so a kernel
+    caller branches the same way a `run_code` program does:
+
+        try:
+            text = tools.read({"path": "notes.txt"})
+        except ToolCallError as e:
+            print(e.toolName, e)
+
+    `toolName` names the tool that failed and `code` carries the registry's
+    structured code when it supplied one (e.g. `UNKNOWN_TOOL`,
+    `ABORTED_BEFORE_DISPATCH`); the message is the tool's model-facing text.
+    """
+
+    def __init__(self, tool_name, message, code=None):
+        super().__init__(message)
+        self.toolName = tool_name
+        self.code = code
+
+
+def _tool_error_text(envelope):
+    """The model-facing failure text from a `tools.call` error envelope.
+
+    The registry renders a failure into content blocks exactly as it would for
+    a model-facing call, so that rendering is the message — not the short
+    `error.message`, which omits the tool's own diagnostics. Falls back to
+    `error.message`, then to a fixed sentence, so a malformed envelope still
+    produces a usable exception.
+    """
+    blocks = envelope.get("content")
+    if isinstance(blocks, list):
+        parts = [b.get("text") for b in blocks
+                 if isinstance(b, dict) and b.get("type") == "text" and isinstance(b.get("text"), str)]
+        text = "\n".join(parts).strip()
+        if text:
+            return text
+    error = envelope.get("error")
+    if isinstance(error, dict) and isinstance(error.get("message"), str) and error["message"]:
+        return error["message"]
+    return "the tool call failed"
+
+
+def _tool_error_code(envelope):
+    """The registry's structured error code from an error envelope, if any."""
+    error = envelope.get("error")
+    if isinstance(error, dict):
+        info = error.get("info")
+        if isinstance(info, dict) and isinstance(info.get("code"), str):
+            return info["code"]
+    return None
+
+
+def call_tool(name, arguments=None, timeout=600.0, raw=False):
+    """Execute one harness tool through the full `ctx.tools` pipeline.
+
+    This is the kernel's general door onto every capability the harness mounts.
+    The call goes through `ctx.tools.execute`, the SAME registry pipeline a
+    model-facing call traverses — pre-execute policy, the approval gate, guards,
+    the tool body, post-execute, and output validation — so a call made here is
+    subject to exactly the enforcement a model-issued call is, and its result is
+    the tool's canonical value rather than a parallel implementation of it.
+
+    `name` is the registered tool name (`list_tools()` reports the visible set).
+    `arguments` is the JSON arguments object the tool's schema declares; omit it
+    or pass None for a tool that takes none.
+
+    On success the tool's canonical lossless-JSON value is returned — the same
+    value a `run_code` program receives from `await tools.name(args)`.
+
+    On failure a `ToolCallError` is raised, carrying the tool's model-facing
+    failure text. A denial by policy or guard arrives the same way, so a caller
+    cannot mistake a refused call for a successful one.
+
+    `raw=True` returns the whole `{isError, value, content, meta}` envelope
+    instead of raising, for a caller that needs the model-facing rendering or
+    the presentation metadata.
+
+    `timeout` bounds the seam round trip in seconds. It defaults high because a
+    tool may legitimately run long (a subagent, a browser session, a build); a
+    call that exceeds it raises, rather than silently degrading to a local
+    implementation the way the adapter helpers do.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("call_tool requires a non-empty tool name")
+    if arguments is None:
+        arguments = {}
+    if not isinstance(arguments, dict):
+        raise TypeError("call_tool arguments must be a dict (or None)")
+
+    seam = _seam_request("tools.call", {"name": name, "arguments": arguments}, timeout=timeout)
+    if seam is None:
+        raise ToolCallError(
+            name,
+            "the tools seam is unavailable: this cell has no harness connection, "
+            "or it is running in the background where seam round trips are not served")
+    if seam.get("unavailable"):
+        raise ToolCallError(name, seam.get("error") or "the tools seam is not mounted for this agent")
+    if not seam.get("ok"):
+        raise ToolCallError(name, seam.get("error") or "the tools seam rejected the request")
+
+    envelope = seam.get("value")
+    if not isinstance(envelope, dict):
+        raise ToolCallError(name, "the tools seam returned a malformed result")
+    if raw:
+        return envelope
+    if envelope.get("isError"):
+        raise ToolCallError(name, _tool_error_text(envelope), code=_tool_error_code(envelope))
+    return envelope.get("value")
+
+
+class _ToolCaller:
+    """One bound tool, returned by the `tools` namespace's attribute/subscript access."""
+
+    __slots__ = ("_name",)
+
+    def __init__(self, name):
+        self._name = name
+
+    @property
+    def name(self):
+        """The registered tool name this caller invokes."""
+        return self._name
+
+    def __call__(self, arguments=None, timeout=600.0, raw=False):
+        return call_tool(self._name, arguments, timeout=timeout, raw=raw)
+
+    def __repr__(self):
+        return "<harness tool %r>" % (self._name,)
+
+
+class _ToolNamespace:
+    """Every visible harness tool, as `tools.<name>(args)` or `tools["<name>"](args)`.
+
+    The kernel's own helpers (`read_file`, `sh`, `bash`, `web_search`, ...) stay
+    as they are: each is a fast local path for its common case and keeps working
+    when no harness is attached. This namespace is the general door beside them —
+    it reaches ANY tool the harness mounts, including ones with no local helper
+    at all, through the real registry pipeline.
+
+    A tool name that is not a legal Python attribute — `my-tool`, `class`, or one
+    with a leading underscore — is reached by subscript: `tools["my-tool"]({...})`.
+    """
+
+    __slots__ = ()
+
+    def __getattr__(self, name):
+        # Underscore-leading names are reserved for Python's own protocol
+        # lookups, and a tool genuinely named `_x` is reached by subscript.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return _ToolCaller(name)
+
+    def __getitem__(self, name):
+        return _ToolCaller(str(name))
+
+    def __dir__(self):
+        """Every visible tool name, so completion and `dir()` show the surface."""
+        entries = list_tools()
+        if not isinstance(entries, list):
+            return []
+        return sorted(e["name"] for e in entries
+                      if isinstance(e, dict) and isinstance(e.get("name"), str))
+
+    def __repr__(self):
+        return "<harness tools: call as tools.<name>({...}) or tools['<name>']({...})>"
+
+
+#: The single `tools` namespace bound into every cell's globals.
+tools = _ToolNamespace()
+
+
 def list_sessions(timeout=15.0):
     """List live sessions known to the harness `ctx.sessions` registry.
 
@@ -3116,6 +3289,7 @@ prompt_dict = dict(sh=sh, fetch=fetch, search=search, os=os, sys=sys,
                    goal_disarm=goal_disarm,
 
                    list_tools=list_tools, tool_schema=tool_schema,
+                   call_tool=call_tool, tools=tools, ToolCallError=ToolCallError,
 
                    list_sessions=list_sessions, get_session=get_session,
 
@@ -4666,6 +4840,17 @@ class _CellRunner(_threading.Thread):
 
         _active_conv.value = self._conv
 
+        # The FIRST cell to run installs the generated harness-tool functions.
+        # It has to happen here rather than at import: `list_tools` needs a seam
+        # round trip, and only a cell running on the foreground thread can make
+        # one. A failure is recorded, not raised — a cell must still run when
+        # the harness is absent or its schemas are malformed.
+        if not _TOOLS_INSTALLED[0]:
+            try:
+                _install_harness_tools()
+            except BaseException as e:
+                prompt_dict["_harness_tools_error"] = _format_exc(e)
+
         try:
 
             self.out, self.err = _run_cell(self._code)
@@ -5693,10 +5878,35 @@ def stop_agent(agent_id):
 
 
 
+def _harness_tool_names(scope=None):
+    """Names of the harness tools visible to this cell, or None with no harness.
+
+    `list_tools` answers with an `{"error": ...}` dict rather than raising when
+    the tools seam is not mounted (no harness attached, or a backgrounded cell),
+    so the probe can tell "no harness" apart from "a harness exposing no tools".
+    """
+    listing = list_tools(scope=scope)
+    if not isinstance(listing, list):
+        return None
+    return sorted(entry["name"] for entry in listing
+                  if isinstance(entry, dict) and isinstance(entry.get("name"), str))
+
+
 def tool_help(tool_name=None, pattern=None):
-    """Display help for all tools, one tool, or a glob/substring pattern."""
+    """Display help for all tools, one tool, or a glob/substring pattern.
+
+    Covers BOTH kinds of callable a cell has: the preloaded local helpers, and
+    every harness tool reachable through the `tools` namespace. `tool_help()`
+    lists both; `tool_help("read_file")` returns a helper's docstring, and
+    `tool_help("read")` — bare or as `tool_help("tools.read")` — returns the
+    harness tool's schema as the model itself would see it.
+
+    The harness half is what makes the general door discoverable: a helper that
+    exists only in the harness (no local equivalent) is otherwise reachable but
+    invisible to anyone asking the kernel what it can do.
+    """
     import inspect
-    tools = {}
+    catalog = {}
     for name, obj in globals().items():
         if name.startswith("_"):
             continue
@@ -5704,13 +5914,27 @@ def tool_help(tool_name=None, pattern=None):
             continue
         doc = inspect.getdoc(obj)
         if doc:
-            tools[name] = doc
+            catalog[name] = doc
+
+    harness = _harness_tool_names()
+
     if tool_name:
-        doc = tools.get(tool_name)
-        if doc:
-            return "%s:\n%s" % (tool_name, doc)
+        # A harness tool is named either bare or with its `tools.` prefix; the
+        # prefixed form is what a caller copies straight out of a listing.
+        bare = tool_name[6:] if tool_name.startswith("tools.") else tool_name
+        if bare in catalog:
+            return "%s:\n%s" % (bare, catalog[bare])
+        if harness is not None and bare in harness:
+            schema = tool_schema(bare)
+            if isinstance(schema, dict) and schema.get("name"):
+                return "tools.%s (harness tool):\n%s\n\nparameters:\n%s" % (
+                    bare,
+                    schema.get("description") or "",
+                    json.dumps(schema.get("parameters"), indent=2, ensure_ascii=False),
+                )
         return "No help found for %s" % tool_name
-    names = sorted(tools)
+
+    names = sorted(catalog)
     if pattern:
         names = [n for n in names
                  if fnmatch.fnmatch(n, pattern) or pattern in n]
@@ -5718,9 +5942,322 @@ def tool_help(tool_name=None, pattern=None):
     if not names:
         lines.append("  (no tools matched %r)" % pattern)
     for name in names:
-        first = tools[name].splitlines()[0] if tools[name] else ""
+        first = catalog[name].splitlines()[0] if catalog[name] else ""
         lines.append("  %s -- %s" % (name, first))
+
+    lines += ["", "Harness tools (any tool the harness mounts):", ""]
+    if harness is None:
+        lines.append("  (unavailable: no harness is attached, or this cell is backgrounded)")
+        return "\n".join(lines)
+    matched = harness
+    if pattern:
+        matched = [n for n in harness
+                   if fnmatch.fnmatch(n, pattern) or pattern in n]
+    if not matched:
+        lines.append("  (none matched %r)" % pattern)
+    for name in matched:
+        lines.append("  tools.%s" % name)
+    if not pattern:
+        lines += [
+            "",
+            "  tools.<name>({...}) calls any of them through the same registry",
+            "  pipeline a model-issued call uses — policy, approval, guards, and",
+            "  output validation all apply — and returns the tool's canonical",
+            "  value. A refusal or failure raises ToolCallError. Use",
+            "  tool_help('tools.<name>') for one tool's schema.",
+        ]
     return "\n".join(lines)
+
+# ─────────────────────────────────────────────────────────────
+# Every harness tool as a real Python function
+#
+# `tools.<name>({...})` reaches any tool, but a cell author wants
+# `read(...)`, `web_search(...)`, `subagent(...)` — real functions whose
+# signatures, defaults, and docstrings are visible to `help()`, to
+# `inspect.signature`, and to anyone reading the cell.
+#
+# These are GENERATED from the registry's own schemas. Nothing below is a
+# hand-written per-tool wrapper, so a tool the harness adds appears here
+# without editing this file, a schema change lands in the signature, and a
+# removed tool stops being offered. A hand-written list is exactly the thing
+# that goes stale and silently omits a capability.
+# ─────────────────────────────────────────────────────────────
+
+import keyword as _keyword
+
+#: tool name -> the generated function, for introspection and tests.
+_HARNESS_FUNCS = {}
+
+#: harness tool name -> the local helper kept as `local_<name>` because both
+#: wanted the same name. Recorded so the shadowing is visible, never silent.
+_HARNESS_SHADOWED = {}
+
+#: Names a generated signature claims for its own controls, so a schema
+#: property with one of these names is renamed instead of colliding.
+_HARNESS_CONTROL_PARAMS = ("timeout", "raw")
+
+#: One-shot latch: the first foreground cell installs the functions, because
+#: only a cell runs on the thread the seam serves.
+_TOOLS_INSTALLED = [False]
+
+
+class _Unset:
+    """Marks "the caller passed nothing" apart from "the caller passed None".
+
+    A property whose schema admits null must be able to receive an explicit
+    `None`; every other property treats `None` as "argument omitted". A plain
+    `None` default cannot express that difference, so an omitted nullable
+    property would be sent as `{"prop": null}` — an argument the tool never
+    asked for. This sentinel is the default instead, and only a value that is
+    not the sentinel is placed in the call.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self):
+        return "<not provided>"
+
+
+_UNSET = _Unset()
+
+
+def _schema_allows_null(sub):
+    """Whether a property schema admits an explicit null.
+
+    The distinction matters: a property that admits null needs `None` passed
+    THROUGH to the tool, while for every other property `None` means "argument
+    omitted". Conflating them would send `{"path": null}` to a tool that only
+    wanted no `path` at all.
+    """
+    if not isinstance(sub, dict):
+        return False
+    declared = sub.get("type")
+    if declared == "null" or (isinstance(declared, list) and "null" in declared):
+        return True
+    for key in ("anyOf", "oneOf"):
+        options = sub.get(key)
+        if isinstance(options, list):
+            for option in options:
+                if isinstance(option, dict) and option.get("type") == "null":
+                    return True
+    return False
+
+
+def _tool_param_name(raw, used):
+    """A legal, non-colliding Python parameter name for a schema property."""
+    candidate = re.sub(r"\W", "_", str(raw))
+    if not candidate or candidate[0].isdigit():
+        candidate = "_" + candidate
+    if _keyword.iskeyword(candidate):
+        candidate += "_"
+    base, n = candidate, 2
+    while candidate in used or candidate in _HARNESS_CONTROL_PARAMS:
+        candidate = "%s_%d" % (base, n)
+        n += 1
+    used.add(candidate)
+    return candidate
+
+
+def _schema_type_label(sub):
+    """A short human type label for one property schema."""
+    if not isinstance(sub, dict):
+        return "any"
+    declared = sub.get("type")
+    if isinstance(declared, list):
+        return "|".join(str(t) for t in declared if t != "null") or "any"
+    if isinstance(declared, str) and declared != "null":
+        return declared
+    for key in ("anyOf", "oneOf"):
+        options = sub.get(key)
+        if isinstance(options, list):
+            parts = [o.get("type") for o in options
+                     if isinstance(o, dict) and isinstance(o.get("type"), str)]
+            parts = [p for p in parts if p != "null"]
+            if parts:
+                return "|".join(parts)
+    return "any"
+
+
+def _make_tool_function(tool_name, schema):
+    """Generate one real Python function that dispatches `tool_name`.
+
+    The function is built by `exec` so its signature is genuine — the
+    parameters, their defaults, and their order all come from the tool's own
+    schema, which is what makes `help(read)` and tab-completion useful instead
+    of showing an opaque `**kwargs`.
+    """
+    params = schema.get("parameters") if isinstance(schema, dict) else None
+    if not isinstance(params, dict):
+        params = {}
+    properties = params.get("properties")
+    if not isinstance(properties, dict):
+        properties = {}
+    declared_required = params.get("required")
+    required_names = ([r for r in declared_required if isinstance(r, str)]
+                      if isinstance(declared_required, list) else [])
+
+    used = set()
+    fields = []  # (py_name, raw_name, allows_null, is_required, label)
+    for raw in properties:
+        sub = properties.get(raw)
+        fields.append((
+            _tool_param_name(raw, used),
+            str(raw),
+            _schema_allows_null(sub),
+            str(raw) in required_names,
+            _schema_type_label(sub),
+        ))
+    # Required first so they are positional; schema order is preserved within
+    # each group, which keeps the signature stable for a given schema.
+    fields.sort(key=lambda f: 0 if f[3] else 1)
+
+    # A nullable property defaults to the sentinel, not to None: `None` is a
+    # value it must be able to receive, so it needs a distinct "not passed".
+    positional = []
+    for py_name, _raw, allows_null, is_required, _label in fields:
+        if is_required:
+            positional.append(py_name)
+        else:
+            positional.append("%s=%s" % (py_name, "_UNSET" if allows_null else "None"))
+
+    if fields:
+        signature = ", ".join(positional + ["timeout=600.0", "raw=False", "**extra"])
+        body = ["    _args = {}"]
+        for py_name, raw_name, allows_null, is_required, _label in fields:
+            if is_required:
+                body.append("    _args[%r] = %s" % (raw_name, py_name))
+            elif allows_null:
+                body.append("    if %s is not _UNSET:" % py_name)
+                body.append("        _args[%r] = %s" % (raw_name, py_name))
+            else:
+                body.append("    if %s is not None:" % py_name)
+                body.append("        _args[%r] = %s" % (raw_name, py_name))
+        body.append("    _args.update(extra)")
+    else:
+        # A schema declaring no properties leaves nothing to name, so the one
+        # positional parameter is the whole argument object. Without this the
+        # first positional would land on `timeout`, and `tool({...})` — the
+        # natural spelling, and the one `tools.<name>` already accepts — would
+        # fail deep inside the call instead of at the signature.
+        signature = ", ".join(["arguments=None", "timeout=600.0", "raw=False", "**extra"])
+        body = [
+            "    _args = {} if arguments is None else arguments",
+            "    if isinstance(_args, dict):",
+            "        _args = dict(_args)",
+            "        _args.update(extra)",
+        ]
+    body.append("    return call_tool(%r, _args, timeout=timeout, raw=raw)" % tool_name)
+
+    description = (schema.get("description") if isinstance(schema, dict) else None) or ""
+    doc = ["Run the `%s` harness tool." % tool_name, ""]
+    if description:
+        doc += [description.strip(), ""]
+    if fields:
+        doc.append("Arguments (as the harness declares them):")
+        for py_name, raw_name, allows_null, is_required, label in fields:
+            note = "required" if is_required else "optional"
+            if allows_null:
+                note += ", may be None"
+            if py_name != raw_name:
+                note += ", passed as %s" % raw_name
+            doc.append("  %-18s %s  [%s]" % (raw_name, label, note))
+        doc.append("")
+    else:
+        # The schema names no properties, so there is nothing to list — but the
+        # function still takes the argument object, and saying "no arguments"
+        # would send a caller looking for a different spelling.
+        doc += [
+            "Takes no declared arguments; pass the whole argument object",
+            "positionally, e.g. `%s({...})`." % tool_name,
+            "",
+        ]
+    doc += [
+        "Dispatches through `ctx.tools.execute`, so policy, guards, approval,",
+        "and output validation apply exactly as for a model-issued call, and the",
+        "returned value is the tool's canonical lossless-JSON value. A refusal or",
+        "failure raises ToolCallError. `timeout` bounds the round trip; `raw=True`",
+        "returns the whole {isError, value, content, meta} envelope. Extra keyword",
+        "arguments are passed through verbatim, which reaches any property the",
+        "signature had to rename.",
+    ]
+
+    source = "def _harness_tool_fn(%s):\n% s" % (signature, "\n".join(body))
+    # `_UNSET` must be in scope: it is the default of every nullable optional
+    # parameter, and a missing name here would fail at CALL time, not at
+    # definition time — the worst place for it to surface.
+    namespace = {"call_tool": call_tool, "_UNSET": _UNSET}
+    exec(compile(source, "<harness-tool %s>" % tool_name, "exec"), namespace)
+    func = namespace["_harness_tool_fn"]
+    func.__name__ = tool_name
+    func.__qualname__ = tool_name
+    func.__doc__ = "\n".join(doc)
+    func.__harness_tool__ = tool_name
+    func.__signature_params__ = [f[1] for f in fields]
+    return func
+
+
+def _install_harness_tools(scope=None):
+    """Bind every visible harness tool as a real function in the cell namespace.
+
+    Idempotent and re-runnable: `refresh_tools()` calls it after a tool set
+    changes. A name that already belongs to a preloaded local helper is NOT
+    silently clobbered — the helper is preserved as `local_<name>` first, so
+    the harness tool takes the plain name (which is what a cell author asking
+    for `read(...)` means) while the old behaviour stays reachable and the
+    shadowing is recorded in `_HARNESS_SHADOWED`.
+    """
+    listing = list_tools(scope=scope)
+    if not isinstance(listing, list):
+        return {"installed": 0, "reason": "no harness attached"}
+
+    installed, failed = [], {}
+    for entry in listing:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        try:
+            func = _make_tool_function(name, entry)
+        except Exception as exc:  # one bad schema must not cost every tool
+            failed[name] = "%s: %s" % (type(exc).__name__, exc)
+            continue
+        # Preserve a same-named local helper before it is shadowed.
+        for target in (_ns, prompt_dict):
+            existing = target.get(name)
+            if existing is not None and existing is not func:
+                if getattr(existing, "__harness_tool__", None) is None:
+                    alias = "local_" + name
+                    target.setdefault(alias, existing)
+                    _HARNESS_SHADOWED[name] = alias
+        _HARNESS_FUNCS[name] = func
+        prompt_dict[name] = func
+        _ns[name] = func
+        installed.append(name)
+
+    _TOOLS_INSTALLED[0] = True
+    return {
+        "installed": len(installed),
+        "names": sorted(installed),
+        "shadowed": dict(_HARNESS_SHADOWED),
+        "failed": failed,
+    }
+
+
+def refresh_tools(scope=None):
+    """Re-read the harness tool set and rebind the generated functions.
+
+    Call after the harness mounts or unmounts tools. Returns a dict with the
+    count installed, the shadowed-name mapping, and any schema that could not
+    be turned into a function.
+    """
+    return _install_harness_tools(scope=scope)
+
+
+def harness_tools():
+    """The generated tool functions, keyed by tool name."""
+    return dict(_HARNESS_FUNCS)
+
 
 def _ckpt_paths(name):
     """Return (data_path, manifest_path) for a sanitized checkpoint name."""

@@ -5,7 +5,6 @@
  */
 
 import type { KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider } from '@deepseek-ai/dsh-kernel'
-import type { Context } from '@deepseek-ai/cordis'
 import { KernelAbortError, KernelChild, parseControlResult } from './child.ts'
 import type { SeamRequest } from './seam.ts'
 import { dispatchSeam } from './seam.ts'
@@ -34,17 +33,15 @@ const LOST_NOTICE = ' Variables in the namespace are gone; anything you saved wi
 const FALLBACK_TIMEOUT_MS = 180_000
 
 /**
- * The owning agent's shared session id, read structurally rather than through
- * the `Context.agent` augmentation. This package does not import
- * `@deepseek-ai/dsh-agent`, so that augmentation is outside its type program
- * and referencing it here would break an isolated typecheck. The shape matches
- * `Agent.id` (a string `SessionId`). Absence means the cell was dispatched
- * without an owning agent, and the Python side falls back to standalone
- * behavior (no durable conversation key).
+ * The owning agent's shared session id.
+ *
+ * Read from the request's explicit `agent` field. It is NOT recoverable from
+ * `agentCtx`: `Context` carries no reverse Agent property, and a property read
+ * that resolves in no fiber's store throws rather than returning undefined.
+ * Absence means the cell was dispatched without an owning agent, and the Python
+ * side falls back to standalone behavior (no durable conversation key).
  */
-function conversationOf(agentCtx: Context | undefined): string | undefined {
-  if (agentCtx === undefined) return undefined
-  const agent = (agentCtx as Context & { agent?: { id?: unknown } }).agent
+function conversationOf(agent: KernelExecuteRequest['agent']): string | undefined {
   return typeof agent?.id === 'string' ? agent.id : undefined
 }
 
@@ -148,9 +145,9 @@ export class KilnKernelProvider implements KernelProvider {
       // (and the RLM ctx_write/ctx_read bind path) must be scoped per cell,
       // exactly like `cwd`. Without a live agent the conversation key is
       // absent and the Python side falls back to standalone behavior.
-      const conv = conversationOf(request.agentCtx)
+      const conv = conversationOf(request.agent)
       const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
-      const outcome = await this.awaitCell(child, id, request, signal, request.agentCtx)
+      const outcome = await this.awaitCell(child, id, request, signal, request.agentCtx, request.agent)
       if (outcome.kind === 'ok') {
         return { output: outcome.output, outcome: 'ok' as const, restarted: false }
       }
@@ -173,10 +170,11 @@ export class KilnKernelProvider implements KernelProvider {
     request: KernelExecuteRequest,
     signal?: AbortSignal,
     agentCtx?: KernelExecuteRequest['agentCtx'],
+    agent?: KernelExecuteRequest['agent'],
   ): Promise<{ kind: 'ok'; output: string } | { kind: Exclude<KernelOutcome, 'ok'> }> {
     const prevHandler = child.seamHandler
     child.seamHandler = (seam: SeamRequest): void => {
-      void dispatchSeam(agentCtx, seam, signal).then(
+      void dispatchSeam(agentCtx, agent, seam, signal).then(
         (response) => { if (!child.dead) child.sendSeamResponse(response) },
         (reason: unknown) => {
           if (!child.dead) {
