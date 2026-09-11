@@ -225,7 +225,7 @@
     "packages/llm/llm-kiln/",
     "packages/web/web-browser/",
     "packages/host/sidebar-bridge/",
-    "packages/client/ui-dock/",
+    "packages/client/ui-sidebar-terminal/",
     "packages/client/ui-effects/",
     "packages/session/command-session-info/",
     "packages/agent-memory/",

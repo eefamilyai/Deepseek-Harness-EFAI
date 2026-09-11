@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **125** in **22** patch(es).
+Tier-2 files: **124** in **22** patch(es).
 
 ## Patches
 
@@ -103,18 +103,17 @@ Tier-2 files: **125** in **22** patch(es).
 - `packages/client/locale/src/locales/en.ts`
 - `packages/client/locale/src/locales/zh.ts`
 
-### `patches/client-chat.patch` — 14 file(s)
+### `patches/client-chat.patch` — 13 file(s)
 
 - `packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx`
 - `packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css`
 - `packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx`
 - `packages/client/ui-chat/src/client/chat/ReasoningRow.module.css`
 - `packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx`
-- `packages/client/ui-chat/src/client/chat/TurnProcessNodeView.module.css`
-- `packages/client/ui-chat/src/client/chat/TurnProcessNodeView.tsx`
-- `packages/client/ui-chat/src/client/contract/slots.ts`
+- `packages/client/ui-chat/src/client/contract/snapshot.ts`
 - `packages/client/ui-chat/src/client/contract/store.ts`
-- `packages/client/ui-chat/src/client/locale.ts`
+- `packages/client/ui-chat/src/client/contract/turn-process.ts`
+- `packages/client/ui-chat/src/client/conversation-nodes/turn-process-presentation.ts`
 - `packages/client/ui-chat/src/client/markdown-labels.ts`
 - `packages/client/ui-chat/src/client/stores.ts`
 - `packages/client/ui-chat/tests/chat-store.client.spec.ts`
@@ -227,7 +226,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 229 paths do not exist upstream, so no patch covers them and none can conflict.
+These 212 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -299,24 +298,7 @@ These 229 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/agent-memory/agent-memory/src/spec.ts`
 - `packages/agent-memory/agent-memory/tests/memory.spec.ts`
 - `packages/agent-memory/agent-memory/tsconfig.json`
-- `packages/client/ui-chat/src/client/contract/turn-tool-summary.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
-- `packages/client/ui-chat/tests/turn-tool-summary.client.spec.ts`
-- `packages/client/ui-dock/README.md`
-- `packages/client/ui-dock/package.json`
-- `packages/client/ui-dock/src/client/Dock.tsx`
-- `packages/client/ui-dock/src/client/Terminal.tsx`
-- `packages/client/ui-dock/src/client/ansi.ts`
-- `packages/client/ui-dock/src/client/dock-events.ts`
-- `packages/client/ui-dock/src/client/dock.module.css`
-- `packages/client/ui-dock/src/client/header-actions.tsx`
-- `packages/client/ui-dock/src/client/header-locales.ts`
-- `packages/client/ui-dock/src/client/header.module.css`
-- `packages/client/ui-dock/src/client/index.ts`
-- `packages/client/ui-dock/src/css-modules.d.ts`
-- `packages/client/ui-dock/src/index.ts`
-- `packages/client/ui-dock/tsconfig.json`
-- `packages/client/ui-dock/tsdown.config.ts`
 - `packages/client/ui-effects/README.md`
 - `packages/client/ui-effects/package.json`
 - `packages/client/ui-effects/src/client/EffectsSettingsRow.module.css`

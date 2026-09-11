@@ -41,61 +41,6 @@
   white-space: nowrap;
 }
 
-/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
-/* One hue per tool family, the same --dsw-alias-flow-* set the expanded rows
-   colour through (ui-tool's ToolRow, ReasoningRow, ContextInjectionRow). A
-   folded Turn then reads as a miniature of the rows it hides: what was read,
-   what was written, and what was run stay distinguishable at a glance instead
-   of collapsing into one grey sentence.
-
-   Only the verb carries the hue. A kernel cell's trailing text is the model's
-   own sentence, quoted here rather than restated by the row, so tinting it
-   would claim the row's palette for words the row did not write. */
-.phrase[data-tone='mutate'] {
-  color: var(--dsw-alias-flow-mutate);
-}
-
-.phrase[data-tone='read'] {
-  color: var(--dsw-alias-flow-read);
-}
-
-.phrase[data-tone='shell'] {
-  color: var(--dsw-alias-flow-shell);
-}
-
-.phrase[data-tone='search'] {
-  color: var(--dsw-alias-flow-search);
-}
-
-.phrase[data-tone='instruct'] {
-  color: var(--dsw-alias-flow-instruct);
-}
-
-.phrase[data-tone='generic'] {
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* A quoted sentence the verb introduces: the row's own copy stops at the verb,
-   so the quotation reads as ordinary text in the row's default colour. */
-.detail {
-  color: var(--dsw-alias-label-secondary);
-}
-
-/* What the row could not print, and the line delta: secondary facts about the
-   Turn, so they stay quieter than the actions themselves. The delta keeps the
-   diff card's add/remove convention. */
-.more {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.added {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.removed {
-  color: var(--dsw-alias-state-error-primary);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .chevron {
     transition: none;

@@ -39,7 +39,7 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
   // audited allowlists must name them; without entries the gate rejects a correct README.
   // EXIT: upstream accepts a model-experience declaration inside each package manifest.
-  'packages/client/ui-dock': 'Browser-side dock overlay; it mounts a private React root and header slots, and the sidebar bridge behind it owns the shared-browser and user-shell endpoints.',
+  'packages/client/ui-sidebar-terminal': 'Terminal tab type for the right Sidebar; it registers the tab and the conversation header menu, and the sidebar bridge behind it owns the shell endpoint.',
   'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
   'packages/host/sidebar-bridge': 'The host HTTP/WebSocket carrier for the dock panels; it serves browser state and a user shell and registers nothing model-facing.',
 }

@@ -1,7 +1,8 @@
-/* Conversation-header dock controls, themed through the same --dsw tokens as the
-   upstream Session header utilities so the buttons sit flush beside them. */
+/* The conversation-header more-actions button, themed through the same --dsw
+   tokens as the upstream Session header utilities so it sits flush beside them.
+   The retired dock's toggle button shared this sheet; the button went with the
+   drawer, so only the menu trigger remains. */
 
-.toggleButton,
 .menuButton {
   display: inline-flex;
   align-items: center;
@@ -17,12 +18,10 @@
   flex: none;
 }
 
-.toggleButton:hover,
 .menuButton:hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.toggleButton svg,
 .menuButton svg {
   flex: none;
 }

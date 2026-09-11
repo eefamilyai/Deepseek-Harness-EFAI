@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-client-ui-dock",
-  "description": "Right-side dock: a live terminal in the workspace cwd over the sidebar-bridge endpoints.",
+  "name": "@deepseek-ai/dsh-client-ui-sidebar-terminal",
+  "description": "Terminal tab type for the right Sidebar: a live shell in the session workspace over the sidebar-bridge PTY endpoint",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/client/ui-dock"
+    "directory": "packages/client/ui-sidebar-terminal"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -27,9 +27,12 @@
   },
   "dsh": {
     "client": {
-      "inject": [],
-      "platform": "web",
-      "immediately": true
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-session"
+      ],
+      "platform": "web"
     }
   },
   "scripts": {
@@ -38,22 +41,21 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-session": "workspace:^",
-    "@types/react": "~18.3.1",
-    "@types/react-dom": "~18.3.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-client-locale": "workspace:^",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:^"
+    "@deepseek-ai/dsh-client-ui-session": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "files": [
     "lib/index.js",

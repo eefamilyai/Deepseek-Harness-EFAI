@@ -18,7 +18,8 @@ function samePresentation(
     && left.turn === right.turn
     && left.turnClosed === right.turnClosed
     && left.hasExternalProcess === right.hasExternalProcess
-    && left.compactAnswer === right.compactAnswer)
+    && left.compactAnswer === right.compactAnswer
+    && left.openingHumanAnchorSeq === right.openingHumanAnchorSeq)
 }
 
 function derivePresentation(
@@ -49,12 +50,24 @@ function derivePresentation(
   for (const key of keys) {
     const node = nodes.get(key) as ChatNode | undefined
     if (node === undefined || node.kind === 'turn-process') continue
+    // DSH-FORK(brand): only a human message that renders outside the fold can
+    // separate the collapsed summary from its answer, and a kind is outside the
+    // fold exactly when it is process-independent. A mid-turn steer is now a
+    // process member, so it is hidden with the rest and the answer still
+    // follows the summary directly.
+    // EXIT: upstream lists `steering` as process-independent, so this guard
+    // stops excluding it and the steer breaks the gap again.
     if ((node.kind === 'user' || node.kind === 'steering')
+      && TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
       && (openingHumanAnchor === undefined || node.anchorSeq > openingHumanAnchor)
       && (spec.answerAnchorSeq === null || node.anchorSeq < spec.answerAnchorSeq)) {
       compactAnswer = false
     }
+    // The Turn's own opening human message renders outside the fold, so it is
+    // not process evidence: a Turn whose only non-input row is its prompt must
+    // not grow a disclosure that folds nothing.
     if (TURN_PROCESS_INDEPENDENT_KINDS.has(node.kind)
+      || node.anchorSeq === openingHumanAnchor
       || node.anchorSeq < spec.processStartSeq
       || (spec.answerAnchorSeq !== null && node.anchorSeq >= spec.answerAnchorSeq)) continue
     if (node.kind !== 'assistant-step' || spec.answerStep === null || node.data.step !== spec.answerStep) {
@@ -67,6 +80,7 @@ function derivePresentation(
     turnClosed: location.turn.status === 'closed',
     hasExternalProcess,
     compactAnswer,
+    openingHumanAnchorSeq: openingHumanAnchor ?? null,
   }
 }
 

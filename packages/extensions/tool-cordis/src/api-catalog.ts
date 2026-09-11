@@ -4534,8 +4534,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
   },
   {
+    name: 'KernelAgent',
+    declaration: 'export interface KernelAgent {\n    readonly id: string;\n    readonly session: {\n        readonly id: string;\n    };\n}',
+  },
+  {
     name: 'KernelExecuteRequest',
-    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n}',
+    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n    readonly agent?: KernelAgent;\n}',
   },
   {
     name: 'KernelExecuteResult',

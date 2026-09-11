@@ -19,7 +19,6 @@ import type {
   ChatNodeProcessSource, ChatNodeSource, ChatSnapshot, ChatTurnProcessPresentation,
 } from './snapshot.ts'
 import type { TurnProcessSpec } from './turn-process.ts'
-import type { TurnToolSummary } from './turn-tool-summary.ts'
 import type { TranscriptViewMode } from '../../chat-settings.ts'
 
 /** Selector hook over the current Conversation binding's Chat target. */
@@ -104,10 +103,6 @@ export interface TurnProcessOwnerProps {
   readonly foldable: boolean
   readonly open: boolean
   setOpen(open: boolean): void
-  // DSH-FORK(brand): what the Turn's tool calls did, so the collapsed row reads
-  // as work ("Created a.mjs, ran a command +53 -0") instead of raw counts.
-  // EXIT: upstream gives the folded process row a content-derived label.
-  readonly summary?: TurnToolSummary | undefined
 }
 
 /** Full props of one keyed Chat renderer. */

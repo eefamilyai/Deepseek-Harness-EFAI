@@ -20,7 +20,13 @@ export interface TurnProcessSpec {
 const TURN_PROCESS_INDEPENDENT_KIND_LIST = [
   'system-prompt',
   'user',
-  'steering',
+  // DSH-FORK(brand): a steer admitted mid-Turn is part of that Turn's work, so
+  // it folds with the rest of the process window instead of floating after the
+  // collapsed summary. `user` stays independent, and the Turn's opening human
+  // input — whichever kind carries it — is excluded by the opening anchor, so
+  // the message that opened the Turn is never hidden.
+  // EXIT: upstream lists `steering` here and renders a mid-Turn steer outside
+  // the collapsed process row.
   'turn-process',
   'turn-error',
   'turn-max-tokens',

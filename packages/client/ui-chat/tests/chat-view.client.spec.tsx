@@ -179,14 +179,6 @@ const toolResult = (seq: number, callId: string, name = 'bash'): ToolResultNode 
   callTime: seq * 1_000 - 500,
   content: [], isError: false, subCalls: [],
 })
-// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-chat/src/client/chat.
-/** Settled kernel cell whose leading comment becomes the row's phrase. */
-const kernelResult = (seq: number, callId: string, comment: string): ToolResultNode => ({
-  kind: 'tool-result', seq, time: seq * 1_000, callId,
-  call: { name: 'kernel', argsRaw: JSON.stringify({ code: `${comment}\nprint(1)` }) },
-  callTime: seq * 1_000 - 500,
-  content: [], isError: false, subCalls: [],
-})
 const runningCall = (callId: string, name = 'bash'): RunningToolCall => ({
   callId, name, argsRaw: `{"command":"cmd-${callId}"}`, turn: 2, step: 1, time: 1_000, subCalls: [],
 })
@@ -1367,7 +1359,7 @@ describe('ChatView', () => {
       turnEnds: new Map([[1, 6]]),
     })
     const view = render(<h.ChatView {...h.props} />)
-    const toggle = view.getByRole('button', { name: '运行了命令 · 委派了 subagent' })
+    const toggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 个 subagent' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(toggle.getAttribute('data-turn-process-tool-calls')).toBe('1')
     expect(toggle.getAttribute('data-turn-process-messages')).toBe('1')
@@ -1398,7 +1390,7 @@ describe('ChatView', () => {
     act(() => { h.set({
       nodes: [user(1, 'question'), first, toolResult(3, 'a'), toolResult(4, 'b', 'subagent'), second],
     }) })
-    const renewedToggle = view.getByRole('button', { name: '运行了命令 · 委派了 subagent' })
+    const renewedToggle = view.getByRole('button', { name: '1 次工具调用 · 1 条消息 · 1 个 subagent' })
     expect(renewedToggle.getAttribute('aria-expanded')).toBe('true')
     expect(members[0]?.getAttribute('hidden')).toBeNull()
   })
@@ -1508,7 +1500,10 @@ describe('ChatView', () => {
     expect(contextRow?.getAttribute('hidden')).toBeNull()
   })
 
-  it('keeps ordinary spacing when steering separates the process control from its answer', () => {
+  // DSH-FORK(brand): a mid-turn steer folds with the Turn process, so it cannot
+  // separate the collapsed summary from its answer. EXIT: upstream renders the
+  // steer outside the collapsed process row.
+  it('keeps the tightened answer gap when a folding steer separates the control from its answer', () => {
     const h = makeHarness({
       nodes: [
         user(1, 'question'),
@@ -1520,12 +1515,18 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     const answer = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="assistant-step"]:not([hidden])')
+    const steer = view.getByText('also mention safety')
+      .closest('[data-chat-flow-kind="steering"]') as HTMLElement
 
-    expect(view.getByText('also mention safety')).toBeTruthy()
-    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(false)
+    expect(steer.dataset.turnProcessMember).toBe('true')
+    expect(steer.getAttribute('hidden')).toBe('until-found')
+    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(true)
   })
 
-  it('keeps ordinary spacing when steering precedes the first process evidence', () => {
+  // DSH-FORK(brand): the first direct message of the Turn is its opening input
+  // and stays outside the fold; every later steer folds with the process.
+  // EXIT: upstream renders every steer outside the collapsed process row.
+  it('keeps the opening message outside the fold and folds a steer before the first process evidence', () => {
     const h = makeHarness({
       nodes: [
         steering(1, 'question', 1),
@@ -1537,9 +1538,15 @@ describe('ChatView', () => {
     })
     const view = render(<h.ChatView {...h.props} />)
     const answer = view.container.querySelector<HTMLElement>('[data-chat-flow-kind="assistant-step"]:not([hidden])')
+    const opening = view.getByText('question').closest('[data-chat-flow-kind="steering"]') as HTMLElement
+    const steer = view.getByText('also mention safety')
+      .closest('[data-chat-flow-kind="steering"]') as HTMLElement
 
-    expect(view.getByText('also mention safety')).toBeTruthy()
-    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(false)
+    expect(opening.hasAttribute('data-turn-process-member')).toBe(false)
+    expect(opening.getAttribute('hidden')).toBeNull()
+    expect(steer.dataset.turnProcessMember).toBe('true')
+    expect(steer.getAttribute('hidden')).toBe('until-found')
+    expect(answer?.hasAttribute('data-turn-process-answer')).toBe(true)
   })
 
   it('shows a running Turn expanded and folds it once at turn/end', () => {
@@ -1614,8 +1621,11 @@ describe('ChatView', () => {
     expect(row.getAttribute('hidden')).toBe('until-found')
   })
 
-  // DSH-FORK(brand): the reader's own mid-run steer must stay outside the fold.
-  it('keeps a steer that lands mid-run outside the process fold', () => {
+  // DSH-FORK(brand): a steer admitted mid-Turn is part of that Turn's process,
+  // so it folds with the rest of the work instead of floating after the
+  // collapsed summary. EXIT: upstream keeps `steering` process-independent and
+  // renders the steer outside the collapsed process row.
+  it('folds a steer that lands mid-run with the rest of the Turn process', () => {
     const h = makeHarness({
       nodes: [
         user(1, 'question'),
@@ -1628,12 +1638,120 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const row = view.getByText('also mention safety')
       .closest('[data-chat-flow-kind="steering"]') as HTMLElement
-    // The reader's own words are never hidden behind the Turn's work.
-    expect(row.dataset.turnProcessMember).toBeUndefined()
+    // A running Turn starts expanded, so the steer is visible while it lands.
+    expect(row.dataset.turnProcessMember).toBe('true')
     expect(row.getAttribute('hidden')).toBeNull()
 
+    // Collapsing the Turn process hides the steer with the work it steered.
     fireEvent.click(turnProcessControl(view.container)!)
     expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    expect(row.getAttribute('hidden')).toBe('until-found')
+
+    // Expanding brings it back in its original position.
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(row.getAttribute('hidden')).toBeNull()
+  })
+
+  // DSH-FORK(brand): the Turn's own opening human message renders outside the
+  // fold, so it is not process evidence — a Turn whose only non-answer row is
+  // that message must not grow a disclosure that folds nothing. EXIT: upstream
+  // renders a mid-turn steer outside the collapsed process row.
+  it('grows no disclosure when a Turn opens on a steer and has no other process', () => {
+    const h = makeHarness({
+      nodes: [steering(1, 'question', 1), assistant(2, 'final answer', 1, 1)],
+      turnEnds: new Map([[1, 3]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+
+    expect(turnProcessControl(view.container)).toBeNull()
+    const opening = view.getByText('question').closest('[data-chat-flow-kind="steering"]') as HTMLElement
+    expect(opening.hasAttribute('data-turn-process-member')).toBe(false)
+    expect(opening.getAttribute('hidden')).toBeNull()
+    expect(view.getByText('final answer')).toBeTruthy()
+  })
+
+  // DSH-FORK(brand): a completed Turn's folded window keeps its ordering, so the
+  // answer still follows the summary even with steerings interleaved. EXIT:
+  // upstream renders each steer outside the collapsed process row.
+  it('folds every mid-turn steer of a completed Turn while keeping the answer last', () => {
+    const h = makeHarness({
+      nodes: [
+        user(1, 'question'),
+        reasoningAssistant(2, 'inspect', 1, 1),
+        toolResult(3, 'a'),
+        steering(4, 'first steer', 1),
+        toolResult(5, 'b'),
+        steering(6, 'second steer', 1),
+        assistant(8, 'final answer', 1, 2),
+      ],
+      turnEnds: new Map([[1, 9]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const steers = ['first steer', 'second steer'].map(text => view.getByText(text)
+      .closest('[data-chat-flow-kind="steering"]') as HTMLElement)
+
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('false')
+    expect(steers.map(steer => steer.dataset.turnProcessMember)).toEqual(['true', 'true'])
+    expect(steers.map(steer => steer.getAttribute('hidden')))
+      .toEqual(['until-found', 'until-found'])
+    // The opening human message is the Turn's input, not its work.
+    const question = view.getByText('question').closest('[data-chat-flow-kind="user"]') as HTMLElement
+    expect(question.hasAttribute('data-turn-process-member')).toBe(false)
+    expect(question.getAttribute('hidden')).toBeNull()
+
+    fireEvent.click(turnProcessControl(view.container)!)
+    expect(steers.map(steer => steer.getAttribute('hidden'))).toEqual([null, null])
+  })
+
+  // DSH-FORK(brand): a reader who expands a running Turn keeps that expansion
+  // once the Turn finalizes. EXIT: upstream has no running-Turn fold state.
+  it('remembers an expansion chosen while the Turn was still running', () => {
+    const process = assistant(2, 'inspect', 1, 1)
+    const h = makeHarness({
+      nodes: [user(1, 'question'), process],
+      partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'streaming answer' }] },
+      running: true,
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.getByText('inspect').closest('[data-chat-flow-kind="assistant-step"]') as HTMLElement
+    const toggle = turnProcessControl(view.container)!
+    // Collapse then expand: the second choice is the reader's live preference.
+    fireEvent.click(toggle)
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+
+    act(() => {
+      h.set({
+        nodes: [user(1, 'question'), process, assistant(4, 'settled answer', 1, 2)],
+        partial: null,
+        running: false,
+        turnEnds: new Map([[1, 5]]),
+      })
+    })
+    expect(turnProcessControl(view.container)?.getAttribute('aria-expanded')).toBe('true')
+    expect(row.getAttribute('hidden')).toBeNull()
+  })
+
+  // DSH-FORK(brand): a steer the reader sends after the answer still belongs to
+  // the Turn that produced it. EXIT: upstream gives the folded process row a
+  // content-derived label.
+  it('folds a steer anchored after the finalized answer with the same Turn', () => {
+    const h = makeHarness({
+      nodes: [
+        user(1, 'question'),
+        reasoningAssistant(2, 'inspect', 1, 1),
+        assistant(3, 'final answer', 1, 2),
+        steering(4, 'one more thing', 1),
+      ],
+      turnEnds: new Map([[1, 5]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.getByText('one more thing')
+      .closest('[data-chat-flow-kind="steering"]') as HTMLElement
+    expect(row.dataset.turnProcessMember).toBe('true')
+    expect(row.getAttribute('hidden')).toBe('until-found')
+
+    fireEvent.click(turnProcessControl(view.container)!)
     expect(row.getAttribute('hidden')).toBeNull()
   })
 
@@ -1722,85 +1840,6 @@ describe('ChatView', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(contextRow?.getAttribute('hidden')).toBe('until-found')
     expect(view.getByLabelText('回到底部')).toBeTruthy()
-  })
-
-  it('colours each folded phrase by its tool family and separates the verb', () => {
-    // `write` and `read` only classify as a mutation and a read when the call
-    // carries the file it touched, so each fixture names one.
-    const write = (seq: number, callId: string, path: string): ToolResultNode => ({
-      ...toolResult(seq, callId, 'write'),
-      call: { name: 'write', argsRaw: JSON.stringify({ file_path: path, content: 'x' }) },
-    })
-    const read = (seq: number, callId: string, path: string): ToolResultNode => ({
-      ...toolResult(seq, callId, 'read'),
-      call: { name: 'read', argsRaw: JSON.stringify({ file_path: path }) },
-    })
-    // The process window needs an owning step-1 assistant; without it the row
-    // never mounts and the assertion reads null.
-    const first = {
-      ...assistant(2, 'earlier reply', 1, 1),
-      blocks: [
-        { kind: 'reasoning' as const, text: 'inspect the repository' },
-        { kind: 'text' as const, text: 'earlier reply' },
-      ],
-    }
-    const h = makeHarness({
-      nodes: [
-        user(1, 'question'),
-        first,
-        kernelResult(3, 'a', '# Read the checkout root'),
-        write(4, 'b', '/w/notes.md'),
-        read(5, 'c', '/w/manifest.json'),
-        assistant(6, 'final answer', 1, 2),
-      ],
-      turnEnds: new Map([[1, 7]]),
-    })
-    const view = render(<h.ChatView {...h.props} />)
-    const control = turnProcessControl(view.container)!
-    const tones = [...control.querySelectorAll<HTMLElement>('[data-tone]')]
-      .map(span => span.getAttribute('data-tone'))
-    // One hue per family, so the folded line stays a miniature of the expanded
-    // rows it hides. A kernel cell is an execution, so it takes the shell
-    // family's hue; a write is a mutation and a read is a read.
-    expect(tones).toContain('shell')
-    expect(tones).toContain('mutate')
-    expect(tones).toContain('read')
-    // Only the verb is tinted: the model's own sentence follows as neutral
-    // text, so the row does not claim its palette for words it did not write.
-    const detail = control.querySelector<HTMLElement>('[class*="detail"]')
-    expect(detail?.textContent).toBe('Read the checkout root')
-    // A kernel comment is already a capitalised sentence, so the verb needs a
-    // separator in front of it; "ran Repeat the ..." read as one broken word.
-    // This suite renders the zh dictionary, whose verb already ends in a colon.
-    expect(control.textContent).toContain('运行了脚本：Read the checkout root')
-  })
-
-  it('budgets the folded row label so it is never cut mid-word', () => {
-    const first = {
-      ...assistant(2, 'earlier reply', 1, 1),
-      blocks: [
-        { kind: 'reasoning' as const, text: 'inspect the repository' },
-        { kind: 'text' as const, text: 'earlier reply' },
-      ],
-    }
-    const h = makeHarness({
-      nodes: [
-        user(1, 'question'),
-        first,
-        kernelResult(3, 'a', '# Report working directory and top-level contents of the checkout root'),
-        kernelResult(4, 'b', '# Show working directory and top-level entries with file sizes'),
-        assistant(5, 'final answer', 1, 2),
-      ],
-      turnEnds: new Map([[1, 6]]),
-    })
-    const view = render(<h.ChatView {...h.props} />)
-    const label = turnProcessControl(view.container)?.textContent ?? ''
-    // The leading phrase is abbreviated at a word boundary...
-    expect(label).toContain('Report working directory and top-level contents of the…')
-    // ...and what the row could not print is reported rather than silently
-    // elided, which is what used to leave a fragment like "entries wi…".
-    expect(label).toContain('还有 1 项')
-    expect(label).not.toContain('entries wi')
   })
 
   it('keeps a focused process row visible when a live Turn completes', () => {
@@ -3066,4 +3105,5 @@ describe('ChatView', () => {
     expect(failedView.getByText('Compaction cancelled.')).toBeTruthy()
     expect(failedView.container.querySelector('[data-state="error"]')).not.toBeNull()
   })
+
 })

@@ -9,11 +9,12 @@
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
-    { "path": "../ui-session" },
     { "path": "../locale" },
     { "path": "../ui-conversation" },
     { "path": "../ui-primitives" },
     { "path": "../ui-renderer" },
+    { "path": "../ui-session" },
+    { "path": "../ui-sidebar-right" },
     { "path": "../ui-slots" }
   ]
 }

@@ -48,13 +48,22 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const storedEntry = useStore(state => processSpec === undefined
     ? undefined
     : storedTurnProcessEntry(state, processSpec.turn))
-  const processEntry = processSpec !== undefined
-    && processSpec.answerStep !== null
-    && storedEntry?.answerStep === processSpec.answerStep
+  // DSH-FORK(brand): a stored entry applies to this Turn when it pins the
+  // Turn's current answer step, or when it was recorded while the Turn was
+  // still running (answer step null) and therefore describes no other
+  // generation. Comparing the two answer steps alone dropped every explicit
+  // choice the reader made mid-Turn the moment `turn/end` pinned a step.
+  // EXIT: upstream renders the process row only after the Turn closes, so it
+  // never has to carry a running choice across that boundary.
+  const processEntry = storedEntry !== undefined
+    && processSpec !== undefined
+    && (storedEntry.answerStep === null || storedEntry.answerStep === processSpec.answerStep)
     ? storedEntry
     : undefined
   const setOpen = useCallback((open: boolean) => {
-    if (processSpec !== undefined && processSpec.answerStep !== null) {
+    // A running Turn has no answer step yet; it records null rather than
+    // dropping the choice, so the reader's collapse survives the Turn finishing.
+    if (processSpec !== undefined) {
       actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
     }
   }, [actions, processSpec])
@@ -84,13 +93,25 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && compactTranscript
     && processPresentation.turn === processSpec.turn
     && !historyTruncatesTurn
+  // DSH-FORK(brand): the human message that opened the Turn is the Turn's input,
+  // not its work, so it stays visible even though a mid-turn steer now folds
+  // with the rest of the process. EXIT: upstream renders a mid-turn steer
+  // outside the collapsed process row.
+  const openingHumanAnchorSeq = processPresentation?.openingHumanAnchorSeq ?? null
+  // DSH-FORK(brand): a steer the reader sends after the finalized answer still
+  // belongs to the Turn it steered, so it folds with the rest of the process
+  // instead of floating below the summary. Every other member stops at the
+  // answer, which keeps the answer itself last. EXIT: upstream gives the folded
+  // process row a content-derived label.
+  const afterAnswerSteer = routedNode?.kind === 'steering'
   const processMember = routedNode !== undefined
     && sameTurn
     && processWindowReady
     && processEndSeq !== null
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
     && routedNode.anchorSeq >= processSpec.processStartSeq
-    && routedNode.anchorSeq < processEndSeq
+    && (routedNode.anchorSeq < processEndSeq || afterAnswerSteer)
+    && routedNode.anchorSeq !== openingHumanAnchorSeq
   const processAnswer = routedNode !== undefined
     && sameTurn
     && processWindowReady

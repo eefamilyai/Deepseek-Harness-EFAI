@@ -1,62 +1,16 @@
 diff --git a/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts b/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
-index cebcefaada..5d787dc21f 100644
+index cebcefaada..c027478636 100644
 --- a/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
 +++ b/packages/extensions/cordis-client-runner/src/client/slot-catalog.ts
-@@ -174,7 +174,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
-     ],
-     replaceRisk: 'none',
-     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.assistant-actions\', () => ctx.slots.register(\n      { name: \'conversation.chat.assistant-actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
--    source: 'packages/client/ui-chat/src/client/contract/slots.ts:217',
-+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:222',
-   },
-   {
-     key: 'conversation.chat.commandview',
-@@ -221,7 +221,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
-     occupants: [],
-     replaceRisk: 'none',
-     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.commandview\', () => ctx.slots.register(\n      { name: \'conversation.chat.commandview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
--    source: 'packages/client/ui-chat/src/client/contract/slots.ts:205',
-+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:210',
-   },
-   {
-     key: 'conversation.chat.node',
-@@ -289,7 +289,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
-     ],
-     replaceRisk: 'shadows-shipped-ui',
-     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.node\', () => ctx.slots.register(\n      { name: \'conversation.chat.node\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
--    source: 'packages/client/ui-chat/src/client/contract/slots.ts:186',
-+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:191',
-   },
-   {
-     key: 'conversation.chat.turnTail',
-@@ -336,7 +336,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
-     ],
-     replaceRisk: 'none',
-     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.turnTail\', () => ctx.slots.register(\n      { name: \'conversation.chat.turnTail\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
--    source: 'packages/client/ui-chat/src/client/contract/slots.ts:211',
-+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:216',
-   },
-   {
-     key: 'conversation.composer',
-@@ -984,7 +984,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
-     ],
-     replaceRisk: 'shadows-shipped-ui',
-     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.message.images\', () => ctx.slots.register(\n      { name: \'conversation.message.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
--    source: 'packages/client/ui-chat/src/client/contract/slots.ts:199',
-+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:204',
-   },
-   {
-     key: 'conversation.session',
-@@ -1247,6 +1247,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
-     slotInject: '',
+@@ -1248,6 +1248,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
      declaredBy: 'an entry in \'conversation.session.header\' (client-ui-conversation), so it exists while that entry is mounted',
      occupants: [
-+      'client-ui-dock DockToggleHeaderAction id \'dock-toggle\'',
-+      'client-ui-dock DockMenuHeaderAction id \'session-log-download\'',
        'client-ui-open-in-app OpenInAppAction id \'open-in-app\'',
++      'client-ui-sidebar-terminal TerminalMenuHeaderAction id \'session-log-download\'',
        'session-log-export SessionLogDownloadHeaderAction id \'session-log-download\'',
      ],
-@@ -1648,6 +1650,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+     replaceRisk: 'none',
+@@ -1648,6 +1649,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
        'client-locale LanguageRow id \'language\'',
        'client-ui-chat TranscriptViewRow id \'transcript-view\'',
        'client-ui-conversation EnterBehaviorRow id \'composer-enter\'',
@@ -64,7 +18,7 @@ index cebcefaada..5d787dc21f 100644
        'client-ui-permission-presets PermissionRow id \'permission\'',
        'client-ui-theme AppearanceRow id \'appearance\'',
        'client-ui-theme FontSizeRow id \'font-size\'',
-@@ -1955,6 +1958,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+@@ -1955,6 +1957,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
      occupants: [
        'client-ui-agent-preset AgentPresetSection id \'agent-presets\'',
        'client-ui-settings-general GeneralSection id \'general\'',
@@ -72,8 +26,24 @@ index cebcefaada..5d787dc21f 100644
        'client-ui-settings-models ModelsSection id \'models\'',
        'client-ui-settings-plugins PluginsSettingsSection id \'plugins\'',
      ],
+@@ -2263,6 +2266,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+       'client-ui-sidebar-documentpreview TextPreview',
+       'client-ui-sidebar-files FilesBody',
+       'client-ui-sidebar-right GuideBody',
++      'client-ui-sidebar-terminal TerminalBody',
+     ],
+     replaceRisk: 'none',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.pane.tab\', () => ctx.slots.register(\n      { name: \'sidebar.right.pane.tab\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+@@ -2308,6 +2312,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
+       'client-ui-sidebar-documentpreview TextTitle',
+       'client-ui-sidebar-files FilesTitle',
+       'client-ui-sidebar-right GuideTitle',
++      'client-ui-sidebar-terminal TerminalTitle',
+     ],
+     replaceRisk: 'none',
+     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.right.pane.tab.title\', () => ctx.slots.register(\n      { name: \'sidebar.right.pane.tab.title\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
 diff --git a/packages/extensions/tool-cordis/src/api-catalog.ts b/packages/extensions/tool-cordis/src/api-catalog.ts
-index 54d156e221..396a4bbf37 100644
+index 54d156e221..8dcf695b91 100644
 --- a/packages/extensions/tool-cordis/src/api-catalog.ts
 +++ b/packages/extensions/tool-cordis/src/api-catalog.ts
 @@ -1199,10 +1199,47 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
@@ -151,13 +121,17 @@ index 54d156e221..396a4bbf37 100644
        {
          signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
          description: 'Remote adapter for one draft provider interrogation.',
-@@ -4478,6 +4533,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+@@ -4478,6 +4533,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
      name: 'JsonValue',
      declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
    },
 +  {
++    name: 'KernelAgent',
++    declaration: 'export interface KernelAgent {\n    readonly id: string;\n    readonly session: {\n        readonly id: string;\n    };\n}',
++  },
++  {
 +    name: 'KernelExecuteRequest',
-+    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n}',
++    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n    readonly agent?: KernelAgent;\n}',
 +  },
 +  {
 +    name: 'KernelExecuteResult',
@@ -174,7 +148,7 @@ index 54d156e221..396a4bbf37 100644
    {
      name: 'KnobState',
      declaration: 'export interface KnobState {\n    preset: string | null;\n    sandbox: SandboxMode | null;\n    approval: ApprovalPolicy | null;\n}',
-@@ -4498,6 +4569,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+@@ -4498,6 +4573,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
      name: 'KvUnitDescriptor',
      declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n}',
    },
@@ -193,7 +167,7 @@ index 54d156e221..396a4bbf37 100644
    {
      name: 'LlmAdapter',
      declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
-@@ -4564,7 +4647,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
+@@ -4564,7 +4651,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
    },
    {
      name: 'LlmRuntime',

@@ -118,7 +118,7 @@
     { "path": "./packages/context/file-reference" },
     { "path": "./apps/web" },
     // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
-    { "path": "./packages/client/ui-dock" },
+    { "path": "./packages/client/ui-sidebar-terminal" },
     { "path": "./packages/client/ui-effects" },
     // DSH-FORK end
   ]

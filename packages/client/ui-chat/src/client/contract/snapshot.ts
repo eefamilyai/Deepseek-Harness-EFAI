@@ -77,6 +77,16 @@ export interface ChatTurnProcessPresentation {
   readonly turnClosed: boolean
   readonly hasExternalProcess: boolean
   readonly compactAnswer: boolean
+  // DSH-FORK(brand): a mid-turn steer folds with the Turn process, so the fold
+  // must publish the anchor of the human message that opened the Turn — that
+  // one row is the Turn's input and stays outside the fold. EXIT: upstream
+  // renders every steer outside the collapsed process row and needs no anchor.
+  /**
+   * Anchor of the human message that opened the Turn, when one precedes its
+   * process control. That message is the Turn's input rather than its work, so
+   * it stays outside the fold even when its kind is otherwise foldable.
+   */
+  readonly openingHumanAnchorSeq: number | null
 }
 
 /** Compatibility projection backing StatsPills and the legacy top-level snapshot fields. */

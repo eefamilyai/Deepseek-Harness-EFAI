@@ -1,5 +1,5 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 494e4f762f..1b6fbb5cdc 100644
+index 494e4f762f..8cfc48bafe 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
 @@ -116,6 +116,10 @@
@@ -9,7 +9,7 @@ index 494e4f762f..1b6fbb5cdc 100644
 -    { "path": "./apps/web" }
 +    { "path": "./apps/web" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
-+    { "path": "./packages/client/ui-dock" },
++    { "path": "./packages/client/ui-sidebar-terminal" },
 +    { "path": "./packages/client/ui-effects" },
 +    // DSH-FORK end
    ]

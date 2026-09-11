@@ -6,7 +6,7 @@ type ChatActions = {
   setTurnProcessOpen: (
     draft: ChatStoreState,
     turn: number,
-    answerStep: number,
+    answerStep: number | null,
     open: boolean,
   ) => void
 }
@@ -34,8 +34,8 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
     actions: {
       // DSH-FORK(brand): a close is recorded, not deleted. Deleting it would
       // return the Turn to its default, so a reader could never fold a running
-      // Turn. EXIT: upstream gives the folded process row a content-derived
-      // label.
+      // Turn. A running Turn's `answerStep` is null, which the entry keeps.
+      // EXIT: upstream gives the folded process row a content-derived label.
       setTurnProcessOpen: (draft, turn, answerStep, open) => {
         const index = draft.turnProcesses.findIndex(entry => entry.turn === turn)
         const next = { turn, answerStep, open } satisfies TurnProcessViewEntry
