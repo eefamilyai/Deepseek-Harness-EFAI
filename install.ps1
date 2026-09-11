@@ -30,7 +30,7 @@ if (-not (Have node)) { Die 'Node.js is required (^22.19 or >=24). See https://n
 # The workspace declares node ^22.19 || >=24; an older runtime fails deep in
 # the build with an unhelpful error, so check it here where the message helps.
 $nodeCheck = @'
-const [maj, min] = process.versions.node.split(".").map(Number)
+const [maj, min] = process.versions.node.split('.').map(Number)
 const ok = maj >= 24 || (maj === 22 && min >= 19)
 if (!ok) { console.error(`Node ${process.versions.node} is too old; this needs ^22.19 or >=24.`); process.exit(1) }
 '@
