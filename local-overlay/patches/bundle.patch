@@ -1,5 +1,5 @@
 diff --git a/packages/bundle/base/cordis.patch.yml b/packages/bundle/base/cordis.patch.yml
-index f906ea8601..074f7a6f51 100644
+index f906ea8601..fa7602eaf8 100644
 --- a/packages/bundle/base/cordis.patch.yml
 +++ b/packages/bundle/base/cordis.patch.yml
 @@ -107,6 +107,31 @@
@@ -202,16 +202,18 @@ index f906ea8601..074f7a6f51 100644
      # Consecutive-repeat reminders on the tool chain.
      - id: repeat-tool-reminder
        name: '@deepseek-ai/dsh-repeat-tool-reminder'
-@@ -453,6 +601,17 @@
+@@ -453,6 +601,19 @@
          fetch: true
          searchTimeoutMs: 60000
  
-+    # DSH-FORK(browser): mounts this fork's Playwright fetch provider, so that
-+    # pointing the web seam's fetchProvider at `browser` makes web_fetch return
-+    # what a real browser sees — JavaScript run, client-rendered content
-+    # present — instead of raw HTML. Dormant until web_fetch is turned on. The
-+    # Chromium binary is a one-time `npx playwright install chromium`; a launch
-+    # without it fails with that exact instruction rather than a stack trace.
++    # DSH-FORK(browser): a self-hosted headless browser (Playwright). It mounts
++    # two things. The `browser` tool lets the model read a page as text and act
++    # by element ref — for JS-rendered sites and multi-step flows a plain fetch
++    # cannot handle. The browser-rendered fetch provider registers with the web
++    # seam too, dormant until web_fetch is turned on and its fetchProvider is
++    # pointed at `browser`. Both need a one-time `npx playwright install
++    # chromium`; a launch without the binary fails with that exact instruction
++    # rather than a stack trace.
 +    # EXIT: move to packages/bundle/efai-browser/cordis.patch.yml, a fork-owned
 +    # bundle applied by profile.
 +    - id: web-browser

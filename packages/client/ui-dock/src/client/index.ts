@@ -1,5 +1,5 @@
 /**
- * Browser half of the dock: mounts the right-side dock into a PRIVATE React
+ * Client half of the dock: mounts the right-side dock into a PRIVATE React
  * root appended to the document body — the same self-contained overlay pattern
  * ui-effects uses — so the drawer needs no slot wiring. It also contributes two
  * conversation-header utilities through the slot system: a sidebar toggle and a

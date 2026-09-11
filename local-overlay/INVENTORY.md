@@ -227,7 +227,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 228 paths do not exist upstream, so no patch covers them and none can conflict.
+These 229 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -304,7 +304,6 @@ These 228 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-chat/tests/turn-tool-summary.client.spec.ts`
 - `packages/client/ui-dock/README.md`
 - `packages/client/ui-dock/package.json`
-- `packages/client/ui-dock/src/client/Browser.tsx`
 - `packages/client/ui-dock/src/client/Dock.tsx`
 - `packages/client/ui-dock/src/client/Terminal.tsx`
 - `packages/client/ui-dock/src/client/ansi.ts`
@@ -419,6 +418,8 @@ These 228 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/web/web-browser/src/invariant.ts`
 - `packages/web/web-browser/src/page-script.ts`
 - `packages/web/web-browser/src/provider.ts`
+- `packages/web/web-browser/src/serialize.ts`
+- `packages/web/web-browser/src/tool.ts`
 - `packages/web/web-browser/tsconfig.json`
 - `python/kiln/provider_bridge.py`
 - `python/kiln/runtime/.python-version`

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-dock",
-  "description": "Right-side dock: a modern browser pane mirroring the agent's shared browser (drive it too, or just browse when the AI is idle) and a live terminal in the workspace cwd, over the sidebar-bridge endpoints.",
+  "description": "Right-side dock: a live terminal in the workspace cwd over the sidebar-bridge endpoints.",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"

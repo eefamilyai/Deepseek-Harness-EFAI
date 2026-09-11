@@ -9,7 +9,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  IconBrowseOutline16,
   IconCopyOutline16,
   IconDownloadOutline16,
   IconEllipsisOutline16,
@@ -20,7 +19,7 @@ import {
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, SessionIdOf } from '@deepseek-ai/dsh-client-ui-slots'
-import { openDockTab, toggleDock } from './dock-events.ts'
+import { openDock, toggleDock } from './dock-events.ts'
 import { NS } from './header-locales.ts'
 import css from './header.module.css'
 
@@ -84,11 +83,6 @@ export function DockMenuHeaderAction({ sessionId, t }: HeaderProps): ReactNode {
     },
     { type: 'separator', id: 'sep' },
     {
-      id: 'open-browser',
-      label: t('menu.openBrowser'),
-      icon: <IconBrowseOutline16 size={16} />,
-    },
-    {
       id: 'open-terminal',
       label: t('menu.openTerminal'),
       icon: <IconCodeOutline16 size={16} />,
@@ -109,10 +103,8 @@ export function DockMenuHeaderAction({ sessionId, t }: HeaderProps): ReactNode {
       }
     } else if (id === 'copy-session-id') {
       void writeClipboard(String(sessionId))
-    } else if (id === 'open-browser') {
-      openDockTab('browser')
     } else if (id === 'open-terminal') {
-      openDockTab('terminal')
+      openDock()
     }
   }
 
