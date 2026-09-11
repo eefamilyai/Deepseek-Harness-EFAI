@@ -185,6 +185,18 @@
       "regenerate": "pnpm run gen-module-graph"
     },
     {
+      "path": "docs/subsystems/code-runtime.md",
+      "regenerate": "pnpm run gen-cordis-catalog"
+    },
+    {
+      "path": "docs/subsystems/code-runtime.zh.md",
+      "regenerate": "pnpm run gen-cordis-catalog"
+    },
+    {
+      "path": "docs/subsystems/code-runtime.i18n.yaml",
+      "regenerate": "pnpm run gen-cordis-catalog"
+    },
+    {
       "path": "THIRD_PARTY_NOTICES.md",
       "regenerate": "pnpm run gen-third-party-notices"
     },

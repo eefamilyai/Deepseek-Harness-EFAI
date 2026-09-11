@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **121** in **21** patch(es).
+Tier-2 files: **118** in **21** patch(es).
 
 ## Patches
 
@@ -181,12 +181,9 @@ Tier-2 files: **121** in **21** patch(es).
 - `packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx`
 - `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
 
-### `patches/docs.patch` — 7 file(s)
+### `patches/docs.patch` — 4 file(s)
 
 - `docs/event-producer-consumer.md`
-- `docs/subsystems/code-runtime.i18n.yaml`
-- `docs/subsystems/code-runtime.md`
-- `docs/subsystems/code-runtime.zh.md`
 - `docs/subsystems/llm-streaming.i18n.yaml`
 - `docs/subsystems/llm-streaming.md`
 - `docs/subsystems/llm-streaming.zh.md`
@@ -211,6 +208,9 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 | `docs/module-graph.md` | `pnpm run gen-module-graph` |
 | `docs/module-graph.zh.md` | `pnpm run gen-module-graph` |
 | `docs/module-graph.i18n.yaml` | `pnpm run gen-module-graph` |
+| `docs/subsystems/code-runtime.md` | `pnpm run gen-cordis-catalog` |
+| `docs/subsystems/code-runtime.zh.md` | `pnpm run gen-cordis-catalog` |
+| `docs/subsystems/code-runtime.i18n.yaml` | `pnpm run gen-cordis-catalog` |
 | `THIRD_PARTY_NOTICES.md` | `pnpm run gen-third-party-notices` |
 | `snapshots/web/lifecycle-chrome/hero.expected.md` | `pnpm run test:snapshot:record` |
 | `snapshots/web/lifecycle-chrome/plan-active.expected.md` | `pnpm run test:snapshot:record` |
