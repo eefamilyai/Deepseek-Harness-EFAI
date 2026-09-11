@@ -27,22 +27,13 @@ const TRUNCATED_MESSAGE = '<response clipped><NOTE>To save on context only part 
 const DEFAULT_DESCRIPTION = [
   'Editing tool for Jupyter (.ipynb) notebooks. One schema, five commands.',
   '',
-  "- 'view' renders every cell: zero-based index, cell type, code execution",
-  "  count (or 'unexecuted'), and the cell source indented two spaces. It does",
-  '  not modify the notebook.',
-  "- 'create' writes a new notebook and refuses to overwrite an existing path.",
-  "  Omit 'cells' for an empty notebook, or pass a JSON array of nbformat cells",
-  "  (each with 'cell_type' and 'source').",
-  "- 'str_replace' replaces one literal 'old_str' inside the 'cell_id' cell's",
-  "  source. The match must be exact and unique within that cell; omit 'new_str'",
-  '  (never null) to delete the match.',
-  "- 'insert' adds a new cell at zero-based 'cell_id' (0 prepends, the cell",
-  "  count appends) with 'cell_type' and 'source'.",
+  "- 'view' renders every cell: zero-based index, cell type, code execution count (or 'unexecuted'), and the cell source indented two spaces. It does not modify the notebook.",
+  "- 'create' writes a new notebook and refuses to overwrite an existing path. Omit 'cells' for an empty notebook, or pass a JSON array of nbformat cells (each with 'cell_type' and 'source').",
+  "- 'str_replace' replaces one literal 'old_str' inside the 'cell_id' cell's source. The match must be exact and unique within that cell; omit 'new_str' (never null) to delete the match.",
+  "- 'insert' adds a new cell at zero-based 'cell_id' (0 prepends, the cell count appends) with 'cell_type' and 'source'.",
   "- 'delete' removes the cell at zero-based 'cell_id'.",
   '',
-  'Cell indexes are zero-based and stable for a single command. Paths must be',
-  'absolute. Mutating commands re-read the notebook and write the whole file',
-  'back through the mounted filesystem policy.',
+  'Cell indexes are zero-based and stable for a single command. Paths must be absolute. Mutating commands re-read the notebook and write the whole file back through the mounted filesystem policy.',
 ].join('\n')
 
 interface NotebookCell {

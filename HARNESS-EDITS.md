@@ -18,11 +18,11 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against the base `c291e7961a`, `master`'s surface is **347 paths** (221 added, 125 modified, 1 deleted). `local-overlay/INVENTORY.md` enumerates them from the rules that produce the patches, so it cannot drift from the tree the way a hand-written table can.
+Measured against the base `c291e7961a`, `master`'s surface is **354 paths** (221 added, 132 modified, 1 deleted). `local-overlay/INVENTORY.md` enumerates them from the rules that produce the patches, so it cannot drift from the tree the way a hand-written table can.
 
 Of the 221 added paths, all are free: upstream owns no path among them, so they merge untouched, forever.
 
-The 125 modified paths are the entire cost of every future update: 121 are patched, and the other four are files a generator owns, which is why they are excluded from the patches and regenerated instead.
+The remaining 133 paths are the entire cost of every future update: 118 are patched, and the other 15 are files a generator owns, which is why they are excluded from the patches and regenerated instead.
 
 The seam below is grouped by why each edit exists, because the fix differs per group.
 
@@ -62,8 +62,8 @@ names.
 
 ### Tier 2 — the seam with upstream (the whole problem)
 
-The seam is **121 patched paths**. The groups below are a curated selection — the
-edits worth understanding before a merge — not an exhaustive partition of those 121;
+The seam is **118 patched paths**. The groups below are a curated selection — the
+edits worth understanding before a merge — not an exhaustive partition of those 118;
 `local-overlay/INVENTORY.md` is the authority for the full list, and
 `local-overlay/rules.json` for which group owns which path. The counts in each heading
 are that group's curated membership as written, not the total for its subsystem.
@@ -160,7 +160,7 @@ Seven concrete failures, in order of cost.
 
 **4. Generated files are committed as hand edits.** T2-F is ~260 lines that a generator rewrites in seconds. Every one is a conflict that costs review attention and yields a catalog describing the previous release.
 
-**5. The marker convention is applied unevenly.** Rule 2 asks every Tier-2 edit to carry a marker, and most do: `DSH-FORK` appears in 98 of the 121 patched paths. The other 23 are invisible to the convention — 5 `package.json` manifests, 5 `README.i18n.yaml` pairs, one package `tsconfig.json`, the two generated catalog modules (`packages/extensions/tool-cordis/src/api-catalog.ts`, `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`), one client spec, one client component (`packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`), and 7 `docs/` pages. The 121st path, `.claude/skills`, is the one file the fork deletes — a symlink, with nowhere to put a comment. Markers are not the inventory and cannot be: a grep cannot tell a marked edit from a marked file, and a diff against `upstream/master` is mostly upstream's own churn across 1,934 commits. `local-overlay/INVENTORY.md` supplies the inventory mechanically. What the 22 unmarked files cost is legibility at conflict time: the resolver reads a hunk with no stated reason and no exit condition.
+**5. The marker convention is applied unevenly.** Rule 2 asks every Tier-2 edit to carry a marker, and most do: `DSH-FORK` appears in 98 of the 118 patched paths. The other 20 are invisible to the convention — 5 `package.json` manifests, 5 `README.i18n.yaml` pairs, one package `tsconfig.json`, the two generated catalog modules (`packages/extensions/tool-cordis/src/api-catalog.ts`, `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`), one client spec, one client component (`packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`), and 4 `docs/` pages. The 20th path, `.claude/skills`, is the one file the fork deletes — a symlink, with nowhere to put a comment. Markers are not the inventory and cannot be: a grep cannot tell a marked edit from a marked file, and a diff against `upstream/master` is mostly upstream's own churn across 1,934 commits. `local-overlay/INVENTORY.md` supplies the inventory mechanically. What the 20 unmarked files cost is legibility at conflict time: the resolver reads a hunk with no stated reason and no exit condition.
 
 **6. `doc-sync` is red on five gates, and the fork packages cause two of them.** `pnpm run test:docs` fails on markdown links, translation pairing, markdown wrap, package README summaries, and the documentation-standard spec. The fork's own packages drive the last two: the sixteen READMEs under `packages/kernel/*`, `packages/rlm/*`, `packages/agent-memory/*`, `packages/client/{ui-dock,ui-effects}`, `packages/host/sidebar-bridge`, `packages/web/web-browser`, `packages/llm/llm-kiln`, `packages/fs/tool-notebook-edit`, and `packages/session/command-session-info` were written without the `## Summary` heading the summaries gate requires, and without the frontmatter, Table of Contents, and Dev Note the doc-standard spec requires. The documentation exists and is detailed; it does not carry the skeleton the gates read. The cost is that five red gates hide a sixth real breakage: a genuine documentation regression lands on top of known failures and nobody notices.
 
@@ -332,7 +332,7 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 14 | `tsconfig.{host,client}.json` | `all` | project references | Contiguous fenced block (Rule 6) |
 | 15 | `pnpm-lock.yaml` | `all` | dependencies | `merge=ours` + regenerate (Rule 7) |
 | 16 | `.gitignore`, `.gitattributes` | `all` | credentials, CRLF for `*.cmd` | Permanent; append at end of file only |
-| 17 | `docs/subsystems/{code-runtime,llm-streaming}.*` | `kernel` `kiln` | hand-written docs for fork features | Move to fork-owned `docs/` pages |
+| 17 | `docs/subsystems/llm-streaming.*` | `kiln` | hand-written docs for a fork feature | Move to fork-owned `docs/` pages |
 | 18 | 8 test files | various | mirror 3–6 above | Follows whatever those become |
 | 19 | 2 files inside `client/ui-settings-general` | `kernel` | new files placed in an upstream package directory | Move to a fork-owned client package |
 | 20 | `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}` | `browser` | collapsible per-provider groups in the model dropdown, with account routes folded under a single base-provider header and an account picker | Upstream adopts provider collapse and account grouping in `ModelSelect` |
@@ -432,7 +432,7 @@ Ordered by how much each removes from the next merge.
 
 1. **Send rows 9 and 10 upstream.** Two self-contained bug fixes; they leave the fork's diff entirely when they land.
 2. **Create `packages/bundle/efai-kernel` and `packages/bundle/efai-kiln`.** Moves rows 1 and 2 — six files, the highest-churn upstream files the fork touches — to Tier 1.
-3. **Finish the marker pass.** 22 of the 121 patched paths still carry no marker; the list and the grouping are in failure 5. Each one is a conflict a resolver reads cold.
+3. **Finish the marker pass.** 20 of the 118 patched paths still carry no marker; the list and the grouping are in failure 5. Each one is a conflict a resolver reads cold.
 4. **Fence the `tsconfig.host.json` / `tsconfig.client.json` entries.** Ten minutes; turns eight conflicts into two.
 5. **`pnpm-lock.yaml merge=ours`.** One line; removes the single largest conflicting file.
 6. **Move `ds_config.json` and `ds_sessions.json` out of the repository tree.**
