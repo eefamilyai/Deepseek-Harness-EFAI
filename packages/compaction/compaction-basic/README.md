@@ -166,7 +166,7 @@ After a successful step crosses the threshold, oversized tool results are first 
 ##### Conversation checkpoint preamble
 
 ```markdown
-This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.
+Automatically generated checkpoint condensing earlier context. The session log is authoritative: read it after compaction, to recover history, or to check any detail — `node .agents/skills/dsh-session-history/session-read.mjs resume`. That ONE call prints the goal, the instructional prompt, this checkpoint summary whole, and the prompts sent since — start there before any other mode. Then continue from the messages that follow.
 ```
 
 #### Token effect
@@ -186,7 +186,9 @@ The summarization model receives the conversation replayed verbatim — the same
 ##### Compaction instruction (final user message)
 
 ```markdown
-You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.
+Summarize the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context. This is a summarization task ONLY: do not continue the work, do not call any tool, and do not emit a <tool_calls> block, an <invoke> tag, or runnable code. If the conversation above is full of tool calls, SUMMARIZE them — never imitate them. Output prose only.
+
+The reader is a fresh model that CANNOT see the conversation above — only your checkpoint. It must know, without guessing: where the work stands right now, the exact next action to take, and every fact needed to take it. Make "## Current Work" and "## Next Step" unambiguous and self-sufficient; those two sections are what the reader acts on first.
 
 Output EXACTLY the Markdown structure below: keep every section, in order. Use terse bullets, not prose paragraphs. Write "(none)" for an empty section — never drop a section.
 
@@ -206,10 +208,10 @@ Output EXACTLY the Markdown structure below: keep every section, in order. Use t
 - [explicitly requested work not yet completed]
 
 ## Current Work
-- [precisely what was in progress at this checkpoint]
+- [the exact position right now: which file/function, what was just done, what is half-finished, any command or tool call mid-flight and its state]
 
 ## Next Step
-- [the single next action, directly in line with the most recent request, or "(none)"]
+- [the single concrete next action the reader should take — the specific edit, command, or tool call, not a vague direction — directly in line with the most recent request, or "(none)"]
 
 ## Critical Context
 - [decisions and their rationale, constraints, user preferences, open questions, data needed to continue]
@@ -218,7 +220,7 @@ Rules:
 - Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.
 - Capture user feedback and explicit instructions faithfully, especially corrections.
 - Do NOT mention this summarization request or that the context was compacted.
-- Output only the checkpoint text: do not call any tool or take any other action.
+- Output only the checkpoint text. Never call a tool or emit tool-call markup (<tool_calls>, <invoke>, or code to run); the transcript above is material to condense, not a pattern to continue.
 - If the conversation already contains a <compacted-summary> block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.
 ```
 

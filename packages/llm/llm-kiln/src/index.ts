@@ -39,6 +39,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type {} from '@deepseek-ai/dsh-attachment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-settings'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmAccountAdder } from '@deepseek-ai/dsh-llm'
@@ -49,7 +50,17 @@ import type { KilnProvider } from './bridge.ts'
 export { KilnAdapter, buildTurns, flattenMessage, isRateLimit, mintCallId, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions, toolIndex } from './adapter.ts'
 export type { KilnAdapterOptions } from './adapter.ts'
 export { KilnBridge } from './bridge.ts'
-export type { KilnBridgeOptions, KilnMessage, KilnModel, KilnProvider, KilnStreamEvent, KilnStreamRequest } from './bridge.ts'
+export type {
+  KilnBridgeOptions,
+  KilnMessage,
+  KilnModel,
+  KilnProvider,
+  KilnStreamEvent,
+  KilnStreamRequest,
+  KilnUploadedFile,
+  KilnUploadFile,
+  KilnUploadResult,
+} from './bridge.ts'
 export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from './dsml.ts'
 export type { DsmlEvent } from './dsml.ts'
 export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requiredNames, toolProtocolPrompt, unescapeXml } from './protocol.ts'
@@ -57,7 +68,14 @@ export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requ
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'llm-kiln'
 
-/** Services required before the adapter can register. */
+/**
+ * Services required before the adapter can register.
+ *
+ * `attachments` is deliberately NOT required. An image reaches `ds_direct` by
+ * being read from that store, but a deployment that mounts no attachment
+ * provider must still get its text routes; the adapter reads the service per
+ * request and degrades to the text placeholder when it is absent.
+ */
 export const inject = ['llm']
 
 /** Settings namespace for the Kiln adapter (deepseek-web credentials + routing knobs). */
@@ -325,6 +343,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     routes: () => routes,
     kilnId: route => kilnIds.get(route) ?? route,
     account: route => accounts.get(route),
+    // Read per request, not captured: the attachment service can be replaced by
+    // a later composition, and a store pinned at registration would be the
+    // wrong one for every request after that.
+    resolveAttachments: () => ctx.get('attachments'),
   })
   const handle: AdapterRegistrationHandle = ctx.llm.registerAdapter([...routes.keys()], adapter)
 

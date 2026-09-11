@@ -50,11 +50,14 @@ Two capabilities, deliberately separable:
 
 ## Arguments worth knowing
 
-**`max_width`** (default 1600). Every capture is downscaled to this before it is
-saved. Not cosmetic: a 1920×1080 PNG is ~450 KB, and the image is billed against
-the same context window as text, so a full-size grab of a mostly-empty desktop
-is a lot of tokens spent on wallpaper. 1600 keeps UI text legible.
-`max_width=0` keeps native resolution.
+**`max_width`** (default `None`). Captures are saved at **native resolution** —
+a 1920×1080 grab stays 1920×1080. Downscaling is opt-in: pass a number to trade
+fidelity for a smaller upload when the caller knows legibility is not at stake
+(thumbnail-style context, "is anything on screen"). It was a 1600 default for a
+while, which silently threw away a third of the pixels of the small UI text,
+thin borders, and code these tools exist to read; `scale` in the result reports
+the ratio actually applied, so a caller can tell whether it got full fidelity.
+`max_width=None` and `max_width=0` both keep native.
 
 **`region={left,top,width,height}`** (or the same four as keywords). Crops to
 that rectangle of the virtual desktop — the way to show the model one dialog

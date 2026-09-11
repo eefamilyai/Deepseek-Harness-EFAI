@@ -190,6 +190,31 @@ describe('installModelSelection()', () => {
   })
 
   // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
+  it('keeps two Agents in one process reading their own selections', async () => {
+    // The production shape: ONE Host process composes many Agents, each on its
+    // own scope extending a shared root. Cordis declares an accessor in a
+    // single process-wide property table, so only the first Agent can declare
+    // `modelSelection`; every later one must still read its own selection
+    // rather than the first Agent's.
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    function scope(): void {}
+    const ctxA = ctx.plugin(scope).ctx.extend({ agent: 'a' })
+    const ctxB = ctx.plugin(scope).ctx.extend({ agent: 'b' })
+
+    installModelSelection(ctxA, { current: { provider: 'alpha', model: 'a1' }, assembled: undefined })
+    installModelSelection(ctxB, { current: { provider: 'beta', model: 'b1' }, assembled: undefined })
+
+    expect(ctxA.modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
+    expect(ctxB.modelSelection).toEqual({ provider: 'beta', model: 'b1' })
+    // A context extending an Agent scope reads through to that Agent, and an
+    // unscoped ancestor carries no selection at all.
+    expect(ctxA.extend({}).modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
+    expect(ctx.modelSelection).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
   it('adopts a scope that already declares the accessor instead of crashing on re-entry', async () => {
     // A resume/reconnect can re-enter setup on the same agent context before the
     // first attempt's fiber unwound; a second raw accessor declaration throws
@@ -202,8 +227,9 @@ describe('installModelSelection()', () => {
 
     const second: ModelSelectionRef = { current: { provider: 'beta', model: 'b1' }, assembled: undefined }
     expect(() => installModelSelection(ctx, second)).not.toThrow()
-    // The original wiring still governs: the scope reads the first selection.
-    expect(ctx.modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
+    // Re-entry on ONE scope replaces that scope's selection: the latest install
+    // is what the scope reads, and no accessor was declared twice.
+    expect(ctx.modelSelection).toEqual({ provider: 'beta', model: 'b1' })
     await ctx.fiber.dispose()
   })
 })

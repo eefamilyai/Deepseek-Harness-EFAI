@@ -20,7 +20,6 @@ The browser is one process-wide `KilnBrowser` inside the kernel, so the model an
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Registers the terminal and browser routes on the web-server carrier |
-| [`src/invariant.ts`](src/invariant.ts) | The package-owned invariant companion |
 
 ## Known Limitations and Deferred Work
 

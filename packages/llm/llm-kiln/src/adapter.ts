@@ -22,6 +22,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import type { AttachmentStore, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, isContextWindowExceededError, LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
@@ -37,7 +38,7 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import { DsmlTranslator, trailingReasoningCalls } from './dsml.ts'
 import { DSML_CLOSE, DSML_OPEN, escapeXml, renderParameter, toolProtocolPrompt } from './protocol.ts'
-import type { KilnBridge, KilnMessage, KilnProvider } from './bridge.ts'
+import type { KilnBridge, KilnMessage, KilnProvider, KilnUploadFile } from './bridge.ts'
 
 /** Constructor options: the sidecar and the route mapping the plugin owns. */
 export interface KilnAdapterOptions {
@@ -52,7 +53,155 @@ export interface KilnAdapterOptions {
    * whichever account the sidecar's ring offers.
    */
   readonly account?: (provider: string) => string | undefined
+  /**
+   * The mounted attachment service, read per request rather than captured at
+   * registration: the service can be replaced by a later composition, and a
+   * cached store would pin the wrong one. Absent means attached images cannot
+   * be read for upload, which degrades to the placeholder rather than failing.
+   */
+  readonly resolveAttachments?: () => AttachmentStore | undefined
 }
+
+/**
+ * Provider whose routes can carry an image.
+ *
+ * Only `ds_direct` has a file store to push bytes into and a turn parameter to
+ * attach the resulting ids to; every other route in the registry is a plain
+ * text protocol. That is a property of the sidecar, not of this adapter, so it
+ * is named here in one place instead of being probed per request.
+ */
+const IMAGE_CAPABLE_KILN_PROVIDER = 'deepseek'
+
+/** What one request's attached images became. */
+interface ImageUpload {
+  /** Provider file ids to attach to this turn, in message order. */
+  readonly fileIds: readonly string[]
+  /** Login owning those ids; must accompany them into the stream call. */
+  readonly account?: string
+  /** Substitution for each image occurrence when none were delivered. */
+  readonly placeholder?: string
+}
+
+/** File extension for one media type, for the name the provider stores. */
+function imageExtension(mediaType: ImageMediaType): string {
+  switch (mediaType) {
+    case 'image/png': return '.png'
+    case 'image/jpeg': return '.jpg'
+    case 'image/webp': return '.webp'
+    case 'image/gif': return '.gif'
+  }
+}
+
+/** Trailing image extension a display name may already carry. */
+const IMAGE_EXTENSION_RE = /\.(?:png|jpe?g|webp|gif)$/iu
+
+/**
+ * Name one request image for the provider's file store.
+ *
+ * The digest prefix keeps two attachments that share a display name from
+ * colliding, and the extension comes from the media type the attachment
+ * service proved. Any extension the display name already carried is dropped
+ * first, so the result has exactly one — and it is the one matching the bytes
+ * — rather than accumulating a second `.png` per attempt. A name is never
+ * interpreted as a path anywhere in this pipeline, so this is presentation,
+ * not identity.
+ */
+function imageFilename(ref: ImageAttachmentRef): string {
+  const digest = String(ref.attachmentId).slice('sha256:'.length, 'sha256:'.length + 8)
+  const bare = ref.name === undefined || ref.name.length === 0
+    ? `image-${digest}`
+    : ref.name.replace(IMAGE_EXTENSION_RE, '')
+  return `${bare}${imageExtension(ref.mediaType)}`
+}
+
+/** Collect attached images in request order, walking nested tool results. */
+function collectImageRefs(content: readonly ContentBlock[], refs: ImageAttachmentRef[]): void {
+  for (const block of content) {
+    if (block.type === 'image') refs.push(block.attachment)
+    else if (block.type === 'tool-result') collectImageRefs(block.content, refs)
+  }
+}
+
+/**
+ * Push this request's attached images into the provider's file store.
+ *
+ * Every image in the request is uploaded, and the returned ids ride the turn as
+ * `ref_file_ids` — the one channel a route with no native attachment field has.
+ * The upload's `account` is returned rather than discarded because the ids are
+ * scoped to the login that stored them: attaching them to a turn served by a
+ * different login names files that login cannot see.
+ *
+ * A route that cannot store files, a request with no images, or a store that is
+ * not mounted all resolve to an empty result, which leaves the caller's
+ * placeholder in place — the honest outcome, since the image genuinely did not
+ * travel.
+ */
+async function uploadRequestImages(
+  options: GenerateOptions,
+  bridge: KilnBridge,
+  kilnProvider: string,
+  attachments: AttachmentStore | undefined,
+  account: string | undefined,
+): Promise<ImageUpload> {
+  const refs: ImageAttachmentRef[] = []
+  for (const message of options.messages) collectImageRefs(message.content, refs)
+  if (refs.length === 0) return { fileIds: [] }
+  if (kilnProvider !== IMAGE_CAPABLE_KILN_PROVIDER || attachments === undefined) {
+    return {
+      fileIds: [],
+      placeholder: attachments === undefined
+        ? '[an image was attached, but no attachment store is mounted to read it]'
+        : '[an image was attached, which this provider cannot receive]',
+    }
+  }
+  const files: KilnUploadFile[] = []
+  for (const ref of refs) {
+    const stored = await attachments.readImage(ref, options.signal)
+    files.push({ name: imageFilename(ref), data: stored.data })
+  }
+  const result = await bridge.uploadFiles(kilnProvider, files, account, options.signal)
+  if (result.files.length === 0) {
+    const detail = result.errors.length > 0 ? `: ${result.errors.join('; ')}` : ''
+    return { fileIds: [], placeholder: `[an image was attached but the provider rejected it${detail}]` }
+  }
+  // A per-file failure is not fatal to the turn: the files that did upload ride
+  // it, and the placeholder for the rest is the caller-visible record of which.
+  //
+  // A FULLY successful upload still needs an explicit placeholder. The image
+  // block must render as something, and leaving it to the caller's default made
+  // a delivered image narrate itself as one the provider refused — the same
+  // notice the not-capable branch emits, so the two were indistinguishable.
+  const outcome = result.errors.length > 0
+    ? `[${result.errors.length} attached image(s) could not be uploaded: ${result.errors.join('; ')}]`
+    : '[an image was delivered to the model]'
+  return {
+    fileIds: result.files.map(file => file.id),
+    ...result.account === undefined ? {} : { account: result.account },
+    placeholder: outcome,
+  }
+}
+
+/**
+ * Message source kinds the sidecar must never clip away, whatever the prompt
+ * budget.
+ *
+ * `user` is the operator's actual request: the harness appends large injected
+ * context after it, so an oldest-first clip dropped the ask and left the model
+ * with pages of context and no question.
+ *
+ * `skill-catalog` and `skill-invocation` are the recovery affordance. `tool-skill`
+ * re-publishes the catalog and re-injects an always-load body precisely when
+ * compaction has pruned them from the session surface, so they arrive on the
+ * turn that most needs them and are then the only durable record that skills
+ * exist and that this session's history can be read back from disk. They are
+ * also small — a name list plus one body — so pinning them costs a fraction of
+ * the context they share the budget with.
+ *
+ * Read as widened strings: `MessageSourceMap` is merge-extensible, and these
+ * two kinds are declared by the tool-skill plugin rather than by this package,
+ * so they are not literals in this program's type of `message.source`.
+ */
+const PINNED_SOURCE_KINDS: readonly string[] = ['user', 'skill-catalog', 'skill-invocation']
 
 /**
  * Flatten one harness message into the registry's turn shape.
@@ -62,26 +211,28 @@ export interface KilnAdapterOptions {
  * Tool calls and results are rendered as text because that is the only channel
  * these routes have — the same convention the translator reads back.
  * @param message - the harness message.
+ * @param imageText - text standing in for one image block; defaults to the
+ *   provider-cannot-receive notice, and is replaced by the upload outcome when
+ *   this request actually delivered the images.
  * @returns the flattened turn, or undefined when nothing survived flattening.
  */
-export function flattenMessage(message: Message): KilnMessage | undefined {
+export function flattenMessage(message: Message, imageText?: string): KilnMessage | undefined {
   const parts: string[] = []
   for (const block of message.content) {
-    parts.push(...flattenBlock(block))
+    parts.push(...flattenBlock(block, imageText))
   }
   const content = parts.join('\n').trim()
   if (content.length === 0) return undefined
-  // Pin a genuine user turn so the sidecar never clips it to fit. The harness
-  // sends the actual request as source 'user' but appends large injected
-  // context (workspace instructions, runtime snapshot, skills) AFTER it, so the
-  // request is often the OLDEST body message; without this it was the first
-  // thing an oldest-first clip dropped, and the model saw context with no ask.
-  const pinned = message.source.kind === 'user'
+  // See PINNED_SOURCE_KINDS: these are the turns an oldest-first clip must never
+  // take, because each is either the operator's actual request or the only
+  // surviving record of how to recover after a compaction.
+  const kind = (message.source as { kind?: string }).kind
+  const pinned = kind !== undefined && PINNED_SOURCE_KINDS.includes(kind)
   return { role: message.role, content, ...pinned ? { pin: true } : {} }
 }
 
 /** Render one content block as the text these providers can carry. */
-function flattenBlock(block: ContentBlock): string[] {
+function flattenBlock(block: ContentBlock, imageText?: string): string[] {
   switch (block.type) {
     case 'text':
       return [block.text]
@@ -91,14 +242,18 @@ function flattenBlock(block: ContentBlock): string[] {
       return [renderToolCall(block.name, block.arguments)]
     case 'tool-result': {
       const body = block.content
-        .flatMap(inner => flattenBlock(inner))
+        .flatMap(inner => flattenBlock(inner, imageText))
         .join('\n')
       return [`OUTPUT:\n${body}`]
     }
     case 'reasoning':
       return []
     case 'image':
-      return ['[an image was attached, which this provider cannot receive]']
+      // The image itself does not travel as text: it rides the turn as an
+      // uploaded file reference, or it did not travel at all. The default
+      // notice is the un-uploaded case, so a route that cannot store files
+      // never silently implies the model saw something it did not.
+      return [imageText ?? '[an image was attached, which this provider cannot receive]']
     default:
       return []
   }
@@ -136,9 +291,14 @@ export function renderToolCall(name: string, args: string): string {
  * Build the registry's per-request options from a harness request.
  * @param options - the harness generate options.
  * @param account - the login this route is pinned to, when it is an account route.
+ * @param refFileIds - provider file ids to attach to this turn, from a prior upload.
  * @returns the `opts` dict the registry's adapters read.
  */
-export function requestOptions(options: GenerateOptions, account?: string): Record<string, unknown> {
+export function requestOptions(
+  options: GenerateOptions,
+  account?: string,
+  refFileIds?: readonly string[],
+): Record<string, unknown> {
   // An auxiliary one-shot (compaction or session-title summary) must NOT thread
   // onto the conversation's persistent DeepSeek chat. That chat holds the whole
   // running transcript — for compaction it is often the very chat that just hit
@@ -164,8 +324,14 @@ export function requestOptions(options: GenerateOptions, account?: string): Reco
     // Which LOGIN serves the request, as opposed to which chat. Absent, the
     // sidecar takes the next account in its ring, so two agents starting near
     // each other can land on the same one; naming it is what lets a subagent be
-    // kept off the account its parent is using.
+    // kept off the account its parent is using. It is also what makes uploaded
+    // file ids reachable — see `ref_file_ids` below.
     ...account !== undefined ? { account } : {},
+    // Ids of files already stored under that login. This is the ONLY channel an
+    // image has on these routes: the registry's adapters take no attachment
+    // field, so the bytes are uploaded first and named here. Ids without their
+    // owning `account` are names the serving login cannot resolve.
+    ...refFileIds !== undefined && refFileIds.length > 0 ? { ref_file_ids: [...refFileIds] } : {},
   }
 }
 
@@ -265,16 +431,50 @@ export class KilnAdapter extends LlmAdapter {
       ...known?.context_limit !== undefined && known.context_limit > 0
         ? { context: { contextWindow: known.context_limit } }
         : {},
+      // Image capability is declared on the ROUTE, not on the model: the
+      // registry's model list says nothing about attachments, and the only
+      // thing that decides whether an image can travel is whether the sidecar
+      // can store it. Without this the runtime projects every image to a
+      // text placeholder BEFORE dispatch — the adapter would never see one, and
+      // uploading in `stream` would be dead code.
+      ...this.imagesSupported(provider) ? { inputModalities: ['text', 'image'] as const } : {},
     })
   }
 
+  /**
+   * Whether images can reach the model on one route.
+   *
+   * True only where the sidecar can store the bytes and attach the ids: the
+   * free DeepSeek web session. Every other route in the registry is a text
+   * protocol with no file store, so declaring otherwise would promise a
+   * capability the upload path then refuses.
+   */
+  private imagesSupported(provider: string): boolean {
+    return this.options.kilnId(provider) === IMAGE_CAPABLE_KILN_PROVIDER
+  }
+
   async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    const messages = buildTurns(options)
+    const kilnProvider = this.options.kilnId(options.provider)
+    const routeAccount = this.options.account?.(options.provider)
+    // Attached images are pushed into the provider's own file store before the
+    // turn is assembled, because the ids are the only way they can ride it: this
+    // route has no native attachment field, so an image that is not uploaded
+    // here cannot be shown to the model at all. The upload's own account wins
+    // over the route's — ids are scoped to the login that stored them, and a
+    // route pinned to a different login would otherwise name files it cannot see.
+    const upload = await uploadRequestImages(
+      options,
+      this.options.bridge,
+      kilnProvider,
+      this.options.resolveAttachments?.(),
+      routeAccount,
+    )
+    const messages = buildTurns(options, upload.placeholder)
     const events = this.options.bridge.stream({
-      provider: this.options.kilnId(options.provider),
+      provider: kilnProvider,
       model: options.model,
       messages,
-      opts: requestOptions(options, this.options.account?.(options.provider)),
+      opts: requestOptions(options, upload.account ?? routeAccount, upload.fileIds),
     }, options.signal)
 
     const emitter = new ChunkEmitter(toolIndex(options.tools))
@@ -315,9 +515,10 @@ export class KilnAdapter extends LlmAdapter {
  * from `options.tools`, so it describes the roster the harness actually
  * composed for this request.
  * @param options - the harness generate options.
+ * @param imageText - text standing in for each image block; see {@link flattenMessage}.
  * @returns the turns to send.
  */
-export function buildTurns(options: GenerateOptions): KilnMessage[] {
+export function buildTurns(options: GenerateOptions, imageText?: string): KilnMessage[] {
   const parts: string[] = []
   if (options.system !== undefined && options.system.length > 0) parts.push(options.system)
   const protocol = toolProtocolPrompt(options.tools)
@@ -328,7 +529,7 @@ export function buildTurns(options: GenerateOptions): KilnMessage[] {
     turns.push({ role: 'system', content: system })
   }
   for (const message of options.messages) {
-    const turn = flattenMessage(message)
+    const turn = flattenMessage(message, imageText)
     if (turn !== undefined) turns.push(turn)
   }
   return turns

@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **118** in **21** patch(es).
+Tier-2 files: **125** in **22** patch(es).
 
 ## Patches
 
@@ -76,11 +76,14 @@ Tier-2 files: **118** in **21** patch(es).
 - `packages/llm/token-meter/src/usage-projection.ts`
 - `packages/llm/token-meter/tests/token-usage-projection.spec.ts`
 
-### `patches/compaction.patch` — 6 file(s)
+### `patches/compaction.patch` — 9 file(s)
 
 - `packages/compaction/command-compact/src/index.ts`
 - `packages/compaction/command-compact/tests/command-compact.spec.ts`
 - `packages/compaction/command-compact/tests/loader-composition.spec.ts`
+- `packages/compaction/compaction-basic/README.i18n.yaml`
+- `packages/compaction/compaction-basic/README.md`
+- `packages/compaction/compaction-basic/README.zh.md`
 - `packages/compaction/compaction-basic/src/index.ts`
 - `packages/compaction/compaction-basic/src/summarizer.ts`
 - `packages/compaction/compaction-basic/tests/compaction-basic.spec.ts`
@@ -181,6 +184,13 @@ Tier-2 files: **118** in **21** patch(es).
 - `packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx`
 - `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
 
+### `patches/session-format-migration.patch` — 4 file(s)
+
+- `packages/session/session-format-v0-to-v1/src/payload-validation.ts`
+- `packages/session/session-format-v0-to-v1/src/relationships.ts`
+- `packages/session/session-format-v0-to-v1/src/validation.ts`
+- `packages/session/session-format-v0-to-v1/tests/relationships.spec.ts`
+
 ### `patches/docs.patch` — 4 file(s)
 
 - `docs/event-producer-consumer.md`
@@ -217,9 +227,12 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 221 paths do not exist upstream, so no patch covers them and none can conflict.
+These 228 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
+- `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
+- `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
+- `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.zh.md`
 - `.agents/notes/implemented/bug-fix/2026-09-03-tsdown-workspace-manifest-membership.i18n.yaml`
 - `.agents/notes/implemented/bug-fix/2026-09-03-tsdown-workspace-manifest-membership.md`
 - `.agents/notes/implemented/bug-fix/2026-09-03-tsdown-workspace-manifest-membership.zh.md`
@@ -269,6 +282,7 @@ These 221 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/llm.patch`
 - `local-overlay/patches/presets.patch`
 - `local-overlay/patches/root-meta.patch`
+- `local-overlay/patches/session-format-migration.patch`
 - `local-overlay/patches/skill.patch`
 - `local-overlay/patches/tsconfig.patch`
 - `local-overlay/rebuild.mjs`
@@ -348,6 +362,8 @@ These 221 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/src/provider.ts`
 - `packages/kernel/kernel-python/src/seam.ts`
 - `packages/kernel/kernel-python/tests/fixtures/fake-kernel.py`
+- `packages/kernel/kernel-python/tests/seam-tools-call.e2e.spec.ts`
+- `packages/kernel/kernel-python/tests/seam-tools-call.spec.ts`
 - `packages/kernel/kernel-python/tests/transport.spec.ts`
 - `packages/kernel/kernel-python/tsconfig.json`
 - `packages/kernel/kernel-rlm-context/README.md`
@@ -376,6 +392,8 @@ These 221 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/src/invariant.ts`
 - `packages/llm/llm-kiln/src/protocol.ts`
 - `packages/llm/llm-kiln/tests/dsml.spec.ts`
+- `packages/llm/llm-kiln/tests/images.spec.ts`
+- `packages/llm/llm-kiln/tests/pinning.spec.ts`
 - `packages/llm/llm-kiln/tsconfig.json`
 - `packages/rlm/rlm-mode/README.md`
 - `packages/rlm/rlm-mode/package.json`
@@ -401,8 +419,6 @@ These 221 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/web/web-browser/src/invariant.ts`
 - `packages/web/web-browser/src/page-script.ts`
 - `packages/web/web-browser/src/provider.ts`
-- `packages/web/web-browser/src/serialize.ts`
-- `packages/web/web-browser/src/tool.ts`
 - `packages/web/web-browser/tsconfig.json`
 - `python/kiln/provider_bridge.py`
 - `python/kiln/runtime/.python-version`
@@ -432,6 +448,7 @@ These 221 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/sse_client.py`
 - `python/kiln/runtime/test_browser_page_pick.py`
 - `python/kiln/runtime/test_ds_direct_modes.py`
+- `python/kiln/runtime/test_harness_tools.py`
 - `python/kiln/runtime/test_tools_smoke.py`
 - `python/kiln/runtime/test_vision_tools.py`
 - `python/kiln/runtime/token_usage.py`

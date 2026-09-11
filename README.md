@@ -8,6 +8,8 @@ English | [中文](README.zh.md)
 
 The fork's full change contract lives in [HARNESS-EDITS.md](HARNESS-EDITS.md).
 
+<a id="run"></a>
+
 ## Install
 
 ### One command
@@ -25,6 +27,8 @@ irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/in
 ```
 
 The installer clones the fork to `~/.deepseek-harness` (Windows: `%USERPROFILE%\.deepseek-harness`), installs and builds, and adds `dsh` and `dsh-update` to `PATH`. Run the same command again to update in place.
+
+<a id="run-from-source"></a>
 
 ### From source
 

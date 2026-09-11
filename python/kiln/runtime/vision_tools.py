@@ -105,13 +105,14 @@ def _grab_mss(region=None, monitor=1):
         return _Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
-def _save(img, name, max_width=1600, quality_note=None):
-    """Downscale and write a PNG. Returns (path, (w, h) after scaling).
+def _save(img, name, max_width=None, quality_note=None):
+    """Write a PNG at native resolution. Returns (path, (w, h)).
 
-    Downscaling is not cosmetic. A 1920x1080 grab is ~1.5 MB of PNG; DeepSeek
-    charges the image against the same context window as text, so a full-size
-    screenshot of a mostly-empty desktop is a lot of tokens spent on wallpaper.
-    1600px keeps UI text legible while cutting the payload substantially.
+    `max_width=None` keeps the capture pixel-exact: a 2560-wide grab stays 2560
+    wide. Downscaling is lossy for exactly the content these tools exist to read
+    — small UI text, thin borders, code — so it is opt-in via an explicit
+    `max_width`, never a default. Pass a number to trade fidelity for a smaller
+    upload when the caller knows legibility is not at stake.
     """
     if max_width and img.width > max_width:
         ratio = max_width / float(img.width)
@@ -143,7 +144,7 @@ def _resolve_region(region=None, left=None, top=None, width=None, height=None):
     return box
 
 
-def capture_screen(path=None, max_width=1600, monitor=1, region=None,
+def capture_screen(path=None, max_width=None, monitor=1, region=None,
                    left=None, top=None, width=None, height=None):
     """Screenshot the screen, one monitor, or a rectangle -> PNG on disk.
 
@@ -314,7 +315,7 @@ def _window_rect(handle):
     return {"left": r.left, "top": r.top, "width": w, "height": h}
 
 
-def capture_window(handle=None, title=None, path=None, max_width=1600,
+def capture_window(handle=None, title=None, path=None, max_width=None,
                    raise_window=True):
     """Screenshot ONE window, located by handle or by a title substring.
 
@@ -373,7 +374,7 @@ def capture_window(handle=None, title=None, path=None, max_width=1600,
 
 # ── the embedded browser ────────────────────────────────────────────
 
-def capture_browser(path=None, max_width=1600, full_page=False):
+def capture_browser(path=None, max_width=None, full_page=False):
     """Screenshot the embedded browser's CURRENT page — this launches no browser.
 
     Reuses `browser_tools`, which already owns the page and its lifecycle, and
@@ -520,7 +521,7 @@ def describe_image(path=None, prompt=None, files=None, cancelled=None,
     return res
 
 
-def describe_screen(prompt=None, monitor=1, region=None, max_width=1600,
+def describe_screen(prompt=None, monitor=1, region=None, max_width=None,
                     keep=True, cancelled=None):
     """Capture the screen and describe it, in one call.
 
@@ -546,7 +547,7 @@ def describe_screen(prompt=None, monitor=1, region=None, max_width=1600,
     return res
 
 
-def see(target="screen", prompt=None, max_width=1600, keep=True, **kw):
+def see(target="screen", prompt=None, max_width=None, keep=True, **kw):
     """One entry point for every "look at this" request. Never raises.
 
     target:

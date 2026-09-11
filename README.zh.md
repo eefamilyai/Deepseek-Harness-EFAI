@@ -8,6 +8,8 @@
 
 本分支的完整改动契约见 [HARNESS-EDITS.md](HARNESS-EDITS.md)。
 
+<a id="run"></a>
+
 ## 安装
 
 ### 一条命令
@@ -25,6 +27,8 @@ irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/in
 ```
 
 安装程序会把分支克隆到 `~/.deepseek-harness`（Windows 为 `%USERPROFILE%\.deepseek-harness`），完成安装与构建，并把 `dsh` 和 `dsh-update` 加入 `PATH`。再次运行同一命令即可原地更新。
+
+<a id="run-from-source"></a>
 
 ### 从源码构建
 

@@ -174,9 +174,14 @@ export function assertReleasedArtifactRelationships(
             throw new SessionFormatError(`tool/result ${callId} is not the exact TOOL_NOT_STARTED repair`)
           }
           toolLifecycles.delete(callId)
-        } else if (openTurn === null) {
-          throw new SessionFormatError('tool/result replacement is outside an open turn')
         }
+        // DSH-FORK(kernel): a surface replacement needs no open turn. Compaction
+        // writes these after turn/end to restate a historical node, which the
+        // original guard refused. EXIT: upstream admits a post-turn replacement.
+        // A replacement re-anchors an existing current-surface node rather than appending a live
+        // result, so it needs no open turn: compaction writes these after turn/end to restate a
+        // historical node. applySurface has already proved the range is on the current surface and
+        // that sourceEventSeqs covers every shadowed node.
         break
       case 'request/header':
         if (openTurn === null) throw new SessionFormatError(`${event.type} is outside an open turn`)
@@ -197,7 +202,17 @@ export function assertReleasedArtifactRelationships(
           throw new SessionFormatError(`${event.type} parentCallId does not belong to rootCallId`)
         }
         if (event.type === 'tool/code-dispatch-start') {
-          if (ptcStarts.has(child)) throw new SessionFormatError('tool/code-dispatch-start repeats subCallId')
+          // DSH-FORK(kernel): a settled sub-call identity may legitimately be
+          // re-dispatched in a later turn; the corpus holds two sessions that do.
+          // Only an unsettled duplicate is an error. EXIT: upstream distinguishes
+          // a settled sub-call from an open one.
+          // A sub-call identity is stable for its root call, so a later turn may
+          // dispatch the same subCallId again. Only a second start overlapping an
+          // unsettled one is a real duplicate; a settled entry is already consumed.
+          const prior = ptcStarts.get(child)
+          if (prior !== undefined && !prior.settled) {
+            throw new SessionFormatError('tool/code-dispatch-start repeats subCallId')
+          }
           ptcStarts.set(child, {
             root,
             parent,

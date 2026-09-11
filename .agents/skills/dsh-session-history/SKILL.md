@@ -1,6 +1,6 @@
 ---
 name: dsh-session-history
-description: "Use when you need this harness's own prior conversation history — reading, searching, or resuming what an earlier agent did in this project, recovering context lost to compaction, or distinguishing the operator's actual instructions from mid-task steering and machine-injected reminders. Locates $DSH_HOME/sessions/ logs, decodes their concatenated zstd frames, and answers 'what was I asked to do' and 'what happened'."
+description: "Always use when unsure, or session history is needed. To ALWAYS be used after compaction"
 ---
 
 # Reading DSH Session History
@@ -13,11 +13,11 @@ survives context compaction, a kernel restart, and a fresh session.
 
 - The user says "resume", "continue", "pick up where you left off", or hands you a
   path to a session log.
-- Context was compacted and you need the original request, not the summary of it.
+- **ALWAYS AFTER context was compacted**
 - You need to know what a previous agent already changed, tried, or ruled out.
 - The user asks what the latest instruction actually was.
 
-## The one command that matters most
+## FINDING THE PROMPT THAT INSTRUCTS
 
 ```bash
 node .agents/skills/dsh-session-history/session-read.mjs latest-prompt
@@ -27,6 +27,29 @@ That prints the **instructional** prompt: the prompt at which the goal was set, 
 is the task the work was actually commissioned with. Start there when resuming
 anything. Add `--session <id>` to target a specific session, or `--kind steering` to
 see the last mid-task correction instead.
+
+## After a compaction, run `resume` first
+
+```bash
+node .agents/skills/dsh-session-history/session-read.mjs resume
+```
+
+One call that answers "what was I doing". It prints the folded goal, the
+instructional prompt, the latest checkpoint summary **whole**, the operator prompts
+sent after that checkpoint, and the tail of the log. Recovering that by hand means
+running `types`, `prompts`, `latest-prompt`, `grep`, and `show` in the right order —
+which is exactly the work a compacted reader is least equipped to do.
+
+The summary is the part that matters most and the part that used to be unreadable: a
+checkpoint is ~10 KB of markdown, and the per-event display clip flattened its
+newlines, returning an unreadable single line. `resume` prints blocks with their
+newlines intact and **no width limit by default**.
+
+- `--width N` caps a block; the cut always reports how many characters were withheld
+  and the flag that removes it.
+- Blocks are indented one heading level so the embedded summary's `###` sections
+  cannot be mistaken for the printer's own `##` sections. Headings inside fenced code
+  blocks are left alone — that text is code, not structure.
 
 ## Instruction versus steering
 
@@ -93,10 +116,22 @@ skips `node_modules` and other untracked bulk by construction.
 
 ## Log format
 
-Logs live at `$DSH_HOME/sessions/<project>/<session-id>/session.jsonl.zstd`
+Logs live at `$DSH_HOME/sessions/<project>/<session-id>/`
 (`$DSH_HOME` defaults to `~/.dsh`). The project directory is the cwd with separators
 replaced by `-`, so `D:\deepseek-kernel-harness` becomes
 `--D-deepseek-kernel-harness--`.
+
+**A session directory can hold two logs**, and this is the trap worth knowing
+about: `session.v3.jsonl.zstd` is the current format, and `session.jsonl.zstd` is
+the legacy name that a v3 session keeps as a *shorter compaction of the same
+conversation*. The legacy copy stops early — in one session it froze at turn 11
+while the v3 log ran to turn 23 — so reading it answers a question about the
+present with a transcript from hours ago, silently.
+
+The reader now reads the newest format present by default and prints which log it
+read on every mode, so the choice is never invisible. Pass `--log NAME` only when
+you specifically want the other one; naming a log a session does not have is an
+error rather than a silent fallback.
 
 Each file is a **concatenation of independent Zstandard frames**, so a single
 `zstdDecompress` call returns only the first frame and silently loses the rest. The

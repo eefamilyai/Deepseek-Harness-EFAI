@@ -75,7 +75,9 @@ The system slot is the first thing in the request, so a change there invalidates
 
 #### What the model sees
 
-Reasoning blocks are dropped, because every one of these providers either regenerates its own thinking or rejects it on input. A prior tool call is re-rendered as the same block the model wrote, and its result as a labelled `OUTPUT:` block, so the transcript stays self-consistent. An image becomes the text `[an image was attached, which this provider cannot receive]`.
+Reasoning blocks are dropped, because every one of these providers either regenerates its own thinking or rejects it on input. A prior tool call is re-rendered as the same block the model wrote, and its result as a labelled `OUTPUT:` block, so the transcript stays self-consistent.
+
+An image does not travel as text. On `deepseek`, the free web session, its bytes are uploaded to the provider's file store and the returned ids ride the turn as `ref_file_ids`; the image block itself renders as a short notice naming which of those happened — delivered, partially uploaded, or refused. On every other route there is no file store to push bytes into, so the image renders as `[an image was attached, which this provider cannot receive]` and the model never sees it. The delivered and refused cases are deliberately distinct: an earlier revision let both fall through to the same notice, which made a delivered image read as a rejected one.
 
 #### Token effect
 
@@ -90,7 +92,7 @@ Append-only while the route and the flattened prefix stay unchanged.
 These limits define what this package does not provide. They are current package constraints, not a roadmap.
 
 - **No native tool calling** - every Kiln route carries tools as text in the system prompt, so tool-selection quality depends on the model reading the format statement rather than on a provider-side decoder.
-- **No image input** - an attached image degrades to a placeholder line, and `ds_direct` cannot receive one at all.
+- **Image input on one route only** - `ds_direct` is the sole route with a file store, so it is the only one that can carry an attached image; every other route degrades the image to a placeholder line. Images also require a mounted attachment service to read the bytes from — without one, `ds_direct` falls back to the placeholder too.
 - **The sidecar is a hard dependency** - the provider registry, including `ds_direct`'s proof-of-work auth and WAF cookie handling, stays Python; the adapter talks to it over one JSON object per line and cannot function without it.
 - **Reasoning is never sent back** - a provider that expects its own prior thinking on input cannot receive it through this transport.
 - **Keys live in the child's environment** - the catalog reports only `has_key`, so a missing key surfaces as a per-request failure naming the variable rather than as a configuration error.

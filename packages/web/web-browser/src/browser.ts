@@ -1,12 +1,6 @@
 /**
- * The headless-browser manager: one lazily launched Chromium, one page per
- * session key, and the small set of actions the `browser` tool and the fetch
- * provider drive.
- *
- * Everything returns a {@link RawSnapshot}, because the model's only view of the
- * page is text: after every action it gets a fresh snapshot with new refs, and
- * acts on those. The refs are only valid until the next action reshapes the DOM,
- * which is exactly the read-act-read loop the tool prompt describes.
+ * The headless-browser manager: one lazily launched Chromium and the single page
+ * the fetch provider renders under.
  *
  * @module @deepseek-ai/dsh-web-browser/browser
  */
@@ -20,8 +14,6 @@ import type { RawSnapshot } from './page-script.ts'
 export interface BrowserLimits {
   /** Timeout for a page load (ms). */
   navigationTimeoutMs: number
-  /** Timeout for a click/type/press (ms). */
-  actionTimeoutMs: number
   /** Cap on the page text returned in a snapshot (chars). */
   maxTextChars: number
   /** Launch Chromium headless (true) or headed (false, for debugging). */
@@ -38,14 +30,14 @@ export interface RenderedPage {
   statusCode: number
 }
 
-/** The dedicated session key the fetch provider renders under, kept off the tool's pages. */
+/** The dedicated session key the fetch provider renders under. */
 const FETCH_KEY = '__fetch__'
 
 /** Advice attached to a launch failure — the browser binary is a separate one-time install. */
 const INSTALL_HINT =
   'no headless browser is installed — run `npx playwright install chromium` once in the harness directory, then retry'
 
-/** One Chromium instance shared across sessions, each session isolated in its own context. */
+/** One Chromium instance shared across fetches. */
 export class BrowserManager {
   private browser: Browser | undefined
   private readonly sessions = new Map<string, { context: BrowserContext; page: Page }>()
@@ -73,7 +65,6 @@ export class BrowserManager {
     const browser = await this.ensureBrowser()
     const context = await browser.newContext({ userAgent: this.limits.userAgent })
     const page = await context.newPage()
-    page.setDefaultTimeout(this.limits.actionTimeoutMs)
     page.setDefaultNavigationTimeout(this.limits.navigationTimeoutMs)
     this.sessions.set(key, { context, page })
     return page
@@ -84,56 +75,7 @@ export class BrowserManager {
     return (await page.evaluate(snapshotScript(this.limits.maxTextChars))) as RawSnapshot
   }
 
-  /** Open a URL and return the resulting page. */
-  async navigate(key: string, url: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
-    return this.snapshot(page)
-  }
-
-  /** Re-read the current page without acting. */
-  async read(key: string): Promise<RawSnapshot> {
-    return this.snapshot(await this.pageFor(key))
-  }
-
-  /** Click the element with the given ref, then snapshot whatever the click produced. */
-  async click(key: string, ref: number): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
-    await page.click(`[data-ai-ref="${ref}"]`)
-    await page.waitForLoadState('domcontentloaded').catch(() => { /* SPA navigations need no full load */ })
-    return this.snapshot(page)
-  }
-
-  /** Fill the input with the given ref, then snapshot. */
-  async type(key: string, ref: number, text: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
-    await page.fill(`[data-ai-ref="${ref}"]`, text)
-    return this.snapshot(page)
-  }
-
-  /** Press one keyboard key (Enter, Tab, ArrowDown, …) on the focused element, then snapshot. */
-  async press(key: string, keyName: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
-    await page.keyboard.press(keyName)
-    await page.waitForLoadState('domcontentloaded').catch(() => { /* a keypress rarely triggers a full load */ })
-    return this.snapshot(page)
-  }
-
-  /** Scroll the page up or down one viewport-ish step, then snapshot. */
-  async scroll(key: string, direction: 'up' | 'down'): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
-    await page.mouse.wheel(0, direction === 'up' ? -800 : 800)
-    return this.snapshot(page)
-  }
-
-  /** Go back one entry in history, then snapshot. */
-  async back(key: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
-    await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => { /* nothing to go back to is not an error */ })
-    return this.snapshot(page)
-  }
-
-  /** Render a URL for the fetch provider: navigate on the dedicated fetch page and return its text. */
+  /** Render a URL for the fetch provider: navigate on the fetch page and return its text. */
   async render(url: string): Promise<RenderedPage> {
     const page = await this.pageFor(FETCH_KEY)
     const response = await page.goto(url, { waitUntil: 'domcontentloaded' })

@@ -3152,7 +3152,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/fs/tool-notebook-edit/src/index.ts:494`](../packages/fs/tool-notebook-edit/src/index.ts)
+Source: [`packages/fs/tool-notebook-edit/src/index.ts:485`](../packages/fs/tool-notebook-edit/src/index.ts)
 
 <a id="deepseek-aidsh-tool-present"></a>
 

@@ -21,6 +21,9 @@
       "path": "../llm"
     },
     {
+      "path": "../../attachment/attachment"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     },
     {

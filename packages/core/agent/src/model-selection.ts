@@ -12,6 +12,35 @@ import {
 } from '@deepseek-ai/dsh-llm'
 import type { PreStepDecision } from './runtime-types.ts'
 
+/**
+ * Selection belonging to each Agent scope, keyed by the exact scope context the
+ * selection was installed on. A Cordis accessor is declared in ONE process-wide
+ * property table, so `modelSelection` can only ever be declared once however
+ * many Agents run; the accessor that wins must therefore resolve its value from
+ * the scope the read was made through rather than close over one Agent's.
+ * Keying by the scope lets the entry die with that scope.
+ */
+const selectionByScope = new WeakMap<object, ModelSelectionRef>()
+
+/**
+ * Find the selection owning the scope a read was made through.
+ *
+ * A read arrives on the Agent's own scope or on any context extending it, so
+ * the nearest registered ancestor is the owner. Absent means the reading scope
+ * carries no Agent selection — never some other Agent's.
+ * @param reading - context the `modelSelection` read went through.
+ * @returns the owning selection, or undefined when this scope has none.
+ */
+function selectionOwnerOf(reading: object): ModelSelectionRef | undefined {
+  let cursor: object | null = reading
+  while (cursor !== null) {
+    const found = selectionByScope.get(cursor)
+    if (found !== undefined) return found
+    cursor = Object.getPrototypeOf(cursor)
+  }
+  return undefined
+}
+
 /** Complete provider, model, and optional reasoning effort selected for one live Agent. */
 export interface ModelSelection {
   /** Registered provider route. */
@@ -74,19 +103,25 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
  * @returns Disposer for all scoped waterfall listeners.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
-  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream lands the accessor re-entrancy guard (upstream PR).
-  // Declaring an accessor twice on one scope is a hard cordis error, and a
-  // resume or reconnect can re-enter setup on the SAME agent context before the
-  // previous attempt's fiber has unwound its accessor — which crashed the whole
-  // resume with `property "modelSelection" is already declared as accessor`. A
-  // scope that already exposes `modelSelection` is already wired (accessor and
-  // both listeners came in together and unwind together), so adopt it rather
-  // than redeclare. The check reads the same per-scope prop table `accessor`
-  // writes to, so it is true only for a genuine same-scope re-entry.
-  if ('modelSelection' in agentCtx) return () => {}
-  agentCtx.accessor('modelSelection', {
-    get: () => selection.current,
-  })
+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream resolves
+  // the accessor from the reading scope instead of closing over one selection.
+  //
+  // Declaring an accessor twice is a hard cordis error, and a resume or
+  // reconnect re-enters setup on the same agent context before the previous
+  // attempt unwound — hence the declaration is guarded. But the guarded
+  // property table is on the ROOT reflect service, not per scope, so the guard
+  // is true for every Agent after the first; returning early there left each of
+  // them with no accessor of its own, and its `modelSelection` reads resolved
+  // to whichever Agent installed first. Registering the selection per scope and
+  // resolving it from the reading scope is what keeps two live Agents apart.
+  selectionByScope.set(agentCtx, selection)
+  if (!('modelSelection' in agentCtx)) {
+    agentCtx.accessor('modelSelection', {
+      get(this: Context) {
+        return selectionOwnerOf(this)?.current
+      },
+    })
+  }
   const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
     const selected = selection.current
     const assembled = await next()
@@ -136,6 +171,9 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
     disposeAssembly()
     disposeRequest()
     disposeNotice()
+    // Only the install that still owns the entry may drop it, so a re-entry
+    // that replaced this selection keeps its own registration.
+    if (selectionByScope.get(agentCtx) === selection) selectionByScope.delete(agentCtx)
   }
 }
 

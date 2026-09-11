@@ -601,13 +601,14 @@
         fetch: true
         searchTimeoutMs: 60000
 
-    # A self-hosted headless browser (Playwright). The `browser` tool lets the
-    # model read a page as text and act by element ref — for JS-rendered sites
-    # and multi-step flows a plain fetch cannot handle. It needs a one-time
-    # `npx playwright install chromium`; a launch without the binary fails with
-    # that exact instruction rather than a stack trace. The browser-rendered
-    # fetch provider registers too, dormant until web_fetch is turned on and the
-    # web seam's fetchProvider is pointed at `browser`.
+    # DSH-FORK(browser): mounts this fork's Playwright fetch provider, so that
+    # pointing the web seam's fetchProvider at `browser` makes web_fetch return
+    # what a real browser sees — JavaScript run, client-rendered content
+    # present — instead of raw HTML. Dormant until web_fetch is turned on. The
+    # Chromium binary is a one-time `npx playwright install chromium`; a launch
+    # without it fails with that exact instruction rather than a stack trace.
+    # EXIT: move to packages/bundle/efai-browser/cordis.patch.yml, a fork-owned
+    # bundle applied by profile.
     - id: web-browser
       name: '@deepseek-ai/dsh-web-browser'
 

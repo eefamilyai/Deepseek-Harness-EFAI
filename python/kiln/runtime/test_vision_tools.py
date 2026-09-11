@@ -82,8 +82,8 @@ else:
           res.get("path") and os.path.exists(res["path"])
           and png_size(res["path"]) == (res["width"], res["height"]),
           repr(res))
-    check("capture_screen downscales to max_width",
-          res["width"] <= 1600, repr(res.get("width")))
+    check("capture_screen keeps native resolution by default",
+          res.get("scale") == 1.0, repr(res.get("scale")))
     check("capture_screen kept the aspect ratio",
           abs((res["width"] / float(res["height"])) - (16 / 9.0)) < 0.05,
           repr((res.get("width"), res.get("height"))))
@@ -91,13 +91,14 @@ else:
           0 < res.get("scale", 0) <= 1.0, repr(res.get("scale")))
 
     big = vt.capture_screen(max_width=0)          # 0 = keep native size
-    check("max_width=0 disables downscaling", big.get("scale") == 1.0, repr(big))
-    check("the native capture is bigger than the scaled one",
-          big["width"] > res["width"], "%s vs %s" % (big["width"], res["width"]))
+    check("max_width=0 also keeps native size", big.get("scale") == 1.0, repr(big))
 
     small = vt.capture_screen(max_width=640)
     check("a smaller max_width produces a smaller image",
           small["width"] <= 640, repr(small.get("width")))
+    check("an explicit max_width is the only thing that downscales",
+          small["width"] < res["width"],
+          "%s vs %s" % (small["width"], res["width"]))
 
     # A region must be honoured exactly: this is what makes "screenshot this
     # dialog" show the dialog instead of the desktop it sits on.

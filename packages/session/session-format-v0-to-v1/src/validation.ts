@@ -13,7 +13,7 @@ import type {
   SessionFormatJsonValue,
 } from '@deepseek-ai/dsh-session-format'
 import { RELEASED_V0_EVENT_DISPOSITIONS } from './dispositions.ts'
-import { assertReleasedPayloadSemantics } from './payload-validation.ts'
+import { assertReleasedPayloadSemantics, isReleasedDescriptorVersion } from './payload-validation.ts'
 import { assertReleasedV0Keys, releasedV0Record } from './validation-helpers.ts'
 
 const HEADER_REQUIRED = ['version', 'id', 'createdAt', 'isSeeded', 'delegationDepth'] as const
@@ -195,8 +195,16 @@ export function assertReleasedEventPayload(event: SessionFormatEvent, version: 0
     )
   }
   const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
-  if (event.type === 'subagent/descriptor' && data['version'] !== 3) {
+  if (event.type === 'subagent/descriptor' && !isReleasedDescriptorVersion(data['version'])) {
     const descriptorVersion = sessionFormatCount(data['version'], `${event.type} ${event.seq} version`)
+    // DSH-FORK(kernel): the released-version test above lets the 27 v2 sessions in
+    // the corpus migrate; the original literal `!== 3` refused them. EXIT: upstream
+    // validates against a released-descriptor inventory instead of the live build.
+    // Historical v0 must classify every descriptor it migrates, so a version
+    // outside the released inventory is refused. Current v1 keeps an unknown
+    // version opaque: the installed runtime already degrades such a descriptor
+    // instead of failing, so restating that here would be stricter than the
+    // reader it restores for.
     if (version === 0) {
       throw new SessionFormatUnsupportedMigrationError(
         `${event.type} ${event.seq} uses unsupported descriptor version ${descriptorVersion}`,

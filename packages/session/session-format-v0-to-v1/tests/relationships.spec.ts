@@ -474,6 +474,26 @@ describe('released v1 whole-artifact relationships', () => {
     ])).toThrow(/does not match/)
   })
 
+  it('admits re-dispatching a sub-call identity its earlier settle already consumed', () => {
+    const turn = { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }
+    const start = (seq: number) => ({
+      type: 'tool/code-dispatch-start', seq, time: seq + 1,
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'sub', name: 'a', arguments: {} },
+    })
+    const settle = (seq: number) => ({
+      type: 'tool/code-dispatch', seq, time: seq + 1,
+      data: {
+        rootCallId: 'root', parentCallId: 'root', subCallId: 'sub', name: 'a', arguments: {},
+        isError: false, content: [],
+      },
+    })
+    // A sub-call identity is stable for its root call, so a later dispatch of the same
+    // subCallId is a fresh start, not a duplicate of the one already settled.
+    expect(decode([turn, start(1), settle(2), start(3), settle(4)]).events).toHaveLength(5)
+    // Only a second start overlapping an unsettled one is the duplicate.
+    expect(() => decode([turn, start(1), start(2)])).toThrow(/repeats subCallId/)
+  })
+
   it('refuses a wrong own-session v0 delivery marker before the header bump', () => {
     const v0 = { ...header, version: 0 }
     const rows = [
@@ -574,7 +594,9 @@ describe('released v1 whole-artifact relationships', () => {
         },
       },
     }
-    expect(() => decode([base, replacement])).toThrow(/outside an open turn/)
+    // A replacement re-anchors a node already on the current surface, so it needs no open turn:
+    // compaction restates historical tool results after the owning turn has already ended.
+    expect(decode([base, replacement]).events).toHaveLength(2)
     const { surfaceOp: _surfaceOp, ...withoutSurface } = base
     expect(() => decode([withoutSurface])).toThrow(/surfaceOp/)
     expect(() => decode([base, {

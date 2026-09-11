@@ -84,9 +84,27 @@ const COMPACTION_INSTRUCTION = [
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')
 
-/** Framing that makes the replacement user message established context. */
-const CHECKPOINT_PREAMBLE =
-  'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.'
+/**
+ * Framing that makes the replacement user message established context, and makes the
+ * authoritative session log a standing instruction rather than a fallback.
+ *
+ * DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream supplies its own
+ * framing. A compacted agent cannot tell that its context is a lossy summary, so it
+ * guesses at an omitted path or hash, or asks the operator to repeat a requirement the
+ * session log already records. The read is therefore unconditional and covers all four
+ * triggers — after compaction, recovering history, checking a detail, and any doubt
+ * about what the summary dropped — because a reader that cannot see what was removed is
+ * the worst judge of whether anything was. The block stays no longer than upstream's so
+ * the checkpoint still prices below the span it replaces; the reader's full procedure
+ * lives in the dsh-session-history skill.
+ *
+ * @returns the preamble block for the replacement user message.
+ */
+function checkpointPreamble(): string {
+  return [
+    'Automatically generated checkpoint condensing earlier context. The session log is authoritative: read it after compaction, to recover history, or to check any detail — `node .agents/skills/dsh-session-history/session-read.mjs resume`. That ONE call prints the goal, the instructional prompt, this checkpoint summary whole, and the prompts sent since — start there before any other mode. Then continue from the messages that follow.',
+  ].join('\n')
+}
 
 /**
  * The replayed conversation surface the summarizer condenses. Reproducing the
@@ -225,7 +243,7 @@ export async function summarizeWithLlm(
  */
 export function frameSummary(summary: readonly ContentBlock[]): ContentBlock[] {
   return [
-    { type: 'text', text: `${CHECKPOINT_PREAMBLE}\n\n${SUMMARY_OPEN_TAG}` },
+    { type: 'text', text: `${checkpointPreamble()}\n\n${SUMMARY_OPEN_TAG}` },
     ...summary,
     { type: 'text', text: SUMMARY_CLOSE_TAG },
   ]

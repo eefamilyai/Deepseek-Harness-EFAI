@@ -73,5 +73,12 @@ python/kiln/runtime/subkernels.json
 python/kiln/runtime/.kiln_memory/
 
 
+# vision_tools captures: these are pictures of the real screen, so they must
+# never reach a commit. Written under KILN_STATE_DIR when set, else beside the
+# runtime; both locations are covered.
+python/kiln/runtime/screenshots/
+screenshots/
+
+
 # Harness desktop shell: CDP discovery record, regenerated at every launch
 .cdp-target.json

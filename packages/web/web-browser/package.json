@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-web-browser",
-  "description": "Self-hosted headless-browser capability for the DeepSeek Harness: a text-first `browser` tool a vision-less model can drive, plus a Playwright fetch provider (ctx.web)",
+  "description": "Self-hosted browser-rendered web fetch for the DeepSeek Harness: a Playwright WebFetchProvider for ctx.web, so web_fetch returns what a real browser sees instead of raw HTML",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
@@ -33,8 +33,6 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
@@ -43,10 +41,7 @@
     "playwright": "^1.49.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   }

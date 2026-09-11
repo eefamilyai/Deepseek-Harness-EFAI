@@ -91,6 +91,39 @@ export interface KilnStreamRequest {
   readonly opts: Readonly<Record<string, unknown>>
 }
 
+/** One caller-supplied file to push into the provider's own file store. */
+export interface KilnUploadFile {
+  /** Filename the provider stores, extension included. */
+  readonly name: string
+  /** Exact bytes to upload. */
+  readonly data: Uint8Array
+}
+
+/** One file the provider accepted. */
+export interface KilnUploadedFile {
+  readonly name: string
+  /** Provider-assigned id, attachable to a later turn as `ref_file_ids`. */
+  readonly id: string
+  readonly size: number
+}
+
+/**
+ * The outcome of one upload batch.
+ *
+ * A single bad file lands in `errors` rather than failing the whole call — the
+ * sidecar's own contract, kept here because the caller is the only party that
+ * knows whether losing one of five attachments is fatal. `account` is the login
+ * that now owns the returned ids: they are scoped to it and are not portable
+ * between logins, so the same value must travel with them into the stream call
+ * or the chat cannot see the files.
+ */
+export interface KilnUploadResult {
+  /** Login owning the returned ids; omitted only when the sidecar reported none. */
+  readonly account?: string
+  readonly files: readonly KilnUploadedFile[]
+  readonly errors: readonly string[]
+}
+
 /** How to launch the sidecar. */
 export interface KilnBridgeOptions {
   /** Interpreter to run. */
@@ -105,6 +138,30 @@ export interface KilnBridgeOptions {
 
 /** The sidecar's process handle: piped stdin/stdout; stderr captured for diagnostics. */
 type KilnBridgeProcess = ChildProcessByStdio<Writable, Readable, Readable>
+
+/**
+ * Read the sidecar's per-file upload receipts, dropping anything malformed.
+ *
+ * A file that uploaded is one the provider will accept by id, so an entry
+ * missing its id is not a partial success to pass on — it is a file the caller
+ * must not believe it can attach. Dropping it keeps the returned list honest
+ * rather than handing a later `ref_file_ids` an empty id.
+ */
+function parseUploadedFiles(value: unknown): KilnUploadedFile[] {
+  if (!Array.isArray(value)) return []
+  const files: KilnUploadedFile[] = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') continue
+    const record = entry as { name?: unknown; id?: unknown; size?: unknown }
+    if (typeof record.id !== 'string' || record.id.length === 0) continue
+    files.push({
+      name: typeof record.name === 'string' ? record.name : 'file',
+      id: record.id,
+      size: typeof record.size === 'number' && Number.isFinite(record.size) ? record.size : 0,
+    })
+  }
+  return files
+}
 
 /** A pending single-response request. */
 interface Waiter {
@@ -214,14 +271,34 @@ export class KilnBridge {
   }
 
   /** Send one request and await its single response frame. */
-  private request(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private request(payload: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> {
     const id = this.nextId++
     return new Promise((resolve, reject) => {
-      this.waiters.set(id, { resolve, reject })
+      if (signal?.aborted) {
+        reject(signal.reason instanceof Error ? signal.reason : new LlmError('the request was aborted', 'TRANSPORT'))
+        return
+      }
+      // Cancelling the caller's signal abandons this frame: the waiter is
+      // removed so `onLine` drops the late reply rather than resolving a
+      // promise nobody holds. The request itself is already on the wire, so
+      // the abort releases the caller without pretending the work was undone.
+      const onAbort = (): void => {
+        if (!this.waiters.delete(id)) return
+        reject(signal?.reason instanceof Error
+          ? signal.reason
+          : new LlmError('the request was aborted', 'TRANSPORT'))
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      const settle = (): void => signal?.removeEventListener('abort', onAbort)
+      this.waiters.set(id, {
+        resolve: (value) => { settle(); resolve(value) },
+        reject: (reason) => { settle(); reject(reason) },
+      })
       try {
         this.write({ ...payload, id })
       } catch (cause) {
         this.waiters.delete(id)
+        settle()
         reject(cause instanceof Error ? cause : new LlmError(String(cause), 'TRANSPORT'))
       }
     })
@@ -286,6 +363,53 @@ export class KilnBridge {
       ok: frame['ok'] === true,
       ...typeof frame['account'] === 'string' ? { account: frame['account'] } : {},
       ...typeof frame['error'] === 'string' ? { message: frame['error'] } : {},
+    }
+  }
+
+  /**
+   * Push caller-supplied bytes into the provider's own file store.
+   *
+   * The wire is newline-delimited JSON, so bytes cross base64-encoded; the
+   * sidecar decodes them and hands `[(name, blob)]` to the provider's own
+   * uploader. The ids that come back are the only way a file reaches a chat on
+   * a route with no native attachment channel — they are attached to a later
+   * stream as `opts.ref_file_ids`.
+   *
+   * Ids are scoped to the login that uploaded them, so the returned `account`
+   * must travel with them into that stream call; `ref_file_ids` without the
+   * matching `account` names files the serving login cannot see.
+   * @param provider - the Kiln provider id; only `deepseek` stores files today.
+   * @param files - filenames and exact bytes, in the order they should upload.
+   * @param account - the login to upload as; omitted lets the ring choose.
+   * @param signal - cancellation for this upload batch.
+   * @returns the owning account, the accepted files, and any per-file errors.
+   */
+  async uploadFiles(
+    provider: string,
+    files: readonly KilnUploadFile[],
+    account?: string,
+    signal?: AbortSignal,
+  ): Promise<KilnUploadResult> {
+    if (files.length === 0) return { files: [], errors: [] }
+    const frame = await this.request({
+      cmd: 'upload_files',
+      provider,
+      ...account === undefined ? {} : { account },
+      files: files.map(file => ({
+        name: file.name,
+        data: Buffer.from(file.data).toString('base64'),
+      })),
+    }, signal)
+    if (frame['ok'] !== true) {
+      const detail = typeof frame['error'] === 'string' ? frame['error'] : 'the upload was refused'
+      throw new LlmError(`Kiln file upload failed: ${detail}`, 'TRANSPORT')
+    }
+    return {
+      ...typeof frame['account'] === 'string' ? { account: frame['account'] } : {},
+      files: parseUploadedFiles(frame['files']),
+      errors: Array.isArray(frame['errors'])
+        ? frame['errors'].filter((entry): entry is string => typeof entry === 'string')
+        : [],
     }
   }
 

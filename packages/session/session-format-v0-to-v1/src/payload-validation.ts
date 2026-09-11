@@ -758,9 +758,33 @@ function finishReasonValue(value: SessionFormatJsonValue | undefined, label: str
   nonEmptyString(reason['kind'], `${label} kind`)
 }
 
+// DSH-FORK(kernel): the v0 corpus holds the pre-split FLAT replay envelope
+// (adapter fields beside `blocks`), which exactRecord rejected outright, so
+// restore failed on every affected message. EXIT: upstream normalizes the flat
+// envelope inside the v0 codec itself.
+/**
+ * Validate one released `replayState` envelope.
+ *
+ * Adapters own this metadata outright, so the migration records only its outer
+ * structure. Two shapes were released into persisted logs: the original flat
+ * envelope, which kept the adapter's response fields beside `blocks`, and the
+ * later split `{ response, blocks }` the current reader expects. Admitting both
+ * keeps restoring a historical log independent of which adapter build wrote it —
+ * a reader that cannot use one shape degrades that single message instead of
+ * failing the whole restore.
+ */
 function replayEnvelopeValue(value: SessionFormatJsonValue | undefined, label: string): void {
-  const replay = exactRecord(value, label, ['response'], ['blocks'])
-  if (replay['blocks'] !== undefined && !Array.isArray(replay['blocks'])) {
+  const replay = releasedV0Record(value, label)
+  if (!Object.hasOwn(replay, 'response')) {
+    // Flat released envelope: adapter-private response fields beside `blocks`.
+    // Every member is already admitted lossless JSON by the record reader.
+    if (replay['blocks'] !== undefined && !Array.isArray(replay['blocks'])) {
+      throw new SessionFormatError(`${label} blocks must be an array`)
+    }
+    return
+  }
+  const split = exactRecord(value, label, ['response'], ['blocks'])
+  if (split['blocks'] !== undefined && !Array.isArray(split['blocks'])) {
     throw new SessionFormatError(`${label} blocks must be an array`)
   }
 }
@@ -952,30 +976,93 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
   nonEmptyString(route['model'], `${label} model`)
 }
 
+// DSH-FORK(kernel): the released-descriptor inventory below replaces a literal
+// `version === 3` check. The migration validates historical payloads, so it must
+// admit every version a released build could have written — the corpus holds v2
+// in 27 sessions — rather than only the installed build's version.
+// EXIT: upstream keys descriptor validation to a released-version table.
+/**
+ * The optional composition members each descriptor version released into
+ * persisted logs admitted. The v0→v1 migration reads historical payloads, so it
+ * admits every released version rather than the installed build's current
+ * descriptor version; a version absent here was never released and stays
+ * unclassifiable.
+ *
+ * - v1 predates the one-shot/continuable split: no `mode`, no durable `label`.
+ * - v2 added `mode` and `label`.
+ * - v3 added the optional `agentReasoningEffort`.
+ */
+const RELEASED_DESCRIPTOR_OPTIONAL_KEYS: ReadonlyMap<number, readonly string[]> = new Map([
+  [1, ['agentProvider', 'agentModel', 'persona', 'toolFilter']],
+  [2, ['label', 'agentProvider', 'agentModel', 'persona', 'toolFilter']],
+  [3, ['label', 'agentProvider', 'agentModel', 'agentReasoningEffort', 'persona', 'toolFilter']],
+])
+
+/**
+ * Whether a persisted `subagent/descriptor` version was ever released.
+ * @param version - the payload's declared descriptor version.
+ * @returns whether the version belongs to the released inventory.
+ */
+export function isReleasedDescriptorVersion(version: SessionFormatJsonValue | undefined): boolean {
+  return typeof version === 'number' && RELEASED_DESCRIPTOR_OPTIONAL_KEYS.has(version)
+}
+
+/** Validate the tool scoping carried by a released continuable descriptor. */
+function assertDescriptorToolFilter(data: JsonRecord, label: string): void {
+  if (data['toolFilter'] === undefined) return
+  const filter = exactRecord(data['toolFilter'], `${label} toolFilter`, [], ['allow', 'deny'])
+  if (filter['allow'] === undefined && filter['deny'] === undefined) {
+    throw new SessionFormatError(`${label} toolFilter requires allow or deny`)
+  }
+  if (filter['allow'] !== undefined) arrayValue(filter['allow'], `${label} allow`, nonEmptyString)
+  if (filter['deny'] !== undefined) arrayValue(filter['deny'], `${label} deny`, nonEmptyString)
+}
+
+/** Validate the resumable composition members shared by released descriptors. */
+function assertDescriptorComposition(
+  data: JsonRecord,
+  label: string,
+  members: readonly string[],
+): void {
+  for (const key of members) {
+    if (data[key] !== undefined) nonEmptyString(data[key], `${label} ${key}`)
+  }
+  if ((data['agentProvider'] === undefined) !== (data['agentModel'] === undefined)) {
+    throw new SessionFormatError(`${label} agentProvider and agentModel must be paired`)
+  }
+  assertDescriptorToolFilter(data, label)
+}
+
 function subagentDescriptorValue(data: JsonRecord, label: string): void {
-  literalValue(data['version'], [3], `${label} version`)
+  const descriptorVersion = countValue(data['version'], `${label} version`)
+  const optional = RELEASED_DESCRIPTOR_OPTIONAL_KEYS.get(descriptorVersion)
+  /* v8 ignore next -- artifact coordinate validation admits only released descriptor versions. */
+  if (optional === undefined) {
+    throw new SessionFormatError(`${label} version ${descriptorVersion} is not a released descriptor version`)
+  }
   nonEmptyString(data['provider'], `${label} provider`)
+  if (descriptorVersion === 1) {
+    // Released v1 descriptors predate the one-shot/continuable split, so every
+    // record is a continuable composition carrying no mode and no durable label.
+    assertReleasedV0Keys(data, ['version', 'provider'], optional, `${label} data`)
+    assertDescriptorComposition(data, label, ['agentProvider', 'agentModel', 'persona'])
+    return
+  }
   if (data['mode'] === 'one-shot') {
     assertReleasedV0Keys(data, ['mode', 'version', 'provider'], ['label'], `${label} data`)
     if (data['label'] !== undefined) stringValue(data['label'], `${label} label`)
     return
   }
   literalValue(data['mode'], ['continuable'], `${label} mode`)
+  assertReleasedV0Keys(data, ['mode', 'version', 'provider'], optional, `${label} data`)
   nonEmptyString(data['label'], `${label} label`)
-  for (const key of ['agentProvider', 'agentModel', 'agentReasoningEffort', 'persona'] as const) {
-    if (data[key] !== undefined) nonEmptyString(data[key], `${label} ${key}`)
-  }
-  if ((data['agentProvider'] === undefined) !== (data['agentModel'] === undefined)) {
-    throw new SessionFormatError(`${label} agentProvider and agentModel must be paired`)
-  }
-  if (data['toolFilter'] !== undefined) {
-    const filter = exactRecord(data['toolFilter'], `${label} toolFilter`, [], ['allow', 'deny'])
-    if (filter['allow'] === undefined && filter['deny'] === undefined) {
-      throw new SessionFormatError(`${label} toolFilter requires allow or deny`)
-    }
-    if (filter['allow'] !== undefined) arrayValue(filter['allow'], `${label} allow`, nonEmptyString)
-    if (filter['deny'] !== undefined) arrayValue(filter['deny'], `${label} deny`, nonEmptyString)
-  }
+  assertDescriptorComposition(
+    data,
+    label,
+    descriptorVersion === 3
+      ? ['agentProvider', 'agentModel', 'agentReasoningEffort', 'persona']
+      : ['agentProvider', 'agentModel', 'persona'],
+  )
 }
 
 function allowedModelsValue(value: SessionFormatJsonValue | undefined, label: string): void {
