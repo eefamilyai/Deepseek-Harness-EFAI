@@ -226,7 +226,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 212 paths do not exist upstream, so no patch covers them and none can conflict.
+These 228 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -317,6 +317,22 @@ These 212 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-primitives/src/terminal-bridge.ts`
 - `packages/client/ui-settings-general/src/client/AdvancedSection.module.css`
 - `packages/client/ui-settings-general/src/client/AdvancedSection.tsx`
+- `packages/client/ui-sidebar-terminal/package.json`
+- `packages/client/ui-sidebar-terminal/src/client/TerminalBody.tsx`
+- `packages/client/ui-sidebar-terminal/src/client/TerminalTitle.tsx`
+- `packages/client/ui-sidebar-terminal/src/client/ansi.ts`
+- `packages/client/ui-sidebar-terminal/src/client/definition.tsx`
+- `packages/client/ui-sidebar-terminal/src/client/header-actions.tsx`
+- `packages/client/ui-sidebar-terminal/src/client/header.module.css`
+- `packages/client/ui-sidebar-terminal/src/client/index.ts`
+- `packages/client/ui-sidebar-terminal/src/client/locales.ts`
+- `packages/client/ui-sidebar-terminal/src/client/params.ts`
+- `packages/client/ui-sidebar-terminal/src/client/terminal-session.ts`
+- `packages/client/ui-sidebar-terminal/src/client/terminal.module.css`
+- `packages/client/ui-sidebar-terminal/src/css-modules.d.ts`
+- `packages/client/ui-sidebar-terminal/src/index.ts`
+- `packages/client/ui-sidebar-terminal/tsconfig.json`
+- `packages/client/ui-sidebar-terminal/tsdown.config.ts`
 - `packages/client/ui-theme/tests/flow-accent-tokens.client.spec.ts`
 - `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
 - `packages/fs/tool-notebook-edit/README.md`

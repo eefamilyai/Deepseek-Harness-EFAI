@@ -110,10 +110,8 @@ function collapseCarriageReturns(text: string): string {
 }
 
 // OSC = ESC ] … (BEL | ESC \) — window title and friends; dropped whole.
-// oxlint-disable-next-line no-control-regex
 const OSC = new RegExp(`${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`, 'g')
 // CSI = ESC [ params letter — only the SGR (`m`) form colours anything.
-// oxlint-disable-next-line no-control-regex
 const CSI = new RegExp(`${ESC}\\[([0-9;?]*)([A-Za-z])`, 'g')
 
 /**
