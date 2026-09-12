@@ -238,7 +238,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 237 paths do not exist upstream, so no patch covers them and none can conflict.
+These 238 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -474,6 +474,7 @@ These 237 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/token_usage.py`
 - `python/kiln/runtime/uv.lock`
 - `python/kiln/runtime/vision_tools.py`
+- `python/kiln/test_provider_bridge_wire.py`
 - `start.cmd`
 - `start.sh`
 - `upload_to_git.py`

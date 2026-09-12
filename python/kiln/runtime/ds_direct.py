@@ -2192,20 +2192,30 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
         # when the old session ids no longer resolve. Drop it and open a fresh
         # chat, exactly like a 404. Bounded to one heal so a genuinely broken
         # account can't spin here.
-        if not yielded and heal < 1 and _is_dead_session(raw_sink):
+        if not yielded and heal < 1 and (_is_dead_session(raw_sink) or not raw_sink):
             import sys as _sys
-            print("[ds_direct] invalid chat session — opening a fresh chat and retrying",
-                  file=_sys.stderr, flush=True)
+            print("[ds_direct] chat cannot be served (dead session or empty stream) — "
+                  "opening a fresh chat and retrying", file=_sys.stderr, flush=True)
             _drop_session()
             force_new = True
             heal += 1
             continue
         if yielded or heal >= 1:
-            if not yielded:                       # empty even after retry — show what DeepSeek sent
+            if not yielded:                       # empty even after a fresh chat — this is a FAILURE
                 import sys as _sys
                 print(f"[ds_direct] EMPTY response (HTTP {r.status_code}). raw lines:\n  " +
                       "\n  ".join(raw_sink[:25] or ["(no lines at all)"]),
                       file=_sys.stderr, flush=True)
+                _persist_cookies(client)
+                # Report it. Returning normally here is what let a goal round re-arm
+                # forever: the harness saw a COMPLETED turn carrying no content, so
+                # nothing told it the round had accomplished nothing, and it queued
+                # the next one until the goal hit its round cap. Raising makes the
+                # empty turn a failed one, which is what it actually is.
+                raise RuntimeError(
+                    "DeepSeek returned an empty response (HTTP %s): no answer and no "
+                    "diagnostic. Raw body: %s"
+                    % (r.status_code, " | ".join(raw_sink[:5]) or "(no lines at all)"))
             _persist_cookies(client)              # capture any WAF token DeepSeek just refreshed
             if yielded:
                 usage = _turn_usage(None if fresh_chat else prev_prompt, full_prompt, output_text, reasoning_text)
