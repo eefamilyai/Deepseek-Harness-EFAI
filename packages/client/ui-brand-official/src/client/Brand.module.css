@@ -1,0 +1,61 @@
+/* The wordmark is live text so it can carry a specular sweep. The gradient is
+   painted into the glyphs, so the highlight travels through the letters rather
+   than across a box behind them, and the ink stays the primary label colour on
+   either side of the band. */
+.shimmer {
+  --dsh-brand-glint: var(--dsw-alias-state-business-primary, #4d6bfe);
+
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+}
+
+/* Without text clipping the gradient would paint a solid bar behind the words,
+   so the sweep is opt-in and the plain ink above is the fallback. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .shimmer {
+    /* Both ends of the tile are the same primary ink, so a repeated tile joins
+       seamlessly and one period of travel is exactly one sweep. */
+    background-image: linear-gradient(
+      100deg,
+      var(--dsw-alias-label-primary) 0%,
+      var(--dsw-alias-label-primary) 38%,
+      var(--dsh-brand-glint) 50%,
+      var(--dsw-alias-label-primary) 62%,
+      var(--dsw-alias-label-primary) 100%
+    );
+    /* The tile is twice the element and repeats: every glyph is always painted,
+       at every point in the cycle, so the ink never drops out behind the band.
+       A non-repeating tile would leave the far end of the wordmark unpainted
+       once the band left it. */
+    background-size: 200% 100%;
+    background-repeat: repeat;
+    background-position: 200% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    animation: brandShimmer 4.2s linear infinite;
+  }
+}
+
+/* Linear, so the band crosses at a constant rate; one period is one full tile. */
+@keyframes brandShimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: 0% 0;
+  }
+}
+
+/* A shimmer is decoration: readers who asked for reduced motion get the static
+   wordmark in the same ink the gradient starts and ends on. */
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--dsw-alias-label-primary);
+  }
+}

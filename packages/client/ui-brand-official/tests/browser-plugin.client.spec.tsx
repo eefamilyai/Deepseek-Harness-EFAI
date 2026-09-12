@@ -40,15 +40,17 @@ describe('official browser-brand plugin', () => {
     expect(inject).toEqual(['slots'])
   })
 
-  it('leaves every slot empty outside the official build profile', async () => {
+  // DSH-FORK(brand): the occupants register in every build profile, so the
+  // profile no longer selects the sidebar brand. EXIT: a fork-owned client
+  // package owns the sidebar chrome.
+  it('fills the brand slots regardless of the build profile', async () => {
     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'local')
     const subject = await bench()
     await subject.ctx.plugin({ inject: [...inject], apply }).await()
-    for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(0)
+    for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(1)
   })
 
   it('fills declarations before or after apply and removes every occupant on teardown', async () => {
-    vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
     const before = await bench()
     const fiber = before.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
@@ -71,16 +73,23 @@ describe('official browser-brand plugin', () => {
     for (const hole of HOLES) expect(after.slots.entries(hole)).toHaveLength(1)
   })
 
-  it('leaves the conversation hero on its declaring fallback even in official builds', async () => {
-    vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
+  it('leaves the conversation hero on its declaring fallback', async () => {
     const subject = await bench()
     await subject.ctx.plugin({ inject: [...inject], apply }).await()
     expect(subject.slots.entries(HERO_HOLE)).toHaveLength(0)
   })
 
-  it('renders the official name independently from both requested mark sizes', () => {
+  // DSH-FORK(brand): the name is live text so the specular sweep can travel
+  // through the glyphs. EXIT: upstream ships a wordmark whose highlight moves
+  // through its glyphs.
+  it('renders the product name as shimmering live text, not the name artwork', () => {
     const name = render(<OfficialBrandName />)
-    expect(name.container.querySelector('svg')?.getAttribute('viewBox')).toBe('26 0 156 24')
+    expect(name.container.textContent).toBe('DeepSeek Harness')
+    // Live text is what lets the sweep travel through the glyphs; the artwork
+    // would be a single svg with nothing to clip a gradient to.
+    expect(name.container.querySelector('svg')).toBeNull()
+    const span = name.container.querySelector('span')
+    expect(span?.className).toBeTruthy()
     name.unmount()
 
     const mark = render(<OfficialBrandMark size={34} />)

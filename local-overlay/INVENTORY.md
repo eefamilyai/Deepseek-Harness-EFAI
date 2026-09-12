@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **126** in **22** patch(es).
+Tier-2 files: **133** in **23** patch(es).
 
 ## Patches
 
@@ -35,9 +35,10 @@ Tier-2 files: **126** in **22** patch(es).
 - `scripts/verify-package-readme-model-experience.ts`
 - `tsdown.config.ts`
 
-### `patches/apps.patch` — 1 file(s)
+### `patches/apps.patch` — 2 file(s)
 
 - `apps/cli/package.json`
+- `apps/web/tests/built-boot.expected.e2e.ts`
 
 ### `patches/bundle.patch` — 6 file(s)
 
@@ -156,6 +157,15 @@ Tier-2 files: **126** in **22** patch(es).
 - `packages/client/ui-settings-general/tsconfig.json`
 - `packages/client/ui-settings/src/client/settings-scope.ts`
 
+### `patches/client-brand.patch` — 6 file(s)
+
+- `packages/client/ui-brand-official/README.i18n.yaml`
+- `packages/client/ui-brand-official/README.md`
+- `packages/client/ui-brand-official/README.zh.md`
+- `packages/client/ui-brand-official/src/client/Brand.tsx`
+- `packages/client/ui-brand-official/src/client/index.ts`
+- `packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx`
+
 ### `patches/client-shell.patch` — 26 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
@@ -228,7 +238,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 228 paths do not exist upstream, so no patch covers them and none can conflict.
+These 230 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -300,6 +310,8 @@ These 228 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/agent-memory/agent-memory/src/spec.ts`
 - `packages/agent-memory/agent-memory/tests/memory.spec.ts`
 - `packages/agent-memory/agent-memory/tsconfig.json`
+- `packages/client/ui-brand-official/src/client/Brand.module.css`
+- `packages/client/ui-brand-official/src/css-modules.d.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
 - `packages/client/ui-effects/README.md`
 - `packages/client/ui-effects/package.json`

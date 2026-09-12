@@ -61,20 +61,20 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn
 
   // The sidebar renders from the boot graph: every inject layer activated.
   const tree = await screen.findByRole('tree', { name: 'Sessions' }, { timeout: 10_000 })
-  if (clientBuildValue('DSH_CLIENT_BUILD_PROFILE') === 'official') {
-    expect(document.querySelector('svg[viewBox="26 0 156 24"]')).not.toBeNull()
-    expect(screen.queryByText('DSH Local Build')).toBeNull()
-  } else {
-    expect(document.querySelector('svg[viewBox="0 0 23.16 17.04"]')).not.toBeNull()
-    const version = clientBuildValue('DSH_CLIENT_VERSION')
-    if (version === undefined) throw new Error('default client build record must carry DSH_CLIENT_VERSION')
-    const commit = clientBuildValue('DSH_CLIENT_COMMIT_HASH')
-    const buildVersion = version
-      + (commit === undefined ? '' : `-${commit}`)
-      + (clientBuildValue('DSH_CLIENT_GIT_DIRTY') === 'true' ? '-dirty' : '')
-    screen.getByText('DSH Local Build')
-    screen.getByText(buildVersion)
-  }
+  // DSH-FORK(brand): the sidebar brand is the fork's in every profile, so the
+  // shell's local-build label and its version badge never render here.
+  // EXIT: a fork-owned client package owns the sidebar chrome.
+  // The brand slot is the fork's, in every profile: the DeepSeek Harness
+  // wordmark as live text beside the whale mark, and never the shell's
+  // local-build label with its version badge.
+  expect(screen.getByText('DeepSeek Harness')).toBeTruthy()
+  expect(screen.queryByText('DSH Local Build')).toBeNull()
+  expect(document.querySelector('svg[viewBox="0 0 23.16 17.04"]')).not.toBeNull()
+  // The build record still carries provenance, but the brand no longer renders
+  // it: the local-build label and its version badge are gone from the sidebar.
+  const version = clientBuildValue('DSH_CLIENT_VERSION')
+  if (version === undefined) throw new Error('client build record must carry DSH_CLIENT_VERSION')
+  expect(screen.queryByText(version)).toBeNull()
   // The compact layout dropped group session counts; the fixture workspace
   // group row renders immediately with its sessions beneath it.
   const fixtureGroup = (await within(tree).findAllByText('fixture'))

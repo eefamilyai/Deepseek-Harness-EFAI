@@ -1,15 +1,17 @@
 ---
-description: "Official DeepSeek Harness brand occupants for the sidebar, active only in official builds; for users and maintainers choosing or replacing brand presentation."
+description: "DeepSeek Harness brand occupants for the sidebar; for users and maintainers choosing or replacing brand presentation."
 kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-client-ui-brand-official
 
+<!-- DSH-FORK(brand): this package's occupants register unconditionally in the fork. EXIT: a fork-owned client package owns the sidebar chrome. -->
+
 English | [中文](README.zh.md)
 
 ## Summary
 
-This package gives an `official` client build the DeepSeek Harness mark and name in the sidebar. Other build profiles keep the shell's fish mark and local-build label, while the conversation hero always uses the animated fish. Choose it for deployments branded as DeepSeek Harness; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
+This package gives the sidebar the DeepSeek Harness mark and the shimmering DeepSeek Harness wordmark. The conversation hero keeps the animated fish. Choose it for deployments branded as DeepSeek Harness; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
 
 ## Table of Contents
 
@@ -25,11 +27,11 @@ This package gives an `official` client build the DeepSeek Harness mark and name
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin in the browser roster of a deployment whose identity is DeepSeek's own, then build the client with the `official` profile so the occupants register.
+Mount this plugin in the browser roster of a deployment whose identity is DeepSeek's own. The occupants register on mount; no build profile selects them.
 
-### Choosing the profile
+### What the name does
 
-`DSH_CLIENT_BUILD_PROFILE` selects which brand renders. An `official` build shows the official mark and name in the sidebar; any other value leaves the shell fallbacks — the fish mark and the local-build label — in place. The conversation hero shows the animated hero fish from `dsh-client-ui-conversation` regardless of profile, because that fallback is already the official mark. The plugin still loads and validates in both cases; only the registration is profile-gated.
+The name is live text, not the name artwork, so the highlight can travel through the glyphs. A gradient sweeps one pass every 4.2 seconds and the ink returns to the primary label colour on either side of the band. Where the browser cannot clip a background to text the wordmark renders in that same primary ink with no sweep, and `prefers-reduced-motion: reduce` asks for exactly that static form. The mark beside it is the whale in the brand blue. The conversation hero shows the animated hero fish from `dsh-client-ui-conversation`, because that fallback is already the official mark.
 
 ### Replacing the brand
 
@@ -89,4 +91,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. The package retains no mutable state, and its three slot occupants install and leave through one transactional effect.
+**Runtime invariant:** No companion is published. The package retains no mutable state, and its two slot occupants install and leave through one transactional effect.

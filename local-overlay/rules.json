@@ -124,6 +124,12 @@
       ]
     },
     {
+      "name": "client-brand",
+      "paths": [
+        "packages/client/ui-brand-official/"
+      ]
+    },
+    {
       "name": "client-shell",
       "paths": [
         "packages/client/ui-conversation/",

@@ -1,0 +1,216 @@
+diff --git a/packages/client/ui-brand-official/README.i18n.yaml b/packages/client/ui-brand-official/README.i18n.yaml
+index e01d15ad30..148d49cc50 100644
+--- a/packages/client/ui-brand-official/README.i18n.yaml
++++ b/packages/client/ui-brand-official/README.i18n.yaml
+@@ -2,5 +2,5 @@
+ # side as of the last confirmed-consistent state. Both languages carry equal authority;
+ # after editing either side, bring the other along and re-record with:
+ #   pnpm run verify-translation-pairing --write packages/client/ui-brand-official/README.md
+-README.md: f8687047ca3b2a88d4fb2ae36a27819852df5ee9
+-README.zh.md: e23b0c59720bbd45285f057aa8edf967e3f019c2
++README.md: 661dbfff379683f826b1e1225d5fcf32a3ae32dd
++README.zh.md: f7dd8cbb1fbebc86b61a81c3df0fb4968b2a9c04
+diff --git a/packages/client/ui-brand-official/README.md b/packages/client/ui-brand-official/README.md
+index f8687047ca..661dbfff37 100644
+--- a/packages/client/ui-brand-official/README.md
++++ b/packages/client/ui-brand-official/README.md
+@@ -1,15 +1,17 @@
+ ---
+-description: "Official DeepSeek Harness brand occupants for the sidebar, active only in official builds; for users and maintainers choosing or replacing brand presentation."
++description: "DeepSeek Harness brand occupants for the sidebar; for users and maintainers choosing or replacing brand presentation."
+ kind: "package-reference"
+ ---
+ 
+ # @deepseek-ai/dsh-client-ui-brand-official
+ 
++<!-- DSH-FORK(brand): this package's occupants register unconditionally in the fork. EXIT: a fork-owned client package owns the sidebar chrome. -->
++
+ English | [中文](README.zh.md)
+ 
+ ## Summary
+ 
+-This package gives an `official` client build the DeepSeek Harness mark and name in the sidebar. Other build profiles keep the shell's fish mark and local-build label, while the conversation hero always uses the animated fish. Choose it for deployments branded as DeepSeek Harness; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
++This package gives the sidebar the DeepSeek Harness mark and the shimmering DeepSeek Harness wordmark. The conversation hero keeps the animated fish. Choose it for deployments branded as DeepSeek Harness; deployments with another identity should provide a replacement brand package. It has no runtime state and does not affect model requests.
+ 
+ ## Table of Contents
+ 
+@@ -25,11 +27,11 @@ This package gives an `official` client build the DeepSeek Harness mark and name
+ <a id="use-this-package"></a>
+ ## Use this package
+ 
+-Mount this plugin in the browser roster of a deployment whose identity is DeepSeek's own, then build the client with the `official` profile so the occupants register.
++Mount this plugin in the browser roster of a deployment whose identity is DeepSeek's own. The occupants register on mount; no build profile selects them.
+ 
+-### Choosing the profile
++### What the name does
+ 
+-`DSH_CLIENT_BUILD_PROFILE` selects which brand renders. An `official` build shows the official mark and name in the sidebar; any other value leaves the shell fallbacks — the fish mark and the local-build label — in place. The conversation hero shows the animated hero fish from `dsh-client-ui-conversation` regardless of profile, because that fallback is already the official mark. The plugin still loads and validates in both cases; only the registration is profile-gated.
++The name is live text, not the name artwork, so the highlight can travel through the glyphs. A gradient sweeps one pass every 4.2 seconds and the ink returns to the primary label colour on either side of the band. Where the browser cannot clip a background to text the wordmark renders in that same primary ink with no sweep, and `prefers-reduced-motion: reduce` asks for exactly that static form. The mark beside it is the whale in the brand blue. The conversation hero shows the animated hero fish from `dsh-client-ui-conversation`, because that fallback is already the official mark.
+ 
+ ### Replacing the brand
+ 
+@@ -89,4 +91,4 @@ None.
+ 
+ </details>
+ 
+-**Runtime invariant:** No companion is published. The package retains no mutable state, and its three slot occupants install and leave through one transactional effect.
++**Runtime invariant:** No companion is published. The package retains no mutable state, and its two slot occupants install and leave through one transactional effect.
+diff --git a/packages/client/ui-brand-official/README.zh.md b/packages/client/ui-brand-official/README.zh.md
+index e23b0c5972..f7dd8cbb1f 100644
+--- a/packages/client/ui-brand-official/README.zh.md
++++ b/packages/client/ui-brand-official/README.zh.md
+@@ -1,15 +1,17 @@
+ ---
+-description: "面向侧栏的官方 DeepSeek Harness 品牌填充，仅在官方构建中生效；供选择或替换品牌呈现的用户与维护者阅读。"
++description: "面向侧栏的 DeepSeek Harness 品牌填充；供选择或替换品牌呈现的用户与维护者阅读。"
+ kind: "package-reference"
+ ---
+ 
+ # @deepseek-ai/dsh-client-ui-brand-official
+ 
++<!-- DSH-FORK(brand): this package's occupants register unconditionally in the fork. EXIT: a fork-owned client package owns the sidebar chrome. -->
++
+ [English](README.md) | 中文
+ 
+ ## 概述
+ 
+-本包让以 `official` profile 构建的客户端在侧栏显示 DeepSeek Harness 标志与名称。其他构建 profile 保留外壳的鱼形标志与本地构建标签，会话首屏则始终使用动画鱼。品牌为 DeepSeek Harness 的部署应选择本包；使用其他品牌的部署应提供替代品牌包。本包不保留运行时状态，也不影响模型请求。
++本包让侧栏显示 DeepSeek Harness 标志，以及带流光效果的 DeepSeek Harness 字标。会话首屏保留动画鱼。品牌为 DeepSeek Harness 的部署应选择本包；使用其他品牌的部署应提供替代品牌包。本包不保留运行时状态，也不影响模型请求。
+ 
+ ## 目录
+ 
+@@ -25,11 +27,11 @@ kind: "package-reference"
+ <a id="use-this-package"></a>
+ ## 使用本包
+ 
+-在采用 DeepSeek 自有品牌的部署中，将本插件挂载到浏览器插件名单，然后以 `official` profile 构建客户端，让填充得以注册。
++在采用 DeepSeek 自有品牌的部署中，将本插件挂载到浏览器插件名单即可。填充在挂载时注册；没有任何构建 profile 来选择它们。
+ 
+-### 选择 profile
++### 名称的行为
+ 
+-`DSH_CLIENT_BUILD_PROFILE` 决定渲染哪个品牌。`official` 构建在侧栏显示官方标志与名称；任何其他取值都让外壳回退——鱼形标志与本地构建标签——保持原样。会话首屏无论 profile 如何都显示来自 `dsh-client-ui-conversation` 的动画首屏鱼，因为这个回退本身就是官方标志。两种情况下插件都会照常加载并通过校验；只有注册受 profile 门控。
++名称是实时文本，而非字标图片，这样高光才能在字形之间穿行。渐变每 4.2 秒扫过一次，光带两侧的墨色回到主标签色。当浏览器无法把背景裁剪到文字时，字标以同一个主墨色渲染且没有流光；`prefers-reduced-motion: reduce` 请求的正是这种静态形式。其旁的标志是品牌蓝的鲸鱼。会话首屏显示来自 `dsh-client-ui-conversation` 的动画首屏鱼，因为这个回退本身就是官方标志。
+ 
+ ### 替换品牌
+ 
+@@ -89,4 +91,4 @@ kind: "package-reference"
+ 
+ </details>
+ 
+-**运行时不变式：** 不发布伴生入口。本包不保留可变状态，三个 slot occupant 通过同一个事务性 effect 安装和释放。
++**运行时不变式：** 不发布伴生入口。本包不保留可变状态，两个 slot occupant 通过同一个事务性 effect 安装和释放。
+diff --git a/packages/client/ui-brand-official/src/client/Brand.tsx b/packages/client/ui-brand-official/src/client/Brand.tsx
+index 9ac6dd7ce2..6295f25cec 100644
+--- a/packages/client/ui-brand-official/src/client/Brand.tsx
++++ b/packages/client/ui-brand-official/src/client/Brand.tsx
+@@ -1,5 +1,12 @@
+-import { BrandWordmark, FishLogo } from '@deepseek-ai/dsh-client-ui-primitives'
++import { FishLogo } from '@deepseek-ai/dsh-client-ui-primitives'
+ import type { SidebarBrandMarkOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
++// DSH-FORK(brand): the sidebar brand is the fork's in every build profile, so
++// the name is live text this package styles rather than the upstream name
++// artwork. EXIT: a fork-owned client package owns the sidebar chrome.
++import css from './Brand.module.css'
++
++/** The product name as the sidebar prints it. */
++export const BRAND_NAME = 'DeepSeek Harness'
+ 
+ /**
+  * Render the official mark with the presentation requested by its host surface.
+@@ -10,10 +17,15 @@ export function OfficialBrandMark({ size }: SidebarBrandMarkOwnerProps) {
+   return <FishLogo size={size} />
+ }
+ 
++// DSH-FORK(brand): the specular sweep has to travel through the glyphs, so the
++// name is live text rather than the upstream `BrandWordmark` artwork.
++// EXIT: upstream ships a wordmark whose highlight moves through its glyphs.
+ /**
+- * Render the official name artwork without its independently slotted mark.
+- * @returns the official name wordmark.
++ * Render the product name as live text carrying the specular sweep. Live text
++ * rather than the name artwork, because the highlight has to travel through the
++ * glyphs; the sweep is decoration and degrades to the plain wordmark.
++ * @returns the shimmering product name.
+  */
+ export function OfficialBrandName() {
+-  return <BrandWordmark includeMark={false} />
++  return <span className={css.shimmer}>{BRAND_NAME}</span>
+ }
+diff --git a/packages/client/ui-brand-official/src/client/index.ts b/packages/client/ui-brand-official/src/client/index.ts
+index 332a5f6007..7f4821ed38 100644
+--- a/packages/client/ui-brand-official/src/client/index.ts
++++ b/packages/client/ui-brand-official/src/client/index.ts
+@@ -7,14 +7,17 @@ import { OfficialBrandMark, OfficialBrandName } from './Brand.tsx'
+ /** Required service: the UI slot registry. */
+ export const inject = ['slots']
+ 
++// DSH-FORK(brand): the sidebar always shows the DeepSeek Harness wordmark.
++// Upstream gates this registration behind DSH_CLIENT_BUILD_PROFILE=official, so
++// an unprofiled build falls through to the shell's "DSH Local Build" fallback and
++// its version badge. EXIT: a fork-owned client package owns the sidebar chrome.
+ /**
+  * Fill the sidebar brand slots as one declaration-aware registration set. The
+  * conversation hero stays on its declaring package's animated fish fallback,
+- * so the official build registers nothing there.
++ * so this registers nothing there.
+  * @param ctx - Client root context.
+  */
+ export function apply(ctx: ClientContext): void {
+-  if (process.env.DSH_CLIENT_BUILD_PROFILE !== 'official') return
+   ctx.slots.inject('sidebar.brand.mark', () =>
+     ctx.slots.inject('sidebar.brand.name', function* () {
+       yield ctx.slots.register({ name: 'sidebar.brand.mark' }, OfficialBrandMark)
+diff --git a/packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx b/packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx
+index 47e32068f6..10a3da5b83 100644
+--- a/packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx
++++ b/packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx
+@@ -40,15 +40,17 @@ describe('official browser-brand plugin', () => {
+     expect(inject).toEqual(['slots'])
+   })
+ 
+-  it('leaves every slot empty outside the official build profile', async () => {
++  // DSH-FORK(brand): the occupants register in every build profile, so the
++  // profile no longer selects the sidebar brand. EXIT: a fork-owned client
++  // package owns the sidebar chrome.
++  it('fills the brand slots regardless of the build profile', async () => {
+     vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'local')
+     const subject = await bench()
+     await subject.ctx.plugin({ inject: [...inject], apply }).await()
+-    for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(0)
++    for (const hole of HOLES) expect(subject.slots.entries(hole)).toHaveLength(1)
+   })
+ 
+   it('fills declarations before or after apply and removes every occupant on teardown', async () => {
+-    vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
+     const before = await bench()
+     const fiber = before.ctx.plugin({ inject: [...inject], apply })
+     await fiber.await()
+@@ -71,16 +73,23 @@ describe('official browser-brand plugin', () => {
+     for (const hole of HOLES) expect(after.slots.entries(hole)).toHaveLength(1)
+   })
+ 
+-  it('leaves the conversation hero on its declaring fallback even in official builds', async () => {
+-    vi.stubEnv('DSH_CLIENT_BUILD_PROFILE', 'official')
++  it('leaves the conversation hero on its declaring fallback', async () => {
+     const subject = await bench()
+     await subject.ctx.plugin({ inject: [...inject], apply }).await()
+     expect(subject.slots.entries(HERO_HOLE)).toHaveLength(0)
+   })
+ 
+-  it('renders the official name independently from both requested mark sizes', () => {
++  // DSH-FORK(brand): the name is live text so the specular sweep can travel
++  // through the glyphs. EXIT: upstream ships a wordmark whose highlight moves
++  // through its glyphs.
++  it('renders the product name as shimmering live text, not the name artwork', () => {
+     const name = render(<OfficialBrandName />)
+-    expect(name.container.querySelector('svg')?.getAttribute('viewBox')).toBe('26 0 156 24')
++    expect(name.container.textContent).toBe('DeepSeek Harness')
++    // Live text is what lets the sweep travel through the glyphs; the artwork
++    // would be a single svg with nothing to clip a gradient to.
++    expect(name.container.querySelector('svg')).toBeNull()
++    const span = name.container.querySelector('span')
++    expect(span?.className).toBeTruthy()
+     name.unmount()
+ 
+     const mark = render(<OfficialBrandMark size={34} />)
