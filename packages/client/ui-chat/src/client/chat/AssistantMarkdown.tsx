@@ -71,6 +71,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     if (block === undefined) continue
     switch (block.kind) {
       case 'text':
+        // DSH-FORK(brand): an empty text block renders a zero-height
+        // MarkdownText that still claims one `.body` flex gap, so it doubles
+        // the space before whatever follows. Empty prose carries no content,
+        // so it contributes no row.
+        // EXIT: upstream renders every text block, including an empty one.
+        if (block.text.trim() === '') break
         rendered.push(
           <MarkdownText
             key={i}

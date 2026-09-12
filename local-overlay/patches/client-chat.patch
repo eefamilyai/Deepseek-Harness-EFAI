@@ -1,3 +1,39 @@
+diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css
+index 8d7c41ac85..124a391672 100644
+--- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css
++++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css
+@@ -20,6 +20,14 @@
+   gap: 16px;
+ }
+ 
++/* DSH-FORK(brand): an empty block child paints nothing but still claims one
++   flex gap, so a stray empty MarkdownText doubles the space between the row
++   above it and the next row. An empty child contributes no row at all.
++   EXIT: upstream gives every `.body` child the gap unconditionally. */
++.body > :empty {
++  display: none;
++}
++
+ /* Wide markdown tables (the renderer's ≥4-column md-table-wide hook) span
+    the whole transcript width instead of clipping at the 748px message
+    column, while the table content keeps starting at its normal x (the lead
+diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
+index 3212801e00..8ad130a3f4 100644
+--- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
++++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
+@@ -71,6 +71,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+     if (block === undefined) continue
+     switch (block.kind) {
+       case 'text':
++        // DSH-FORK(brand): an empty text block renders a zero-height
++        // MarkdownText that still claims one `.body` flex gap, so it doubles
++        // the space before whatever follows. Empty prose carries no content,
++        // so it contributes no row.
++        // EXIT: upstream renders every text block, including an empty one.
++        if (block.text.trim() === '') break
+         rendered.push(
+           <MarkdownText
+             key={i}
 diff --git a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx b/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx
 index 40e08dbaf7..341c4f5933 100644
 --- a/packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx

@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **124** in **22** patch(es).
+Tier-2 files: **126** in **22** patch(es).
 
 ## Patches
 
@@ -103,8 +103,10 @@ Tier-2 files: **124** in **22** patch(es).
 - `packages/client/locale/src/locales/en.ts`
 - `packages/client/locale/src/locales/zh.ts`
 
-### `patches/client-chat.patch` — 13 file(s)
+### `patches/client-chat.patch` — 15 file(s)
 
+- `packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css`
+- `packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx`
 - `packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx`
 - `packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css`
 - `packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx`

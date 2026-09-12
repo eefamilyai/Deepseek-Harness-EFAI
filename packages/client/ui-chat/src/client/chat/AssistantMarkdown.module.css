@@ -20,6 +20,14 @@
   gap: 16px;
 }
 
+/* DSH-FORK(brand): an empty block child paints nothing but still claims one
+   flex gap, so a stray empty MarkdownText doubles the space between the row
+   above it and the next row. An empty child contributes no row at all.
+   EXIT: upstream gives every `.body` child the gap unconditionally. */
+.body > :empty {
+  display: none;
+}
+
 /* Wide markdown tables (the renderer's ≥4-column md-table-wide hook) span
    the whole transcript width instead of clipping at the 748px message
    column, while the table content keeps starting at its normal x (the lead
