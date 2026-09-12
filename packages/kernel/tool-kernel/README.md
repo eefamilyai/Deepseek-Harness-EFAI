@@ -55,19 +55,92 @@ to mount.
 
 #### What the model sees
 
-One tool named `kernel` with a required `code` string and an optional `timeoutMs`. The description states that variables and imports persist across calls, that shell commands run through `sh("...")`, and that the first line must be a `#` comment titling the cell. A separate `tool:kernel` prompt section tells the model to call `tool_help()` to discover the preloaded helpers. See [`@deepseek-ai/dsh-tool-kernel`](../../../docs/tool-catalog.md#deepseek-aidsh-tool-kernel) in the generated tool catalog.
+One tool named `kernel` with a required `code` string and an optional `timeoutMs`. The description states that variables and imports persist across calls, that shell commands run through `sh("...")`, and that the first line must be a `#` comment titling the cell. A separate `tool:kernel` prompt section requires the model to call `tool_help()` to discover the preloaded helpers *before* writing a cell, and to check the per-helper signature with `tool_help("<name>")` before relying on it. Dropping to a raw `os.walk` is allowed only after that lookup has shown no helper fits. See [`@deepseek-ai/dsh-tool-kernel`](../../../docs/tool-catalog.md#deepseek-aidsh-tool-kernel) in the generated tool catalog.
 
 ##### Prompt section verbatim
 
 ```markdown
 You have one tool for acting on this machine: `kernel`, which runs Python in a
-persistent namespace. To learn every preloaded helper and how each one behaves,
-call `tool_help()` - with no argument it lists every tool and a one-line summary;
-pass a name to get its full documentation.
+persistent namespace. Variables and imports persist across calls, so build state
+up instead of re-deriving it. To learn every preloaded helper, call `tool_help()`
+with no argument; `tool_help("grep")` documents one.
 
 Begin every cell with a single-line `#` comment stating what the script does.
 That first line titles the call in the transcript, so make it a short, concrete
-summary of the intent. The cell body follows.
+summary of the intent — `# Count the files under packages/`, not `# code` or a bare
+restatement of the line below it. The cell body follows.
+
+## Discover the helpers before you write anything
+
+This is a requirement, not advice. The kernel ships a helper for nearly every
+filesystem, search, and process task, and `tool_help()` is the only way to learn
+what exists. A script written before you have called it is guesswork about your
+own hands.
+
+Make this the first cell of any session that will touch files, search, or
+processes, and repeat it whenever you are about to write a loop you have not
+written before:
+
+1. `tool_help()` lists every preloaded helper and every harness tool reachable
+   through `tools.<name>`, each with a one-line summary. Call it before you plan.
+2. `tool_help("<name>")` gives one helper its full signature and semantics. Call
+   it for every helper you intend to use, before you rely on its argument order.
+3. Only then write the cell, calling those helpers instead of reimplementing them.
+
+Skipping step 1 is the expensive mistake. A hand-rolled `os.walk` plus
+`for line in open(f)` reads every file one line at a time, while the helpers
+drive ripgrep and the git index; on a large repository that gap is minutes per
+call, not milliseconds. The helpers below are the ones you will reach for most:
+
+- `grep(pattern, path, include=, max_matches=)` — matching lines, `file:line:text`.
+- `find(pattern, path)` — which files match, one hit per file.
+- `glob(pattern, path)` — paths by pattern (`**/*.ts`).
+- `search_files(query, path)` — filenames and contents together.
+- `list_dir(path, depth)` / `tree(path, depth)` — a directory, bounded.
+- `read_file` / `read` / `write` / `edit_file` / `append_file` — file I/O.
+- `sh(cmd, result=True)` — a shell command; `result=True` gives `{ok, code, stdout}`.
+- `run_process(argv, cwd=)` — argv without a shell, for quoting-sensitive commands.
+- `read_json` / `write_json` / `read_yaml` / `read_csv` — structured data.
+- `show(image)` — hand a real screenshot or image back to your own vision.
+
+Only once `tool_help()` has shown that none of these fits may you drop to a raw
+`os.walk`, `Path.rglob`, or a per-line Python loop — and then say so in a comment,
+naming the helper you ruled out and why. "I did not check" is not a reason.
+
+## Batch independent work into ONE cell
+
+Kernel cells are serialized: the namespace is shared mutable state, so a second
+cell waits for the first to finish. Issuing several `kernel` calls in parallel
+therefore buys nothing — they run one after another regardless. The concurrency
+you want is *inside* a cell:
+
+    # Four independent questions, one call
+    hits = {q: grep(q, "packages", max_matches=5) for q in QUERIES}
+
+    # Or genuinely parallel reads
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(8) as pool:
+        pages = list(pool.map(read_file, PATHS))
+
+So do not split one investigation across four `kernel` turns. Write one cell that
+does all four things and prints what you need to see. That single change removes
+most of the wall-clock a task spends waiting on itself.
+
+## Search wide, then narrow
+
+One fast call beats five slow ones. `grep` with a broad pattern and a generous
+`max_matches` costs about the same as a narrow one, so ask the whole question once
+rather than guessing at paths. Prefer `include="*.ts"` over walking a subtree
+yourself, and `find` over `grep` when you only need to know *which* files are
+involved. If a cell is going to print a lot, print counts or a slice first and
+fetch the detail once you know it matters.
+
+## Read the result before the next call
+
+Every cell returns its printed output plus the value of each top-level bare
+expression. Print what you need to decide the next step, then decide. Do not fire
+a speculative cell to find out what a path looks like when `list_dir` or `glob`
+would have told you in one call.
 ```
 
 #### Token effect
