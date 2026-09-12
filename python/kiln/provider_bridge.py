@@ -56,7 +56,16 @@ _cancels_lock = threading.Lock()
 
 
 def _send(obj):
-    line = json.dumps(obj, ensure_ascii=False)
+    # `ensure_ascii=True` is a wire-protocol requirement, not a style choice.
+    # A non-ASCII character (the MIDDLE DOT in a model label, an em dash, a
+    # CJK model name) written raw is encoded with whatever codepage the child's
+    # stdout happens to carry. Under UTF-8 that is the right bytes; under a
+    # legacy codepage such as Windows cp1252 it is a single byte (the middle
+    # dot becomes 0xB7) that the harness then decodes as UTF-8 and replaces
+    # with U+FFFD -- which renders in the picker as a diamond with a question
+    # mark. Escaping to \\uXXXX keeps every frame pure ASCII, so the text
+    # survives any stdout codepage and is decoded identically on every host.
+    line = json.dumps(obj, ensure_ascii=True)
     with _out_lock:
         sys.stdout.write(line + "\n")
         sys.stdout.flush()

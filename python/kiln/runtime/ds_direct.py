@@ -760,6 +760,14 @@ def solve_pow(ch):
 class _AuthExpired(Exception):
     """Token/cookies no longer valid (401, or a 200 with data:null)."""
 
+    def __init__(self, detail=None):
+        # Every raise site knows WHICH credential check failed, but most pass
+        # nothing, and `"%s" % e` on a bare exception renders as an empty string
+        # -- which surfaced to the user as "auth failed during upload:" with the
+        # reason missing. A default keeps the class usable when raised bare and
+        # lets a caller that knows more say so.
+        super().__init__(detail or "the DeepSeek session is no longer valid")
+
 
 class _SessionStale(RuntimeError):
     """THIS conversation's DeepSeek chat session is bad (unknown session id, or a
@@ -953,7 +961,7 @@ class _Client:
         except (KeyError, TypeError, ValueError, AttributeError):
             sid = None
         if not sid:                       # 401, or 200 with data:null → token dead
-            raise _AuthExpired()
+            raise _AuthExpired("the completion endpoint returned no chat session id")
         return sid
 
     def _pow(self, target_path="/api/v0/chat/completion"):
@@ -968,7 +976,7 @@ class _Client:
         try:
             return r.json()["data"]["biz_data"]["challenge"]
         except (KeyError, TypeError, ValueError, AttributeError):
-            raise _AuthExpired()
+            raise _AuthExpired("the proof-of-work challenge request returned no challenge")
 
     def upload_file(self, filename, blob):
         """Push one file into DeepSeek's store and return its id.
@@ -1500,7 +1508,8 @@ def upload_files(files, account=None, cancelled=None):
                 # These invalidate the credential, not the file — the caller
                 # re-logs-in and retries the whole call, exactly as
                 # `describe_files` does, rather than reporting N file errors.
-                raise RuntimeError("DeepSeek auth failed during upload: %s" % e)
+                raise RuntimeError("DeepSeek auth failed during upload (%s): %s"
+                                 % (type(e).__name__, e))
             except Exception as e:  # noqa: BLE001 — one bad file, not the batch
                 errors.append({"name": name, "error": "%s: %s" % (type(e).__name__, e)})
         _persist_cookies(client)          # uploads can slide the WAF cookies

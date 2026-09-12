@@ -202,7 +202,13 @@ export class KilnBridge {
     if (running !== undefined && running.exitCode === null && !running.killed) return running
     const proc = spawn(this.options.python, ['-u', this.options.script], {
       cwd: this.options.cwd,
-      env: { ...process.env, ...this.options.env },
+      // The bridge speaks newline-delimited JSON on stdout, and the reader
+      // below decodes it as UTF-8. Left to the host, a Windows child on a
+      // legacy ANSI codepage encodes non-ASCII in that codepage instead,
+      // and every such character reaches the UI as U+FFFD (a diamond with
+      // a question mark). Pinning the child to UTF-8 makes the encode side
+      // match the decode side on every host, whatever the console default.
+      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...this.options.env },
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     })

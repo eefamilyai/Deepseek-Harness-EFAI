@@ -265,14 +265,33 @@ export function ModelSelect(
       let y = rect.top - 8 - lh
       if (lw > 0) x = Math.min(Math.max(x, MARGIN), window.innerWidth - lw - MARGIN)
       if (lh > 0) y = Math.min(Math.max(y, MARGIN), window.innerHeight - lh - MARGIN)
-      setMenuPos({ left: x, top: y })
+      // Identical positions must not re-render: the observer below fires on
+      // every resize, and a fresh object each time would loop.
+      setMenuPos(prev => (prev !== null && prev.left === x && prev.top === y)
+        ? prev
+        : { left: x, top: y })
     }
     // First run measures the hidden pre-render (same commit as `open`), so
     // the card lands placed before anything paints.
     place()
+    // DSH-FORK(browser): re-place the portaled card whenever it resizes. Its
+    // height sets its own y (it opens upward), so collapsing a provider group
+    // or a late catalog load moved the card off its trigger and left it
+    // floating. EXIT: upstream re-measures the popover on its own resize.
+    // The card's own height sets its y (it opens upward, above the trigger),
+    // and that height changes after the first paint: collapsing a provider
+    // group, the account picker appearing, a late catalog load landing.
+    // Re-place from the element itself instead of from a dependency list, so
+    // no future source of resizing can reintroduce the stale offset that left
+    // the card floating away from its trigger.
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => { place() })
+    if (observer !== null && menuRef.current !== null) observer.observe(menuRef.current)
     window.addEventListener('scroll', place, true)
     window.addEventListener('resize', place)
     return () => {
+      observer?.disconnect()
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }

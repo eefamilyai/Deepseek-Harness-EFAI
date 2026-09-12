@@ -56,5 +56,10 @@ export function scrubChildEnv(
     if (isSecretEnvVar(name)) continue
     result[name] = value
   }
-  return { ...result, ...additions }
+  // The kernel child is a Python process whose stdout is the cell's `out`.
+  // Without a pinned encoding it inherits the host's, so on a Windows box
+  // whose ANSI codepage is not UTF-8 a cell printing a non-ASCII character
+  // emits that codepage's bytes and the UTF-8 reader replaces them with
+  // U+FFFD. Callers' additions still win, since they are applied last.
+  return { ...result, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', ...additions }
 }
