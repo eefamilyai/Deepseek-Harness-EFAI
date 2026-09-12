@@ -52,6 +52,17 @@ export const KERNEL_ENABLED_PATH = 'kernel.enabled'
 /** Default when the user has never touched the switch. */
 export const KERNEL_ENABLED_DEFAULT = true
 
+/**
+ * The document path for the browser-window preference.
+ *
+ * Exported so the string appears once in TypeScript; the `!!js` expression in
+ * the bundle YAML necessarily spells it out again, and this is what it matches.
+ */
+export const KERNEL_BROWSER_WINDOW_PATH = 'kernel.browserWindow'
+
+/** Default when the user has never touched the preference: no window appears. */
+export const KERNEL_BROWSER_WINDOW_DEFAULT = false
+
 /** Plugin config: the switch, and its composition-layer default. */
 export interface Config {
   /**
@@ -61,6 +72,13 @@ export interface Config {
    * tools, and no kernel. Takes effect on restart.
    */
   enabled?: boolean
+  /**
+   * Whether the agent's browser may open a real Chromium window on the desktop.
+   * Off: the browser runs windowless and nothing appears while the agent works —
+   * screenshots and the live view still work. On: a genuine window opens that
+   * you can watch and take over. Takes effect on restart.
+   */
+  browserWindow?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -68,6 +86,10 @@ export const Config: z<Config> = z.object({
     .description('Run Python in a persistent kernel as the model\'s way of acting on this machine.'
       + ' While on, the shell, filesystem, search, and background-job tools are replaced by'
       + ' function calls inside that namespace. Restart the harness to apply.'),
+  browserWindow: z.boolean().default(KERNEL_BROWSER_WINDOW_DEFAULT)
+    .description('Let the agent open a real Chromium window on your desktop. Off, it browses'
+      + ' windowless and nothing appears while it works; screenshots and the live view still'
+      + ' work. Restart the harness to apply.'),
 })
 
 /**
@@ -83,7 +105,10 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config): void {
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(KERNEL_SETTINGS_NAMESPACE, Config, {
-      base: { enabled: config.enabled ?? KERNEL_ENABLED_DEFAULT },
+      base: {
+        enabled: config.enabled ?? KERNEL_ENABLED_DEFAULT,
+        browserWindow: config.browserWindow ?? KERNEL_BROWSER_WINDOW_DEFAULT,
+      },
       // Read once at boot by every gated Loader row; see the module note.
       applies: 'restart',
     })

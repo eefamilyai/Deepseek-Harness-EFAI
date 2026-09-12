@@ -4,7 +4,9 @@
  * @module @deepseek-ai/dsh-kernel-python/provider
  */
 
-import type { KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider } from '@deepseek-ai/dsh-kernel'
+import type {
+  KernelCellImage, KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider,
+} from '@deepseek-ai/dsh-kernel'
 import { KernelAbortError, KernelChild, parseControlResult } from './child.ts'
 import type { SeamRequest } from './seam.ts'
 import { dispatchSeam } from './seam.ts'
@@ -149,7 +151,15 @@ export class KilnKernelProvider implements KernelProvider {
       const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
       const outcome = await this.awaitCell(child, id, request, signal, request.agentCtx, request.agent)
       if (outcome.kind === 'ok') {
-        return { output: outcome.output, outcome: 'ok' as const, restarted: false }
+        return {
+          output: outcome.output,
+          outcome: 'ok' as const,
+          restarted: false,
+          // Absent rather than empty when the cell showed nothing: a caller
+          // checking "did this cell return a picture" reads the field, and an
+          // always-present empty array would make that check meaningless.
+          ...outcome.images.length > 0 ? { images: outcome.images } : {},
+        }
       }
       await this.replace(child)
       return {
@@ -171,7 +181,7 @@ export class KilnKernelProvider implements KernelProvider {
     signal?: AbortSignal,
     agentCtx?: KernelExecuteRequest['agentCtx'],
     agent?: KernelExecuteRequest['agent'],
-  ): Promise<{ kind: 'ok'; output: string } | { kind: Exclude<KernelOutcome, 'ok'> }> {
+  ): Promise<{ kind: 'ok'; output: string; images: readonly KernelCellImage[] } | { kind: Exclude<KernelOutcome, 'ok'> }> {
     const prevHandler = child.seamHandler
     child.seamHandler = (seam: SeamRequest): void => {
       void dispatchSeam(agentCtx, agent, seam, signal).then(
@@ -199,7 +209,14 @@ export class KilnKernelProvider implements KernelProvider {
       // a cell that genuinely printed nothing, and reporting a dead kernel as
       // "the cell produced no output" is the worst available reading of it.
       if (frame.dead === true || child.dead) return { kind: 'crashed' }
-      return { kind: 'ok', output: joinCellOutput(frame.out ?? '', frame.error ?? null) }
+      return {
+        kind: 'ok',
+        output: joinCellOutput(frame.out ?? '', frame.error ?? null),
+        // A crashed or timed-out cell's images never arrive — those paths
+        // restart the kernel and report the loss, so a picture the model was
+        // promised is gone along with the namespace that produced it.
+        images: frame.images ?? [],
+      }
     } catch (reason) {
       return { kind: reason instanceof KernelAbortError ? reason.kind : 'cancelled' }
     } finally {

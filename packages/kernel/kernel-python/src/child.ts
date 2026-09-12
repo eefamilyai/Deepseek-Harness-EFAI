@@ -97,6 +97,28 @@ export interface KernelFrame {
   readonly backgrounded?: boolean
   /** A Python→TS seam request; never a cell result. Routed to the seam handler. */
   readonly seam?: SeamRequest
+  /**
+   * Images the cell returned with `show()`, already base64-encoded by the
+   * child. Untrusted until a consumer decodes and validates them: this layer
+   * only checks the shape a frame can carry, and a frame is whatever the child
+   * wrote on the channel.
+   */
+  readonly images?: readonly KernelCellImage[]
+}
+
+/**
+ * One frame image: base64 bytes plus the type the child detected.
+ *
+ * Declared here rather than imported from `@deepseek-ai/dsh-kernel` because
+ * this package deliberately mirrors the kernel seam's wire shapes instead of
+ * depending on it at run time — the same reason `SeamRequest` is local.
+ */
+export interface KernelCellImage {
+  readonly data: string
+  readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+  readonly bytes: number
+  readonly name?: string
+  readonly note?: string
 }
 
 /** How to launch the child. */
@@ -199,7 +221,7 @@ export class KernelChild {
         const frame = decodeFrame(line)
         if (frame === undefined) this.discarded += 1
         else if (frame.seam !== undefined) this.onSeamFrame(frame.seam)
-        else this.deliver(frame)
+        else this.deliver(withFrameImages(frame))
       }
       index = this.buffer.indexOf('\n')
     }
@@ -393,6 +415,51 @@ export function decodeFrame(line: string): KernelFrame | undefined {
   } catch {
     return undefined
   }
+}
+
+const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const
+
+/**
+ * Keep only the well-formed images a frame claims to carry.
+ *
+ * A frame is whatever the child wrote on the channel, so its `images` is
+ * untrusted input like any other: the entries are filtered to ones a consumer
+ * can actually use (a supported media type, a non-empty base64 payload, a
+ * consistent byte count) rather than rejected wholesale. One malformed entry
+ * costs its own image and nothing else — losing a whole cell's output because
+ * one picture was described badly would be the worse failure.
+ * @param frame - a decoded frame, with whatever `images` the child sent.
+ * @returns the same frame with a validated `images` array, or without the field
+ *   when it carried none.
+ */
+export function withFrameImages(frame: KernelFrame): KernelFrame {
+  const raw = (frame as { images?: unknown }).images
+  if (!Array.isArray(raw)) {
+    // Absent and malformed are the same answer to a consumer: no images.
+    const { images: _dropped, ...rest } = frame as { images?: unknown }
+    return rest as unknown as KernelFrame
+  }
+  const images: KernelCellImage[] = []
+  for (const entry of raw) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const { data, mediaType, bytes, name, note } = entry as Record<string, unknown>
+    if (typeof data !== 'string' || data.length === 0) continue
+    if (typeof mediaType !== 'string') continue
+    if (!(IMAGE_MEDIA_TYPES as readonly string[]).includes(mediaType)) continue
+    if (typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes < 0) continue
+    images.push({
+      data,
+      mediaType: mediaType as KernelCellImage['mediaType'],
+      bytes,
+      ...typeof name === 'string' && name.length > 0 ? { name } : {},
+      ...typeof note === 'string' && note.length > 0 ? { note } : {},
+    })
+  }
+  if (images.length === 0) {
+    const { images: _dropped, ...rest } = frame as { images?: unknown }
+    return rest as unknown as KernelFrame
+  }
+  return { ...frame, images }
 }
 
 /**

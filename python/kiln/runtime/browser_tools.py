@@ -1,9 +1,10 @@
 # browser_tools.py — sandboxed browser automation for Kiln-Kernel.
 #
-# The browser is a REAL Chromium: headed by default, so a genuine window opens
-# on the desktop and the session the agent drives is the same one you can see
-# and grab. Set KILN_BROWSER_HEADED=0 to force the windowless shell (CI, or a
-# host with no display). Playwright drives it when installed;
+# The browser is a REAL Chromium, and it is windowless by default: an agent
+# that opened a window on every call would take over the desktop uninvited. Set
+# KILN_BROWSER_HEADED=1 to open a genuine window you can see and grab — the
+# session the agent drives is then the same one in front of you. Screenshots
+# work either way. Playwright drives it when installed;
 # without Playwright the "navigate" action degrades to a plain HTTP text fetch
 # and everything else explains what is available. The tool never raises.
 #
@@ -225,10 +226,12 @@ class KilnBrowser:
         self._last_state = None       # last full state.json dict, merged per frame
         self._state_lock = _threading.Lock()   # serialize state.json writes (screencast + worker)
         self._histories = []          # per-page navigation history, aligned to context.pages
-        # Headed by default: the whole point is a real window the user can use,
-        # not a screenshot of one. KILN_BROWSER_HEADED=0 restores the headless
-        # shell for CI and for hosts with no display.
-        _h = os.environ.get("KILN_BROWSER_HEADED", "1").strip().lower()
+        # Windowless unless asked otherwise: the window is a convenience the
+        # user opts into, not something an agent opens on their desktop by
+        # itself. KILN_BROWSER_HEADED=1 opens a real window; screenshots and the
+        # live screencast are available in both forms, so nothing is lost by
+        # staying hidden.
+        _h = os.environ.get("KILN_BROWSER_HEADED", "0").strip().lower()
         self._headed = _h not in ("0", "false", "no", "off")
         # A dedicated profile keeps logins and cookies across restarts WITHOUT
         # touching the user's own Chrome profile (which would fight over its
@@ -261,7 +264,7 @@ class KilnBrowser:
     def _ensure(self):
         """Lazily launch the real browser. Returns (ok, err_or_None).
 
-        Headed by default (``KILN_BROWSER_HEADED=0`` opts out), launched as a
+        Windowless by default (``KILN_BROWSER_HEADED=1`` opts in), launched as a
         PERSISTENT context over a dedicated profile directory so logins survive
         restarts. A fixed viewport is kept even when headed: the dock maps its
         own pixels to page coordinates through state.json's vw/vh, so the
@@ -291,9 +294,12 @@ class KilnBrowser:
                 "locale": "en-US",
                 "extra_http_headers": {"Accept-Language": "en-US,en;q=0.9"},
             }
-            if self._headed and self._profile_dir:
+            if self._profile_dir:
                 # A persistent context IS the browser: it has no separate
                 # ``browser`` handle, and closing the context closes Chromium.
+                # Persistence does not depend on showing a window — it is what
+                # keeps logins across restarts, and a windowless browser needs
+                # that exactly as much as a visible one.
                 os.makedirs(self._profile_dir, exist_ok=True)
                 self.context = self.pw.chromium.launch_persistent_context(
                     self._profile_dir, **launch_kw, **ctx_opts)
@@ -436,9 +442,11 @@ class KilnBrowser:
         self._cdp_attempt_ts = time.time()
         self._cdp_record_mtime = _cdp_discovery_mtime()
         if self._headed is False and os.environ.get("KILN_BROWSER_CDP_URL") is None:
-            # Headless is an explicit request for a private browser; do not
-            # hijack the user's window instead.
-            self._cdp_error = "headless"
+            # Windowless means a private browser: attaching would drive the
+            # window the user already has open, which is exactly the intrusion
+            # the default avoids. An explicit CDP endpoint still wins, because
+            # naming one is an instruction rather than a guess.
+            self._cdp_error = "windowless"
             return False, self._cdp_error
         urls = self._cdp_candidates()
         if not urls:
@@ -664,8 +672,8 @@ class KilnBrowser:
         if not ok:
             return f"show_window needs Playwright ({err})"
         if not getattr(self, "_headed", False):
-            return ("browser is headless; set KILN_BROWSER_HEADED=1 and restart "
-                    "the harness to get a real window")
+            return ("browser is running windowless; set KILN_BROWSER_HEADED=1 and "
+                    "restart the harness to get a real window")
         try:
             self.page.bring_to_front()
             try:
@@ -1816,11 +1824,12 @@ def browser_use(action="navigate", **kw):
 def _browser_use_impl(action="navigate", **kw):
     """One entry point for every browser action. Never raises.
 
-    Non-visual, ref-driven: call read_page() to get the page as a tree of
+    Ref-driven by default: call read_page() to get the page as a tree of
     [ref_N] handles, then act by ref — click(ref='ref_5'), type(ref='ref_2',
-    text='...', submit=True), select(ref='ref_9', value='...'). No screenshots
-    or pixel coordinates are needed (though click also accepts a CSS selector or
-    'x,y'). Every action reports the outcome as text.
+    text='...', submit=True), select(ref='ref_9', value='...'). Screenshots are
+    available when the page's appearance is the point: screenshot() captures the
+    viewport to a file and returns its name, and the picture comes back to you
+    as an attachment. click also accepts a CSS selector or 'x,y'.
 
     Actions:
       read:       navigate(url), read_page()/snapshot() -> [ref_N] tree,
@@ -1834,7 +1843,9 @@ def _browser_use_impl(action="navigate", **kw):
       session:    save_state(path?), load_state(path), new_tab(url?),
                   switch_tab(index), close_tab(), tabs()
       network:    network(limit?), console(limit?), clear_network()
-      safety:     ALWAYS headless; the browser never touches your mouse/keyboard.
+      safety:     windowless by default, so nothing appears on the user's
+                  desktop unless they asked for a window; the browser never
+                  touches the user's mouse or keyboard.
                   Pass proxy='http://...' on navigate to route through a proxy.
     """
     b = BROWSER

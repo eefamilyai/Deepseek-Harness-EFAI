@@ -18,6 +18,37 @@ A cell that carries no budget of its own gets `defaultTimeoutMs` from the seam.
 - `kernel-python` — the backend this tool ends up executing against.
 - `@deepseek-ai/dsh-rlm` — swaps the acting tool from this standalone tool to the recursive engine, which drives the same kernel directly. The two are alternatives, not layers: RLM mode unmounts this row.
 
+## Images a cell returns
+
+A cell can hand back pictures as well as text: `show()` in the Kiln runtime
+queues an image on the cell's result, and this tool turns each one into an image
+block in the model's own context. That is the difference between the model being
+told what a screenshot contains and the model looking at it.
+
+Three steps, in this order, and each one is a place the picture could be lost:
+
+1. **The frame carries the bytes.** `kernel-python` validates whatever the child
+   wrote in its `images` field and reports the survivors on `KernelExecuteResult`.
+   A frame with no images simply omits the field.
+2. **This tool commits them.** `admitCellImages` decodes each payload, asks the
+   attachment store to store it, and returns durable `ImageAttachmentRef`s. The
+   commit happens *before* the tool returns, because a canonical value that cited
+   unstored bytes would replay as a broken picture for the rest of the session.
+3. **The render emits blocks.** `kernelContent` produces the captured output,
+   then one envelope line and one `image` block per stored picture, in queue
+   order.
+
+Refusal is per image, never per cell. An unsupported media type or an oversized
+picture becomes a note shown beside the text and costs only itself: a cell that
+produced a good traceback still delivers it even when one of its pictures could
+not be stored. When the store refuses a whole batch — usually its aggregate byte
+or count bound — the batch is retried one at a time so the images that do fit are
+not lost with the one that does not.
+
+Storing requires `attachments`, so this package declares it in `inject`. A kernel
+tool that silently dropped a cell's pictures would be worse than one that refuses
+to mount.
+
 ## Model Experience
 
 ### `kernel` tool schema
@@ -69,5 +100,6 @@ These limits define what this package does not provide. They are current package
 - **A cell that overruns its budget backgrounds** - the primary budget backgrounds the cell and a much larger secondary budget force-stops it, so a runaway cell can keep running long after the model stopped waiting.
 - **Output is truncated at the cap** - a cell printing more than `maxOutputChars` loses the middle, keeping only the head and tail.
 - **The caller names the working directory** - a call with no agent sends no `cwd` and runs wherever the kernel already is.
+- **Images are bounded by the attachment store** - the kernel caps a cell at 8 images and 4 MB each, and the store applies its own aggregate bounds on top; an image that exceeds them is reported as a note rather than attached.
 
 Fork-owned: `packages/kernel/tool-kernel` is Tier 1, so it touches no upstream file.

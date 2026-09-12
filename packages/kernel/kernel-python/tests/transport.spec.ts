@@ -16,7 +16,7 @@
  */
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { KernelChild, decodeFrame, parseControlResult } from '../src/child.ts'
+import { KernelChild, decodeFrame, parseControlResult, withFrameImages } from '../src/child.ts'
 import { resolvePython } from '../src/index.ts'
 
 const FAKE = join(import.meta.dirname, 'fixtures', 'fake-kernel.py')
@@ -138,6 +138,81 @@ describeChild('KernelChild frame correlation', () => {
     try {
       const frame = await child.nextFrame(child.sendControl({ cmd: 'list_names' }))
       expect(parseControlResult(frame)).toEqual({ names: ['a', 'b'] })
+    } finally {
+      await child.kill()
+    }
+  })
+})
+
+
+/**
+ * A frame's `images` is untrusted child output like any other part of it.
+ *
+ * The child decides what goes in that array, so the transport's job is to hand
+ * on only entries a consumer can actually use — and to drop one bad entry
+ * without discarding the whole cell's result or, worse, the pictures beside it.
+ */
+describe('KernelFrame images', () => {
+  const PNG = { data: 'aGk=', mediaType: 'image/png', bytes: 3 }
+
+  it('keeps a well-formed image list', () => {
+    const frame = withFrameImages({ out: 'x', images: [PNG] } as never)
+    expect(frame.images).toEqual([PNG])
+  })
+
+  it('reports no images when the frame carried none', () => {
+    // Absent is the normal case for a cell that never called show().
+    expect(withFrameImages({ out: 'x' }).images).toBeUndefined()
+  })
+
+  it('drops a malformed entry without losing the good ones beside it', () => {
+    const frame = withFrameImages({
+      out: 'x',
+      images: [
+        PNG,
+        { data: '', mediaType: 'image/png', bytes: 0 },
+        { data: 'aGk=', mediaType: 'image/tiff', bytes: 3 },
+        { data: 'aGk=', mediaType: 'image/png', bytes: -1 },
+        { data: 42, mediaType: 'image/png', bytes: 3 },
+        null,
+        'nope',
+        { data: 'aGk=', mediaType: 'image/webp', bytes: 3, name: 'shot.webp', note: 'after the click' },
+      ],
+    } as never)
+    expect(frame.images).toEqual([
+      PNG,
+      { data: 'aGk=', mediaType: 'image/webp', bytes: 3, name: 'shot.webp', note: 'after the click' },
+    ])
+  })
+
+  it('normalises an empty-but-present list to no images', () => {
+    // A child that sent `images: []` means "no pictures", not "an empty batch
+    // to save" — the two must not reach a consumer as different states.
+    expect(withFrameImages({ out: 'x', images: [] } as never).images).toBeUndefined()
+  })
+
+  it('ignores a non-array images field instead of throwing', () => {
+    expect(withFrameImages({ out: 'x', images: 'oops' } as never).images).toBeUndefined()
+    expect(withFrameImages({ out: 'x', images: { data: 'aGk=' } } as never).images).toBeUndefined()
+  })
+
+  it('carries images from the child through the frame reader', async () => {
+    const child = startFake()
+    try {
+      const frame = await child.nextFrame(child.send(`IMAGES:${JSON.stringify([PNG])}`))
+      expect(frame.out).toBe('images')
+      expect(frame.images).toEqual([PNG])
+    } finally {
+      await child.kill()
+    }
+  })
+
+  it('filters a bad entry that came over the wire', async () => {
+    const child = startFake()
+    try {
+      const sent = [PNG, { data: 'aGk=', mediaType: 'image/bmp', bytes: 3 }]
+      const frame = await child.nextFrame(child.send(`IMAGES:${JSON.stringify(sent)}`))
+      expect(frame.images).toEqual([PNG])
     } finally {
       await child.kill()
     }

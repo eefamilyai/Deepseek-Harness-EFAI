@@ -3,10 +3,12 @@
  * session key, and the small set of actions the `browser` tool and the fetch
  * provider drive.
  *
- * Everything returns a {@link RawSnapshot}, because the model's only view of the
- * page is text: after every action it gets a fresh snapshot with new refs, and
- * acts on those. The refs are only valid until the next action reshapes the DOM,
- * which is exactly the read-act-read loop the tool prompt describes.
+ * The acting actions return a {@link RawSnapshot}, because the model's usual view
+ * of the page is text: after every action it gets a fresh snapshot with new refs,
+ * and acts on those. The refs are only valid until the next action reshapes the
+ * DOM, which is exactly the read-act-read loop the tool prompt describes.
+ * {@link BrowserManager.screenshot} is the one action that returns bytes instead,
+ * for a model that can look at the page rather than read it.
  *
  * @module @deepseek-ai/dsh-web-browser/browser
  */
@@ -28,6 +30,24 @@ export interface BrowserLimits {
   headless: boolean
   /** `User-Agent` presented to sites. */
   userAgent: string
+}
+
+/**
+ * One captured viewport, as it crosses into durable storage.
+ *
+ * Only PNG is produced: it is the format the renderer emits natively, so
+ * capturing it costs no re-encode, and it is lossless for text-heavy UI — the
+ * thing a screenshot of a page is almost always taken to judge.
+ */
+export interface CapturedScreenshot {
+  /** Encoded PNG bytes. */
+  readonly data: Uint8Array
+  /** Always `image/png`; stated so a consumer needs no sniffing. */
+  readonly mediaType: 'image/png'
+  /** The page the capture was taken from, which the image alone does not say. */
+  readonly url: string
+  /** That page's title, empty when it has none. */
+  readonly title: string
 }
 
 /** What a rendered fetch returns to the web seam. */
@@ -131,6 +151,20 @@ export class BrowserManager {
     const page = await this.pageFor(key)
     await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => { /* nothing to go back to is not an error */ })
     return this.snapshot(page)
+  }
+
+  /**
+   * Capture the visible viewport as a PNG.
+   *
+   * Viewport-only, not full-page: a full-page capture can be tens of thousands
+   * of pixels tall, which the attachment store refuses or downscales so far that
+   * the detail the caller wanted is gone. The viewport is what the page shows,
+   * and `scroll` moves it.
+   */
+  async screenshot(key: string): Promise<CapturedScreenshot> {
+    const page = await this.pageFor(key)
+    const data = await page.screenshot({ fullPage: false, type: 'png' })
+    return { data, mediaType: 'image/png', url: page.url(), title: await page.title() }
   }
 
   /** Render a URL for the fetch provider: navigate on the dedicated fetch page and return its text. */

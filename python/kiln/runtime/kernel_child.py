@@ -4732,6 +4732,265 @@ except Exception:
 _seam_fg_thread = None
 _seam_lock = _threading.Lock()
 
+# ── images a cell hands back to the model ───────────────────────────────
+#
+# The kernel tool's result is otherwise pure text. These helpers attach REAL
+# images to the current cell's result, so the calling agent's own vision reads
+# them — no second model, and no description standing in for the picture.
+#
+# `see()` (vision_tools) is the other thing and a different one: it asks a
+# separate model to describe a screenshot and returns its words. That is right
+# when the caller cannot see. This is right when it can — the bytes go back as
+# an image block on the kernel tool's own result, so the picture sits in the
+# transcript beside the text and the agent looks at it directly.
+#
+# The bytes travel as base64 on the cell's result frame. The harness commits
+# each one to its durable attachment store — the same store a user-uploaded
+# image lands in — so an image survives compaction and later turns exactly like
+# any other attachment.
+#
+# Bounds are enforced HERE, before a frame grows. The harness validates the
+# bytes again on arrival, so these are a courtesy to the channel, not the
+# authority on what an image may be.
+
+_MAX_SHOW_IMAGES = 8                 # per cell result (and per background flush)
+_MAX_SHOW_BYTES = 4 * 1024 * 1024    # per image, before base64 expansion
+
+#: This thread's pending image list. Thread-local for the same reason the
+#: output capture is: a backgrounded cell and a foreground cell run at once, and
+#: a process-global list would splice one cell's pictures into the other's
+#: result. None outside a running cell.
+_show_state = _threading.local()
+
+
+def _sniff_image_media(data):
+    """The media type an image's own bytes declare, or None if unsupported."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _encode_for_show(value):
+    """Normalise one show() argument to (media_type, bytes, suggested_name).
+
+    Raises ValueError with an actionable message for anything that is not a
+    supported image, so show() can report the problem without killing the cell.
+    """
+    import os as _os
+
+    if isinstance(value, (str, _os.PathLike)):
+        path = _os.fspath(value)
+        if not _os.path.exists(path):
+            raise ValueError("no such file: %s" % path)
+        with open(path, "rb") as fh:
+            data = fh.read()
+        # The BYTES decide the media type, not the extension: a mislabelled file
+        # is common enough that trusting the name would hand the harness a
+        # declared type its own decode would then reject.
+        media = _sniff_image_media(data)
+        if media is None:
+            raise ValueError("%s is not a PNG/JPEG/WebP/GIF image" % path)
+        return media, data, _os.path.basename(path)
+
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        data = bytes(value)
+        media = _sniff_image_media(data)
+        if media is None:
+            raise ValueError(
+                "those bytes are not a PNG/JPEG/WebP/GIF image; pass a path, a "
+                "PIL image, a matplotlib figure, or encoded image bytes")
+        return media, data, None
+
+    # matplotlib Figure: render through its own canvas, so what is shown is what
+    # savefig would have written.
+    if callable(getattr(value, "savefig", None)) and hasattr(value, "canvas"):
+        buf = io.BytesIO()
+        value.savefig(buf, format="png", bbox_inches="tight", dpi=110)
+        return "image/png", buf.getvalue(), None
+
+    # PIL image. Convert anything the PNG encoder cannot take directly.
+    if callable(getattr(value, "save", None)) and hasattr(value, "mode") and hasattr(value, "size"):
+        buf = io.BytesIO()
+        img = value
+        if getattr(img, "mode", "") not in ("RGB", "RGBA", "L", "P"):
+            img = img.convert("RGB")
+        img.save(buf, "PNG", optimize=True)
+        return "image/png", buf.getvalue(), None
+
+    # numpy array: PIL knows how to interpret the shape.
+    if getattr(value, "shape", None) is not None and hasattr(value, "dtype"):
+        from PIL import Image as _PILImage
+        buf = io.BytesIO()
+        _PILImage.fromarray(value).save(buf, "PNG", optimize=True)
+        return "image/png", buf.getvalue(), None
+
+    read = getattr(value, "read", None)
+    if callable(read):
+        data = read()
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        media = _sniff_image_media(data)
+        if media is None:
+            raise ValueError("that stream did not yield a PNG/JPEG/WebP/GIF image")
+        return media, data, None
+
+    raise ValueError(
+        "show() cannot read a %s as an image; pass a path, encoded image bytes, "
+        "a PIL image, a matplotlib figure, or a numpy array" % type(value).__name__)
+
+
+def _queue_show_image(media, data, name=None, note=None):
+    """Append one image to the running cell's list; returns its 1-based position."""
+    sink = getattr(_show_state, "images", None)
+    if sink is None:
+        raise RuntimeError(
+            "show() only works inside a foreground cell: a backgrounded cell has "
+            "no result frame of its own to carry the image")
+    if len(data) > _MAX_SHOW_BYTES:
+        raise ValueError(
+            "the image is %.1f MB, over the %d MB per-image limit; downscale it "
+            "before showing it" % (len(data) / 1048576.0, _MAX_SHOW_BYTES // 1048576))
+    if len(sink) >= _MAX_SHOW_IMAGES:
+        raise ValueError(
+            "this cell has already queued %d images, the per-result limit; show "
+            "the rest in a later cell" % _MAX_SHOW_IMAGES)
+    entry = {
+        "mediaType": media,
+        "data": base64.b64encode(data).decode("ascii"),
+        "bytes": len(data),
+    }
+    if name:
+        entry["name"] = str(name)
+    if note:
+        entry["note"] = str(note)
+    sink.append(entry)
+    return len(sink)
+
+
+def shown_images():
+    """What THIS cell has already queued for the model to look at.
+
+    Returns {"count", "images": [{mediaType, bytes, name?, note?}]} — the base64
+    payload is deliberately left out, since it is the picture itself and a caller
+    asking what it queued does not want it echoed back.
+    """
+    sink = getattr(_show_state, "images", None) or []
+    return {
+        "count": len(sink),
+        "images": [{k: v for k, v in entry.items() if k != "data"}
+                   for entry in sink],
+    }
+
+
+def show(image=None, note=None, name=None, **kw):
+    """Show YOURSELF an image — you see the pixels, not a description of them.
+
+    The picture is attached to this cell's result as a real image, so your own
+    vision reads it on the next turn. Reach for it whenever the question is what
+    something LOOKS like: whether a click landed on the button or the whitespace
+    beside it, whether a layout is broken, what a chart actually plots, whether a
+    render came out right.
+
+    `see()` from vision_tools is the other tool and a different thing: it asks a
+    separate model to describe a screenshot and hands you its words. Use `see()`
+    only when you want a summary instead of the picture.
+
+    What `image` accepts:
+      "screen"          the primary monitor            (monitor=, region=)
+      "window"          one window by title= or handle=
+      "browser"         the embedded browser's page    (full_page=)
+      a path            any PNG/JPEG/WebP/GIF file
+      bytes             encoded image bytes
+      a PIL image       any object with .save/.mode/.size
+      a matplotlib Figure   rendered through its canvas
+      a numpy array     via pillow
+
+    `note` is a caption shown to you beside the image; `name` overrides the
+    display name. Both are optional.
+
+    Returns {"queued": n, ...} describing what was attached, or {"error": ...} —
+    a failure to show one image never kills the cell.
+
+    Images are capped at 8 per cell and 4 MB each. A cell that overruns its
+    budget and moves to the background cannot show an image until it finishes;
+    its pictures arrive with the result that reports it done.
+    """
+    import os as _os
+
+    target = image
+    if target is None:
+        target = kw.pop("target", None) or "screen"
+
+    def _attach(shot, source):
+        """Queue a capture's PNG and build the success payload."""
+        try:
+            media, data, base = _encode_for_show(shot["path"])
+            idx = _queue_show_image(media, data, name=name or base, note=note)
+        except ValueError as e:
+            return {"error": str(e), "capture": shot}
+        out = {"queued": idx, "source": source, "path": shot["path"],
+               "width": shot["width"], "height": shot["height"],
+               "bytes": shot["bytes"]}
+        if shot.get("url"):
+            out["url"] = shot["url"]
+        return out
+
+    # A bare string is a capture TARGET when it names one, and a file path
+    # otherwise. Checking the keywords first keeps `show("screen")` from
+    # silently becoming "no such file: screen".
+    if isinstance(target, str):
+        word = target.strip().lower()
+        if word in ("screen", "desktop", "monitor"):
+            if vision_tools is None:
+                return {"error": "screen capture is unavailable: the vision tools "
+                                 "module did not import (call vision_status() for "
+                                 "the reason)"}
+            shot = vision_tools.capture_screen(
+                monitor=int(kw.get("monitor") or 1),
+                region=kw.get("region"),
+                max_width=kw.get("max_width"))
+            if shot.get("error"):
+                return shot
+            return _attach(shot, "screen")
+
+        if word in ("window", "browser"):
+            if vision_tools is None:
+                return {"error": "%s capture is unavailable: the vision tools "
+                                 "module did not import (call vision_status() for "
+                                 "the reason)" % word}
+            if word == "window":
+                shot = vision_tools.capture_window(
+                    handle=kw.get("handle"), title=kw.get("title"),
+                    max_width=kw.get("max_width"),
+                    raise_window=kw.get("raise_window", True))
+            else:
+                shot = vision_tools.capture_browser(
+                    max_width=kw.get("max_width"),
+                    full_page=bool(kw.get("full_page")))
+            if shot.get("error"):
+                return shot
+            return _attach(shot, word)
+
+    try:
+        media, data, suggested = _encode_for_show(target)
+        idx = _queue_show_image(media, data, name=name or suggested, note=note)
+    except ValueError as e:
+        return {"error": str(e), "input": type(target).__name__}
+    except RuntimeError as e:
+        return {"error": str(e)}
+    out = {"queued": idx, "source": "image", "mediaType": media, "bytes": len(data)}
+    if name or suggested:
+        out["name"] = name or suggested
+    return out
+
+
+
 
 
 
@@ -4799,6 +5058,7 @@ _bg_lock = _threading.Lock()
 _bg_runners = {}                     # bg_id -> _CellRunner still running in background
 
 _bg_results = []                     # finished/stopped background output awaiting a frame
+_bg_images = []                      # ...and their images, flushed with the same frame
 
 _bg_counter = [0]
 
@@ -4823,8 +5083,12 @@ class _CellRunner(_threading.Thread):
         self._conv = conv if conv else None
 
         self.out = ""
-
         self.err = None
+
+        #: Images this cell queued with show(), in order. Filled from the
+        #: thread-local sink when the cell finishes, then read by the dispatch
+        #: loop (or by _flush_bg when the cell outlived its own result frame).
+        self.images = []
 
         self.done = _threading.Event()
 
@@ -4837,8 +5101,10 @@ class _CellRunner(_threading.Thread):
 
 
     def run(self):
-
         _active_conv.value = self._conv
+        # The sink show() appends to. Thread-local, so a backgrounded cell and a
+        # foreground cell never collect into each other's list.
+        _show_state.images = []
 
         # The FIRST cell to run installs the generated harness-tool functions.
         # It has to happen here rather than at import: `list_tools` needs a seam
@@ -4860,9 +5126,12 @@ class _CellRunner(_threading.Thread):
             self.err = _tag_error(_format_exc(e))
 
         finally:
-
+            # Read the sink BEFORE clearing it, and keep whatever was queued even
+            # if the cell raised: a picture taken before the traceback is exactly
+            # the evidence the traceback is about.
+            self.images = list(getattr(_show_state, "images", None) or [])
+            _show_state.images = None
             _active_conv.value = None
-
             self.done.set()
 
 
@@ -4923,6 +5192,9 @@ def _flush_bg():
 
             _bg_results.append("[bg#%d %s]\n%s" % (bid, status, _bg_body(runner)))
 
+            # A backgrounded cell's pictures have no frame of their own; they
+            # ride the next result, with the text that says the cell finished.
+            _bg_images.extend(runner.images)
             del _bg_runners[bid]
 
         if not _bg_results:
@@ -4937,6 +5209,22 @@ def _flush_bg():
 
 
 
+
+
+def _frame_images(cell_images=None):
+    """Every image this result frame carries, older background cells first.
+
+    `_flush_bg()` has already moved any finished background cell's pictures into
+    `_bg_images`, so draining that list and appending this cell's own keeps
+    arrival order: the older background result reads first, then the cell that
+    produced this frame.
+    """
+    with _bg_lock:
+        images = list(_bg_images)
+        _bg_images.clear()
+    if cell_images:
+        images.extend(cell_images)
+    return images[: _MAX_SHOW_IMAGES * 2]
 
 
 def _join_stray(body):
@@ -6393,6 +6681,17 @@ if vision_tools is not None:
     }
     prompt_dict.update(_VISION_TOOLS)
     globals().update(_VISION_TOOLS)
+
+# Images a cell hands back to the model. Registered in both places for the same
+# reason the vision tools are: `prompt_dict` makes them callable, and `globals()`
+# is what `tool_help` scans for functions with a docstring. A helper the model
+# cannot discover is a helper it will not use.
+_IMAGE_TOOLS = {
+    "show": show,
+    "shown_images": shown_images,
+}
+prompt_dict.update(_IMAGE_TOOLS)
+globals().update(_IMAGE_TOOLS)
 _ns.update(prompt_dict)
 
 send_frame({"ready": True, "engine": engine})
@@ -6553,7 +6852,8 @@ while True:
         # cell that completed since the last frame.
 
         _seam_fg_thread = None
-        send_frame({"out": _join_stray(_flush_bg() + runner.out), "error": runner.err, "id": cell_id})
+        send_frame({"out": _join_stray(_flush_bg() + runner.out), "error": runner.err,
+                    "images": _frame_images(runner.images), "id": cell_id})
 
     else:
 
@@ -6582,7 +6882,8 @@ while True:
 
                   % (round(primary_ms / 1000.0), runner.bg_id, round(secondary_ms / 1000.0)))
 
-        send_frame({"out": _join_stray(_flush_bg() + notice), "error": None, "backgrounded": True, "id": cell_id})
+        send_frame({"out": _join_stray(_flush_bg() + notice), "error": None, "backgrounded": True,
+                    "images": _frame_images(), "id": cell_id})
 
 
 

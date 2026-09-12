@@ -336,6 +336,7 @@
       disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
       config:
         cwd: !!js process.env.DSH_KERNEL_CWD
+        browserWindow: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.browserWindow', false)) === true
 
     - id: tool-kernel
       name: '@deepseek-ai/dsh-tool-kernel'

@@ -63,6 +63,12 @@ export interface Config {
   stateDir?: string
   /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
   runtimeDir?: string
+  /**
+   * Whether the agent's browser may open a real Chromium window. Omitted = no
+   * window: the browser runs windowless, which is what an agent working on your
+   * behalf should do unless you asked to watch. Takes effect on restart.
+   */
+  browserWindow?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -70,6 +76,7 @@ export const Config: z<Config> = z.object({
   cwd: z.string(),
   stateDir: z.string(),
   runtimeDir: z.string(),
+  browserWindow: z.boolean().default(false),
 })
 
 /** Probe timeout for one interpreter candidate. */
@@ -186,6 +193,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       // per-cwd state dir) matches the browser being one process-wide singleton;
       // an explicit KILN_BROWSER_DIR still wins.
       KILN_BROWSER_DIR: process.env.KILN_BROWSER_DIR ?? join(homedir(), '.dsh', 'browser'),
+      // Whether the browser may put a window on the desktop. The runtime reads
+      // this once per process, so it is resolved here rather than per action,
+      // and an explicit environment value still wins for a one-off run.
+      KILN_BROWSER_HEADED: process.env.KILN_BROWSER_HEADED
+        ?? (config.browserWindow === true ? '1' : '0'),
       // The runtime's own modules resolve relative to the script, but a cell
       // that imports one of them needs the directory on the path too.
       PYTHONPATH: [dirname(script), process.env.PYTHONPATH].filter(part => part !== undefined && part.length > 0).join(process.platform === 'win32' ? ';' : ':'),

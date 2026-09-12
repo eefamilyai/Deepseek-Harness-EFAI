@@ -102,7 +102,44 @@ export interface KernelExecuteResult {
   readonly outcome: KernelOutcome
   /** True when the kernel was restarted, meaning the namespace is now empty. */
   readonly restarted: boolean
+  /**
+   * Images the cell handed back with `show()`, in the order it queued them.
+   *
+   * The kernel's result is otherwise pure text, and this is the one channel
+   * that carries a real picture back to the caller's own vision instead of a
+   * description of one. A backend that cannot carry images simply omits the
+   * field, and a consumer must treat its absence as "no images", never as an
+   * error.
+   *
+   * The bytes are encoded image data, not yet a durable attachment: committing
+   * them to the attachment store is the consumer's job, because only the
+   * consumer knows whether the calling route can accept image input at all.
+   */
+  readonly images?: readonly KernelCellImage[]
 }
+
+/**
+ * One image a cell returned, as it crossed the process boundary.
+ *
+ * Deliberately not an `ImageAttachmentRef`: at this point nothing has validated
+ * or stored the bytes, so there is no durable identity to name. A consumer that
+ * commits the image gets the reference back and uses that instead.
+ */
+export interface KernelCellImage {
+  /** Base64-encoded image bytes. */
+  readonly data: string
+  /** Media type the producer detected from the image's own signature bytes. */
+  readonly mediaType: ImageMediaType
+  /** Exact decoded byte length, for a consumer that bounds or reports the size. */
+  readonly bytes: number
+  /** Optional display name; never interpreted as a path. */
+  readonly name?: string
+  /** Optional caption the cell attached for the model. */
+  readonly note?: string
+}
+
+/** Raster formats a cell may return. Mirrors the attachment store's accepted set. */
+export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
 
 /**
  * One backend able to host a persistent kernel. Implementations own process

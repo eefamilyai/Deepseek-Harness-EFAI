@@ -15,18 +15,28 @@
  * @module @deepseek-ai/dsh-tool-kernel
  */
 
+import { Buffer } from 'node:buffer'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentStore, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, GenericResultView, ToolResult } from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-kernel'
+import type { KernelCellImage } from '@deepseek-ai/dsh-kernel'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-kernel'
 
-/** Services required by the kernel tool. */
-export const inject = ['tools', 'kernel', 'systemPrompt']
+/**
+ * Services required by the kernel tool.
+ *
+ * `attachments` is required: a cell that returns an image can only hand it on
+ * through the durable store, and a kernel tool that silently dropped pictures
+ * would be worse than one that refuses the call.
+ */
+export const inject = ['tools', 'kernel', 'systemPrompt', 'attachments']
 
 /** Default cooperative tool-call budget (ms), matching the Kiln kernel's own default. */
 export const DEFAULT_KERNEL_TIMEOUT_MS = 180_000
@@ -76,6 +86,203 @@ export const Config: z<Config> = z.object({
 
 /** Complete config after schemastery applies every field default. */
 type ResolvedConfig = Required<Config>
+
+/** One stored cell image, in the shape the output schema declares. */
+export interface KernelValueImage {
+  attachmentId: string
+  mediaType: ImageMediaType
+  bytes: number
+  width: number
+  height: number
+  name?: string
+  /** Orientation-applied dimensions before normalization; present only when storage reduced it. */
+  originalDimensions?: { width: number; height: number }
+  /** Caption the cell attached for the model. */
+  note?: string
+}
+
+/**
+ * Output-schema shape of one stored image.
+ *
+ * Deliberately carries no top-level `required`. This node is used as an array's
+ * `items`, and the value schema DSL only accepts `required` on a *property*
+ * (`allowRequired` is false for `items` and `oneOf` branches), so a `required`
+ * here fails the whole tool at mount time. Requiredness belongs to the `images`
+ * property that holds the array, which is where it is declared.
+ */
+const IMAGE_VALUE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    attachmentId: { type: 'string', required: true },
+    mediaType: { type: 'string', enum: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'], required: true },
+    bytes: { type: 'integer', required: true },
+    width: { type: 'integer', required: true },
+    height: { type: 'integer', required: true },
+    name: { type: 'string' },
+    originalDimensions: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        width: { type: 'integer', required: true },
+        height: { type: 'integer', required: true },
+      },
+    },
+    note: { type: 'string' },
+  },
+} as const
+
+/** Name one returned image in a diagnostic, preferring its display name. */
+function imageLabel(image: KernelCellImage): string {
+  const name = image.name === undefined ? 'image' : `"${image.name}"`
+  return `${name} (${image.mediaType}, ${image.bytes} bytes)`
+}
+
+/**
+ * Commit one cell's returned images to the durable attachment store.
+ *
+ * Each image is validated and normalized by the store, so a cell cannot put
+ * bytes into the transcript that no provider would accept. The store enforces
+ * its own batch limits, which may be tighter than the kernel's per-cell caps —
+ * so a refused batch is retried one image at a time, and a single oversized or
+ * unreadable picture costs only itself.
+ *
+ * Never throws. A cell that produced a good traceback must still deliver it
+ * even when one of its pictures cannot be stored, so every failure comes back
+ * as a note to show beside the text.
+ * @param attachments - the deployment attachment store.
+ * @param images - images as they crossed the process boundary.
+ * @param signal - cancellation for the storage work.
+ * @returns durable references in the order they were committed, and one
+ *   human-readable note per image that could not be committed.
+ */
+export async function admitCellImages(
+  attachments: AttachmentStore,
+  images: readonly KernelCellImage[],
+  signal?: AbortSignal,
+): Promise<{ refs: ImageAttachmentRef[]; notes: string[] }> {
+  const notes: string[] = []
+  const accepted: KernelCellImage[] = []
+  for (const image of images) {
+    // The store is the authority on accepted types; refusing here rather than
+    // letting it throw keeps one unsupported type from costing the whole cell.
+    if (attachments.imageLimits.mediaTypes.includes(image.mediaType)) accepted.push(image)
+    else notes.push(`${imageLabel(image)} was not stored: ${image.mediaType} is not accepted by this deployment.`)
+  }
+  if (accepted.length === 0) return { refs: [], notes }
+
+  const inputs = accepted.map(image => ({
+    data: new Uint8Array(Buffer.from(image.data, 'base64')),
+    mediaType: image.mediaType as ImageMediaType,
+    ...image.name === undefined ? {} : { name: image.name },
+  }))
+
+  try {
+    const refs = await attachments.saveImages(inputs)
+    return { refs: [...refs], notes }
+  } catch {
+    // The batch was refused as a whole — most often its aggregate byte or
+    // count bound. Retry one at a time so a single bad member cannot take the
+    // good ones down with it.
+  }
+
+  const refs: ImageAttachmentRef[] = []
+  for (const [index, input] of inputs.entries()) {
+    signal?.throwIfAborted()
+    try {
+      refs.push(await attachments.saveImage(input))
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error)
+      notes.push(`${imageLabel(accepted[index] as KernelCellImage)} was not stored: ${reason}`)
+    }
+  }
+  return { refs, notes }
+}
+
+/** Project one stored attachment plus its caption into the declared output shape. */
+function valueImageFrom(
+  ref: ImageAttachmentRef,
+  note: string | undefined,
+): KernelValueImage {
+  return {
+    attachmentId: ref.attachmentId,
+    mediaType: ref.mediaType,
+    bytes: ref.bytes,
+    width: ref.width,
+    height: ref.height,
+    ...ref.name === undefined ? {} : { name: ref.name },
+    ...ref.originalDimensions === undefined ? {} : {
+      originalDimensions: { ...ref.originalDimensions },
+    },
+    ...note === undefined ? {} : { note },
+  }
+}
+
+/**
+ * Re-brand one structured image outcome into the reference an image block carries.
+ * @param image - the image metadata from the output schema.
+ * @returns the branded attachment reference.
+ */
+export function imageRefFromValue(image: KernelValueImage): ImageAttachmentRef {
+  return {
+    attachmentId: AttachmentId(image.attachmentId),
+    mediaType: image.mediaType,
+    bytes: image.bytes,
+    width: image.width,
+    height: image.height,
+    ...image.name === undefined ? {} : { name: image.name },
+    ...image.originalDimensions === undefined ? {} : {
+      originalDimensions: { ...image.originalDimensions },
+    },
+  }
+}
+
+/**
+ * Format one stored cell image as the envelope line beside its picture.
+ *
+ * The envelope carries the stored dimensions and the caption the cell attached,
+ * so the model can tell what it is looking at without spending a call to ask.
+ * @param image - the image metadata from the output schema.
+ * @returns the model-facing envelope.
+ */
+export function formatImageNote(image: KernelValueImage): string {
+  const name = image.name === undefined ? 'image' : `"${image.name}"`
+  const scaled = image.originalDimensions === undefined
+    ? ''
+    : ` (downscaled from ${image.originalDimensions.width}x${image.originalDimensions.height} px)`
+  const caption = image.note === undefined ? '' : ` \u2014 ${image.note}`
+  return `[${name}: ${image.mediaType}, ${image.width}x${image.height} px, ${image.bytes} bytes${scaled}${caption}]`
+}
+
+/**
+ * Project one cell outcome into the content blocks the model receives: the
+ * captured output, then each stored image beside its envelope.
+ *
+ * Shared by the native render and the nested-dispatch path, so an image
+ * returned through either route arrives as the same pair of blocks.
+ * @param value - the kernel outcome after image admission.
+ * @returns the ordered content blocks.
+ */
+export function kernelContent(value: KernelOutcomeValue): ContentBlock[] {
+  const blocks: ContentBlock[] = [{ type: 'text', text: formatKernelOutput(value.output) }]
+  for (const note of value.imageNotes) {
+    blocks.push({ type: 'text', text: note })
+  }
+  for (const image of value.images) {
+    blocks.push({ type: 'text', text: formatImageNote(image) })
+    blocks.push({ type: 'image', attachment: imageRefFromValue(image) })
+  }
+  return blocks
+}
+
+/** The canonical outcome the `kernel` output schema declares. */
+export interface KernelOutcomeValue {
+  output: string
+  outcome: string
+  restarted: boolean
+  images: KernelValueImage[]
+  imageNotes: string[]
+}
 
 /**
  * Validate what the schema DSL cannot: a non-blank cell. An empty cell is
@@ -161,7 +368,11 @@ export function presentKernelResult(result: ToolResult): GenericResultView | und
     .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
     .map(block => block.text)
     .join('\n')
-  return { card: 'generic', content: [{ type: 'text', text }] }
+  // Image blocks are carried through as-is. Dropping them here would make the
+  // card disagree with the model-facing result: the transcript would show a
+  // cell that returned a picture while the card claimed it returned only text.
+  const images = result.content.filter(block => block.type === 'image')
+  return { card: 'generic', content: [{ type: 'text', text }, ...images] }
 }
 
 /**
@@ -211,9 +422,11 @@ export function apply(ctx: Context, config: Config): void {
           output: { type: 'string', required: true },
           outcome: { type: 'string', required: true },
           restarted: { type: 'boolean', required: true },
+          images: { type: 'array', items: IMAGE_VALUE_SCHEMA, required: true },
+          imageNotes: { type: 'array', items: { type: 'string' }, required: true },
         },
       },
-      render: (_args, value) => [{ type: 'text', text: formatKernelOutput(value.output) }],
+      render: (_args, value) => kernelContent(value),
     },
     timeoutMs: resolved.maxTimeoutMs + TOOL_TIMEOUT_GRACE_MS,
     async execute(args, exec) {
@@ -241,10 +454,18 @@ export function apply(ctx: Context, config: Config): void {
         },
         exec.signal,
       )
+      // Commit any returned images BEFORE returning, because the canonical
+      // value must already cite durable references by the time the tool result
+      // is appended: an image block naming bytes that were never stored would
+      // replay as a broken picture for the rest of the session.
+      const { refs, notes } = await admitCellImages(ctx.attachments, result.images ?? [], exec.signal)
+      const images = refs.map((ref, index) => valueImageFrom(ref, result.images?.[index]?.note))
       return {
         output: capOutput(result.output, resolved.maxOutputChars),
         outcome: result.outcome,
         restarted: result.restarted,
+        images,
+        imageNotes: notes,
       }
     },
     presentCall: presentKernelCall,

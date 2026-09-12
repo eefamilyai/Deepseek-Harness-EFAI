@@ -18,7 +18,9 @@ import { KernelError } from './types.ts'
 
 export { KernelError } from './types.ts'
 export type {
+  ImageMediaType,
   KernelAgent,
+  KernelCellImage,
   KernelErrorCode,
   KernelExecuteRequest,
   KernelExecuteResult,

@@ -17,8 +17,11 @@ The gating itself is composition, not imperative code: the rows in the shipped a
 | Key | Default | Applies |
 |---|---|---|
 | `kernel.enabled` | preset-dependent | `restart` |
+| `kernel.browserWindow` | `false` | `restart` |
 
 `applies: 'restart'` is deliberate — swapping the acting roster mid-session would leave the conversation's earlier turns describing a tool set the model no longer has.
+
+`kernel.browserWindow` is the second decision this package owns, and it is not a roster question: it says whether the agent's browser may put a window on your desktop. Off, the browser works windowless and nothing appears while the agent browses; screenshots and the live view still work, because those never needed a visible window. On, a genuine Chromium window opens that you can watch and take over. It is here rather than in the browser package because it is a deployment preference about your desktop, not a capability of the browser itself.
 
 ## Model Experience
 

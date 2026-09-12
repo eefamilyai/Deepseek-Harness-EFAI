@@ -238,7 +238,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 230 paths do not exist upstream, so no patch covers them and none can conflict.
+These 236 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -279,6 +279,7 @@ These 230 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/boot.patch`
 - `local-overlay/patches/build.patch`
 - `local-overlay/patches/bundle.patch`
+- `local-overlay/patches/client-brand.patch`
 - `local-overlay/patches/client-chat.patch`
 - `local-overlay/patches/client-input-trigger.patch`
 - `local-overlay/patches/client-locale.patch`
@@ -363,6 +364,7 @@ These 230 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-mode/package.json`
 - `packages/kernel/kernel-mode/src/index.ts`
 - `packages/kernel/kernel-mode/src/invariant.ts`
+- `packages/kernel/kernel-mode/tests/settings.spec.ts`
 - `packages/kernel/kernel-mode/tsconfig.json`
 - `packages/kernel/kernel-python/README.md`
 - `packages/kernel/kernel-python/package.json`
@@ -373,6 +375,7 @@ These 230 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/src/provider.ts`
 - `packages/kernel/kernel-python/src/seam.ts`
 - `packages/kernel/kernel-python/tests/fixtures/fake-kernel.py`
+- `packages/kernel/kernel-python/tests/images.e2e.spec.ts`
 - `packages/kernel/kernel-python/tests/seam-tools-call.e2e.spec.ts`
 - `packages/kernel/kernel-python/tests/seam-tools-call.spec.ts`
 - `packages/kernel/kernel-python/tests/transport.spec.ts`
@@ -393,6 +396,7 @@ These 230 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-kernel/package.json`
 - `packages/kernel/tool-kernel/src/index.ts`
 - `packages/kernel/tool-kernel/src/invariant.ts`
+- `packages/kernel/tool-kernel/tests/images.spec.ts`
 - `packages/kernel/tool-kernel/tsconfig.json`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
@@ -432,6 +436,7 @@ These 230 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/web/web-browser/src/provider.ts`
 - `packages/web/web-browser/src/serialize.ts`
 - `packages/web/web-browser/src/tool.ts`
+- `packages/web/web-browser/tests/tool.spec.ts`
 - `packages/web/web-browser/tsconfig.json`
 - `python/kiln/provider_bridge.py`
 - `python/kiln/runtime/.python-version`
@@ -462,6 +467,7 @@ These 230 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/test_browser_page_pick.py`
 - `python/kiln/runtime/test_ds_direct_modes.py`
 - `python/kiln/runtime/test_harness_tools.py`
+- `python/kiln/runtime/test_kernel_images.py`
 - `python/kiln/runtime/test_tools_smoke.py`
 - `python/kiln/runtime/test_vision_tools.py`
 - `python/kiln/runtime/token_usage.py`

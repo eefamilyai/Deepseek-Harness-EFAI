@@ -8,6 +8,9 @@
 #   RAW:<text>      write <text> to the real fd 1 WITHOUT framing it, then
 #                   answer normally -- the contamination this suite exists for
 #   SILENT          answer with empty output (a cell that printed nothing)
+#   IMAGES:<json>   answer with that JSON as the frame's `images` array, so the
+#                   transport's validation of an untrusted image list is exercised
+#                   without needing a real kernel or real image bytes
 #   EXIT            exit the process without answering
 import base64
 import json
@@ -56,5 +59,9 @@ while True:
         continue
     if code.startswith("ECHO:"):
         send({"out": code[5:], "error": None, "id": cell_id})
+        continue
+    if code.startswith("IMAGES:"):
+        send({"out": "images", "error": None, "id": cell_id,
+              "images": json.loads(code[7:])})
         continue
     send({"out": "", "error": "unknown directive: %s" % code, "id": cell_id})

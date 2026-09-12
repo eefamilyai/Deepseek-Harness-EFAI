@@ -1,5 +1,5 @@
 diff --git a/packages/bundle/base/cordis.patch.yml b/packages/bundle/base/cordis.patch.yml
-index f906ea8601..fa7602eaf8 100644
+index f906ea8601..3762038685 100644
 --- a/packages/bundle/base/cordis.patch.yml
 +++ b/packages/bundle/base/cordis.patch.yml
 @@ -107,6 +107,31 @@
@@ -34,7 +34,7 @@ index f906ea8601..fa7602eaf8 100644
      - id: session-persistence-jsonl
        name: '@deepseek-ai/dsh-session-persistence-jsonl'
        config:
-@@ -243,28 +268,142 @@
+@@ -243,28 +268,143 @@
      - id: shell-env
        name: '@deepseek-ai/dsh-shell-env'
  
@@ -108,6 +108,7 @@ index f906ea8601..fa7602eaf8 100644
 +      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
 +      config:
 +        cwd: !!js process.env.DSH_KERNEL_CWD
++        browserWindow: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.browserWindow', false)) === true
 +
 +    - id: tool-kernel
 +      name: '@deepseek-ai/dsh-tool-kernel'
@@ -179,7 +180,7 @@ index f906ea8601..fa7602eaf8 100644
      - id: agent-instructions
        name: '@deepseek-ai/dsh-agent-instructions'
        config:
-@@ -289,6 +428,9 @@
+@@ -289,6 +429,9 @@
      - id: command-feedback
        name: '@deepseek-ai/dsh-command-feedback'
  
@@ -189,7 +190,7 @@ index f906ea8601..fa7602eaf8 100644
      - id: goal
        name: '@deepseek-ai/dsh-goal'
  
-@@ -415,6 +557,12 @@
+@@ -415,6 +558,12 @@
          subagentProvider: spawn
          maxRounds: 64
  
@@ -202,7 +203,7 @@ index f906ea8601..fa7602eaf8 100644
      # Consecutive-repeat reminders on the tool chain.
      - id: repeat-tool-reminder
        name: '@deepseek-ai/dsh-repeat-tool-reminder'
-@@ -453,6 +601,19 @@
+@@ -453,6 +602,19 @@
          fetch: true
          searchTimeoutMs: 60000
  
