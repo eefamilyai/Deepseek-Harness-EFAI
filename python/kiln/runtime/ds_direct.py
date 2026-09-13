@@ -2163,23 +2163,23 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                 # /users/login three times.
                 if attempt < 3 and client.login():
                     continue                # fresh token — retry the SAME chat session
-                if getattr(client, "last_login_device_risk", False):
-                    # The login did not merely fail, it was refused for the
-                    # device. Retrying the same machine cannot change that.
-                    raise RuntimeError(
-                        "DeepSeek refused this device — "
-                        f"{getattr(client, 'last_login_error', None)}.")
                 why_login = getattr(client, "last_login_error", None)
-                # A device verdict is about this MACHINE, not this credential.
-                # Rotating would post a fresh /users/login for every remaining
-                # account and earn the same refusal from each, so surface it
-                # once instead of burning the pool.
+                # A device verdict is about this MACHINE (and the address it
+                # connects from), not this credential. Rotating would post a
+                # fresh /users/login for every remaining account and earn the
+                # same refusal from each, so surface it once instead of burning
+                # the pool. Verified live on a flagged machine: the same verdict
+                # arrives with a fresh `device_id`, a clean cookie jar and a
+                # solved WAF token, so it is not something this connector can
+                # retry its way out of.
                 if getattr(client, "last_login_device_risk", False):
                     raise RuntimeError(
                         f"DeepSeek refused this device — {why_login}. This is a "
                         "device/anti-abuse verdict, not a credential problem, so "
-                        "another account will be refused the same way. See the "
-                        "device-identity notes in README.ds-direct.md.")
+                        "another account will be refused the same way. Sign in "
+                        "once from a real browser on this machine to clear the "
+                        "flag; see the device-identity notes in "
+                        "README.ds-direct.md.")
                 if not is_last:             # a dead/blocked account — try the next one
                     raise _RotateAccount(why_login or "auth failed / account blocked")
                 raise RuntimeError(

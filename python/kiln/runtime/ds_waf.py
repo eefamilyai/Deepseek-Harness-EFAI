@@ -206,13 +206,35 @@ _GPU_POOL = [
     },
 ]
 
-_PLUGINS = [
-    {"name": "PDF Viewer", "str": "PDF Viewer "},
-    {"name": "Chrome PDF Viewer", "str": "Chrome PDF Viewer "},
-    {"name": "Chromium PDF Viewer", "str": "Chromium PDF Viewer "},
-    {"name": "Microsoft Edge PDF Viewer", "str": "Microsoft Edge PDF Viewer "},
-    {"name": "WebKit built-in PDF", "str": "WebKit built-in PDF "},
+# PDF-plugin lists, tagged with the platform they actually come from. The Edge
+# entry exists only on Windows and the WebKit entry only on macOS/WebKit builds,
+# so `ds_identity.plugins_for_platform` picks the list matching the User-Agent
+# rather than always presenting the Windows one under a macOS identity.
+_PLUGIN_POOL = [
+    {
+        "platform": "Windows",
+        "plugins": [
+            {"name": "PDF Viewer", "str": "PDF Viewer "},
+            {"name": "Chrome PDF Viewer", "str": "Chrome PDF Viewer "},
+            {"name": "Chromium PDF Viewer", "str": "Chromium PDF Viewer "},
+            {"name": "Microsoft Edge PDF Viewer", "str": "Microsoft Edge PDF Viewer "},
+            {"name": "WebKit built-in PDF", "str": "WebKit built-in PDF "},
+        ],
+    },
+    {
+        "platform": "macOS",
+        "plugins": [
+            {"name": "PDF Viewer", "str": "PDF Viewer "},
+            {"name": "Chrome PDF Viewer", "str": "Chrome PDF Viewer "},
+            {"name": "Chromium PDF Viewer", "str": "Chromium PDF Viewer "},
+            {"name": "WebKit built-in PDF", "str": "WebKit built-in PDF "},
+        ],
+    },
 ]
+
+# Kept for callers that only need a representative list; the signal itself uses
+# the platform-scoped selection in `_build_signal`.
+_PLUGINS = _PLUGIN_POOL[0]["plugins"]
 _PLUGIN_STR = "".join(p["str"] for p in _PLUGINS)
 _SCREEN = "1920-1080-1080-24-*-*-*"
 _MATH = {"tan": "-1.4214488238747245", "sin": "0.8178819121159085",
@@ -319,10 +341,12 @@ def _build_signal(fp_metrics):
     # below, because those legitimately vary per challenge.
     fp_rng = ds_identity.fingerprint_rng()
     gpu = fp_rng.choice(ds_identity.gpu_for_platform(_GPU_POOL))
+    plugins = ds_identity.plugins_for_platform(_PLUGIN_POOL)
     ch, cb = _rand_canvas(fp_rng)
     return {
         "metrics": fp_metrics, "start": now, "flashVersion": None,
-        "plugins": _PLUGINS, "dupedPlugins": f"{_PLUGIN_STR}||{_SCREEN}",
+        "plugins": plugins,
+        "dupedPlugins": f"{''.join(p['str'] for p in plugins)}||{_SCREEN}",
         "screenInfo": _SCREEN, "referrer": "", "userAgent": _UA, "location": _SITE + "/",
         "webDriver": False,
         "capabilities": {

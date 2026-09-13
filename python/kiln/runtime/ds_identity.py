@@ -69,6 +69,21 @@ def client_hints():
     }
 
 
+def plugins_for_platform(pool):
+    """The PDF-plugin list whose platform matches `PLATFORM`.
+
+    A plugin list is platform evidence the same way a WebGL renderer string is:
+    the Edge entry exists only on Windows and the WebKit entry only on
+    macOS/WebKit builds, so presenting the Windows list under a macOS
+    User-Agent advertises a browser that cannot exist. Falls back to the first
+    entry rather than raising, matching `gpu_for_platform`.
+    """
+    for entry in pool:
+        if entry.get("platform") == PLATFORM:
+            return list(entry.get("plugins") or [])
+    return list(pool[0].get("plugins") or []) if pool else []
+
+
 def gpu_for_platform(pool):
     """The entries of `pool` whose renderer strings match `PLATFORM`.
 
@@ -89,7 +104,29 @@ def state_dir():
     return os.environ.get("KILN_STATE_DIR") or _DIR
 
 
+def identity_dir():
+    """Where the machine's identity seed lives.
+
+    Deliberately NOT `state_dir()`. The harness sets `KILN_STATE_DIR` to
+    `<cwd>/.kiln_kernel_state`, so a state-scoped seed is scoped to the
+    LAUNCH DIRECTORY: starting the harness from a second folder minted a second
+    `device_id` for the SAME computer. One machine presenting as several devices
+    is exactly the signal this module exists to avoid, so the seed lives in one
+    per-user location regardless of where the process was started.
+    `KILN_IDENTITY_DIR` overrides it.
+    """
+    override = os.environ.get("KILN_IDENTITY_DIR")
+    if override:
+        return override
+    return os.path.join(os.path.expanduser("~"), ".kiln_identity")
+
+
 def identity_path():
+    return os.path.join(identity_dir(), "ds_identity.json")
+
+
+def _legacy_identity_path():
+    """The state-scoped location the seed used before `identity_dir()`."""
     return os.path.join(state_dir(), "ds_identity.json")
 
 
@@ -134,7 +171,7 @@ def seed():
     writing means whichever landed second is discarded, so the machine still
     converges on exactly one seed.
     """
-    folder = state_dir()
+    folder = identity_dir()
     with _seed_lock:
         cached = _seed_cache.get(folder)
         if cached:
@@ -142,7 +179,14 @@ def seed():
         path = identity_path()
         value = _read_seed(path)
         if not value:
-            value = secrets.token_hex(32)
+            # Adopt a seed already minted under the old state-scoped location
+            # rather than minting a fresh one. A new device_id is one more new
+            # device joining the account, which is the very signal being fixed.
+            legacy = _legacy_identity_path()
+            if os.path.abspath(legacy) != os.path.abspath(path):
+                value = _read_seed(legacy)
+            if not value:
+                value = secrets.token_hex(32)
             with contextlib.suppress(Exception):
                 _write_seed(path, value)
             value = _read_seed(path) or value

@@ -83,7 +83,8 @@ login is solved automatically via [`ds_waf.py`](ds_waf.py).
 | Variable | Effect |
 | --- | --- |
 | `KILN_DS_CONFIG` | Absolute path to a `ds_config.json` outside the source tree (checked before the local one). |
-| `KILN_STATE_DIR` | Where `ds_sessions.json` (conversation → DeepSeek-chat map) is written. Keeps mutable state out of a read-only vendored runtime. |
+| `KILN_STATE_DIR` | Where `ds_sessions.json` (conversation → DeepSeek-chat map) is written. Keeps mutable state out of a read-only vendored runtime. The harness sets this to `<cwd>/.kiln_kernel_state`. |
+| `KILN_IDENTITY_DIR` | Where `ds_identity.json` is written. Defaults to `~/.kiln_identity`; set it only to pin the identity somewhere specific. |
 | `DEEPSEEK_TOKEN` / `DEEPSEEK_COOKIE` / `DEEPSEEK_EMAIL` / `DEEPSEEK_MOBILE` / `DEEPSEEK_AREA_CODE` / `DEEPSEEK_PASSWORD` | Account `#0` straight from the environment (no file needed). |
 
 The config file is **hot-reloaded** — editing it (e.g. pasting a new token)
@@ -201,7 +202,7 @@ connector do the same. It keeps one seed per machine — `ds_identity.json`, und
 
 | Value | Behaviour |
 | --- | --- |
-| `device_id` | Identical on every login from this machine, across restarts. |
+| `device_id` | Identical on every login from this machine, across restarts and from any launch directory. |
 | Canvas hash + histogram | Identical on every WAF challenge. |
 | GPU | Identical on every WAF challenge, and of this machine's platform. |
 | User-Agent, client hints, TLS fingerprint | One browser, described consistently. |
@@ -215,6 +216,15 @@ same address is what earns "too many requests" on `/users/login`.
 The seed is **not a credential**. It is never sent anywhere; it only stops the
 values this client already sends from changing under it. Delete
 `ds_identity.json` to mint a new identity for this machine.
+
+It lives at `~/.kiln_identity/ds_identity.json`, deliberately **not** under
+`KILN_STATE_DIR`. The harness sets that variable to `<cwd>/.kiln_kernel_state`,
+so a state-scoped seed was scoped to the *launch directory*: starting the
+harness from a second folder minted a second `device_id` for the same computer,
+and one machine presenting as several devices is the signal this module exists
+to avoid. `KILN_IDENTITY_DIR` overrides the location; a seed already minted
+under the old state-scoped path is adopted rather than replaced, because a new
+`device_id` is itself one more new device joining the account.
 
 The browser profile itself lives in `ds_identity.py` (`IMPERSONATE`, `UA`,
 `SEC_CH_UA`) so the TLS fingerprint curl_cffi impersonates and the headers that
@@ -358,13 +368,36 @@ browser-solved token that retries can't produce. Paste a fresh `token` +
 `cookie` from DevTools, or set `email` + `password` for auto-refresh.
 
 **`code=0/11 RISK_DEVICE_DETECTED`** — the anti-abuse stack refused the *device*,
-not the credential. It is deliberately **not** treated as an auth failure: a
-device verdict is about this machine, so rotating to the next account would post
-a fresh `/users/login` for every credential in `ds_config.json` and earn the same
-refusal from each. The turn fails once, with that explanation, instead of burning
-the pool. Because the verdict is about the device, the fix is the device: check
-the identity above is stable and self-consistent, and sign in once from a real
-browser on this machine to clear a flag.
+not the credential. A wrong password answers `code=0/2
+PASSWORD_OR_USER_NAME_IS_WRONG`, so the credential gate runs and passes first;
+the device gate refuses afterwards. It is deliberately **not** treated as an auth
+failure: a device verdict is about this machine, so rotating to the next account
+would post a fresh `/users/login` for every credential in `ds_config.json` and
+earn the same refusal from each. The turn fails once, with that explanation,
+instead of burning the pool.
+
+The verdict is **not** derived from anything this connector sends. On a machine
+that had been flagged, all of these returned `0/11` unchanged:
+
+| Varied | Result |
+| --- | --- |
+| this machine's `device_id` | `0/11` |
+| a freshly minted random `device_id` | `0/11` |
+| an empty `device_id` | `0/11` |
+| a clean cookie jar | `0/11` |
+| a freshly solved `aws-waf-token` | `0/11` |
+| a Windows User-Agent with matching client hints | `0/11` |
+
+So a stable, self-consistent identity is what keeps the machine from *earning*
+the flag, but it cannot clear one that is already set. A flag is attached to the
+account, the address, or the machine beyond the client's control, and the remedy
+is outside this connector: sign in once from a real browser on that machine, and
+if the address is shared, give each machine its own account in `accounts`.
+
+One consequence worth knowing: an empty or missing `device_id` is *also* refused
+(`0/11`), while a malformed one is rejected earlier with `code=40029
+TOO_MANY_REQUESTS`. Do not treat `TOO_MANY_REQUESTS` from `/users/login` as a
+pure rate limit — check the `device_id` the payload carried.
 
 **Answers show as "thinking" and then stop** — historically a fragment-typing
 bug; the parser now honours `THINK → RESPONSE` type flips and dict-shaped
@@ -400,7 +433,7 @@ you ever need them, copy them from a live `/completion` request into the
 | `ds_waf.py` | Automatic AWS-WAF challenge solver used during login. |
 | `ds_identity.py` | This machine's device identity and browser profile. Shared by the two above. |
 | `ds_config.json` | **Your credentials. Git-ignored. Never commit.** |
-| `ds_identity.json` | The per-machine identity seed (auto-managed, git-ignored; honour `KILN_STATE_DIR`). |
+| `ds_identity.json` | The per-machine identity seed (auto-managed, git-ignored; lives in `KILN_IDENTITY_DIR` or `~/.kiln_identity`, deliberately NOT under `KILN_STATE_DIR`). |
 | `ds_sessions.json` | Conversation → DeepSeek-chat map (auto-managed; honour `KILN_STATE_DIR`). |
 | `sha3_wasm_bg.wasm` / `_pow_solver.cjs` | PoW assets (cached / generated on first use). |
 

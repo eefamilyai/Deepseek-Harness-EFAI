@@ -26,9 +26,13 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Point the identity at a scratch directory BEFORE importing: the module reads
-# KILN_STATE_DIR at call time, and a test must not touch the real identity.
+# KILN_IDENTITY_DIR at call time, and a test must not touch the real identity.
+# KILN_STATE_DIR is set too, because that is where the pre-move seed lived and
+# the adoption path reads it.
 _SCRATCH = tempfile.mkdtemp(prefix="ds-identity-test-")
+_IDENTITY_SCRATCH = os.path.join(_SCRATCH, "identity")
 os.environ["KILN_STATE_DIR"] = _SCRATCH
+os.environ["KILN_IDENTITY_DIR"] = _IDENTITY_SCRATCH
 
 import ds_identity as di          # noqa: E402
 import ds_direct as dd            # noqa: E402
@@ -70,11 +74,11 @@ try:
     # would look identical to DeepSeek.
     other = os.path.join(_SCRATCH, "other")
     os.makedirs(other, exist_ok=True)
-    os.environ["KILN_STATE_DIR"] = other
+    os.environ["KILN_IDENTITY_DIR"] = other
     di._seed_cache.clear()
     check("a different seed yields a different device_id",
           di.device_id() != dev_a, "two machines would share one device_id")
-    os.environ["KILN_STATE_DIR"] = _SCRATCH
+    os.environ["KILN_IDENTITY_DIR"] = _IDENTITY_SCRATCH
     di._seed_cache.clear()
 
     # ── the browser identity is one browser ─────────────────────────
@@ -212,6 +216,68 @@ try:
           "self.last_login_device_risk = False" in src_direct_all)
     check("a device verdict raises instead of rotating",
           "refused this device" in src_direct_all)
+
+    # ── the seed is per MACHINE, not per launch directory ───────────
+    # `KILN_STATE_DIR` is `<cwd>/.kiln_kernel_state`, so a state-scoped seed
+    # gave one computer a different device_id per launch directory: the same
+    # machine presented as several devices, which is the signal being fixed.
+    check("the identity lives outside the launch-directory state dir",
+          os.path.abspath(di.identity_dir()) != os.path.abspath(di.state_dir()),
+          "identity_dir must not follow KILN_STATE_DIR")
+    check("identity_dir honours KILN_IDENTITY_DIR",
+          di.identity_dir() == os.environ["KILN_IDENTITY_DIR"])
+    check("the seed file is inside identity_dir",
+          di.identity_path() == os.path.join(di.identity_dir(), "ds_identity.json"))
+
+    # The decisive property: changing KILN_STATE_DIR (what a different launch
+    # directory produces) must NOT change the device_id.
+    _saved_state = os.environ.get("KILN_STATE_DIR")
+    os.environ["KILN_STATE_DIR"] = os.path.join(_SCRATCH, "some-other-cwd-state")
+    di._seed_cache.clear()
+    check("the device_id survives a different launch directory",
+          di.device_id() == dev_a,
+          "one machine minted a second device_id from another cwd")
+    os.environ["KILN_STATE_DIR"] = _saved_state
+    di._seed_cache.clear()
+
+    # ── the plugin list must match the platform ─────────────────────
+    # A PDF-plugin list is platform evidence the same way a GPU string is: the
+    # Edge entry exists only on Windows and the WebKit entry only on
+    # macOS/WebKit builds, so the Windows list under a macOS UA advertises a
+    # browser that cannot exist.
+    check("the plugin pool is tagged by platform",
+          all("platform" in e for e in dw._PLUGIN_POOL),
+          "an untagged pool cannot be filtered")
+    sel_plugins = di.plugins_for_platform(dw._PLUGIN_POOL)
+    names = [p["name"] for p in sel_plugins]
+    check("the plugin list is non-empty", bool(names), repr(names))
+    if di.PLATFORM == "macOS":
+        check("a macOS identity does not advertise a Windows-only plugin",
+              not any("Edge" in n for n in names),
+              "the Edge PDF viewer exists only on Windows: " + repr(names))
+    check("the plugins_for_platform fallback does not raise",
+          di.plugins_for_platform([]) == []
+          and len(di.plugins_for_platform([{"platform": "Plan9", "plugins": [{"name": "p", "str": "p "}]}])) == 1)
+
+    # The signal must carry the platform-scoped list, not the raw pool head.
+    sig2 = dw._build_signal({"capabilities": 3})
+    check("the WAF signal carries the platform-scoped plugins",
+          sig2["plugins"] == sel_plugins,
+          "the signal still ships the unfiltered list")
+    check("dupedPlugins is derived from the selected plugins",
+          sig2["dupedPlugins"].startswith("".join(p["str"] for p in sel_plugins)))
+
+    # ── a device verdict has exactly one handling path ──────────────
+    # Two checks used to guard the same condition; the first was unreachable
+    # and produced the terse message, so the informative one never ran.
+    import inspect
+    src_all = inspect.getsource(dd)
+    check("the device verdict has exactly one handling site",
+          src_all.count('getattr(client, "last_login_device_risk", False)') == 1,
+          "a second guard was unreachable and shadowed the informative message")
+    check("the handling message names the real remedy",
+          "Sign in" in src_all and "real browser" in src_all,
+          "the message must tell the operator what actually clears the flag")
 
     # ── the source of truth is not duplicated ───────────────────────
     import inspect
