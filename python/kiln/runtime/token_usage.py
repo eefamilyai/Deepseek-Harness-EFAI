@@ -8,6 +8,8 @@ context limits let the UI show
 "used / max" for the active chat.
 """
 
+import re
+
 # Approximate context windows for DeepSeek web models (tokens). The web chat
 # serves a 1M-token context window (chat.deepseek.com); the paid API models
 # below are separate entries and keep their own limits.
@@ -131,18 +133,20 @@ def context_limit(model_key, provider=None):
 CATEGORIES = ("input", "output", "reasoning", "cache_read", "cache_write", "uploads")
 
 
+# CJK codepoints are priced at ~0.6 tokens/char by `estimate_tokens`; everything
+# else at ~3 chars/token. Classifying them in a per-character Python loop made
+# this the dominant cost of a turn: the reconstructed chat prompt is priced once
+# per turn and runs to megabytes on a long conversation. A compiled character
+# class performs the identical classification in C.
+_CJK_CLASS = re.compile('[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]')
+
+
 def estimate_tokens(text):
     """DeepSeek token estimate: CJK ~0.6 tokens/char, other ~3 chars/token."""
     if not text:
         return 0
-    n = 0
-    cjk = 0
-    for ch in text:
-        o = ord(ch)
-        if 0x4E00 <= o <= 0x9FFF or 0x3040 <= o <= 0x30FF or 0xAC00 <= o <= 0xD7AF:
-            cjk += 1
-        else:
-            n += 1
+    cjk = len(_CJK_CLASS.findall(text))
+    n = len(text) - cjk
     est = cjk * 0.6 + (n / 3.0 if n else 0.0)
     if est <= 0:
         return 0

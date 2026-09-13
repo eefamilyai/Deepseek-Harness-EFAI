@@ -1588,13 +1588,62 @@ def _msg_text(msg):
     return str(c)
 
 
+def _msg_text_accounting(msg):
+    """Render one message the way the DeepSeek CHAT holds it, not the wire.
+
+    `_msg_text` extracts only `text` blocks, which is what the wire prompt needs:
+    the reasoning a turn already emitted must never be re-sent as input. The
+    server-side chat is a different question. DeepSeek threads every turn onto
+    ONE chat and that chat keeps the model's own thinking alongside its answers,
+    so the conversation occupying the context window contains every reasoning
+    block the model produced. Counting only `text` therefore priced the chat at
+    roughly HALF of what the server was actually holding: over one long session,
+    visible text and tool traffic came to ~6.9M characters while the reasoning
+    blocks alone came to ~5.1M more.
+
+    That gap is what made compaction look arbitrary. `_turn_usage` diffs this
+    reconstruction to report usage, the harness trusts that number as its
+    occupancy, and the compaction threshold is a fraction of it -- so the
+    harness believed a 1M-token chat sat below 400k while DeepSeek was already
+    refusing further turns on it. The refusal arrived as a server "length limit"
+    hint at an unpredictable point, and every occurrence cost a forced
+    compaction. Pricing the reasoning here makes the reported occupancy track
+    the real chat, so the harness compacts on its own schedule instead.
+    """
+    c = msg.get("content", "")
+    if not isinstance(c, list):
+        return str(c)
+    parts = []
+    for block in c:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") in ("text", "reasoning"):
+            parts.append(block.get("text") or "")
+        else:
+            parts.append(json.dumps(block, ensure_ascii=False))
+    return " ".join(parts)
+
+
 def _common_prefix_len(a, b):
-    """Length of the common character prefix of two strings."""
+    """Length of the common character prefix of two strings.
+
+    Binary search over slice equality rather than a per-character Python loop:
+    this runs once per turn over the whole reconstructed chat prompt, which is
+    multi-megabyte on a long conversation, and slice comparison happens in C.
+    """
     n = min(len(a), len(b))
-    i = 0
-    while i < n and a[i] == b[i]:
-        i += 1
-    return i
+    if n == 0:
+        return 0
+    if a[:n] == b[:n]:
+        return n
+    lo, hi = 0, n            # invariant: a[:lo] == b[:lo], a[:hi] != b[:hi]
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if a[:mid] == b[:mid]:
+            lo = mid
+        else:
+            hi = mid
+    return lo
 
 
 # DeepSeek prompt-cache engineering parameters: the cache stores prefixes in
@@ -1636,7 +1685,7 @@ def _turn_usage(prev_prompt, prompt, output_text, reasoning_text):
     }
 
 
-def messages_to_prompt(messages):
+def messages_to_prompt(messages, text_of=None):
     """Render the caller's turns as the single prompt string DeepSeek web takes.
 
     This function ADDS NO INSTRUCTIONS. DeepSeek's web endpoint accepts one
@@ -1651,7 +1700,7 @@ def messages_to_prompt(messages):
     sys_parts, body_parts = [], []
     for msg in messages or []:
         role = msg.get("role", "")
-        content = _msg_text(msg)
+        content = (text_of or _msg_text)(msg)
         if role == "system":
             sys_parts.append(content)
         elif role == "tool":
@@ -1681,7 +1730,7 @@ def _full_conversation_prompt(messages):
     sys_msgs = [m for m in messages if m.get("role") == "system"]
     body = [m for m in messages
             if m.get("role") != "system" and m.get("kind") != "env"]
-    return messages_to_prompt(sys_msgs + body)
+    return messages_to_prompt(sys_msgs + body, text_of=_msg_text_accounting)
 
 
 # Hard ceiling on what we hand DeepSeek in one prompt. DeepSeek rejects oversized
