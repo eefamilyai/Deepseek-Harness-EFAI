@@ -203,7 +203,7 @@ connector do the same. It keeps one seed per machine — `ds_identity.json`, und
 | --- | --- |
 | `device_id` | Identical on every login from this machine, across restarts. |
 | Canvas hash + histogram | Identical on every WAF challenge. |
-| GPU | Identical on every WAF challenge. |
+| GPU | Identical on every WAF challenge, and of this machine's platform. |
 | User-Agent, client hints, TLS fingerprint | One browser, described consistently. |
 
 Two of those used to change on every attempt, and both read as bot signals
@@ -217,10 +217,23 @@ values this client already sends from changing under it. Delete
 `ds_identity.json` to mint a new identity for this machine.
 
 The browser profile itself lives in `ds_identity.py` (`IMPERSONATE`, `UA`,
-`SEC_CH_UA`, `SEC_CH_UA_PLATFORM`) so the TLS fingerprint curl_cffi impersonates
-and the headers that ride it can never describe two different builds — a macOS
-Chrome 120 handshake under a Windows Chrome 134 User-Agent is a combination no
-real browser emits.
+`SEC_CH_UA`) so the TLS fingerprint curl_cffi impersonates and the headers that
+ride it can never describe two different builds — a macOS Chrome 120 handshake
+under a Windows Chrome 134 User-Agent is a combination no real browser emits.
+
+The platform is **read out of the User-Agent** (`ds_identity.PLATFORM`), not
+restated beside it, because a second hand-written copy is exactly how the
+fingerprint drifted before. Two things follow from it:
+
+  * `client_hints()` is the one source of the `sec-ch-ua*` triple, used by
+    `ds_direct`'s request and login headers and by both WAF header sets. The WAF
+    path used to hardcode Windows Chrome 134, so the challenge was solved under
+    a different browser than the request that triggered it.
+  * `gpu_for_platform()` filters the WebGL pool to renderers that exist on this
+    platform. A renderer string is platform evidence — `Direct3D11 ... ps_5_0`
+    and `PCIe/SSE2` only exist on Windows, an ANGLE Metal renderer only on
+    macOS — and both shipped entries were Windows renderers, so every macOS
+    challenge presented a Windows GPU.
 
 ### One login at a time
 
@@ -343,6 +356,15 @@ complete configuration (a token gets minted on first use).
 **`DeepSeek auth failed` and it won't clear** — the WAF wants a
 browser-solved token that retries can't produce. Paste a fresh `token` +
 `cookie` from DevTools, or set `email` + `password` for auto-refresh.
+
+**`code=0/11 RISK_DEVICE_DETECTED`** — the anti-abuse stack refused the *device*,
+not the credential. It is deliberately **not** treated as an auth failure: a
+device verdict is about this machine, so rotating to the next account would post
+a fresh `/users/login` for every credential in `ds_config.json` and earn the same
+refusal from each. The turn fails once, with that explanation, instead of burning
+the pool. Because the verdict is about the device, the fix is the device: check
+the identity above is stable and self-consistent, and sign in once from a real
+browser on this machine to clear a flag.
 
 **Answers show as "thinking" and then stop** — historically a fragment-typing
 bug; the parser now honours `THINK → RESPONSE` type flips and dict-shaped

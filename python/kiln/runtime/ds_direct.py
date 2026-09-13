@@ -832,6 +832,10 @@ class _Client:
         self.token = ""
         self.last_login_error = None
         self.creds_mtime = 0.0         # so the pool knows when this client is stale
+        # Set when the last login was refused by the anti-abuse stack rather
+        # than by the credential. A device verdict is about this machine, so it
+        # must not be answered by trying the next account.
+        self.last_login_device_risk = False
         if account is not None:
             self.apply_account(account)
 
@@ -997,10 +1001,18 @@ class _Client:
         data = d.get("data") or {}
         tok = (data.get("biz_data") or {}).get("user", {}).get("token")
         if not tok:
-            self.last_login_error = (f"login rejected — HTTP {r.status_code}, "
-                                     f"code={d.get('code')}/{data.get('biz_code')} "
-                                     f"{data.get('biz_msg') or d.get('msg') or ''}".strip())
+            detail = (f"login rejected — HTTP {r.status_code}, "
+                      f"code={d.get('code')}/{data.get('biz_code')} "
+                      f"{data.get('biz_msg') or d.get('msg') or ''}".strip())
+            self.last_login_error = detail
+            # The anti-abuse stack refusing the DEVICE is not a bad password, so
+            # it is recorded apart from the message. The caller must not answer
+            # it by rotating to the next account: the same machine earns the
+            # same verdict for every credential, and each attempt posts another
+            # /users/login for an identity that is already refused.
+            self.last_login_device_risk = _is_device_risk(detail)
             return None
+        self.last_login_device_risk = False
         print(f"[ds_direct] token expired for account {acct.id if acct else '?'} — "
               f"re-logged in with saved password")
         self.last_login_error = None
@@ -1899,6 +1911,20 @@ def _is_length_limit(msg):
     return bool(msg) and bool(_LENGTH_RE.search(str(msg)))
 
 
+# DeepSeek's anti-abuse stack refuses the LOGIN itself (HTTP 200, code 0/11)
+# when it does not believe the device. Unlike a bad password or a WAF
+# challenge, this is a verdict about THIS MACHINE, so it is not per-account:
+# the next account on the same machine is refused for the same reason.
+# Rotating accounts at it burns every credential in ds_config.json and still
+# fails, which is what made this look like "too many requests".
+_DEVICE_RISK_RE = re.compile(r"RISK_DEVICE|DEVICE_DETECTED|device.{0,12}risk", re.I)
+
+
+def _is_device_risk(msg):
+    """True when DeepSeek refused the login because it distrusts this device."""
+    return bool(msg) and bool(_DEVICE_RISK_RE.search(str(msg)))
+
+
 def _retry_kind(msg):
     """Classify a DeepSeek error as a transient one worth resending, or not.
 
@@ -2137,7 +2163,23 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                 # /users/login three times.
                 if attempt < 3 and client.login():
                     continue                # fresh token — retry the SAME chat session
+                if getattr(client, "last_login_device_risk", False):
+                    # The login did not merely fail, it was refused for the
+                    # device. Retrying the same machine cannot change that.
+                    raise RuntimeError(
+                        "DeepSeek refused this device — "
+                        f"{getattr(client, 'last_login_error', None)}.")
                 why_login = getattr(client, "last_login_error", None)
+                # A device verdict is about this MACHINE, not this credential.
+                # Rotating would post a fresh /users/login for every remaining
+                # account and earn the same refusal from each, so surface it
+                # once instead of burning the pool.
+                if getattr(client, "last_login_device_risk", False):
+                    raise RuntimeError(
+                        f"DeepSeek refused this device — {why_login}. This is a "
+                        "device/anti-abuse verdict, not a credential problem, so "
+                        "another account will be refused the same way. See the "
+                        "device-identity notes in README.ds-direct.md.")
                 if not is_last:             # a dead/blocked account — try the next one
                     raise _RotateAccount(why_login or "auth failed / account blocked")
                 raise RuntimeError(

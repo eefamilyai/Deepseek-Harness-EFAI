@@ -43,6 +43,44 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 SEC_CH_UA = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
 SEC_CH_UA_PLATFORM = '"macOS"'
+SEC_CH_UA_MOBILE = "?0"
+
+# The platform the presented browser runs on, read OUT of the User-Agent rather
+# than restated beside it. A second hand-written copy is exactly how the
+# fingerprint drifted before: the headers said Windows Chrome 134 while the UA
+# and the TLS handshake said macOS Chrome 120, so every challenge advertised a
+# browser that does not exist.
+PLATFORM = ("macOS" if "Macintosh" in UA
+            else "Windows" if "Windows" in UA
+            else "Linux")
+
+
+def client_hints():
+    """The client-hint triple, which must agree with `UA` and `PLATFORM`.
+
+    Every request that carries a User-Agent carries these too, and a challenge
+    signal that names a different platform than the request that delivered it is
+    the contradiction an anti-abuse signal is built to catch.
+    """
+    return {
+        "sec-ch-ua": SEC_CH_UA,
+        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM,
+    }
+
+
+def gpu_for_platform(pool):
+    """The entries of `pool` whose renderer strings match `PLATFORM`.
+
+    A WebGL renderer is platform-specific evidence -- `Direct3D11 ... ps_5_0`
+    only exists on Windows, and Metal/`Apple M*` only on macOS -- so presenting
+    a Windows GPU under a macOS User-Agent contradicts the same browser
+    description the headers assert. Falls back to the whole pool when no entry
+    claims the platform, rather than raising: a missing GPU string is a weaker
+    signal than a mismatched one.
+    """
+    matching = [entry for entry in pool if entry.get("platform") == PLATFORM]
+    return matching or pool
 
 
 def state_dir():

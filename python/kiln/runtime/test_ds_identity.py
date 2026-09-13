@@ -132,6 +132,87 @@ try:
           dw._build_signal(fp_a)["metrics"] == fp_a,
           "_build_signal must carry the metrics it was given")
 
+    # ── the WAF path describes the same browser ────────────────────
+    # The headers the WAF challenge is solved under are the SAME identity.
+    # A hardcoded pair here is how the fingerprint drifted: the signal claimed
+    # Windows Chrome 134 while the request that delivered it was macOS
+    # Chrome 120.
+    nav = dw._nav_headers()
+    check("the WAF navigation carries matching client hints",
+          nav.get("sec-ch-ua") == di.SEC_CH_UA
+          and nav.get("sec-ch-ua-platform") == di.SEC_CH_UA_PLATFORM,
+          repr({k: v for k, v in nav.items() if k.startswith("sec-ch-ua")}))
+    check("the WAF navigation carries the shared User-Agent",
+          nav.get("user-agent") == di.UA)
+    api = dw._api_headers(True)
+    check("the WAF api call carries matching client hints",
+          api.get("sec-ch-ua") == di.SEC_CH_UA
+          and api.get("sec-ch-ua-platform") == di.SEC_CH_UA_PLATFORM)
+    check("the WAF api call carries the shared User-Agent",
+          api.get("user-agent") == di.UA)
+
+    # The platform is derived from the User-Agent, not restated beside it, so
+    # the two cannot disagree.
+    check("the platform is read out of the User-Agent",
+          di.PLATFORM == "macOS", repr(di.PLATFORM))
+    check("the client-hint platform matches the derived platform",
+          di.SEC_CH_UA_PLATFORM == '"%s"' % di.PLATFORM,
+          "%s vs %s" % (di.SEC_CH_UA_PLATFORM, di.PLATFORM))
+
+    # ── the GPU cannot contradict the platform ──────────────────────
+    # A WebGL renderer string is platform evidence: Direct3D11 only exists on
+    # Windows, an ANGLE Metal renderer only on macOS. Both shipped entries were
+    # Windows renderers, so every macOS challenge presented a Windows GPU.
+    check("the GPU pool is tagged by platform",
+          all("platform" in g for g in dw._GPU_POOL),
+          "an untagged pool cannot be filtered")
+    picked = di.gpu_for_platform(dw._GPU_POOL)
+    check("the platform filter keeps only this platform's GPUs",
+          picked and all(g["platform"] == di.PLATFORM for g in picked),
+          repr([g.get("platform") for g in picked]))
+    check("a macOS identity has a macOS GPU to present",
+          any(g["platform"] == "macOS" for g in dw._GPU_POOL),
+          "filtering would have fallen back to a Windows renderer")
+    for g in picked:
+        check("the macOS GPU is not a Windows renderer: %s" % g["model"][:38],
+              "Direct3D11" not in g["model"] and "PCIe/SSE2" not in g["model"],
+              "a Windows renderer under a macOS UA contradicts the request")
+    # An unknown platform must not raise; a weaker signal beats a crash.
+    check("the filter falls back rather than raising",
+          di.gpu_for_platform([{"platform": "Plan9", "vendor": "v", "model": "m"}])
+          == [{"platform": "Plan9", "vendor": "v", "model": "m"}])
+
+    # ── a refused DEVICE is not a bad credential ────────────────────
+    # DeepSeek answers /users/login with HTTP 200, code 0/11,
+    # RISK_DEVICE_DETECTED when the anti-abuse stack distrusts the machine.
+    # Classifying that as an auth failure made the caller rotate accounts,
+    # posting a fresh login for every credential in ds_config.json.
+    risk = ("login rejected — HTTP 200, code=0/11 RISK_DEVICE_DETECTED")
+    check("a device verdict is recognised", dd._is_device_risk(risk))
+    check("the code=0/11 biz_msg alone is recognised",
+          dd._is_device_risk("0/11 RISK_DEVICE_DETECTED"))
+    check("a device verdict is recognised case-insensitively",
+          dd._is_device_risk("risk_device_detected"))
+    check("an ordinary refusal is not a device verdict",
+          not dd._is_device_risk("login rejected — HTTP 200, code=1/1 wrong password"))
+    check("a WAF refusal is not a device verdict",
+          not dd._is_device_risk("login blocked by AWS WAF"))
+    check("an empty message is not a device verdict",
+          not dd._is_device_risk("") and not dd._is_device_risk(None))
+
+    # The pool must not rotate on it, and the retry loop must not re-login.
+    import inspect as _inspect
+    src_direct_all = _inspect.getsource(dd)
+    check("the rotation path checks the device verdict",
+          "last_login_device_risk" in src_direct_all,
+          "without this the pool burns every account on one device verdict")
+    check("the device verdict is recorded at the login rejection",
+          "_is_device_risk(detail)" in src_direct_all)
+    check("the device verdict is cleared on a successful login",
+          "self.last_login_device_risk = False" in src_direct_all)
+    check("a device verdict raises instead of rotating",
+          "refused this device" in src_direct_all)
+
     # ── the source of truth is not duplicated ───────────────────────
     import inspect
     src_direct = inspect.getsource(dd)
