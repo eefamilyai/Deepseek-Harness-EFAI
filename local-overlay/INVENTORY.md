@@ -238,7 +238,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 239 paths do not exist upstream, so no patch covers them and none can conflict.
+These 242 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -452,6 +452,7 @@ These 239 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/config.py`
 - `python/kiln/runtime/context_store.py`
 - `python/kiln/runtime/ds_direct.py`
+- `python/kiln/runtime/ds_identity.py`
 - `python/kiln/runtime/ds_waf.py`
 - `python/kiln/runtime/gemini_provider.py`
 - `python/kiln/runtime/kernel_child.py`
@@ -467,6 +468,8 @@ These 239 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/test_browser_page_pick.py`
 - `python/kiln/runtime/test_ds_direct_empty.py`
 - `python/kiln/runtime/test_ds_direct_modes.py`
+- `python/kiln/runtime/test_ds_identity.py`
+- `python/kiln/runtime/test_ds_login_serial.py`
 - `python/kiln/runtime/test_fast_search.py`
 - `python/kiln/runtime/test_harness_tools.py`
 - `python/kiln/runtime/test_kernel_images.py`

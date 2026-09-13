@@ -30,6 +30,8 @@ import re
 import time
 import uuid
 
+import ds_identity
+
 # AES-GCM key used to encrypt the browser-fingerprint signal. This key is the
 # same one AWS WAF ships in its challenge script on every protected site (both
 # reference solvers hardcode it): it is a client-side obfuscation key, NOT a
@@ -39,8 +41,9 @@ _WAF_KEY = bytes.fromhex("6f71a512b1e035eaab53d8be73120d3fb68a0ca346b9560aab3e5c
 _SITE = "https://chat.deepseek.com"
 _DOMAIN = "chat.deepseek.com"
 
-_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-       "(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36")
+# The SAME browser ds_direct presents. A WAF signal that names a different
+# browser than the request that carries it is a contradiction, not a disguise.
+_UA = ds_identity.UA
 
 _RE_CHAL_SAME = re.compile(r"(/__challenge_[A-Za-z0-9]+/[a-f0-9]+/[a-f0-9]+)")
 _RE_CHAL_EXT = re.compile(
@@ -126,16 +129,24 @@ def _encode_fp(obj):
     return f"{crc:08X}#{raw}"
 
 
-def _rand_canvas():
+def _rand_canvas(rng=None):
+    """The canvas hash and histogram for THIS machine.
+
+    Drawn from the identity RNG, not the global one: a real browser returns
+    the SAME canvas hash on every challenge, so a value that changed each
+    time was itself a bot signal. Called without an rng it still uses the
+    identity RNG, because that is the only correct answer here.
+    """
+    rng = rng or ds_identity.fingerprint_rng()
     bins = []
     for v in _BASE_BINS:
         if v > 500:
-            bins.append(v + random.randint(-200, 200))
+            bins.append(v + rng.randint(-200, 200))
         elif v > 80:
-            bins.append(v + random.randint(-15, 15))
+            bins.append(v + rng.randint(-15, 15))
         else:
-            bins.append(max(1, v + random.randint(-3, 3)))
-    return random.randint(100000000, 999999999), bins
+            bins.append(max(1, v + rng.randint(-3, 3)))
+    return rng.randint(100000000, 999999999), bins
 
 
 def _build_metrics(has_token=False):
@@ -163,8 +174,13 @@ def _build_metrics(has_token=False):
 
 def _build_signal(fp_metrics):
     now = int(time.time() * 1000)
-    gpu = random.choice(_GPU_POOL)
-    ch, cb = _rand_canvas()
+    # One RNG for the whole signal, seeded from the machine identity: the GPU
+    # and the canvas are properties of THIS browser and must not differ between
+    # challenges. Timings and the envelope id stay on the global `random`
+    # below, because those legitimately vary per challenge.
+    fp_rng = ds_identity.fingerprint_rng()
+    gpu = fp_rng.choice(_GPU_POOL)
+    ch, cb = _rand_canvas(fp_rng)
     return {
         "metrics": fp_metrics, "start": now, "flashVersion": None,
         "plugins": _PLUGINS, "dupedPlugins": f"{_PLUGIN_STR}||{_SCREEN}",

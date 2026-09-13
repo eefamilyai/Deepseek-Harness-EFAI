@@ -30,7 +30,7 @@ index ac01e65042..3a52d077c6 100644
 +# whitespace error. Exempt them from the whitespace check.
 +*.patch -whitespace
 diff --git a/.gitignore b/.gitignore
-index fb999f93fb..d048c48b57 100644
+index fb999f93fb..a56f6d6c51 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -34,6 +34,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
@@ -44,7 +44,7 @@ index fb999f93fb..d048c48b57 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -44,3 +48,37 @@ worktrees/
+@@ -44,3 +48,42 @@ worktrees/
  .agents/worktrees/
  .typert-*/
  native/system/test/bin/
@@ -67,6 +67,11 @@ index fb999f93fb..d048c48b57 100644
 +# Runtime state that can hold live session tokens
 +
 +python/kiln/runtime/ds_sessions.json
++
++# Per-machine browser identity (seed for device_id + WAF fingerprint). It is
++# state, not configuration: committing it would give every machine the same
++# device identity, which is the opposite of what it is for.
++python/kiln/runtime/ds_identity.json
 +
 +python/kiln/runtime/subkernels.json
 +

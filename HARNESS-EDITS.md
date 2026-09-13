@@ -36,7 +36,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 |---|---|---|
 | Python kernel seam | `packages/kernel/**` | 33 files |
 | Kiln LLM provider registry | `packages/llm/llm-kiln` | 10 files |
-| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 33 files |
+| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 41 files |
 | Browser capability | `packages/web/web-browser` | 10 files |
 | Sidebar host bridge | `packages/host/sidebar-bridge` | 4 files |
 | Client sidebar terminal and effects | `packages/client/{ui-sidebar-terminal,ui-effects}` | 31 files |

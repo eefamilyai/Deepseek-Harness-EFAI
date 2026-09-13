@@ -17,7 +17,6 @@ import hashlib
 import json
 import os
 import re
-import secrets
 import shutil
 import struct
 import subprocess
@@ -26,6 +25,7 @@ import threading
 import time
 
 import config
+import ds_identity
 from token_usage import estimate_tokens
 
 try:
@@ -63,7 +63,15 @@ def _cffi_unavailable():
             % (_sys.executable, detail))
 
 BASE = "https://chat.deepseek.com/api/v0"
-IMPERSONATE = "chrome120"
+# The browser this connector presents. ds_identity owns both halves so the
+# TLS fingerprint curl_cffi impersonates and the headers below always
+# describe the SAME build -- a macOS Chrome 120 handshake under a Windows
+# Chrome 134 User-Agent is a combination no real browser emits.
+IMPERSONATE = ds_identity.IMPERSONATE
+UA = ds_identity.UA
+# How long a freshly minted token stays good enough to hand to another client
+# that was waiting on the same account. Only spans the concurrent-401 burst.
+LOGIN_REUSE_WINDOW = 60
 BUSY_MAX_TRIES = 40      # ~3 min of "server is busy" before giving up
 RATE_MAX_TRIES = 20      # ~1 h of "rate limited" before giving up (see DS_RATE_WAIT)
 # How long to wait for DeepSeek to finish parsing an upload. This blocks the
@@ -231,7 +239,8 @@ class _Account:
     ("env",) | ("top", path) | ("array", path, index)."""
     __slots__ = ("id", "token", "cookie", "email", "mobile", "area_code",
                  "password", "headers", "source", "mtime", "lock",
-                 "_last_saved_cookie")
+                 "_last_saved_cookie", "login_lock", "last_login_token",
+                 "last_login_at", "last_login_cookie")
 
     def __init__(self, id, token="", cookie="", email="", mobile="",
                  area_code="+86", password="", source=("env",), mtime=0.0,
@@ -256,6 +265,15 @@ class _Account:
         self.mtime = mtime
         self.lock = threading.Lock()
         self._last_saved_cookie = ""
+        # One login at a time per ACCOUNT. Pooled clients share an account and
+        # each retries 401 independently, so N conversations hitting an
+        # expired token fired N concurrent /users/login posts for one identity
+        # -- which DeepSeek answers with "too many requests". This lock plus
+        # the token handoff below collapses those into one login.
+        self.login_lock = threading.Lock()
+        self.last_login_token = ""
+        self.last_login_at = 0.0
+        self.last_login_cookie = ""
 
     def update_from(self, other):
         """Refresh creds in place from a freshly-read copy, keeping object
@@ -842,8 +860,10 @@ class _Client:
             "accept": "*/*", "authorization": f"Bearer {self.token}",
             "content-type": "application/json", "origin": "https://chat.deepseek.com",
             "referer": "https://chat.deepseek.com/",
-            "user-agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                           "(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"),
+            "user-agent": UA,
+            "sec-ch-ua": ds_identity.SEC_CH_UA,
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": ds_identity.SEC_CH_UA_PLATFORM,
             "x-client-platform": "web", "x-client-version": "2.3.0",
             "x-client-locale": "en_US", "x-client-bundle-id": "com.deepseek.chat",
         }
@@ -866,8 +886,10 @@ class _Client:
         h = {
             "accept": "*/*", "content-type": "application/json",
             "origin": "https://chat.deepseek.com", "referer": "https://chat.deepseek.com/",
-            "user-agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                           "(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"),
+            "user-agent": UA,
+            "sec-ch-ua": ds_identity.SEC_CH_UA,
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": ds_identity.SEC_CH_UA_PLATFORM,
             "x-client-platform": "web", "x-client-version": "2.3.0",
             "x-client-locale": "en_US", "x-client-bundle-id": "com.deepseek.chat",
         }
@@ -876,7 +898,14 @@ class _Client:
 
     def login(self):
         """Log in with THIS account's saved email/mobile + password for a fresh
-        token. Returns it or None; on failure self.last_login_error explains why."""
+        token. Returns it or None; on failure self.last_login_error explains why.
+
+        Serialised per ACCOUNT, not per client. Pooled clients that share one
+        login each hit 401 on the same expired token, and without this they all
+        posted /users/login at once -- several logins for one identity inside a
+        second is what earns "too many requests". The first caller logs in and
+        publishes the token; the rest adopt it instead of asking again.
+        """
         acct = self.account
         email = acct.email if acct else ""
         mobile = acct.mobile if acct else ""
@@ -885,8 +914,37 @@ class _Client:
         if not password or not (email or mobile):
             self.last_login_error = "no email/password set for this account in ds_config.json"
             return None
+
+        lock = acct.login_lock if acct is not None else None
+        if lock is None:
+            return self._login_once(email, mobile, area, password)
+        with lock:
+            # Another client may have logged in while we waited. Its token is
+            # just as good, and reusing it is the whole point of the lock.
+            if (acct.last_login_token and acct.last_login_token != self.token
+                    and time.time() - acct.last_login_at < LOGIN_REUSE_WINDOW):
+                self.token = acct.last_login_token
+                self.last_login_error = None
+                # The other client already refreshed the WAF cookies for this
+                # login; carrying the OLD ones into the new token is what makes
+                # the retry fail again.
+                for part in (acct.last_login_cookie or "").split(";"):
+                    if "=" in part:
+                        k, v = part.strip().split("=", 1)
+                        with contextlib.suppress(Exception):
+                            self.sess.cookies.set(k.strip(), v)
+                return self.token
+            return self._login_once(email, mobile, area, password)
+
+    def _login_once(self, email, mobile, area, password):
+        acct = self.account
         payload = {
-            "password": password, "device_id": secrets.token_hex(16), "os": "web",
+            # The SAME device_id every login from this machine. It used to be
+            # minted fresh per attempt, so a routine token refresh presented as
+            # a new device joining the account -- and several machines doing
+            # that from one address is what earns "too many requests" on
+            # /users/login. ds_identity persists it per machine.
+            "password": password, "device_id": ds_identity.device_id(), "os": "web",
             "email": email or "", "mobile": mobile or "",
             "area_code": area if (mobile and not email) else "",
         }
@@ -950,6 +1008,12 @@ class _Client:
         if acct:
             acct.save(token=tok, cookie=self.cookie_string())   # login also refreshes WAF cookies
             self.creds_mtime = acct.mtime
+            # Hand this token to any client already waiting on the same
+            # account, so it adopts a live token instead of posting a second
+            # /users/login for an identity that just logged in.
+            acct.last_login_token = tok
+            acct.last_login_at = time.time()
+            acct.last_login_cookie = self.cookie_string()
         return tok
 
     def new_session(self):

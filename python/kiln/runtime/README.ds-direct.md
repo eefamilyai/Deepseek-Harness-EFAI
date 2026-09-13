@@ -190,6 +190,49 @@ the same login rather than hopping, because switching accounts abandons the
 server-side chat history. Switching accounts is a manual choice (pick another
 account route in the model picker).
 
+### Device identity
+
+DeepSeek's anti-abuse stack reads two independent things about a client: the
+`device_id` the web client replays on every login, and the browser fingerprint
+(canvas hash, GPU) carried by the WAF challenge. A real browser presents both
+**unchanged** for the life of its profile, and `ds_identity.py` makes this
+connector do the same. It keeps one seed per machine — `ds_identity.json`, under
+`KILN_STATE_DIR` when set — and derives from it:
+
+| Value | Behaviour |
+| --- | --- |
+| `device_id` | Identical on every login from this machine, across restarts. |
+| Canvas hash + histogram | Identical on every WAF challenge. |
+| GPU | Identical on every WAF challenge. |
+| User-Agent, client hints, TLS fingerprint | One browser, described consistently. |
+
+Two of those used to change on every attempt, and both read as bot signals
+rather than as caution: a fresh `device_id` per login made a routine token
+refresh look like a new machine joining the account, and a per-challenge canvas
+hash is something no real browser produces. A second machine doing that from the
+same address is what earns "too many requests" on `/users/login`.
+
+The seed is **not a credential**. It is never sent anywhere; it only stops the
+values this client already sends from changing under it. Delete
+`ds_identity.json` to mint a new identity for this machine.
+
+The browser profile itself lives in `ds_identity.py` (`IMPERSONATE`, `UA`,
+`SEC_CH_UA`, `SEC_CH_UA_PLATFORM`) so the TLS fingerprint curl_cffi impersonates
+and the headers that ride it can never describe two different builds — a macOS
+Chrome 120 handshake under a Windows Chrome 134 User-Agent is a combination no
+real browser emits.
+
+### One login at a time
+
+Pooled clients share an account and each retries a `401` on its own. Without
+coordination, N conversations hitting one expired token fire N concurrent
+`/users/login` posts for a single identity — which is itself a rate-limit
+trigger. Logins are therefore serialised **per account**: the first caller logs
+in and publishes its token, and any client that was waiting adopts that token
+along with the WAF cookies the login refreshed, instead of asking DeepSeek
+again. The handoff window is `LOGIN_REUSE_WINDOW` (60s), which spans only the
+concurrent-`401` burst.
+
 ---
 
 ## Multiple accounts
@@ -305,6 +348,17 @@ browser-solved token that retries can't produce. Paste a fresh `token` +
 bug; the parser now honours `THINK → RESPONSE` type flips and dict-shaped
 `fragments APPEND` events. If you see it, capture the raw SSE with `--debug`.
 
+**"Too many requests" on login, or the account treated as a new device** — this
+used to be self-inflicted. A fresh random `device_id` on every attempt and a
+per-challenge canvas hash made ordinary token refreshes look like new machines
+joining the account, and simultaneous `401` retries posted several logins for
+one identity at once. Both are fixed (see [Device identity](#device-identity)
+and [One login at a time](#one-login-at-a-time)). If it still happens after
+updating, the account has genuinely been flagged: stop the harness for a while
+and sign in once from a real browser to clear it. Running several machines
+against one login will keep tripping it — give each its own account in
+`accounts` instead.
+
 ### The `x-hif-*` headers
 
 DeepSeek's web client sends an `x-hif-*` anti-abuse header pair — AES-GCM blobs
@@ -322,7 +376,9 @@ you ever need them, copy them from a live `/completion` request into the
 | --- | --- |
 | `ds_direct.py` | This connector. |
 | `ds_waf.py` | Automatic AWS-WAF challenge solver used during login. |
+| `ds_identity.py` | This machine's device identity and browser profile. Shared by the two above. |
 | `ds_config.json` | **Your credentials. Git-ignored. Never commit.** |
+| `ds_identity.json` | The per-machine identity seed (auto-managed, git-ignored; honour `KILN_STATE_DIR`). |
 | `ds_sessions.json` | Conversation → DeepSeek-chat map (auto-managed; honour `KILN_STATE_DIR`). |
 | `sha3_wasm_bg.wasm` / `_pow_solver.cjs` | PoW assets (cached / generated on first use). |
 
