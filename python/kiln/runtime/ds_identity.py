@@ -40,10 +40,22 @@ _DIR = os.path.dirname(os.path.abspath(__file__))
 # fingerprint under a Windows Chrome 134 User-Agent -- and no real browser
 # produces that combination, which is the sort of contradiction an anti-bot
 # signal is built to catch.
-IMPERSONATE = "chrome120"
+#
+# The version is curl_cffi's CEILING, not the newest Chrome in the wild. Every
+# desktop Chrome curl_cffi 0.16.2 can impersonate is the macOS build
+# (`edge101` is its only Windows entry and is years old), so a Windows UA here
+# would be a browser whose TLS handshake this client cannot produce -- the same
+# contradiction, just moved. A stale-looking version is the lesser signal: the
+# website's own client has moved on, but a fingerprint that matches the
+# handshake it arrives on is at least a browser that exists.
+#
+# `test_ds_identity.py` pins this against curl_cffi's own tables, so bumping
+# curl_cffi or editing one of these lines alone fails the suite instead of
+# silently shipping a mismatched identity.
+IMPERSONATE = "chrome150"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-SEC_CH_UA = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
+      "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36")
+SEC_CH_UA = '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"'
 SEC_CH_UA_PLATFORM = '"macOS"'
 SEC_CH_UA_MOBILE = "?0"
 
@@ -68,6 +80,59 @@ def client_hints():
         "sec-ch-ua": SEC_CH_UA,
         "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
         "sec-ch-ua-platform": SEC_CH_UA_PLATFORM,
+    }
+
+
+# --- the DeepSeek web client riding that browser ------------------------------
+# Not browser facts, so curl_cffi knows nothing about them and no fingerprint
+# contains them: these identify the chat APPLICATION. A capture of a real
+# `users/login` request is the source. `x-client-version` matters most -- the
+# server knows which builds it has shipped, so a retired one reads as a stale or
+# forged client rather than as a browser quirk, and omitting the group entirely
+# does not look like the website at all.
+CLIENT_VERSION = "2.5.0"
+CLIENT_PLATFORM = "web"
+CLIENT_LOCALE = "en_US"
+CLIENT_BUNDLE_ID = "com.deepseek.chat"
+
+
+def timezone_offset():
+    """This machine's UTC offset in seconds, as the web client reports it.
+
+    Read from the clock rather than pinned: a real client sends the offset it is
+    actually running at, so one hardcoded value is wrong for every operator
+    outside a single timezone. ``time.timezone`` is seconds WEST of UTC, so the
+    value a client sends is its negation (UTC+8 -> 28800).
+    """
+    if time.daylight and time.localtime().tm_isdst:
+        return -time.altzone
+    return -time.timezone
+
+
+def client_headers():
+    """The ``x-client-*`` headers the web client sends on every request."""
+    return {
+        "x-client-platform": CLIENT_PLATFORM,
+        "x-client-version": CLIENT_VERSION,
+        "x-client-locale": CLIENT_LOCALE,
+        "x-client-bundle-id": CLIENT_BUNDLE_ID,
+        "x-client-timezone-offset": str(timezone_offset()),
+    }
+
+
+def fetch_metadata(dest, mode, site):
+    """The ``sec-fetch-*`` triple and ``priority`` Chrome attaches to a fetch.
+
+    Chrome sends these on every request it makes, the login POST included; a
+    client that omits them is not shaped like a browser. The values differ per
+    request kind, so the caller states them rather than this guessing -- a
+    navigation is not an XHR, and the referer differs with it.
+    """
+    return {
+        "sec-fetch-dest": dest,
+        "sec-fetch-mode": mode,
+        "sec-fetch-site": site,
+        "priority": "u=1, i",
     }
 
 

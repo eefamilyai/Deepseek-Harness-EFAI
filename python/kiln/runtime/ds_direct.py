@@ -909,8 +909,9 @@ class _Client:
             "sec-ch-ua": ds_identity.SEC_CH_UA,
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": ds_identity.SEC_CH_UA_PLATFORM,
-            "x-client-platform": "web", "x-client-version": "2.3.0",
-            "x-client-locale": "en_US", "x-client-bundle-id": "com.deepseek.chat",
+            # The completion call is a same-origin XHR the chat page makes.
+            **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
+            **ds_identity.client_headers(),
         }
         if pow_response:
             h["x-ds-pow-response"] = pow_response
@@ -930,13 +931,16 @@ class _Client:
         # A fresh login must NOT carry the old/expired Bearer token.
         h = {
             "accept": "*/*", "content-type": "application/json",
-            "origin": "https://chat.deepseek.com", "referer": "https://chat.deepseek.com/",
+            "origin": "https://chat.deepseek.com",
+            # The real client posts this XHR from the sign-in page, so its
+            # referer is /sign_in and not /.
+            "referer": "https://chat.deepseek.com/sign_in",
             "user-agent": UA,
             "sec-ch-ua": ds_identity.SEC_CH_UA,
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": ds_identity.SEC_CH_UA_PLATFORM,
-            "x-client-platform": "web", "x-client-version": "2.3.0",
-            "x-client-locale": "en_US", "x-client-bundle-id": "com.deepseek.chat",
+            **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
+            **ds_identity.client_headers(),
         }
         h.update(self._extra_headers())
         return h

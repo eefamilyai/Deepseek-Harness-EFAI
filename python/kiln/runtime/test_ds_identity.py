@@ -16,9 +16,11 @@ Everything here is OFFLINE. What these pin is the reason a second machine got
   * the WAF fingerprint (canvas hash, GPU) must REPEAT exactly between
     challenges, because a real browser returns the same canvas every time.
 
-No network and no credentials.
+No credentials and nothing off the machine: the one test that needs to see real
+request headers points a request at a loopback server this file starts itself.
 """
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -47,6 +49,88 @@ def check(name, cond, detail=""):
     else:
         print("FAIL  %s%s" % (name, ("  -- " + detail) if detail else ""))
         FAILS.append(name)
+
+
+# ── curl_cffi is the authority on the browser -------------------------------
+# `ds_identity` states a User-Agent and a client-hint triple; curl_cffi supplies
+# the TLS handshake that must belong to the SAME build. Nothing in this file can
+# assert that pairing from a literal, because a bumped dependency changes what is
+# really sent while a hardcoded string keeps passing. So these read curl_cffi's
+# own tables and the headers it actually emits, and hold `ds_identity` to them.
+# An oracle that cannot answer FAILS these checks rather than skipping them:
+# a probe that silently returns "" would fail against a correct identity and
+# would also pass a drifted one, which is the whole failure this guards.
+def _cffi_targets():
+    """Every impersonation target curl_cffi advertises, or () if unavailable."""
+    try:
+        from curl_cffi.requests.impersonate import BrowserType
+        return tuple(b.value for b in BrowserType)
+    except Exception as exc:                      # pragma: no cover
+        print("      (curl_cffi target table unavailable: %s)" % exc)
+        return ()
+
+
+def _cffi_default_chrome():
+    """The desktop-Chrome build curl_cffi treats as current."""
+    try:
+        from curl_cffi.requests.impersonate import DEFAULT_CHROME
+        return DEFAULT_CHROME
+    except Exception:                             # pragma: no cover
+        return None
+
+
+def _cffi_sends(target):
+    """(user-agent, sec-ch-ua-platform, sec-ch-ua) curl_cffi sends for `target`.
+
+    Read off a real request, because no cheaper answer is honest. curl_cffi
+    0.16.2 keeps the impersonation header set inside the compiled
+    libcurl-impersonate and applies it while the request is built, so
+    `Session(impersonate=...).headers` is EMPTY until the request goes out and
+    reading it returns "" for every header -- which fails these checks against a
+    correct identity.
+
+    The request does not leave the machine: the server is a thread on an
+    ephemeral port bound to 127.0.0.1, and port 0 keeps concurrent runs from
+    colliding. No external network, no credentials.
+    """
+    import http.server
+    import threading
+
+    seen = {}
+
+    class _Echo(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.update({k.lower(): v for k, v in self.headers.items()})
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *args):
+            pass
+
+    try:
+        from curl_cffi import requests as _r
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), _Echo)
+        try:
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            session = _r.Session(impersonate=target)
+            try:
+                session.get("http://127.0.0.1:%d/" % server.server_address[1],
+                            timeout=10)
+            finally:
+                session.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+    except Exception as exc:
+        print("      (curl_cffi header probe failed for %r: %s)" % (target, exc))
+        return ("", "", "")
+
+    return (seen.get("user-agent", ""), seen.get("sec-ch-ua-platform", ""),
+            seen.get("sec-ch-ua", ""))
+
 
 
 try:
@@ -164,13 +248,73 @@ try:
     # A macOS TLS fingerprint must not carry a Windows User-Agent. That
     # contradiction is what this fork shipped, and it is the shape an anti-bot
     # signal is built to catch.
+    #
+    # The VERSION is not asserted literally. curl_cffi owns both the TLS
+    # handshake and the default headers, so a bumped dependency silently
+    # changes what is really sent, and a hardcoded "120" would keep passing
+    # while the identity drifted. These checks read curl_cffi's own answer and
+    # hold `ds_identity` to it.
     ua = di.UA
-    check("the User-Agent is the macOS build curl_cffi impersonates",
-          "Macintosh" in ua and "Chrome/120" in ua, repr(ua))
+    check("the User-Agent is a macOS build", "Macintosh" in ua, repr(ua))
+    check("ds_direct impersonates a target curl_cffi actually ships",
+          di.IMPERSONATE in _cffi_targets(),
+          "%r is not in curl_cffi's table; every request would raise"
+          % di.IMPERSONATE)
+    check("the impersonation is curl_cffi's newest desktop Chrome",
+          di.IMPERSONATE == _cffi_default_chrome(),
+          "curl_cffi defaults to %r; naming an older build is the stale-client"
+          " signal this exists to avoid" % _cffi_default_chrome())
+
+    # What curl_cffi REALLY sends for the named target, which is the only
+    # authority on the handshake/header pair.
+    real_ua, real_plat, real_brands = _cffi_sends(di.IMPERSONATE)
+    # Without this, a probe that quietly returned nothing would read as the
+    # identity being wrong -- which is exactly the mistake this file exists to
+    # catch, aimed the wrong way.
+    check("curl_cffi's own headers could be observed at all",
+          bool(real_ua and real_plat and real_brands),
+          "\n    user-agent: %r\n    sec-ch-ua-platform: %r\n    sec-ch-ua: %r"
+          "\n    (an empty result means the probe is broken, not the identity)"
+          % (real_ua, real_plat, real_brands))
+    check("the User-Agent matches what curl_cffi sends",
+          real_ua == ua, "\n    ours: %s\n    real: %s" % (ua, real_ua))
     check("the client hints name the same Chrome as the User-Agent",
-          "v=\"120\"" in di.SEC_CH_UA, repr(di.SEC_CH_UA))
+          real_brands == di.SEC_CH_UA,
+          "\n    ours: %s\n    real: %s" % (di.SEC_CH_UA, real_brands))
+    # Pull the version out of each place it is stated instead of slicing the
+    # brand list: the list carries three brands plus a grease entry, and the one
+    # naming Chrome is not at a stable offset, so an index picks the wrong one.
+    _ua_ver = re.search(r"Chrome/(\d+)", ua)
+    _brand_vers = re.findall(r'"(?:Google Chrome|Chromium)";v="(\d+)"',
+                             di.SEC_CH_UA)
+    check("the UA version and the hint brands are the same Chrome",
+          bool(_ua_ver) and len(_brand_vers) == 2
+          and _ua_ver.group(1) == _brand_vers[0] == _brand_vers[1],
+          "\n    UA says Chrome %s\n    hints say %s"
+          % (_ua_ver.group(1) if _ua_ver else "nothing", _brand_vers or "nothing"))
     check("the client hints name the same platform as the User-Agent",
-          di.SEC_CH_UA_PLATFORM == '"macOS"', repr(di.SEC_CH_UA_PLATFORM))
+          real_plat == di.SEC_CH_UA_PLATFORM == '"%s"' % di.PLATFORM,
+          "\n    hints: %s\n    real:  %s\n    derived: %s"
+          % (di.SEC_CH_UA_PLATFORM, real_plat, di.PLATFORM))
+
+    # ── the client headers identify a shipped build ─────────────────
+    # These are not browser facts and no fingerprint contains them, so curl_cffi
+    # cannot check them: they name the chat APPLICATION, and only a capture of a
+    # real request knows the value. What is assertable is that they are present,
+    # internally consistent, and not the retired build this fork used to send.
+    ch = di.client_headers()
+    check("the client headers carry a version",
+          bool(ch.get("x-client-version")), repr(ch))
+    check("the client headers are not the retired 2.3.0 build",
+          ch.get("x-client-version") != "2.3.0",
+          "2.3.0 is the version this fork shipped before the login capture")
+    check("the client headers name the web platform",
+          ch.get("x-client-platform") == "web", repr(ch))
+    check("the timezone offset is a real offset, not a pinned constant",
+          -12 * 3600 <= int(ch["x-client-timezone-offset"]) <= 14 * 3600,
+          repr(ch.get("x-client-timezone-offset")))
+    check("the timezone offset is this machine's, read from the clock",
+          int(ch["x-client-timezone-offset"]) == di.timezone_offset())
 
     headers = dd._Client(None)._headers()
     check("the request carries the shared User-Agent",
@@ -178,11 +322,34 @@ try:
     check("the request carries matching client hints",
           headers.get("sec-ch-ua") == di.SEC_CH_UA
           and headers.get("sec-ch-ua-platform") == di.SEC_CH_UA_PLATFORM)
+    # A client that omits the sec-fetch group is not shaped like a browser:
+    # Chrome attaches it to every request it makes, the login POST included.
+    check("the request carries the sec-fetch metadata Chrome always sends",
+          headers.get("sec-fetch-dest") == "empty"
+          and headers.get("sec-fetch-mode") == "cors"
+          and headers.get("sec-fetch-site") == "same-origin",
+          repr({k: v for k, v in headers.items() if k.startswith("sec-fetch")}))
+    check("the request carries the client headers",
+          headers.get("x-client-version") == ch["x-client-version"]
+          and headers.get("x-client-timezone-offset") == ch["x-client-timezone-offset"])
     login_headers = dd._Client(None)._login_headers()
     check("the login request carries the same User-Agent",
           login_headers.get("user-agent") == di.UA)
     check("the login request carries matching client hints",
           login_headers.get("sec-ch-ua") == di.SEC_CH_UA)
+    check("the login request carries the client headers",
+          login_headers.get("x-client-version") == ch["x-client-version"])
+    check("the login request carries the sec-fetch metadata",
+          login_headers.get("sec-fetch-dest") == "empty"
+          and login_headers.get("sec-fetch-site") == "same-origin")
+    # The real client posts /users/login from the sign-in page, so its referer
+    # is /sign_in. Sending "/" is a shape the website never produces.
+    check("the login referer is the sign-in page",
+          login_headers.get("referer", "").endswith("/sign_in"),
+          repr(login_headers.get("referer")))
+    check("a login never carries a Bearer token",
+          "authorization" not in {k.lower() for k in login_headers},
+          "an expired token on a fresh login is itself the failure being fixed")
 
     # ── the WAF fingerprint repeats ─────────────────────────────────
     a = dw._build_signal({"capabilities": 3})
