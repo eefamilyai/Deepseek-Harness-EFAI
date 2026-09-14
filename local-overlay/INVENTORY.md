@@ -238,7 +238,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 243 paths do not exist upstream, so no patch covers them and none can conflict.
+These 260 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -332,6 +332,17 @@ These 243 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-primitives/src/terminal-bridge.ts`
 - `packages/client/ui-settings-general/src/client/AdvancedSection.module.css`
 - `packages/client/ui-settings-general/src/client/AdvancedSection.tsx`
+- `packages/client/ui-settings-tools/README.md`
+- `packages/client/ui-settings-tools/package.json`
+- `packages/client/ui-settings-tools/src/client/ToolsSection.module.css`
+- `packages/client/ui-settings-tools/src/client/ToolsSection.tsx`
+- `packages/client/ui-settings-tools/src/client/index.ts`
+- `packages/client/ui-settings-tools/src/client/locales-keys.ts`
+- `packages/client/ui-settings-tools/src/client/locales.ts`
+- `packages/client/ui-settings-tools/src/css-modules.d.ts`
+- `packages/client/ui-settings-tools/src/index.ts`
+- `packages/client/ui-settings-tools/tsconfig.json`
+- `packages/client/ui-settings-tools/tsdown.config.ts`
 - `packages/client/ui-sidebar-terminal/package.json`
 - `packages/client/ui-sidebar-terminal/src/client/TerminalBody.tsx`
 - `packages/client/ui-sidebar-terminal/src/client/TerminalTitle.tsx`
@@ -398,6 +409,12 @@ These 243 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-kernel/src/invariant.ts`
 - `packages/kernel/tool-kernel/tests/images.spec.ts`
 - `packages/kernel/tool-kernel/tsconfig.json`
+- `packages/kernel/tool-roster/README.md`
+- `packages/kernel/tool-roster/package.json`
+- `packages/kernel/tool-roster/src/index.ts`
+- `packages/kernel/tool-roster/src/invariant.ts`
+- `packages/kernel/tool-roster/tests/roster.spec.ts`
+- `packages/kernel/tool-roster/tsconfig.json`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
 - `packages/llm/llm-kiln/src/adapter.ts`

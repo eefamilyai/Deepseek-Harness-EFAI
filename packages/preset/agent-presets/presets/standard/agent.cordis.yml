@@ -1,29 +1,28 @@
 # The `standard` agent preset: the full coding agent, mounted once per process.
 #
-# ── the kernel switch ───────────────────────────────────────────────────────
+# ── the acting-roster switches ──────────────────────────────────────────────
 #
-# `kernel.enabled` in the user's settings document picks between two rosters,
-# and several rows below read it through `dshSettingFlag('kernel.enabled', true)`.
+# TWO independent categories, both live, both owned by settings:
 #
-#   ON  (default) — the model acts through `kernel`, a persistent Python
-#                   namespace. Reading a file, editing it, searching the tree,
-#                   running a command are function calls inside it, so the shell,
-#                   filesystem, search, and background-job rows switch OFF.
-#   OFF           — those rows switch ON and the kernel switches off: the
-#                   conventional roster, exactly as this preset shipped.
+#   kernel — `kernel.enabled` (owned by `kernel-mode`). The persistent Python
+#            namespace.
+#   tools  — `tools.enabled` plus one `tools.tools.<name>` per tool (owned by
+#            `tool-roster`). The conventional roster below.
 #
-# Only the rows the kernel REPLACES move. Web access, delegation, skills, goals,
-# planning, todos, and asking the user are mounted either way — the kernel
-# cannot do any of them, so switching them off would cost capability and buy
-# nothing.
+# Either can be switched off alone, and both can be on at once. That replaces
+# the earlier either/or arrangement, where the kernel REPLACED the shell,
+# filesystem, search, and job rows and only one side could be mounted.
 #
-# The switch is read once at boot, which is why it is a Loader `disabled`
-# expression rather than a value some plugin re-reads. A tool's prompt section
-# is registered when its plugin mounts, so a tool merely hidden at runtime would
-# leave its instructions in the system prompt describing a tool the model cannot
-# call. Mounting is the only gate that takes the instructions with it. Changing
-# the switch therefore needs a restart, and `@deepseek-ai/dsh-kernel-mode`
-# declares `applies: 'restart'` so the settings UI says so.
+# Every roster row below therefore mounts unconditionally, except for the
+# platform gates, which are not roster questions. Visibility is decided per
+# turn by `@deepseek-ai/dsh-tool-roster` (mounted in the base bundle), which
+# filters the assembled prompt — tool schemas AND their guidance sections
+# together — and guards execution. Nothing has to be unmounted to withdraw a
+# tool, so the switch needs no restart: it lands when the model stops
+# generating.
+#
+# The rows the kernel REPLACES are still listed here rather than only in the
+# kernel namespace, because which tools a preset offers is a preset decision.
 #
 # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
 # standing scope; every session naming it joins by scope parentage, so the
@@ -72,11 +71,11 @@
 # kernel switch. `sh("...")` inside a cell is the same capability.
 - id: tool-bash
   name: '@deepseek-ai/dsh-tool-bash'
-  disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+  disabled: !!js process.platform === 'win32'
 
 - id: tool-pwsh
   name: '@deepseek-ai/dsh-tool-pwsh'
-  disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+  disabled: !!js process.platform !== 'win32'
 
 # ── the kernel ──────────────────────────────────────────────────────────────
 
@@ -97,7 +96,7 @@
 # bundle chain exists (see HARNESS-EDITS.md seam register).
 - id: tool-kernel
   name: '@deepseek-ai/dsh-tool-kernel'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true) && !dshSettingFlag('rlm.enabled', false)) === false
+  disabled: !!js (typeof dshSettingFlag === 'function' && !dshSettingFlag('rlm.enabled', false)) === false
   config:
     timeoutMs: 180000
 
@@ -109,11 +108,9 @@
 # the kernel namespace, so both rows step aside while the switch is on.
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
 - id: tool-fs-search
   name: '@deepseek-ai/dsh-tool-fs-search'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
   config:
     sampleOverCapGlobResults: false
 
@@ -132,7 +129,6 @@
 # shell tools off while the switch is on.
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
-  disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
 # ── skills ──────────────────────────────────────────────────────────────────
 

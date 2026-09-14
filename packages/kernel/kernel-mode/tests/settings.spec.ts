@@ -2,9 +2,8 @@
  * The switch's settings document, including the browser-window preference.
  *
  * These pin the defaults a deployment inherits before anyone opens a settings
- * surface, because both values are read once at boot by Loader rows: a wrong
- * default here is a window on someone's desktop or a tool roster they did not
- * choose, and neither is visible until the process starts.
+ * surface: a wrong default here is a window on someone's desktop, or a tool
+ * roster the operator did not choose.
  */
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
@@ -34,7 +33,7 @@ describe('kernel settings', () => {
       .toMatchObject({ enabled: false, browserWindow: true })
   })
 
-  it('publishes both keys in the kernel namespace as restart-scoped', async () => {
+  it('publishes both keys in the kernel namespace as live-scoped', async () => {
     const ctx = new Context()
     await ctx.plugin(MemorySettings, {})
     apply(ctx, { browserWindow: true })
@@ -46,7 +45,9 @@ describe('kernel settings', () => {
     expect(descriptors).toHaveLength(1)
     // Exactly one entry, asserted above, so reading it is not a guess.
     const descriptor = descriptors[0]!
-    expect(descriptor.applies).toBe('restart')
+    // Live: `tool-roster` applies the switch at the end of the turn in
+    // flight, so no Loader expression reads it and no restart is needed.
+    expect(descriptor.applies).toBe('live')
     expect(descriptor.value).toEqual({ enabled: true, browserWindow: true })
     await ctx.fiber.dispose()
   })

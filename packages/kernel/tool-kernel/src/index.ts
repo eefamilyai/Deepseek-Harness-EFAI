@@ -1,13 +1,13 @@
 /**
  * The model-facing `kernel` tool: run Python in a persistent namespace.
  *
- * In a composition built around this package the kernel is not one tool among
- * many — it is the model's entire hands. Reading a file, editing it, searching
- * the disk, running a command, driving a browser: all of it is Python, written
- * against the helpers the Kiln runtime preloads into the namespace. That is why
- * the roster this package expects to sit in has web access and nothing else
- * beside it. Where a conventional harness gives the model twenty narrow verbs,
- * this one gives it a programming language and a live interpreter.
+ * The kernel is one acting surface among several, never a replacement for the
+ * others. Reading a file, editing it, searching the disk, running a command:
+ * all of it is Python, written against the helpers the Kiln runtime preloads
+ * into the namespace — and all of it is equally available through the
+ * conventional tools, which sit in the same roster and answer to their own
+ * switch. The two categories are independent, so the kernel can be on while the
+ * conventional roster is on, off, or anywhere between.
  *
  * Execution goes through `ctx.kernel`; this module owns only the model-facing
  * schema, prompt guidance, and result presentation — never process lifetime or
@@ -391,10 +391,17 @@ export function apply(ctx: Context, config: Config): void {
     name: 'tool:kernel',
     order: 100,
     text: [
-      'You have one tool for acting on this machine: `kernel`, which runs Python in a',
-      'persistent namespace. Variables and imports persist across calls, so build state',
-      'up instead of re-deriving it. To learn every preloaded helper, call `tool_help()`',
-      'with no argument; `tool_help("grep")` documents one.',
+      'You have `kernel`, which runs Python in a persistent namespace. Variables and',
+      'imports persist across calls, so build state up instead of re-deriving it. To',
+      'learn every preloaded helper, call `tool_help()` with no argument;',
+      '`tool_help("grep")` documents one.',
+      '',
+      'The kernel is one way to act on this machine, not the only one. Every',
+      'conventional tool you also have — reading and editing files, searching, running',
+      'commands, background jobs — stays available alongside it, and each can be',
+      'switched on or off independently in settings. Reach for whichever fits the job;',
+      'a cell that shells out to do what a dedicated tool does directly is usually the',
+      'worse choice.',
       '',
       'Begin every cell with a single-line `#` comment stating what the script does.',
       'That first line titles the call in the transcript, so make it a short, concrete',

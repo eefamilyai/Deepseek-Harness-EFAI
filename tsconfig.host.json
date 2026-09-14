@@ -368,6 +368,7 @@
     { "path": "./packages/kernel/kernel-mode" },
     { "path": "./packages/kernel/kernel-python" },
     { "path": "./packages/kernel/tool-kernel" },
+    { "path": "./packages/kernel/tool-roster" },
     { "path": "./packages/kernel/kernel-rlm-context" },
     { "path": "./packages/rlm/rlm" },
     { "path": "./packages/rlm/rlm-mode" },

@@ -268,29 +268,32 @@
     - id: shell-env
       name: '@deepseek-ai/dsh-shell-env'
 
-    # ── the kernel switch ───────────────────────────────────────────────────
+    # ── the acting-roster switches ──────────────────────────────────────────
     #
-    # `kernel.enabled` (default true) picks between two ways for the model to
-    # act on this machine, and the rows below read it through
-    # `dshSettingFlag('kernel.enabled', true)`.
+    # TWO independent categories, each with its own live switch:
     #
-    #   ON  — `kernel`, a persistent Python namespace. Reading a file, editing
-    #         it, searching the tree, running a command are function calls
-    #         inside it, so the shell, filesystem, search, and background-job
-    #         rows switch OFF.
-    #   OFF — those rows switch ON and the kernel switches off.
+    #   kernel — `kernel.enabled`. The persistent Python namespace: reading a
+    #            file, editing it, searching the tree, running a command are
+    #            function calls inside it.
+    #   tools  — `tools.enabled`, plus one `tools.tools.<name>` per tool. The
+    #            conventional roster: shell, filesystem, search, jobs.
     #
-    # Only the rows the kernel REPLACES move. Everything the kernel cannot do —
-    # web access, skills, goals, delegation, planning, todos, asking the user —
-    # is mounted either way.
+    # They are separate so either can be switched off alone, and both can be on
+    # at once. That replaces the original either/or switch, where the kernel
+    # REPLACED those rows and only one side could ever be mounted.
     #
-    # `kernel-mode` owns the setting and is deliberately NOT gated by it: a
-    # switch that vanished in one of its own positions could never be flipped
-    # back. It also declares `applies: 'restart'`, because these are Loader
-    # `disabled` expressions read once at boot. That is the point rather than a
-    # limitation — a tool plugin registers its system-prompt section when it
-    # mounts, so a tool merely hidden at runtime would leave instructions in the
-    # prompt for a tool the model cannot call. Only not mounting takes both.
+    # Every tool row below is therefore mounted unconditionally, except for the
+    # platform gates, which are not roster questions. `tool-roster` decides
+    # visibility at runtime instead. Mounting everything is what makes the
+    # switch live: a Loader `disabled` expression is read once at boot, so
+    # gating composition on a setting is a restart-shaped interface by
+    # construction — and a tool plugin registers its system-prompt section when
+    # it mounts, so a tool merely hidden without also filtering the assembled
+    # prompt would leave instructions for a function the model cannot call.
+    #
+    # `kernel-mode` still owns only its setting and is NOT gated: a switch that
+    # vanished in one of its own positions could never be flipped back.
+    #
     - id: kernel-mode
       name: '@deepseek-ai/dsh-kernel-mode'
       config:
@@ -298,26 +301,23 @@
 
     - id: tool-bash
       name: '@deepseek-ai/dsh-tool-bash'
-      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform === 'win32'
 
     - id: tool-pwsh
       name: '@deepseek-ai/dsh-tool-pwsh'
-      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+      disabled: !!js process.platform !== 'win32'
 
     - id: tool-jobs
       name: '@deepseek-ai/dsh-tool-jobs'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: fs-observation-policy
       name: '@deepseek-ai/dsh-fs-observation-policy'
 
     - id: tool-fs
       name: '@deepseek-ai/dsh-tool-fs'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 
     - id: tool-fs-search
       name: '@deepseek-ai/dsh-tool-fs-search'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         sampleOverCapGlobResults: false
 
@@ -327,20 +327,17 @@
     # unavailable provider at selection time rather than mid-cell.
     - id: kernel
       name: '@deepseek-ai/dsh-kernel'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
       config:
         defaultTimeoutMs: 180000
 
     - id: kernel-python
       name: '@deepseek-ai/dsh-kernel-python'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
       config:
         cwd: !!js process.env.DSH_KERNEL_CWD
         browserWindow: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.browserWindow', false)) === true
 
     - id: tool-kernel
       name: '@deepseek-ai/dsh-tool-kernel'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
       config:
         timeoutMs: 180000
 
@@ -350,12 +347,12 @@
     # RLM engine itself reads `parseRlmDump` from this same package.
     - id: kernel-rlm-context
       name: '@deepseek-ai/dsh-kernel-rlm-context'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
 
     # ── the RLM switch ─────────────────────────────────────────────────────
     #
-    # `rlm.enabled` (default false) is the second position of the acting-roster
-    # switch. It mirrors `kernel-mode` exactly: the plugin owns only the setting
+    # `rlm.enabled` (default false) is an independent engine switch, not a
+    # position of the acting-roster switch. It mirrors `kernel-mode`: the
+    # plugin owns only the setting
     # and stays mounted in BOTH positions so the switch can always be flipped
     # back. The engine below needs the persistent kernel seam underneath, so it
     # mounts only when BOTH `kernel.enabled` and `rlm.enabled` are true. The
@@ -560,7 +557,6 @@
 
     - id: tool-str-replace-editor
       name: '@deepseek-ai/dsh-tool-str-replace-editor'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
       config:
         maxOutputChars: 16000
 
@@ -647,3 +643,9 @@
     # choice.
     - id: llm-deepseek
       name: '@deepseek-ai/dsh-llm-deepseek'
+
+    # DSH-FORK(kernel): the runtime roster. Mounted after every tool row so its
+    # seeded per-tool defaults see the whole registry. EXIT: upstream ships a
+    # runtime tool-visibility filter of its own.
+    - id: tool-roster
+      name: '@deepseek-ai/dsh-tool-roster'

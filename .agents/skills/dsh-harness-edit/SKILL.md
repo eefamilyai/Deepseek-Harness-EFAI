@@ -311,9 +311,78 @@ When upstream lands a change that makes the fork's edit unnecessary, delete the 
 
 Delete stranded package directories before building. A package removed upstream leaves its `lib/` and `node_modules/` behind, and tsdown adopts the residue as a build target.
 
+## Wiring a new package
+
+A new Tier-1 package has no patch and no marker, which makes it feel finished the
+moment the directory exists. It is not: a package the Loader cannot resolve, or a
+client plugin the composition never mounts, is inert code that builds cleanly and
+does nothing. The overlay scripts cannot see this — they classify paths, not
+wiring — so it is the one class of fork bug no gate catches.
+
+Adding a package means answering every question below. Each is a different layer
+of the boot, so a miss at any layer surfaces only after the ones above it are
+satisfied: you fix the missing mount, rebuild, and the *next* layer fails.
+
+**Which bundle mounts it, and does that bundle depend on it?** These are two
+edits, and the second is the one that gets forgotten. A row in a bundle's
+`cordis.patch.yml` names a package, but the profile's module fallback is built by
+walking the install anchor's `dependencies` + `peerDependencies`
+(`packages/boot/app-boot/src/profile.ts` — `resolveModuleFallbackEntries`). A
+package nothing declares is never linked into `$DSH_HOME/profiles/node_modules`,
+so Node cannot resolve it from the profile directory and the boot dies with
+`Cannot find package`. Add the `workspace:^` entry to the **same bundle's**
+`package.json`, then `pnpm install` to create the link. Mounting the row without
+the dependency, or declaring the dependency in a different bundle's manifest,
+both fail.
+
+**Is it registered in the aggregate tsconfig?** A package absent from
+`tsconfig.host.json` / `tsconfig.client.json` is not in the build graph. See
+[Registration lists](#registration-lists).
+
+**For a client plugin: does the host half export `apply`?** The browser half owns
+the behaviour, which makes `src/index.ts` look like it can be empty. It cannot:
+`export {}` hands Cordis a module namespace with no `apply`, and the Loader
+rejects it with *"invalid plugin, expect function or object with an 'apply'
+method, received object"*. Every sibling client plugin ships an empty
+`export function apply(): void {}` — the host entry must exist as a real plugin so
+the row appears in the Loader at all. Copy a sibling's shape rather than
+reasoning about it.
+
+**Does `inject` name every service the plugin reads, including parents?** Cordis
+resolves a dotted service through its parent, so reading `ctx.remote.settings`
+requires BOTH `'remote.settings'` and `'remote'` in `inject`; naming only the leaf
+throws *"cannot get property 'remote' without inject"*. The rule generalises: for
+any `ctx.a.b` you read, list `'a'` and `'a.b'`. Check the sibling client plugins
+before inventing a list — they all follow the
+`['slots', 'locale', 'remote', 'remote.x']` shape.
+
+**Does it need a `Config` default rather than a hardcoded value?** Anything that
+varies per deployment belongs in `Config`, not a literal; `AGENTS.md` forbids
+hardcoded tunables in plugins.
+
+**Then boot it.** A clean `tsdown` build proves nothing about wiring — every
+failure above compiles fine. The boot is the only check: restart the host and
+confirm the row is actually live (a mounted plugin appears in the Loader; a client
+plugin appears in the UI). A host that has not been restarted since the
+composition edit still runs the old tree, and a bundle-layer row never
+hot-reloads — only the profile and home patch layers are watched
+(`patchReload === 'live'`). Rebuild, then restart.
+
+**Then check what it actually registered.** A plugin can mount, apply, and still
+register nothing useful because it read the world too early. `apply` runs in
+loader order, which is not activation order: a plugin that snapshots a registry
+inside its `ctx.inject` callback fires before its siblings have registered and
+silently sees a partial world. If the plugin enumerates other packages' tools,
+sections, or rows, verify the list is complete and not merely non-empty — and
+have it re-read on the event that changes it rather than capturing once.
+
+This is a Tier-1 checklist, not a Tier-2 one: none of it needs a marker, an
+`EXIT:` clause, or a register row. It needs to actually run.
+
 ## Before committing
 
 - Run the narrowest owning test for the changed behavior, then `pnpm run verify-fork-overlay`.
+- For a new package, walk the wiring checklist above and boot it — a green build is not evidence the row is live.
 - Diff against the recorded base and confirm every modified path is either Tier 1 or a marked, registered Tier-2 edit.
 - A Tier-2 edit that was not planned is a decision, not a detail: move it to Tier 1, send it upstream, or register it with a marker, an exit plan, and a patch group.
 - A new Tier-2 file or a removed one updates the seam register in `HARNESS-EDITS.md` in the same change.

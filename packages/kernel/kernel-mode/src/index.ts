@@ -1,22 +1,24 @@
 /**
- * The kernel switch: one setting deciding which roster the harness composes.
+ * The kernel switch: one setting deciding whether the persistent Python kernel
+ * is available.
  *
- * Turned ON, the model gets the persistent Python kernel and the tools the
- * kernel cannot supply (web access, delegation, skills, goals, planning,
- * asking the user). Turned OFF, it gets the conventional roster — bash, the
- * filesystem tools, search, background jobs — and no kernel. The tools in
- * between, the ones the kernel *replaces*, are the only ones the switch moves;
- * a tool the kernel cannot do is on either way, because switching it off would
- * cost capability for nothing.
+ * Turned ON, the model can run Python in a namespace that outlives a single
+ * call, so reading a file, editing it, searching a tree, and running a command
+ * are all function calls inside it. Turned OFF, the `kernel` tool is withdrawn.
  *
- * This plugin owns only the setting. The gating itself is composition:
- * every affected row carries `disabled: !!js ...` reading this value at boot.
- * That is deliberate and is why the setting declares `applies: 'restart'`.
- * Hiding a tool at runtime is not the same as not mounting it — a mounted tool
- * plugin has already contributed its system-prompt section, so a merely-hidden
- * tool leaves the model reading instructions for something it cannot call.
- * Mounting is a Loader fact, Loader facts are decided at boot, and the honest
- * interface for that is a switch that says it needs a restart.
+ * The switch owns ONE tool and one category. It no longer decides whether the
+ * conventional roster — bash, the filesystem tools, search, background jobs —
+ * is mounted: that is the separate `tools` category, and the two are
+ * independent, so the kernel and the conventional tools can be on at once. The
+ * previous either/or arrangement made the kernel *replace* those rows, which
+ * meant the switch could only ever trade one set for the other.
+ *
+ * This plugin owns only the setting. Enforcing it is `tool-roster`, which
+ * filters the assembled prompt and guards execution; the affected rows are
+ * mounted unconditionally so nothing has to be unmounted to withdraw a tool.
+ * That is also why this setting is `live` rather than `restart`: a change lands
+ * at the end of the turn in flight, and no boot-time Loader expression reads it
+ * any more.
  *
  * The plugin stays mounted in BOTH positions of its own switch. A switch that
  * disappeared when switched off could never be switched back on.
@@ -66,10 +68,9 @@ export const KERNEL_BROWSER_WINDOW_DEFAULT = false
 /** Plugin config: the switch, and its composition-layer default. */
 export interface Config {
   /**
-   * Whether the persistent Python kernel is the model's way of acting on this
-   * machine. On: the `kernel` tool, and no bash/filesystem/search/jobs tools —
-   * those are function calls inside the kernel namespace instead. Off: those
-   * tools, and no kernel. Takes effect on restart.
+   * Whether the persistent Python kernel is available to the model. On: the
+   * `kernel` tool. Off: no kernel, while the conventional tool roster is
+   * unaffected. Applies when the model next stops generating.
    */
   enabled?: boolean
   /**
@@ -83,9 +84,10 @@ export interface Config {
 
 export const Config: z<Config> = z.object({
   enabled: z.boolean().default(KERNEL_ENABLED_DEFAULT)
-    .description('Run Python in a persistent kernel as the model\'s way of acting on this machine.'
-      + ' While on, the shell, filesystem, search, and background-job tools are replaced by'
-      + ' function calls inside that namespace. Restart the harness to apply.'),
+    .description('Make the kernel tool available: run Python in a persistent namespace, where'
+      + ' reading a file, editing it, searching the tree, and running a command are'
+      + ' function calls inside it. Independent of the conventional tool roster.'
+      + ' Applies when the model next stops generating.'),
   browserWindow: z.boolean().default(KERNEL_BROWSER_WINDOW_DEFAULT)
     .description('Let the agent open a real Chromium window on your desktop. Off, it browses'
       + ' windowless and nothing appears while it works; screenshots and the live view still'
@@ -109,8 +111,9 @@ export function apply(ctx: Context, config: Config): void {
         enabled: config.enabled ?? KERNEL_ENABLED_DEFAULT,
         browserWindow: config.browserWindow ?? KERNEL_BROWSER_WINDOW_DEFAULT,
       },
-      // Read once at boot by every gated Loader row; see the module note.
-      applies: 'restart',
+      // Applied by `tool-roster` at the end of the turn in flight; no Loader
+      // expression reads it any more, so a restart is not required.
+      applies: 'live',
     })
   })
 }

@@ -1,5 +1,5 @@
 diff --git a/packages/bundle/base/cordis.patch.yml b/packages/bundle/base/cordis.patch.yml
-index f906ea8601..3762038685 100644
+index f906ea8601..10eee93929 100644
 --- a/packages/bundle/base/cordis.patch.yml
 +++ b/packages/bundle/base/cordis.patch.yml
 @@ -107,6 +107,31 @@
@@ -34,33 +34,36 @@ index f906ea8601..3762038685 100644
      - id: session-persistence-jsonl
        name: '@deepseek-ai/dsh-session-persistence-jsonl'
        config:
-@@ -243,28 +268,143 @@
+@@ -243,6 +268,37 @@
      - id: shell-env
        name: '@deepseek-ai/dsh-shell-env'
  
-+    # ── the kernel switch ───────────────────────────────────────────────────
++    # ── the acting-roster switches ──────────────────────────────────────────
 +    #
-+    # `kernel.enabled` (default true) picks between two ways for the model to
-+    # act on this machine, and the rows below read it through
-+    # `dshSettingFlag('kernel.enabled', true)`.
++    # TWO independent categories, each with its own live switch:
 +    #
-+    #   ON  — `kernel`, a persistent Python namespace. Reading a file, editing
-+    #         it, searching the tree, running a command are function calls
-+    #         inside it, so the shell, filesystem, search, and background-job
-+    #         rows switch OFF.
-+    #   OFF — those rows switch ON and the kernel switches off.
++    #   kernel — `kernel.enabled`. The persistent Python namespace: reading a
++    #            file, editing it, searching the tree, running a command are
++    #            function calls inside it.
++    #   tools  — `tools.enabled`, plus one `tools.tools.<name>` per tool. The
++    #            conventional roster: shell, filesystem, search, jobs.
 +    #
-+    # Only the rows the kernel REPLACES move. Everything the kernel cannot do —
-+    # web access, skills, goals, delegation, planning, todos, asking the user —
-+    # is mounted either way.
++    # They are separate so either can be switched off alone, and both can be on
++    # at once. That replaces the original either/or switch, where the kernel
++    # REPLACED those rows and only one side could ever be mounted.
 +    #
-+    # `kernel-mode` owns the setting and is deliberately NOT gated by it: a
-+    # switch that vanished in one of its own positions could never be flipped
-+    # back. It also declares `applies: 'restart'`, because these are Loader
-+    # `disabled` expressions read once at boot. That is the point rather than a
-+    # limitation — a tool plugin registers its system-prompt section when it
-+    # mounts, so a tool merely hidden at runtime would leave instructions in the
-+    # prompt for a tool the model cannot call. Only not mounting takes both.
++    # Every tool row below is therefore mounted unconditionally, except for the
++    # platform gates, which are not roster questions. `tool-roster` decides
++    # visibility at runtime instead. Mounting everything is what makes the
++    # switch live: a Loader `disabled` expression is read once at boot, so
++    # gating composition on a setting is a restart-shaped interface by
++    # construction — and a tool plugin registers its system-prompt section when
++    # it mounts, so a tool merely hidden without also filtering the assembled
++    # prompt would leave instructions for a function the model cannot call.
++    #
++    # `kernel-mode` still owns only its setting and is NOT gated: a switch that
++    # vanished in one of its own positions could never be flipped back.
++    #
 +    - id: kernel-mode
 +      name: '@deepseek-ai/dsh-kernel-mode'
 +      config:
@@ -68,28 +71,8 @@ index f906ea8601..3762038685 100644
 +
      - id: tool-bash
        name: '@deepseek-ai/dsh-tool-bash'
--      disabled: !!js process.platform === 'win32'
-+      disabled: !!js process.platform === 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
- 
-     - id: tool-pwsh
-       name: '@deepseek-ai/dsh-tool-pwsh'
--      disabled: !!js process.platform !== 'win32'
-+      disabled: !!js process.platform !== 'win32' || (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
- 
-     - id: tool-jobs
-       name: '@deepseek-ai/dsh-tool-jobs'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
- 
-     - id: fs-observation-policy
-       name: '@deepseek-ai/dsh-fs-observation-policy'
- 
-     - id: tool-fs
-       name: '@deepseek-ai/dsh-tool-fs'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
- 
-     - id: tool-fs-search
-       name: '@deepseek-ai/dsh-tool-fs-search'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
+       disabled: !!js process.platform === 'win32'
+@@ -265,6 +321,87 @@
        config:
          sampleOverCapGlobResults: false
  
@@ -99,20 +82,17 @@ index f906ea8601..3762038685 100644
 +    # unavailable provider at selection time rather than mid-cell.
 +    - id: kernel
 +      name: '@deepseek-ai/dsh-kernel'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
 +      config:
 +        defaultTimeoutMs: 180000
 +
 +    - id: kernel-python
 +      name: '@deepseek-ai/dsh-kernel-python'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
 +      config:
 +        cwd: !!js process.env.DSH_KERNEL_CWD
 +        browserWindow: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.browserWindow', false)) === true
 +
 +    - id: tool-kernel
 +      name: '@deepseek-ai/dsh-tool-kernel'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
 +      config:
 +        timeoutMs: 180000
 +
@@ -122,12 +102,12 @@ index f906ea8601..3762038685 100644
 +    # RLM engine itself reads `parseRlmDump` from this same package.
 +    - id: kernel-rlm-context
 +      name: '@deepseek-ai/dsh-kernel-rlm-context'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true)) === false
 +
 +    # ── the RLM switch ─────────────────────────────────────────────────────
 +    #
-+    # `rlm.enabled` (default false) is the second position of the acting-roster
-+    # switch. It mirrors `kernel-mode` exactly: the plugin owns only the setting
++    # `rlm.enabled` (default false) is an independent engine switch, not a
++    # position of the acting-roster switch. It mirrors `kernel-mode`: the
++    # plugin owns only the setting
 +    # and stays mounted in BOTH positions so the switch can always be flipped
 +    # back. The engine below needs the persistent kernel seam underneath, so it
 +    # mounts only when BOTH `kernel.enabled` and `rlm.enabled` are true. The
@@ -180,7 +160,7 @@ index f906ea8601..3762038685 100644
      - id: agent-instructions
        name: '@deepseek-ai/dsh-agent-instructions'
        config:
-@@ -289,6 +429,9 @@
+@@ -289,6 +426,9 @@
      - id: command-feedback
        name: '@deepseek-ai/dsh-command-feedback'
  
@@ -190,20 +170,19 @@ index f906ea8601..3762038685 100644
      - id: goal
        name: '@deepseek-ai/dsh-goal'
  
-@@ -415,6 +558,12 @@
+@@ -415,6 +555,11 @@
          subagentProvider: spawn
          maxRounds: 64
  
 +    - id: tool-str-replace-editor
 +      name: '@deepseek-ai/dsh-tool-str-replace-editor'
-+      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.enabled', true))
 +      config:
 +        maxOutputChars: 16000
 +
      # Consecutive-repeat reminders on the tool chain.
      - id: repeat-tool-reminder
        name: '@deepseek-ai/dsh-repeat-tool-reminder'
-@@ -453,6 +602,19 @@
+@@ -453,6 +598,19 @@
          fetch: true
          searchTimeoutMs: 60000
  
@@ -223,8 +202,18 @@ index f906ea8601..3762038685 100644
      # ── rows every mode mounts, whose values each overlay may state ──────────────
  
      # The tool registry. Presentation mode is a deployment choice; omitting it here
+@@ -485,3 +643,9 @@
+     # choice.
+     - id: llm-deepseek
+       name: '@deepseek-ai/dsh-llm-deepseek'
++
++    # DSH-FORK(kernel): the runtime roster. Mounted after every tool row so its
++    # seeded per-tool defaults see the whole registry. EXIT: upstream ships a
++    # runtime tool-visibility filter of its own.
++    - id: tool-roster
++      name: '@deepseek-ai/dsh-tool-roster'
 diff --git a/packages/bundle/base/package.json b/packages/bundle/base/package.json
-index abe58f9588..3e1b2273be 100644
+index abe58f9588..1cdc467968 100644
 --- a/packages/bundle/base/package.json
 +++ b/packages/bundle/base/package.json
 @@ -45,6 +45,7 @@
@@ -235,7 +224,7 @@ index abe58f9588..3e1b2273be 100644
      "@deepseek-ai/dsh-commands": "workspace:^",
      "@deepseek-ai/dsh-compaction-basic": "workspace:^",
      "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
-@@ -102,6 +103,7 @@
+@@ -102,9 +103,11 @@
      "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
      "@deepseek-ai/dsh-tool-ralph": "workspace:^",
      "@deepseek-ai/dsh-tool-skill": "workspace:^",
@@ -243,7 +232,11 @@ index abe58f9588..3e1b2273be 100644
      "@deepseek-ai/dsh-tool-subagent": "workspace:^",
      "@deepseek-ai/dsh-tool-subagent-control": "workspace:^",
      "@deepseek-ai/dsh-tool-jobs": "workspace:^",
-@@ -114,6 +116,7 @@
++    "@deepseek-ai/dsh-tool-roster": "workspace:^",
+     "@deepseek-ai/dsh-tool-todo": "workspace:^",
+     "@deepseek-ai/dsh-tool-web": "workspace:^",
+     "@deepseek-ai/dsh-tool-workflow": "workspace:^",
+@@ -114,6 +117,7 @@
      "@deepseek-ai/dsh-user-approval": "workspace:^",
      "@deepseek-ai/dsh-user-questions": "workspace:^",
      "@deepseek-ai/dsh-web": "workspace:^",
@@ -252,7 +245,7 @@ index abe58f9588..3e1b2273be 100644
      "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",
      "@deepseek-ai/dsh-workflow-worker-thread": "workspace:^",
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index cf4603031f..c0b24a3eed 100644
+index cf4603031f..f18d2bdc9f 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
 @@ -142,6 +142,14 @@
@@ -292,7 +285,20 @@ index cf4603031f..c0b24a3eed 100644
      - id: ui-settings
        name: '@deepseek-ai/dsh-client-ui-settings'
  
-@@ -470,6 +486,14 @@
+@@ -243,6 +259,12 @@
+     - id: ui-settings-models
+       name: '@deepseek-ai/dsh-client-ui-settings-models'
+ 
++    # DSH-FORK(kernel): the Tools settings section — independent kernel and
++    # conventional-tool switches, one switch per registered tool. EXIT: upstream
++    # ships a runtime tool-roster surface of its own.
++    - id: ui-settings-tools
++      name: '@deepseek-ai/dsh-client-ui-settings-tools'
++
+     - id: ui-settings-plugin-inventory
+       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+ 
+@@ -470,6 +492,14 @@
  - id: tool-web
    disabled: true
  
@@ -308,7 +314,7 @@ index cf4603031f..c0b24a3eed 100644
  # `dsh-agent-presets` itself and prepended as a read-only `system` root
  # (`includeShippedRoot`); `$DSH_HOME/.agent-presets` is where a person — or an
 diff --git a/packages/bundle/web-app/package.json b/packages/bundle/web-app/package.json
-index 3498cb6761..4c48fd42a4 100644
+index 3498cb6761..867f6fff74 100644
 --- a/packages/bundle/web-app/package.json
 +++ b/packages/bundle/web-app/package.json
 @@ -63,6 +63,7 @@
@@ -319,15 +325,21 @@ index 3498cb6761..4c48fd42a4 100644
      "@deepseek-ai/dsh-client-ui-goal": "workspace:^",
      "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:^",
      "@deepseek-ai/dsh-client-ui-jobs": "workspace:^",
-@@ -83,6 +84,7 @@
+@@ -81,10 +82,12 @@
+     "@deepseek-ai/dsh-client-ui-settings-models": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-settings-plugin-inventory": "workspace:^",
      "@deepseek-ai/dsh-client-ui-settings-plugins": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-settings-tools": "workspace:^",
      "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": "workspace:^",
      "@deepseek-ai/dsh-client-ui-sidebar-files": "workspace:^",
-+    "@deepseek-ai/dsh-client-ui-sidebar-terminal": "workspace:^",
      "@deepseek-ai/dsh-client-ui-sidebar-right": "workspace:^",
-     "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": "workspace:^",
+-    "@deepseek-ai/dsh-client-ui-sidebar-documentpreview": "workspace:^",
++    "@deepseek-ai/dsh-client-ui-sidebar-terminal": "workspace:^",
      "@deepseek-ai/dsh-client-ui-skill": "workspace:^",
-@@ -105,6 +107,7 @@
+     "@deepseek-ai/dsh-client-ui-subagent": "workspace:^",
+     "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
+@@ -105,6 +108,7 @@
      "@deepseek-ai/dsh-host-frontend-static": "workspace:^",
      "@deepseek-ai/dsh-host-open-in-app": "workspace:^",
      "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",

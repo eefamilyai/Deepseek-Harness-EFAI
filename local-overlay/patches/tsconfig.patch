@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 494e4f762f..8cfc48bafe 100644
+index 494e4f762f..89f9856090 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -116,6 +116,10 @@
+@@ -116,6 +116,11 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -11,14 +11,15 @@ index 494e4f762f..8cfc48bafe 100644
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/client/ui-sidebar-terminal" },
 +    { "path": "./packages/client/ui-effects" },
++    { "path": "./packages/client/ui-settings-tools" },
 +    // DSH-FORK end
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c5a3f118b3..f05255abcf 100644
+index c5a3f118b3..973162b9a3 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -358,6 +358,22 @@
+@@ -358,6 +358,23 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -33,6 +34,7 @@ index c5a3f118b3..f05255abcf 100644
 +    { "path": "./packages/kernel/kernel-mode" },
 +    { "path": "./packages/kernel/kernel-python" },
 +    { "path": "./packages/kernel/tool-kernel" },
++    { "path": "./packages/kernel/tool-roster" },
 +    { "path": "./packages/kernel/kernel-rlm-context" },
 +    { "path": "./packages/rlm/rlm" },
 +    { "path": "./packages/rlm/rlm-mode" },
