@@ -25,9 +25,11 @@ import hashlib
 import json
 import os
 import random
+import re
 import secrets
 import tempfile
 import threading
+import time
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -199,9 +201,245 @@ def _digest(label, length=32):
     return hashlib.sha256(raw).hexdigest()[:length]
 
 
+# --- the device_id this machine presents -------------------------------------
+# Shumei's ``device_id`` is a device-level fingerprint the real web client mints
+# and then replays for the life of its browser profile. It is NOT computable
+# here: the SDK runs obfuscated JS over canvas, GPU and audio entropy, so the
+# only honest ways to obtain one are to read it out of a real browser, or to be
+# handed one. A locally derived string is not a device id at all -- no Shumei
+# fingerprint ever produces it, which is why presenting one reads as a brand-new
+# device.
+#
+# Resolution order, first hit wins:
+#   1. ``DEEPSEEK_DEVICE_ID``              -- runtime override from the settings UI
+#   2. ``ds_device.json``, source=manual   -- a value pasted in once
+#   3. ``ds_device.json``, source=captured -- read out of a real browser
+#   4. derived fallback                    -- stable, but NOT a real Shumei id
+_DEVICE_ID_ENV = "DEEPSEEK_DEVICE_ID"
+
+# A Shumei value is an opaque base64 blob (real ones run ~89 characters). This
+# is a SHAPE check, not a checksum: the connector cannot verify a fingerprint's
+# contents, and pretending otherwise would be worse than not checking. It exists
+# to catch the mistakes that are actually made -- a pasted bearer token, a bare
+# seed, a truncated copy -- before one is presented and earns ``code=40029``.
+_DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9+/=_-]{16,512}$")
+
+
+def device_path():
+    """Where a manually supplied or captured ``device_id`` is kept."""
+    return os.path.join(identity_dir(), "ds_device.json")
+
+
+def valid_device_id(value):
+    """Whether `value` is shaped like a Shumei ``device_id``."""
+    return bool(_DEVICE_ID_RE.match(str(value or "").strip()))
+
+
+def _read_device_doc():
+    try:
+        with open(device_path(), "r", encoding="utf-8") as f:
+            doc = json.load(f)
+        return doc if isinstance(doc, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_device_doc(doc):
+    folder = identity_dir()
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=folder, prefix=".ds-dev-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(doc, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        with contextlib.suppress(OSError):
+            os.chmod(tmp, 0o600)
+        os.replace(tmp, device_path())
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+        raise
+
+
+def set_device_id(value, source="manual"):
+    """Persist the ``device_id`` this machine should present; return the stored value.
+
+    Raises ``ValueError`` on a value that is not shaped like one. Storing a
+    malformed id and presenting it is what earns ``code=40029`` from
+    /users/login -- a rejection that reads like rate limiting and sends the
+    operator looking in entirely the wrong place.
+    """
+    text = str(value or "").strip()
+    if not valid_device_id(text):
+        raise ValueError(
+            "device_id is not shaped like a Shumei value: expected a base64-ish "
+            "string of 16-512 characters, got %d character(s)" % len(text))
+    doc = _read_device_doc()
+    doc["device_id"] = text
+    doc["source"] = source
+    doc["updated_at"] = time.time()
+    _write_device_doc(doc)
+    return text
+
+
+def configured_device_id():
+    """The configured ``device_id`` and where it came from, or ``(None, None)``."""
+    env = str(os.environ.get(_DEVICE_ID_ENV) or "").strip()
+    if valid_device_id(env):
+        return env, "env"
+    doc = _read_device_doc()
+    stored = str(doc.get("device_id") or "").strip()
+    if valid_device_id(stored):
+        return stored, str(doc.get("source") or "stored")
+    return None, None
+
+
 def device_id():
-    """The stable ``device_id`` every login from this machine sends."""
+    """The ``device_id`` every login from this machine sends.
+
+    A configured or captured value is returned VERBATIM. Only when neither
+    exists does this fall back to a locally derived string -- stable, so the
+    machine at least does not look like a new device every launch, but it is not
+    a Shumei fingerprint and accounts may still refuse it as an unknown device.
+    """
+    value, _source = configured_device_id()
+    if value:
+        return value
     return _digest("device", 32)
+
+
+def device_id_status():
+    """What this machine will present and why, for the settings UI and logs.
+
+    Reports the resolved value's LENGTH and origin rather than the value itself,
+    so a misconfiguration is diagnosable without printing a fingerprint into a
+    log or across a wire.
+    """
+    value, source = configured_device_id()
+    if value:
+        return {"configured": True, "source": source, "length": len(value)}
+    return {
+        "configured": False,
+        "source": "derived",
+        "length": 32,
+        "warning": (
+            "no Shumei device_id is configured for this machine, so a locally "
+            "derived value is being sent; it is not a real device fingerprint "
+            "and the account may refuse it as an unknown device"),
+    }
+
+
+def capture_device_id(headless=True, timeout_ms=45000, on_status=None):
+    """Read a real Shumei ``device_id`` out of a browser and persist it.
+
+    The id is minted by the SDK's obfuscated JS, so the only way to obtain the
+    genuine article is to let a real browser produce it and read it back. Three
+    sources are probed, in order of authority:
+
+      * the ``device_id`` field of the ``/users/login`` request payload, which is
+        exactly the value the web client sends and therefore exactly what this
+        connector must replay;
+      * the SDK's own cookie slot, populated on page load; and
+      * its localStorage slot, for the same reason.
+
+    ``headless=False`` additionally lets the operator complete a login by hand
+    when the storage probes come up empty, which is the case on a fresh profile
+    until the SDK has had a reason to persist.
+
+    Returns the stored value. Raises ``RuntimeError`` with a concrete reason when
+    nothing could be read -- never a placeholder, because a fabricated value here
+    is precisely the defect this function exists to remove.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:  # noqa: BLE001 -- report the real cause to the caller
+        raise RuntimeError(
+            "Playwright is not installed in this interpreter, so a browser cannot "
+            "be driven to capture a device_id (%s: %s)" % (type(e).__name__, e))
+
+    def note(message):
+        if on_status:
+            with contextlib.suppress(Exception):
+                on_status(message)
+
+    captured = {}
+
+    def remember(value, origin):
+        text = str(value or "").strip()
+        # A login payload wins outright; the storage slots only fill a gap.
+        if text and valid_device_id(text) and (
+                "value" not in captured or origin == "login-payload"):
+            captured["value"] = text
+            captured["origin"] = origin
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=bool(headless))
+        try:
+            context = browser.new_context()
+            page = context.new_page()
+
+            def on_request(request):
+                if "/users/login" not in request.url:
+                    return
+                try:
+                    body = request.post_data
+                except Exception:
+                    return
+                if not body:
+                    return
+                with contextlib.suppress(Exception):
+                    payload = json.loads(body)
+                    if isinstance(payload, dict):
+                        remember(payload.get("device_id"), "login-payload")
+
+            page.on("request", on_request)
+            note("opening https://chat.deepseek.com/sign_in")
+            with contextlib.suppress(Exception):
+                page.goto("https://chat.deepseek.com/sign_in",
+                          wait_until="domcontentloaded", timeout=timeout_ms)
+
+            # Give the SDK a moment to initialise and persist its slot.
+            with contextlib.suppress(Exception):
+                page.wait_for_timeout(4000)
+
+            if not headless:
+                note("log in in the browser window to capture the device_id")
+                with contextlib.suppress(Exception):
+                    page.wait_for_timeout(timeout_ms)
+
+            with contextlib.suppress(Exception):
+                for cookie in context.cookies():
+                    name = str(cookie.get("name") or "").lower()
+                    if name in ("smidv2", "smidv1", "smid", "deviceid", "device_id"):
+                        remember(cookie.get("value"), "cookie:%s" % name)
+            with contextlib.suppress(Exception):
+                found = page.evaluate("""() => {
+                    const out = {};
+                    try {
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const k = localStorage.key(i);
+                            if (/smid|device/i.test(k)) out[k] = localStorage.getItem(k);
+                        }
+                    } catch (e) {}
+                    return out;
+                }""")
+                if isinstance(found, dict):
+                    for key, val in found.items():
+                        remember(val, "localStorage:%s" % key)
+
+            if "value" not in captured:
+                raise RuntimeError(
+                    "no device_id could be read: the SDK had stored none and no "
+                    "/users/login request was observed. Re-run with a visible browser "
+                    "(headless=False) and complete a login by hand.")
+            context.close()
+        finally:
+            with contextlib.suppress(Exception):
+                browser.close()
+
+    note("captured device_id via %s" % captured.get("origin"))
+    return set_device_id(captured["value"], source="captured")
 
 
 def fingerprint_rng():

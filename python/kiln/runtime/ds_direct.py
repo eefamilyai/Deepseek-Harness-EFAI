@@ -238,13 +238,13 @@ class _Account:
     token/cookie, so a re-login rewrites the right slot and touches nothing else:
     ("env",) | ("top", path) | ("array", path, index)."""
     __slots__ = ("id", "token", "cookie", "email", "mobile", "area_code",
-                 "password", "headers", "source", "mtime", "lock",
+                 "password", "device_id", "headers", "source", "mtime", "lock",
                  "_last_saved_cookie", "login_lock", "last_login_token",
                  "last_login_at", "last_login_cookie")
 
     def __init__(self, id, token="", cookie="", email="", mobile="",
-                 area_code="+86", password="", source=("env",), mtime=0.0,
-                 headers=None):
+                 area_code="+86", password="", device_id="", source=("env",),
+                 mtime=0.0, headers=None):
         self.id = id
         self.token = token or ""
         self.cookie = cookie or ""
@@ -252,6 +252,11 @@ class _Account:
         self.mobile = mobile or ""
         self.area_code = area_code or "+86"
         self.password = password or ""
+        # A REAL Shumei device fingerprint, replayed verbatim on every login for
+        # this account. Blank means "use the machine-level identity", which is
+        # the usual case: the id is per DEVICE, so one value serves every account
+        # on it. It is per-account here only so a config can pin one.
+        self.device_id = str(device_id or "").strip()
         # Extra request headers, verbatim from ds_config.json. This exists for
         # the `x-hif-*` anti-abuse pair DeepSeek's web client sends: each is an
         # AES-GCM blob (41-byte ciphertext+tag, then a 12-byte IV after the dot)
@@ -281,6 +286,7 @@ class _Account:
         self.token, self.cookie = other.token, other.cookie
         self.email, self.mobile = other.email, other.mobile
         self.area_code, self.password = other.area_code, other.password
+        self.device_id = other.device_id
         self.headers = other.headers
         self.source, self.mtime = other.source, other.mtime
 
@@ -381,6 +387,20 @@ def _usable(acct):
     return _can_login(acct)
 
 
+def _device_id_for(acct):
+    """The ``device_id`` to present when logging in as `acct`.
+
+    A per-account value in ds_config.json wins; otherwise the machine-level
+    identity resolves it. Either way this is a REAL Shumei fingerprint whenever
+    one has been configured or captured, and the derived fallback only when
+    none has -- see `ds_identity.device_id`.
+    """
+    configured = str(getattr(acct, "device_id", "") or "").strip()
+    if configured:
+        return configured
+    return ds_identity.device_id()
+
+
 def _read_accounts_from_disk():
     """Build the account list from env + every ds_config.json. Order is stable:
     env first, then each config's top-level login, then its accounts[]. The same
@@ -414,6 +434,7 @@ def _read_accounts_from_disk():
                  os.environ.get("DEEPSEEK_MOBILE", ""),
                  os.environ.get("DEEPSEEK_AREA_CODE", "+86"),
                  os.environ.get("DEEPSEEK_PASSWORD", ""),
+                 device_id=os.environ.get("DEEPSEEK_DEVICE_ID", ""),
                  source=("env",)))
 
     for p in _config_paths():
@@ -435,6 +456,7 @@ def _read_accounts_from_disk():
             add(_Account(_acct_id_for(doc, tag + ":top"), doc.get("token"),
                          doc.get("cookie"), doc.get("email"), doc.get("mobile"),
                          doc.get("area_code") or "+86", doc.get("password"),
+                         device_id=doc.get("device_id") or "",
                          source=("top", p), mtime=mt,
                          headers=doc.get("headers")))
         arr = doc.get("accounts")
@@ -442,9 +464,14 @@ def _read_accounts_from_disk():
             for i, raw in enumerate(arr):
                 if not isinstance(raw, dict) or not _doc_usable(raw):
                     continue
+                # A per-account device_id falls back to the document's top-level
+                # one: the fingerprint belongs to the MACHINE, so an operator who
+                # set it once at the top should not have to repeat it on every
+                # account entry.
                 add(_Account(_acct_id_for(raw, f"{tag}:acct{i}"), raw.get("token"),
                              raw.get("cookie"), raw.get("email"), raw.get("mobile"),
                              raw.get("area_code") or "+86", raw.get("password"),
+                             device_id=raw.get("device_id") or doc.get("device_id") or "",
                              source=("array", p, i), mtime=mt,
                              headers=raw.get("headers") or doc.get("headers")))
     return out
@@ -459,6 +486,9 @@ def _config_sig():
         os.environ.get("DEEPSEEK_MOBILE", ""),
         os.environ.get("DEEPSEEK_AREA_CODE", ""),
         os.environ.get("DEEPSEEK_PASSWORD", ""),
+        # Part of the signature so a device_id set through the settings UI
+        # rebuilds the account list: it changes what /users/login presents.
+        os.environ.get("DEEPSEEK_DEVICE_ID", ""),
     )]
     for p in _config_paths():
         try:
@@ -525,7 +555,8 @@ def account_ids():
     return [a.id for a in _accounts]
 
 
-def _persist_new_account(acct_id, email, mobile, area_code, password, token, cookie):
+def _persist_new_account(acct_id, email, mobile, area_code, password, token, cookie,
+                         device_id=""):
     """Append (or replace by id) one account in the first config file's `accounts`
     array, leaving any existing top-level or array accounts untouched. Written
     owner-only where the OS supports it. Returns (ok, error)."""
@@ -542,6 +573,11 @@ def _persist_new_account(acct_id, email, mobile, area_code, password, token, coo
     slot = {"id": acct_id, "token": token or "", "cookie": cookie or "",
             "email": email or "", "mobile": mobile or "",
             "area_code": area_code or "+86", "password": password or ""}
+    # Only written when present. A blank field here means "inherit the
+    # document's top-level device_id" (or the machine identity), so materialising
+    # an empty string would pin the account to nothing instead of inheriting.
+    if device_id:
+        slot["device_id"] = device_id
     arr = doc.get("accounts")
     if not isinstance(arr, list):
         arr = []
@@ -566,7 +602,7 @@ def _persist_new_account(acct_id, email, mobile, area_code, password, token, coo
     return True, None
 
 
-def add_account(email="", password="", area_code="+86", mobile=""):
+def add_account(email="", password="", area_code="+86", mobile="", device_id=""):
     """Test a DeepSeek login and, on success, persist it as a new pooled account.
 
     This is what the per-chat 'add account' flow calls: it logs in with the
@@ -581,13 +617,18 @@ def add_account(email="", password="", area_code="+86", mobile=""):
         return None, _cffi_unavailable()
     email = (email or "").strip()
     mobile = (mobile or "").strip()
+    device_id = str(device_id or "").strip()
     if not password:
         return None, "a password is required"
     if not (email or mobile):
         return None, "an email or mobile number is required"
+    if device_id and not ds_identity.valid_device_id(device_id):
+        return None, ("device_id is not shaped like a Shumei value: expected a "
+                      "base64-ish string of 16-512 characters")
     acct_id = email or mobile
     acct = _Account(id=acct_id, email=email, mobile=mobile,
-                    area_code=area_code or "+86", password=password, source=("probe",))
+                    area_code=area_code or "+86", password=password,
+                    device_id=device_id, source=("probe",))
     client = _Client(acct)
     token = client.login()
     if not token:
@@ -597,7 +638,7 @@ def add_account(email="", password="", area_code="+86", mobile=""):
     except Exception as e:  # noqa: BLE001 — any failure here means the login is not usable
         return None, "login succeeded but the token was rejected on first use (%s)" % e
     ok, err = _persist_new_account(acct_id, email, mobile, area_code, password,
-                                   token, client.cookie_string())
+                                   token, client.cookie_string(), device_id=device_id)
     if not ok:
         return None, err
     _load_accounts(force=True)
@@ -943,12 +984,14 @@ class _Client:
     def _login_once(self, email, mobile, area, password):
         acct = self.account
         payload = {
-            # The SAME device_id every login from this machine. It used to be
-            # minted fresh per attempt, so a routine token refresh presented as
-            # a new device joining the account -- and several machines doing
-            # that from one address is what earns "too many requests" on
-            # /users/login. ds_identity persists it per machine.
-            "password": password, "device_id": ds_identity.device_id(), "os": "web",
+            # A REAL Shumei device fingerprint, the same one on every login. It
+            # used to be minted fresh per attempt, so a routine token refresh
+            # presented as a new device joining the account -- and several
+            # machines doing that from one address is what earns "too many
+            # requests" on /users/login. `_device_id_for` prefers a per-account
+            # value from ds_config.json and otherwise resolves the machine-level
+            # one, which is captured from a real browser rather than derived.
+            "password": password, "device_id": _device_id_for(acct), "os": "web",
             "email": email or "", "mobile": mobile or "",
             "area_code": area if (mobile and not email) else "",
         }

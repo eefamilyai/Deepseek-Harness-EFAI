@@ -135,9 +135,14 @@ def _configure(req):
         ("mobile", "DEEPSEEK_MOBILE"),
         ("area_code", "DEEPSEEK_AREA_CODE"),
         ("password", "DEEPSEEK_PASSWORD"),
+        ("device_id", "DEEPSEEK_DEVICE_ID"),
     )
     for key, env_name in env_map:
         if key in data:
+            # An omitted field means "leave it alone"; an explicitly empty
+            # device_id means "stop overriding", which falls back to the
+            # captured or derived machine identity. Those are different
+            # requests and the settings form sends whichever the user made.
             os.environ[env_name] = str(data[key] or "")
     try:
         mod = providers._load_module("ds_direct")
@@ -170,7 +175,8 @@ def _add_account(req):
             email=str(data.get("email") or ""),
             password=str(data.get("password") or ""),
             area_code=str(data.get("area_code") or "+86"),
-            mobile=str(data.get("mobile") or ""))
+            mobile=str(data.get("mobile") or ""),
+            device_id=str(data.get("device_id") or ""))
     except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
         _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
         return
@@ -178,6 +184,63 @@ def _add_account(req):
         _send({"id": req["id"], "ok": False, "error": err})
         return
     _send({"id": req["id"], "ok": True, "account": acct_id})
+
+
+def _device_id(req):
+    """Report, set, or capture the Shumei ``device_id`` this machine presents.
+
+    A DeepSeek login carries a device fingerprint the real web client mints and
+    replays. That value cannot be computed here -- the SDK's obfuscated JS
+    derives it from canvas, GPU and audio entropy -- so the only honest ways to
+    obtain one are to read it out of a real browser (`op` "capture") or to be
+    handed it (`op` "set"). Both land in one per-machine file, and neither is
+    echoed back: the response reports only whether one is configured, where it
+    came from, and its length, so a fingerprint never crosses this wire or
+    reaches a log.
+    """
+    provider = req.get("provider") or "deepseek"
+    if provider != "deepseek":
+        _send({"id": req["id"], "ok": False,
+               "error": "device identity is only supported for provider 'deepseek'"})
+        return
+    try:
+        mod = providers._load_module("ds_identity")
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+
+    op = str(req.get("op") or "status")
+
+    if op == "status":
+        _send({"id": req["id"], "ok": True, "device_id": mod.device_id_status()})
+        return
+
+    if op == "set":
+        value = str(req.get("device_id") or "").strip()
+        if not value:
+            # Clearing is a real request: drop the runtime override so the
+            # captured or derived machine identity takes over again.
+            os.environ.pop("DEEPSEEK_DEVICE_ID", "")
+            _send({"id": req["id"], "ok": True, "device_id": mod.device_id_status()})
+            return
+        try:
+            mod.set_device_id(value, source="manual")
+        except ValueError as e:
+            _send({"id": req["id"], "ok": False, "error": str(e)})
+            return
+        _send({"id": req["id"], "ok": True, "device_id": mod.device_id_status()})
+        return
+
+    if op == "capture":
+        try:
+            mod.capture_device_id(headless=bool(req.get("headless", True)))
+        except Exception as e:  # noqa: BLE001 — the concrete reason is the point
+            _send({"id": req["id"], "ok": False, "error": str(e)})
+            return
+        _send({"id": req["id"], "ok": True, "device_id": mod.device_id_status()})
+        return
+
+    _send({"id": req["id"], "ok": False, "error": "unknown device_id op: %r" % op})
 
 
 def _upload_files(req):
@@ -287,6 +350,8 @@ def _dispatch(req):
             _configure(req)
         elif cmd == "add_account":
             _add_account(req)
+        elif cmd == "device_id":
+            _device_id(req)
         elif cmd == "cancel":
             _cancel(req)
         elif cmd == "upload_files":

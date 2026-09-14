@@ -362,7 +362,7 @@ export class KilnBridge {
    */
   async addAccount(
     provider: string,
-    account: Readonly<{ email?: string; mobile?: string; area_code?: string; password: string }>,
+    account: Readonly<{ email?: string; mobile?: string; area_code?: string; password: string; device_id?: string }>,
   ): Promise<{ ok: boolean; account?: string; message?: string }> {
     const frame = await this.request({ cmd: 'add_account', provider, account })
     return {

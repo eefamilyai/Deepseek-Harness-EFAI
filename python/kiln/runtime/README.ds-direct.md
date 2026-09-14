@@ -197,21 +197,65 @@ DeepSeek's anti-abuse stack reads two independent things about a client: the
 `device_id` the web client replays on every login, and the browser fingerprint
 (canvas hash, GPU) carried by the WAF challenge. A real browser presents both
 **unchanged** for the life of its profile, and `ds_identity.py` makes this
-connector do the same. It keeps one seed per machine — `ds_identity.json`, under
-`KILN_STATE_DIR` when set — and derives from it:
+connector do the same.
 
 | Value | Behaviour |
 | --- | --- |
-| `device_id` | Identical on every login from this machine, across restarts and from any launch directory. |
+| `device_id` | A REAL Shumei fingerprint, replayed verbatim on every login — see below. |
 | Canvas hash + histogram | Identical on every WAF challenge. |
 | GPU | Identical on every WAF challenge, and of this machine's platform. |
 | User-Agent, client hints, TLS fingerprint | One browser, described consistently. |
 
-Two of those used to change on every attempt, and both read as bot signals
-rather than as caution: a fresh `device_id` per login made a routine token
-refresh look like a new machine joining the account, and a per-challenge canvas
-hash is something no real browser produces. A second machine doing that from the
-same address is what earns "too many requests" on `/users/login`.
+#### Supplying the real `device_id`
+
+The `device_id` is **not computable here**. Shumei's SDK mints it in obfuscated
+JS over canvas, GPU and audio entropy, so no local derivation produces a value
+the anti-abuse stack recognises — a derived string is simply a device it has
+never seen. There are three honest ways to supply one, and all of them land in
+the same per-machine file:
+
+| Source | How |
+| --- | --- |
+| `DEEPSEEK_DEVICE_ID` | Runtime override, set from the settings UI. Outranks the stored value. |
+| Manual entry | Paste it once; it is kept in `~/.kiln_identity/ds_device.json`. |
+| Browser capture | Read out of a real browser that has logged in. |
+
+To capture it by hand, log into `https://chat.deepseek.com/sign_in` in Chrome,
+open DevTools → Network, filter `users/login`, and copy the `device_id` field out
+of the request payload. The connector can also drive that browser itself: the
+`device_id` command on the provider bridge reports, sets, or captures the value,
+and the capture path reads it either from the SDK's own storage slot or straight
+off the `/users/login` request the page makes.
+
+When none of those is configured, `device_id()` falls back to a value derived
+from the machine seed — stable, so the machine at least does not present as a new
+device on every launch, but **not a Shumei fingerprint**. `device_id_status()`
+reports which of the two is in force and, for the fallback, says so plainly.
+
+A configured value is returned **verbatim**; it is never hashed, truncated, or
+re-derived, because any of those puts the connector back where it started. A
+value that is not *shaped* like a Shumei id is refused where it is set rather
+than sent: presenting a malformed one earns `code=40029 TOO_MANY_REQUESTS`, which
+reads like rate limiting and sends you looking in entirely the wrong place. The
+check is deliberately only a shape check — the connector cannot verify a
+fingerprint's contents, and pretending otherwise would be worse than not
+checking.
+
+The fingerprint belongs to the **machine**, not the account, so one value serves
+every login on it. `ds_config.accounts[]` may still pin a per-account
+`device_id` (a per-account value wins; a blank one inherits the document's
+top-level value and then the machine identity), but the usual configuration is a
+single value at the top level or in the settings UI.
+
+#### The seed
+
+`ds_identity.py` keeps one seed per machine — `ds_identity.json`, under
+`KILN_STATE_DIR` when set — and derives the WAF fingerprint values from it. Two
+of them used to change on every attempt, and both read as bot signals rather than
+as caution: a fresh `device_id` per login made a routine token refresh look like
+a new machine joining the account, and a per-challenge canvas hash is something
+no real browser produces. A second machine doing that from the same address is
+what earns "too many requests" on `/users/login`.
 
 The seed is **not a credential**. It is never sent anywhere; it only stops the
 values this client already sends from changing under it. Delete

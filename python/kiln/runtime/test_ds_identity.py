@@ -81,6 +81,78 @@ try:
     os.environ["KILN_IDENTITY_DIR"] = _IDENTITY_SCRATCH
     di._seed_cache.clear()
 
+    # ── a REAL device_id is replayed verbatim ───────────────────────
+    # The derived fallback above is stable, but it is NOT a Shumei
+    # fingerprint: no SDK ever produces it, so DeepSeek reads it as an unknown
+    # device. A configured or captured value must therefore reach the login
+    # payload UNCHANGED -- hashing it, truncating it or "deriving" from it puts
+    # the connector straight back where it started.
+    REAL = ("BdQNjmtlDqa0FTFU7mQKwc5VqKKTaIzQuhev79oEmf9dJPQgY24bGBqjLuUZ2nv6d"
+            "PaBsLuCULkcRwLQSctydZg==")
+    os.environ.pop("DEEPSEEK_DEVICE_ID", None)
+
+    check("nothing configured reports derived",
+          di.device_id_status()["configured"] is False,
+          repr(di.device_id_status()))
+    check("the derived status carries a warning",
+          bool(di.device_id_status().get("warning")))
+
+    di.set_device_id(REAL, source="manual")
+    check("a configured device_id is returned verbatim",
+          di.device_id() == REAL,
+          "got %r" % (di.device_id()[:24],))
+    check("the configured value replaced the derived one", di.device_id() != dev_a)
+    check("status reports manual",
+          di.device_id_status()["source"] == "manual",
+          repr(di.device_id_status()))
+    check("status does not echo the value",
+          REAL not in repr(di.device_id_status()))
+    check("the device_id is persisted next to the seed",
+          os.path.exists(di.device_path()))
+
+    # A value that is the wrong SHAPE is refused rather than sent. Presenting a
+    # malformed one earns `code=40029 TOO_MANY_REQUESTS`, which reads like rate
+    # limiting and sends the operator looking in the wrong place entirely.
+    for bad, label in (("", "empty"), ("abc", "too short"),
+                       ("has spaces in it", "whitespace"), ("x" * 600, "too long")):
+        try:
+            di.set_device_id(bad)
+            check("a %s device_id is refused" % label, False, "it was accepted")
+        except ValueError:
+            check("a %s device_id is refused" % label, True)
+
+    # The runtime override outranks the file, and removing it falls back.
+    os.environ["DEEPSEEK_DEVICE_ID"] = "ENVOVERRIDEvalue1234567890"
+    check("the env override outranks the stored value",
+          di.device_id() == "ENVOVERRIDEvalue1234567890")
+    check("status reports env", di.device_id_status()["source"] == "env")
+    os.environ.pop("DEEPSEEK_DEVICE_ID", None)
+    check("the stored value returns when the override clears",
+          di.device_id() == REAL)
+
+    # ── ds_direct presents it on the login payload ──────────────────
+    # The account carries its own slot, and an account with none inherits the
+    # machine identity -- the fingerprint belongs to the DEVICE, so an operator
+    # who set it once should not have to repeat it per account.
+    acct = dd._Account(id="probe@example.com", email="probe@example.com",
+                       password="x", source=("probe",))
+    check("an account with no device_id inherits the machine identity",
+          dd._device_id_for(acct) == REAL, repr(dd._device_id_for(acct)))
+    acct.device_id = "PERACCOUNTvalue1234567890"
+    check("a per-account device_id wins over the machine identity",
+          dd._device_id_for(acct) == "PERACCOUNTvalue1234567890",
+          repr(dd._device_id_for(acct)))
+    acct.device_id = ""
+    check("clearing the account slot falls back to the machine identity",
+          dd._device_id_for(acct) == REAL)
+
+    # The account list must carry a configured id through a load, or a restart
+    # silently reverts to the derived value.
+    dd._load_accounts(force=True)
+    check("a loaded account resolves a real device_id",
+          all(dd._device_id_for(a) == REAL for a in dd._accounts),
+          repr([dd._device_id_for(a)[:12] for a in dd._accounts]))
+
     # ── the browser identity is one browser ─────────────────────────
     check("ds_direct and ds_identity agree on the User-Agent",
           dd.UA == di.UA)
@@ -230,13 +302,19 @@ try:
           di.identity_path() == os.path.join(di.identity_dir(), "ds_identity.json"))
 
     # The decisive property: changing KILN_STATE_DIR (what a different launch
-    # directory produces) must NOT change the device_id.
+    # directory produces) must NOT change the device_id. Compared against the
+    # value in force HERE, not against `dev_a`: the block above deliberately
+    # configures a real Shumei id, which is the value that must survive.
     _saved_state = os.environ.get("KILN_STATE_DIR")
+    _before_cwd_switch = di.device_id()
     os.environ["KILN_STATE_DIR"] = os.path.join(_SCRATCH, "some-other-cwd-state")
     di._seed_cache.clear()
     check("the device_id survives a different launch directory",
-          di.device_id() == dev_a,
+          di.device_id() == _before_cwd_switch,
           "one machine minted a second device_id from another cwd")
+    check("a configured device_id is not re-derived from the state dir",
+          di.device_id() == REAL,
+          "a launch-directory change discarded the configured id")
     os.environ["KILN_STATE_DIR"] = _saved_state
     di._seed_cache.clear()
 

@@ -123,6 +123,15 @@ export interface Config {
     areaCode?: string
     /** Login password for automatic token refresh. */
     password?: string
+    /**
+     * The Shumei `device_id` this machine presents on every DeepSeek login.
+     *
+     * A real fingerprint minted by the web client's anti-abuse SDK, replayed
+     * unchanged. It is per DEVICE, not per account, so one value covers every
+     * login on this machine. Leave it blank to fall back to the captured or
+     * derived machine identity.
+     */
+    deviceId?: string
   }
 }
 
@@ -140,6 +149,7 @@ export const Config: z<Config> = z.object({
     mobile: z.string(),
     areaCode: z.string(),
     password: z.string().role('secret'),
+    deviceId: z.string(),
   }),
 })
 
@@ -285,6 +295,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
             mobile: ds.mobile ?? '',
             area_code: ds.areaCode ?? '',
             password: ds.password ?? '',
+            device_id: ds.deviceId ?? '',
           })
         }
       },
@@ -302,6 +313,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         mobile: ds.mobile ?? '',
         area_code: ds.areaCode ?? '',
         password: ds.password ?? '',
+        device_id: ds.deviceId ?? '',
       })
     }
   }
