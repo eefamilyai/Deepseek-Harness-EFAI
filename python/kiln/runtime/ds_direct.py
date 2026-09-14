@@ -646,15 +646,25 @@ def add_account(email="", password="", area_code="+86", mobile="", device_id="")
 
 
 def _account_order(key, pinned=None):
-    """Accounts to try this turn: the conversation's sticky account first (so it
-    stays on ONE DeepSeek chat), then the rest as failover in ring order.
+    """Accounts to try this turn: the conversation's account first (so it stays
+    on ONE DeepSeek chat), then the rest as failover in ring order.
 
-    `pinned` names an account the CALLER chose — a route bound to one login, so
-    a subagent can be kept off the account the main agent is using. It outranks
-    the round-robin pick for a new conversation but not an existing sticky one,
-    because moving a live chat to another account would abandon its server-side
-    history. The other accounts still follow as failover: an unreachable pinned
-    account should degrade to a slower answer, not to no answer.
+    `pinned` names an account the CALLER chose — a route bound to one login. It
+    OUTRANKS the sticky account, because it is the one explicit instruction in
+    the system: a person picking another login in the model picker means "use
+    this one", and silently ignoring it is worse than the cost. The cost is real
+    and is paid in `_get_state`: the new login has never seen this chat, so the
+    session there is opened fresh and re-primed from the transcript, abandoning
+    whatever server-side history the previous account was holding.
+
+    The inverse case matters just as much: with NO pin (a plain route, or a
+    subagent whose caller did not pin one), the conversation stays where it is.
+    "Server is busy" and rate limits are transient and must not move a live chat
+    to another login — see `stream`, which waits in place instead.
+
+    A pin that names no configured account is ignored rather than fatal, so a
+    stale route left over from a removed login degrades to the normal pick
+    instead of failing every turn.
     """
     _load_accounts()
     ids = [a.id for a in _accounts]
@@ -665,8 +675,10 @@ def _account_order(key, pinned=None):
         st = _sessions.get(key)
         if st:
             sticky = st.get("account")
-    if sticky not in ids:
-        sticky = pinned if pinned in ids else _next_account_id()
+    if pinned in ids:
+        sticky = pinned                     # an explicit pick beats the sticky one
+    elif sticky not in ids:
+        sticky = _next_account_id()
     if sticky in ids:
         i = ids.index(sticky)
         return ids[i:] + ids[:i]
@@ -2077,10 +2089,13 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     with NOTHING streamed yet, the turn fails over to the next account — which
     opens a fresh session there and re-primes it from the transcript.
 
-    `account` pins a NEW conversation to one login instead of taking the next in
-    the ring. The harness exposes one route per account and passes the route's
-    account here, which is how a subagent is kept off the account its parent is
-    on: without it, both take round-robin picks and can collide.
+    `account` pins the conversation to one login — a route bound to one login
+    passes it here. It OUTRANKS the conversation's sticky account: picking
+    another login in the model picker is an explicit instruction, and it moves
+    the chat by opening a fresh session on that login (see `_get_state`). With
+    no pin, the conversation stays where it is: "server is busy" and rate limits
+    are transient and must NOT move a live chat to another login, because that
+    abandons the DeepSeek chat history the current account is holding.
 
     `ref_file_ids` attaches already-uploaded DeepSeek file ids (see
     `upload_files`) to this turn, so a harness caller can put a file in front of

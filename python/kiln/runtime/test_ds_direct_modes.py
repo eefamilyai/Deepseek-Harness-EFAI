@@ -208,6 +208,72 @@ res = _with_fake_client(fake, lambda: dd.upload_files(
 check("all-files-failed still returns a result, not an exception",
       res["files"] == [] and len(res["errors"]) == 2, repr(res))
 
+# ── which account a turn runs on ───────────────────────────────────
+# The harness exposes one route per login and hands the picked one to stream()
+# as `account`. `_account_order` is where that becomes the account actually
+# leased, so a pin that loses to the conversation's sticky account makes the
+# model picker silently do nothing — the bug these pin.
+class _FakeAcct:
+    def __init__(self, acct_id):
+        self.id = acct_id
+
+
+def _with_accounts(ids, sessions, fn):
+    """Run fn() against a fixed account list and session table."""
+    orig = (dd._accounts, dd._sessions, dd._load_accounts,
+            dd._rr_index, dd._session_lock)
+    dd._accounts = [_FakeAcct(i) for i in ids]
+    dd._sessions = dict(sessions)
+    dd._load_accounts = lambda: None
+    dd._rr_index = 0
+    try:
+        return fn()
+    finally:
+        (dd._accounts, dd._sessions, dd._load_accounts,
+         dd._rr_index, dd._session_lock) = orig
+
+
+KEY = "conv#default"
+check("_account_order is the account resolver",
+      callable(getattr(dd, "_account_order", None)))
+
+# The picker wins: a conversation already running on B moves to A when the
+# caller pins A. This is the whole point of `pinned`.
+order = _with_accounts(["A", "B"], {KEY: {"account": "B"}},
+                       lambda: dd._account_order(KEY, pinned="A"))
+check("an explicit pin outranks the conversation's sticky account",
+      order[0] == "A", repr(order))
+
+# With no pin, the conversation must NOT move. "Server is busy" and rate limits
+# are transient; hopping logins there abandons the server-side chat history the
+# current account holds.
+order = _with_accounts(["A", "B"], {KEY: {"account": "B"}},
+                       lambda: dd._account_order(KEY))
+check("an unpinned conversation keeps its sticky account",
+      order[0] == "B", repr(order))
+
+# The rest of the ring still follows as failover, in ring order from the pick.
+order = _with_accounts(["A", "B", "C"], {KEY: {"account": "B"}},
+                       lambda: dd._account_order(KEY, pinned="C"))
+check("the pinned account leads the failover order",
+      order == ["C", "A", "B"], repr(order))
+
+# A route left over from a removed login must degrade to the normal pick
+# rather than fail the turn.
+order = _with_accounts(["A", "B"], {KEY: {"account": "B"}},
+                       lambda: dd._account_order(KEY, pinned="gone"))
+check("a pin naming no configured account is ignored",
+      order[0] == "B", repr(order))
+
+# A brand-new conversation with no sticky record follows the pin.
+order = _with_accounts(["A", "B"], {}, lambda: dd._account_order(KEY, pinned="B"))
+check("a new conversation starts on the pinned account",
+      order[0] == "B", repr(order))
+
+# No accounts at all is the pre-login state, not a crash.
+check("no configured accounts resolves to None",
+      _with_accounts([], {}, lambda: dd._account_order(KEY)) == [None])
+
 print()
 if FAILS:
     print("%d FAILURE(S): %s" % (len(FAILS), ", ".join(FAILS)))
