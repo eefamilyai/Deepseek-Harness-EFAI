@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 494e4f762f..89f9856090 100644
+index 494e4f762f..4ae0ba39e7 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -116,6 +116,11 @@
+@@ -116,6 +116,12 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -12,6 +12,7 @@ index 494e4f762f..89f9856090 100644
 +    { "path": "./packages/client/ui-sidebar-terminal" },
 +    { "path": "./packages/client/ui-effects" },
 +    { "path": "./packages/client/ui-settings-tools" },
++    { "path": "./packages/client/ui-settings-accounts" },
 +    // DSH-FORK end
    ]
  }

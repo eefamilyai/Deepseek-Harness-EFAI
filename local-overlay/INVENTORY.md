@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **133** in **23** patch(es).
+Tier-2 files: **134** in **23** patch(es).
 
 ## Patches
 
@@ -69,9 +69,10 @@ Tier-2 files: **133** in **23** patch(es).
 - `packages/core/system-prompt/tests/system-prompt.spec.ts`
 - `packages/core/tools/tests/gen-tool-catalog.spec.ts`
 
-### `patches/llm.patch` — 5 file(s)
+### `patches/llm.patch` — 6 file(s)
 
 - `packages/llm/llm/src/index.ts`
+- `packages/llm/llm/src/types.ts`
 - `packages/llm/token-meter/src/index.ts`
 - `packages/llm/token-meter/src/projection.ts`
 - `packages/llm/token-meter/src/usage-projection.ts`

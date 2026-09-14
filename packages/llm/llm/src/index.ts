@@ -11,6 +11,8 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type {
   GenerateOptions,
+  LlmAccountAddResult,
+  LlmAccountDraft,
   LlmConfigurableProvider,
   LlmDiscoveredModel,
   LlmFailure,
@@ -331,30 +333,6 @@ export interface DirectoryRegistrationHandle {
  * API, interceptable via the `llm/stream` waterfall.
  */
 // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream exposes account registration on LlmRuntime.
-/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
-export interface LlmAccountDraft {
-  /** Login email, when the account signs in with one. */
-  readonly email?: string
-  /** Login mobile, when the account signs in with one. */
-  readonly mobile?: string
-  /** Area code for a mobile login. */
-  readonly area_code?: string
-  /** Password, used only to test the login; never stored or returned by the runtime. */
-  readonly password: string
-}
-
-/** The outcome of adding one account: its id and new route on success, or a reason. */
-export interface LlmAccountAddResult {
-  /** Whether the login tested successfully and the account was added. */
-  readonly ok: boolean
-  /** The added login id, on success. */
-  readonly account?: string
-  /** The route now bound to that login, on success (selectable immediately). */
-  readonly route?: string
-  /** A plain failure reason, on failure — never the credential. */
-  readonly message?: string
-}
-
 /** Tests a login and, on success, makes it a selectable route for its provider. */
 export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>
 
@@ -707,6 +685,45 @@ export class LlmRuntime extends TypertRemoteService {
     }
     return add(account)
   }
+
+  // DSH-FORK(kiln): expose the account-pool surface to the browser so a settings
+  // page can add a login without editing ds_config.json by hand. Both wrappers
+  // only translate a local failure into a structured Remote code; the local
+  // methods keep their own contracts and stay callable in-process.
+  // EXIT: upstream exposes the account-pool surface over Remote itself.
+  /**
+   * Remote read of the routes that accept account additions.
+   * @returns the registered account-provider routes, in registration order.
+   */
+  @Remote('listAccountProviders')
+  async remoteListAccountProviders(): Promise<string[]> {
+    return this.listAccountProviders()
+  }
+
+  /**
+   * Remote adapter that tests and adds one account login. The password rides
+   * this call only and is never stored or returned; the reply is the new
+   * account id and route, or a plain failure reason.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login to test.
+   * @returns the added account and route, or the failure reason.
+   * @throws RemoteError with `llm/account-rejected` when no route pools accounts,
+   *   or when the draft is missing a password or an email/mobile.
+   */
+  @Remote('addAccount')
+  async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult> {
+    try {
+      return await this.addAccount(provider, account)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/account-rejected',
+        error instanceof Error ? error.message : String(error),
+        { provider },
+        { cause: error },
+      )
+    }
+  }
+  // DSH-FORK end
 
   /**
    * Remote adapter for one draft provider interrogation.

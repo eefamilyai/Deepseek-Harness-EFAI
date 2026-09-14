@@ -41,9 +41,11 @@ const CHILD_NAMES = Object.keys(CHILD_SPECS) as Array<keyof typeof CHILD_SPECS>
  */
 const PRODUCT_SECTIONS: readonly string[] = [
   'general', 'models', 'plugins', 'agent-presets',
-  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
-  // This fork registers its own Advanced section last (order 100).
-  'advanced',
+  // DSH-FORK(kernel): fork sections, in nav order after the upstream roster.
+  // `tools` carries the kernel/conventional-tool toggles (order 25), `accounts`
+  // adds a DeepSeek web login (order 30), and `advanced` closes the nav (100).
+  // EXIT: follows packages/client/ui-settings-general/src/client/index.ts.
+  'tools', 'accounts', 'advanced',
 ]
 /** Onboarding steps the web-app roster registers, in coordinator order; both come from ui-settings-models. */
 const PRODUCT_ONBOARDING: readonly { id: string; order: number }[] = [

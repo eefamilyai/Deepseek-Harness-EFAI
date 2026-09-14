@@ -200,6 +200,35 @@ export interface LlmProviderInfo {
   name: string
 }
 
+// DSH-FORK(kiln): the account-pool boundary vocabulary lives here, not in
+// index.ts, because a Remote method's parameter and result types must be
+// exported from a public non-root subpath for the Typert generator.
+// EXIT: upstream exposes the account-pool surface over Remote itself.
+/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
+export interface LlmAccountDraft {
+  /** Login email, when the account signs in with one. */
+  readonly email?: string
+  /** Login mobile, when the account signs in with one. */
+  readonly mobile?: string
+  /** Area code for a mobile login. */
+  readonly area_code?: string
+  /** Password, used only to test the login; never stored or returned by the runtime. */
+  readonly password: string
+}
+
+/** The outcome of adding one account: its id and new route on success, or a reason. */
+export interface LlmAccountAddResult {
+  /** Whether the login tested successfully and the account was added. */
+  readonly ok: boolean
+  /** The added login id, on success. */
+  readonly account?: string
+  /** The route now bound to that login, on success (selectable immediately). */
+  readonly route?: string
+  /** A plain failure reason, on failure — never the credential. */
+  readonly message?: string
+}
+// DSH-FORK end
+
 /** Merge-extensible provider model modality vocabulary. */
 export interface ModelModalityMap {
   text: 'text'
@@ -278,6 +307,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly settingsNs: string
       readonly baseURL?: string
     }
+    // DSH-FORK(kiln): a settings surface adds a login over Remote, so a refused
+    // draft needs a structured code instead of a generic internal failure.
+    // EXIT: upstream exposes the account-pool surface over Remote itself.
+    /** An account addition was refused: unknown route, or an invalid draft. */
+    'llm/account-rejected': {
+      readonly provider: string
+    }
+    // DSH-FORK end
   }
 }
 

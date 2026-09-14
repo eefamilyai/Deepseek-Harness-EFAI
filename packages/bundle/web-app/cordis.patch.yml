@@ -265,6 +265,12 @@
     - id: ui-settings-tools
       name: '@deepseek-ai/dsh-client-ui-settings-tools'
 
+    # DSH-FORK(kiln): the Accounts settings section — add a DeepSeek web login
+    # from the UI instead of editing ds_config.json by hand. EXIT: upstream
+    # ships an account-management surface of its own.
+    - id: ui-settings-accounts
+      name: '@deepseek-ai/dsh-client-ui-settings-accounts'
+
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
 

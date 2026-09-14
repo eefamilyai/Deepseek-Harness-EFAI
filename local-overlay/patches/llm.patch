@@ -1,36 +1,21 @@
 diff --git a/packages/llm/llm/src/index.ts b/packages/llm/llm/src/index.ts
-index 367688c0d1..4b76c43022 100644
+index 367688c0d1..a02479ee3d 100644
 --- a/packages/llm/llm/src/index.ts
 +++ b/packages/llm/llm/src/index.ts
-@@ -330,6 +330,41 @@ export interface DirectoryRegistrationHandle {
+@@ -11,6 +11,8 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
+ import { deepFreeze } from '@deepseek-ai/dsh-util-values'
+ import type {
+   GenerateOptions,
++  LlmAccountAddResult,
++  LlmAccountDraft,
+   LlmConfigurableProvider,
+   LlmDiscoveredModel,
+   LlmFailure,
+@@ -330,6 +332,17 @@ export interface DirectoryRegistrationHandle {
   * The abstract `llm` service: an adapter registry plus a streaming model-call
   * API, interceptable via the `llm/stream` waterfall.
   */
 +// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream exposes account registration on LlmRuntime.
-+/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
-+export interface LlmAccountDraft {
-+  /** Login email, when the account signs in with one. */
-+  readonly email?: string
-+  /** Login mobile, when the account signs in with one. */
-+  readonly mobile?: string
-+  /** Area code for a mobile login. */
-+  readonly area_code?: string
-+  /** Password, used only to test the login; never stored or returned by the runtime. */
-+  readonly password: string
-+}
-+
-+/** The outcome of adding one account: its id and new route on success, or a reason. */
-+export interface LlmAccountAddResult {
-+  /** Whether the login tested successfully and the account was added. */
-+  readonly ok: boolean
-+  /** The added login id, on success. */
-+  readonly account?: string
-+  /** The route now bound to that login, on success (selectable immediately). */
-+  readonly route?: string
-+  /** A plain failure reason, on failure — never the credential. */
-+  readonly message?: string
-+}
-+
 +/** Tests a login and, on success, makes it a selectable route for its provider. */
 +export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>
 +
@@ -44,7 +29,7 @@ index 367688c0d1..4b76c43022 100644
  export class LlmRuntime extends TypertRemoteService {
    private adapters = new Map<string, AdapterRegistration>()
    private directory = new Map<string, LlmConfigurableProvider>()
-@@ -337,6 +372,7 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -337,6 +350,7 @@ export class LlmRuntime extends TypertRemoteService {
      string,
      (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
    >()
@@ -52,7 +37,7 @@ index 367688c0d1..4b76c43022 100644
  
    constructor(ctx: Context) {
      super(ctx, 'llm')
-@@ -616,6 +652,62 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -616,6 +630,101 @@ export class LlmRuntime extends TypertRemoteService {
      return models
    }
  
@@ -112,9 +97,103 @@ index 367688c0d1..4b76c43022 100644
 +    return add(account)
 +  }
 +
++  // DSH-FORK(kiln): expose the account-pool surface to the browser so a settings
++  // page can add a login without editing ds_config.json by hand. Both wrappers
++  // only translate a local failure into a structured Remote code; the local
++  // methods keep their own contracts and stay callable in-process.
++  // EXIT: upstream exposes the account-pool surface over Remote itself.
++  /**
++   * Remote read of the routes that accept account additions.
++   * @returns the registered account-provider routes, in registration order.
++   */
++  @Remote('listAccountProviders')
++  async remoteListAccountProviders(): Promise<string[]> {
++    return this.listAccountProviders()
++  }
++
++  /**
++   * Remote adapter that tests and adds one account login. The password rides
++   * this call only and is never stored or returned; the reply is the new
++   * account id and route, or a plain failure reason.
++   * @param provider - the provider route that pools logins.
++   * @param account - the login to test.
++   * @returns the added account and route, or the failure reason.
++   * @throws RemoteError with `llm/account-rejected` when no route pools accounts,
++   *   or when the draft is missing a password or an email/mobile.
++   */
++  @Remote('addAccount')
++  async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult> {
++    try {
++      return await this.addAccount(provider, account)
++    } catch (error: unknown) {
++      throw new RemoteError(
++        'llm/account-rejected',
++        error instanceof Error ? error.message : String(error),
++        { provider },
++        { cause: error },
++      )
++    }
++  }
++  // DSH-FORK end
++
    /**
     * Remote adapter for one draft provider interrogation.
     * @param settingsNs - namespace whose registered discovery serves this draft.
+diff --git a/packages/llm/llm/src/types.ts b/packages/llm/llm/src/types.ts
+index bfddde7fc4..43997f2a1b 100644
+--- a/packages/llm/llm/src/types.ts
++++ b/packages/llm/llm/src/types.ts
+@@ -200,6 +200,35 @@ export interface LlmProviderInfo {
+   name: string
+ }
+ 
++// DSH-FORK(kiln): the account-pool boundary vocabulary lives here, not in
++// index.ts, because a Remote method's parameter and result types must be
++// exported from a public non-root subpath for the Typert generator.
++// EXIT: upstream exposes the account-pool surface over Remote itself.
++/** One login being tested by an account-pooling provider (e.g. DeepSeek web). */
++export interface LlmAccountDraft {
++  /** Login email, when the account signs in with one. */
++  readonly email?: string
++  /** Login mobile, when the account signs in with one. */
++  readonly mobile?: string
++  /** Area code for a mobile login. */
++  readonly area_code?: string
++  /** Password, used only to test the login; never stored or returned by the runtime. */
++  readonly password: string
++}
++
++/** The outcome of adding one account: its id and new route on success, or a reason. */
++export interface LlmAccountAddResult {
++  /** Whether the login tested successfully and the account was added. */
++  readonly ok: boolean
++  /** The added login id, on success. */
++  readonly account?: string
++  /** The route now bound to that login, on success (selectable immediately). */
++  readonly route?: string
++  /** A plain failure reason, on failure — never the credential. */
++  readonly message?: string
++}
++// DSH-FORK end
++
+ /** Merge-extensible provider model modality vocabulary. */
+ export interface ModelModalityMap {
+   text: 'text'
+@@ -278,6 +307,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
+       readonly settingsNs: string
+       readonly baseURL?: string
+     }
++    // DSH-FORK(kiln): a settings surface adds a login over Remote, so a refused
++    // draft needs a structured code instead of a generic internal failure.
++    // EXIT: upstream exposes the account-pool surface over Remote itself.
++    /** An account addition was refused: unknown route, or an invalid draft. */
++    'llm/account-rejected': {
++      readonly provider: string
++    }
++    // DSH-FORK end
+   }
+ }
+ 
 diff --git a/packages/llm/token-meter/src/index.ts b/packages/llm/token-meter/src/index.ts
 index 2693af5913..d7cc0c283a 100644
 --- a/packages/llm/token-meter/src/index.ts
