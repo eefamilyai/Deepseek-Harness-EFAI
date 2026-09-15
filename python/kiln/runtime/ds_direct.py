@@ -1104,14 +1104,46 @@ class _Client:
 
         The challenge is bound to the path it was minted for, so the upload
         endpoint needs its own — a completion challenge won't satisfy it.
+
+        AWS WAF can answer this route before DeepSeek does. It replies 202 with
+        `x-amzn-waf-action` and a challenge page rather than the JSON body, so
+        reading only the body finds "no challenge" and blames the credential for
+        a valid token. That is the shape of "auth failed during upload": solve
+        the challenge and retry, exactly as the login path does.
         """
-        r = self.sess.post(f"{BASE}/chat/create_pow_challenge",
-                           headers=self._headers(), json={"target_path": target_path},
-                           impersonate=IMPERSONATE, timeout=60)
-        try:
-            return r.json()["data"]["biz_data"]["challenge"]
-        except (KeyError, TypeError, ValueError, AttributeError):
-            raise _AuthExpired("the proof-of-work challenge request returned no challenge")
+        for attempt in range(2):
+            r = self.sess.post(f"{BASE}/chat/create_pow_challenge",
+                               headers=self._headers(), json={"target_path": target_path},
+                               impersonate=IMPERSONATE, timeout=60)
+            try:
+                return r.json()["data"]["biz_data"]["challenge"]
+            except (KeyError, TypeError, ValueError, AttributeError):
+                pass
+            if attempt == 0 and ds_waf is not None and _waf_intercepted(r):
+                # A stale `aws-waf-token` keeps the page loading while this route
+                # still refuses it, so take a freshly solved token and retry.
+                try:
+                    token = ds_waf.solve_waf(self.sess)
+                except Exception as e:
+                    # NOT `_AuthExpired`: a caller that catches that retries the
+                    # login, which is the wrong answer to a WAF interception and
+                    # is what made this look like a dead credential.
+                    raise RuntimeError(
+                        f"AWS WAF answered the proof-of-work challenge request and "
+                        f"solving the challenge failed: {e}")
+                self.sess.cookies.set("aws-waf-token", token, domain="chat.deepseek.com")
+                _persist_cookies(self)
+                config.dbg("ds_direct solved AWS WAF challenge for %s", target_path)
+                continue
+            # Only an explicit refusal is a dead credential. Any other answer —
+            # a 5xx, or a 200 this route does not recognize — is transient, and
+            # reporting it as an auth failure is what hid the real cause.
+            if r.status_code in (401, 403):
+                raise _AuthExpired(
+                    f"the proof-of-work challenge request returned HTTP {r.status_code}")
+            raise RuntimeError(
+                f"the proof-of-work challenge request returned no challenge "
+                f"(HTTP {r.status_code}): {r.text[:200]}")
 
     def upload_file(self, filename, blob):
         """Push one file into DeepSeek's store and return its id.
@@ -2115,6 +2147,17 @@ def _transient_pause(kind, tries, cancelled):
                     f"(attempt {tries}/{cap})…" if rate else
                     f"DeepSeek is busy — retrying in {span} (attempt {tries})…")}
     return _sleep_cancellable(wait, cancelled)
+
+
+def _waf_intercepted(response):
+    """Whether AWS WAF answered this request instead of DeepSeek.
+
+    The interception is HTTP 202 carrying `x-amzn-waf-action`; the body is a
+    challenge page rather than the route's JSON. A caller that reads only the
+    body sees a missing field and cannot tell the two apart.
+    """
+    return (response.status_code == 202
+            and bool(response.headers.get("x-amzn-waf-action")))
 
 
 def _is_dead_session(raw_lines):
