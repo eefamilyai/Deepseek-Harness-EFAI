@@ -1810,6 +1810,55 @@ def _full_conversation_prompt(messages):
 DS_PROMPT_MAX = 48000
 
 
+def _is_tool_result(msg):
+    """Whether one body message is a rendered tool result.
+
+    The TypeScript adapter flattens every tool result to `OUTPUT:\\n<body>`
+    (`packages/llm/llm-kiln/src/adapter.ts`, `flattenBlock`), so this is the one
+    marker that identifies the category without threading a new field through
+    the wire.
+    """
+    return _msg_text(msg).lstrip().startswith("OUTPUT:")
+
+
+def _trailing_step_start(body_msgs):
+    """Index where the newest step's messages begin.
+
+    A step that issues several tool calls appends several results in a row, so
+    the newest message is only part of one step. This is used when the
+    seen-count has drifted: sending the newest message by itself delivers the
+    step's last result and withholds the ones beside it.
+    """
+    i = len(body_msgs)
+    while i > 0 and _is_tool_result(body_msgs[i - 1]):
+        i -= 1
+    if i == len(body_msgs):
+        return len(body_msgs) - 1           # no trailing results — newest only
+    return max(0, i - 1)                    # include the call that produced them
+
+
+def _truncate_tool_result(msg, room):
+    """Copy `msg` with its text cut to roughly `room` chars, head and tail kept.
+
+    Used instead of dropping an oversized tool result: the model must be able to
+    see that the call ran and what it roughly returned. Removing it entirely
+    reads as "this tool never produced anything", which is how a same-turn
+    multi-call step lost one of its results.
+    """
+    text = _msg_text(msg)
+    keep = max(0, room - 64)
+    head = keep * 2 // 3
+    tail = keep - head
+    marker = "\\n[... output truncated to fit the prompt budget ...]\\n"
+    if head + tail >= len(text):
+        return msg
+    cut = text[:head] + marker + (text[-tail:] if tail > 0 else "")
+    out = dict(msg)
+    out["content"] = cut
+    out.pop("content_blocks", None)
+    return out
+
+
 def _clip_body(body_msgs, budget, primed=True):
     """Keep what fits in `budget` chars, dropping OLDEST first — but never a
     pinned message, and never reordering.
@@ -1846,12 +1895,24 @@ def _clip_body(body_msgs, budget, primed=True):
         if m.get("pin") or m.get("kind") == "compact":
             keep[i] = True
             used += len(_msg_text(m)) + 12
-    # Fill the rest newest-first with whatever still fits.
+    # Local copy: a truncated result must not rewrite the caller's list.
+    body_msgs = list(body_msgs)
+    # Fill the rest newest-first with whatever still fits. A tool result that
+    # does not fit is TRUNCATED, never skipped. A step that issues several calls
+    # appends several results, and the largest of them is routinely the one that
+    # overran the budget; skipping it handed the model the small results and no
+    # sign the big call had run at all — a `read` result arriving while the
+    # `kernel` result beside it vanished.
     for i in range(n - 1, -1, -1):
         if keep[i]:
             continue
         need = len(_msg_text(body_msgs[i])) + 12
         if used + need > budget:
+            room = budget - used - 12
+            if _is_tool_result(body_msgs[i]) and room > 256:
+                body_msgs[i] = _truncate_tool_result(body_msgs[i], room)
+                used += len(_msg_text(body_msgs[i])) + 12
+                keep[i] = True
             continue
         used += need
         keep[i] = True
@@ -1910,7 +1971,10 @@ def _prompt_for(messages, st):
     elif 0 < sent <= len(body):
         fresh = body[sent:] or body[-1:]   # only what it hasn't been told yet
     else:
-        fresh = body[-1:]                  # counts drifted (history trimmed) — newest only
+        # Counts drifted (history trimmed, or a step appended several results at
+        # once). Taking only the newest message is what split a multi-call step:
+        # the model received the last result and never the one before it.
+        fresh = body[_trailing_step_start(body):]
 
     budget = max(2000, DS_PROMPT_MAX - sum(len(_msg_text(m)) for m in sys_msgs))
     # The env tail — cwd, date, and any injected context — is ambient and

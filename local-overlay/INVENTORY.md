@@ -239,7 +239,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 260 paths do not exist upstream, so no patch covers them and none can conflict.
+These 271 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -331,6 +331,17 @@ These 260 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-effects/tsconfig.json`
 - `packages/client/ui-effects/tsdown.config.ts`
 - `packages/client/ui-primitives/src/terminal-bridge.ts`
+- `packages/client/ui-settings-accounts/README.md`
+- `packages/client/ui-settings-accounts/package.json`
+- `packages/client/ui-settings-accounts/src/client/AccountsSection.module.css`
+- `packages/client/ui-settings-accounts/src/client/AccountsSection.tsx`
+- `packages/client/ui-settings-accounts/src/client/index.ts`
+- `packages/client/ui-settings-accounts/src/client/locales-keys.ts`
+- `packages/client/ui-settings-accounts/src/client/locales.ts`
+- `packages/client/ui-settings-accounts/src/css-modules.d.ts`
+- `packages/client/ui-settings-accounts/src/index.ts`
+- `packages/client/ui-settings-accounts/tsconfig.json`
+- `packages/client/ui-settings-accounts/tsdown.config.ts`
 - `packages/client/ui-settings-general/src/client/AdvancedSection.module.css`
 - `packages/client/ui-settings-general/src/client/AdvancedSection.tsx`
 - `packages/client/ui-settings-tools/README.md`
