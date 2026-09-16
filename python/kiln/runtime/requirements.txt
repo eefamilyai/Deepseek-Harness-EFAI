@@ -3,7 +3,7 @@
 # Kept in sync with python/kiln/runtime/pyproject.toml; `uv sync` is the
 # primary provisioning path, while start.cmd/start.sh use this file as a
 # fallback check with the bundled interpreter.
-curl-cffi>=0.7
+curl-cffi>=0.16.2  # ds_direct: the floor whose table holds ds_identity.IMPERSONATE
 playwright>=1.40
 dill>=0.3.8
 psutil>=5.9

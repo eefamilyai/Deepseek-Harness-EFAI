@@ -374,7 +374,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=41.0" },
-    { name = "curl-cffi", specifier = ">=0.7" },
+    { name = "curl-cffi", specifier = ">=0.16.2" },
     { name = "dill", specifier = ">=0.3.8" },
     { name = "mss", specifier = ">=9.0" },
     { name = "pillow", specifier = ">=10.0" },

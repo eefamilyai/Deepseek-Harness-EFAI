@@ -19,7 +19,12 @@ version = "0.0.0"
 description = "Bundled Python environment for the DeepSeek Harness Kiln runtime"
 requires-python = ">=3.11"
 dependencies = [
-  "curl-cffi>=0.7",   # ds_direct: drives chat.deepseek.com (the primary backend)
+  # ds_direct: drives chat.deepseek.com (the primary backend). The floor is the
+  # version whose impersonation table contains `chrome150`, the build
+  # ds_identity.IMPERSONATE names; an older curl_cffi raises
+  # "Impersonating chrome150 is not supported" on every request, which takes the
+  # whole provider down. 0.16.2 is also the first release that defaults to it.
+  "curl-cffi>=0.16.2",
   "playwright>=1.40", # browser_tools: full sandboxed browser toolset
   "dill>=0.3.8",      # kernel_child: namespace snapshot / restore
   "psutil>=5.9",      # kernel_child: process/resource introspection
