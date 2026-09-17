@@ -242,7 +242,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 273 paths do not exist upstream, so no patch covers them and none can conflict.
+These 279 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -430,8 +430,14 @@ These 273 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-roster/src/invariant.ts`
 - `packages/kernel/tool-roster/tests/roster.spec.ts`
 - `packages/kernel/tool-roster/tsconfig.json`
+- `packages/llm/llm-dsml/README.md`
+- `packages/llm/llm-dsml/package.json`
 - `packages/llm/llm-dsml/src/dsml.ts`
+- `packages/llm/llm-dsml/src/index.ts`
 - `packages/llm/llm-dsml/src/protocol.ts`
+- `packages/llm/llm-dsml/src/stream.ts`
+- `packages/llm/llm-dsml/tests/llm-dsml.spec.ts`
+- `packages/llm/llm-dsml/tsconfig.json`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
 - `packages/llm/llm-kiln/src/adapter.ts`

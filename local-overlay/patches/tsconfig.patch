@@ -17,10 +17,10 @@ index 494e4f762f..4ae0ba39e7 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c5a3f118b3..3d1a101c1f 100644
+index c5a3f118b3..98fa1940db 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -358,6 +358,24 @@
+@@ -358,6 +358,25 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -42,7 +42,8 @@ index c5a3f118b3..3d1a101c1f 100644
 +    { "path": "./packages/rlm/rlm-mode" },
 +    { "path": "./packages/agent-memory/agent-memory" },
 +    { "path": "./packages/agent-memory/agent-memory-mode" },
-+    { "path": "./packages/host/sidebar-bridge" }
++    { "path": "./packages/host/sidebar-bridge" },
++    { "path": "./packages/session/session-recovery-context" }
 +    // DSH-FORK end
    ]
  }
