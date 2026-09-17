@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **137** in **23** patch(es).
+Tier-2 files: **138** in **23** patch(es).
 
 ## Patches
 
@@ -203,8 +203,9 @@ Tier-2 files: **137** in **23** patch(es).
 - `packages/session/session-format-v0-to-v1/src/validation.ts`
 - `packages/session/session-format-v0-to-v1/tests/relationships.spec.ts`
 
-### `patches/docs.patch` — 7 file(s)
+### `patches/docs.patch` — 8 file(s)
 
+- `docs/config-catalog.i18n.yaml`
 - `docs/config-catalog.zh.md`
 - `docs/event-producer-consumer.i18n.yaml`
 - `docs/event-producer-consumer.md`
@@ -242,7 +243,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 279 paths do not exist upstream, so no patch covers them and none can conflict.
+These 288 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -465,6 +466,15 @@ These 279 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/command-session-info/src/invariant.ts`
 - `packages/session/command-session-info/tsconfig.json`
 - `packages/session/session-persistence-jsonl/diagnose-session.mjs`
+- `packages/session/session-recovery-context/README.i18n.yaml`
+- `packages/session/session-recovery-context/README.md`
+- `packages/session/session-recovery-context/README.zh.md`
+- `packages/session/session-recovery-context/package.json`
+- `packages/session/session-recovery-context/src/index.ts`
+- `packages/session/session-recovery-context/src/log-path.ts`
+- `packages/session/session-recovery-context/tests/log-path-oracle.spec.ts`
+- `packages/session/session-recovery-context/tests/session-recovery-context.spec.ts`
+- `packages/session/session-recovery-context/tsconfig.json`
 - `packages/web/web-browser/README.md`
 - `packages/web/web-browser/package.json`
 - `packages/web/web-browser/src/browser.ts`

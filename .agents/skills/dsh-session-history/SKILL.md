@@ -1,6 +1,6 @@
 ---
 name: dsh-session-history
-description: "Always use when unsure, or session history is needed. To ALWAYS be used after compaction"
+description: Use when the work depends on something the current context does not hold — the operator says resume, continue, or pick up where you left off; hands over a session id or log path; asks what the original instruction was; or refers to what an earlier agent already changed, tried, or ruled out. Also use after a compaction when the recovery digest the harness injected is not enough to continue. Never use in a session with no prior work to recover: there is no history to read, and looking for it wastes the turn.
 ---
 
 # Reading DSH Session History
@@ -13,7 +13,9 @@ survives context compaction, a kernel restart, and a fresh session.
 
 - The user says "resume", "continue", "pick up where you left off", or hands you a
   path to a session log.
-- **ALWAYS AFTER context was compacted**
+- After a compaction, when the recovery digest the harness injects — the operator's
+  prompts and the tail of the log — does not answer what you need. That digest arrives
+  on its own; this skill is for going deeper than it.
 - You need to know what a previous agent already changed, tried, or ruled out.
 - The user asks what the latest instruction actually was.
 

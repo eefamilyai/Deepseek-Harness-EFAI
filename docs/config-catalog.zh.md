@@ -2018,6 +2018,49 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 
 来源：[`packages/session-query/session-query-sqlite/src/index.ts:92`](../packages/session-query/session-query-sqlite/src/index.ts)
 
+<a id="deepseek-aidsh-session-recovery-context"></a>
+
+## `@deepseek-ai/dsh-session-recovery-context`
+
+需要：`agents` · `sessionProjections`
+
+```ts config-catalog
+/**
+ * Plugin config. Every field bounds state or wording; none is required.
+ *
+ * Defaults live in {@link apply} rather than in the schema below, so an omitted
+ * field is observably omitted — a schema default would make the code's fallback
+ * unreachable and hide which layer chose the value.
+ */
+export interface Config {
+  /**
+   * Session root the JSONL backend writes under. Defaults to the same
+   * `dshHomePath('sessions')` the shipped `session-persistence-jsonl` row uses,
+   * so the two agree without being stated twice; a deployment that moves that
+   * root must set the same value here or the printed path will name a file that
+   * does not exist.
+   */
+  root?: string
+  /** The backend's artifact encoding, which decides the log's suffix. Defaults to `zstd`. */
+  compression?: LogCompression
+  /** How many trailing events the digest carries. `0` disables the tail. Defaults to 50. */
+  tailEvents?: number
+  /** Per-prompt character budget; a longer prompt is clipped with a marker. Defaults to 1200. */
+  promptChars?: number
+  /** How many prompts to keep. Omitted or `0` keeps every one of them. */
+  maxPrompts?: number
+  /** Per-event label budget inside the tail. Defaults to 120. */
+  labelChars?: number
+  /** First line of the injected message. Defaults to {@link DEFAULT_PREAMBLE}. */
+  preamble?: string
+}
+
+/** Physical encoding selected for JSONL session artifacts, as the backend names it. */
+export type LogCompression = 'zstd' | 'none'
+```
+
+来源：[`packages/session/session-recovery-context/src/index.ts:135`](../packages/session/session-recovery-context/src/index.ts)
+
 <a id="deepseek-aidsh-session-reference"></a>
 
 ## `@deepseek-ai/dsh-session-reference`

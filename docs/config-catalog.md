@@ -1093,7 +1093,7 @@ export interface KernelRuntimeConfig {
 }
 ```
 
-Source: [`packages/kernel/kernel/src/index.ts:40`](../packages/kernel/kernel/src/index.ts)
+Source: [`packages/kernel/kernel/src/index.ts:42`](../packages/kernel/kernel/src/index.ts)
 
 <a id="deepseek-aidsh-kernel-mode"></a>
 
@@ -1103,16 +1103,22 @@ Source: [`packages/kernel/kernel/src/index.ts:40`](../packages/kernel/kernel/src
 /** Plugin config: the switch, and its composition-layer default. */
 export interface Config {
   /**
-   * Whether the persistent Python kernel is the model's way of acting on this
-   * machine. On: the `kernel` tool, and no bash/filesystem/search/jobs tools —
-   * those are function calls inside the kernel namespace instead. Off: those
-   * tools, and no kernel. Takes effect on restart.
+   * Whether the persistent Python kernel is available to the model. On: the
+   * `kernel` tool. Off: no kernel, while the conventional tool roster is
+   * unaffected. Applies when the model next stops generating.
    */
   enabled?: boolean
+  /**
+   * Whether the agent's browser may open a real Chromium window on the desktop.
+   * Off: the browser runs windowless and nothing appears while the agent works —
+   * screenshots and the live view still work. On: a genuine window opens that
+   * you can watch and take over. Takes effect on restart.
+   */
+  browserWindow?: boolean
 }
 ```
 
-Source: [`packages/kernel/kernel-mode/src/index.ts:56`](../packages/kernel/kernel-mode/src/index.ts)
+Source: [`packages/kernel/kernel-mode/src/index.ts:69`](../packages/kernel/kernel-mode/src/index.ts)
 
 <a id="deepseek-aidsh-kernel-python"></a>
 
@@ -1131,6 +1137,12 @@ export interface Config {
   stateDir?: string
   /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
   runtimeDir?: string
+  /**
+   * Whether the agent's browser may open a real Chromium window. Omitted = no
+   * window: the browser runs windowless, which is what an agent working on your
+   * behalf should do unless you asked to watch. Takes effect on restart.
+   */
+  browserWindow?: boolean
 }
 ```
 
@@ -1249,6 +1261,32 @@ Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicy
 
 Source: [`packages/llm/llm-deepseek/src/index.ts:134`](../packages/llm/llm-deepseek/src/index.ts)
 
+<a id="deepseek-aidsh-llm-dsml"></a>
+
+## `@deepseek-ai/dsh-llm-dsml`
+
+Requires: `llm`
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /**
+   * Recover a complete tool call the model left at the end of its reasoning
+   * when the turn produced none in its answer. Off, such a call stays in the
+   * thought and the turn runs nothing.
+   */
+  reasoningRecovery?: boolean
+  /**
+   * Provider routes to leave untouched, by registered route name. Empty — the
+   * default — reads every route, which is the point of the pass; name a route
+   * here only to rule out this reader while diagnosing one.
+   */
+  excludeProviders?: string[]
+}
+```
+
+Source: [`packages/llm/llm-dsml/src/index.ts:64`](../packages/llm/llm-dsml/src/index.ts)
+
 <a id="deepseek-aidsh-llm-kiln"></a>
 
 ## `@deepseek-ai/dsh-llm-kiln`
@@ -1295,11 +1333,20 @@ export interface Config {
     areaCode?: string
     /** Login password for automatic token refresh. */
     password?: string
+    /**
+     * The Shumei `device_id` this machine presents on every DeepSeek login.
+     *
+     * A real fingerprint minted by the web client's anti-abuse SDK, replayed
+     * unchanged. It is per DEVICE, not per account, so one value covers every
+     * login on this machine. Leave it blank to fall back to the captured or
+     * derived machine identity.
+     */
+    deviceId?: string
   }
 }
 ```
 
-Source: [`packages/llm/llm-kiln/src/index.ts:88`](../packages/llm/llm-kiln/src/index.ts)
+Source: [`packages/llm/llm-kiln/src/index.ts:93`](../packages/llm/llm-kiln/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -2259,6 +2306,49 @@ Depends on: [`SessionQueryConfig`](../packages/session-query/session-query/src/i
 
 Source: [`packages/session-query/session-query-sqlite/src/index.ts:92`](../packages/session-query/session-query-sqlite/src/index.ts)
 
+<a id="deepseek-aidsh-session-recovery-context"></a>
+
+## `@deepseek-ai/dsh-session-recovery-context`
+
+Requires: `agents` · `sessionProjections`
+
+```ts config-catalog
+/**
+ * Plugin config. Every field bounds state or wording; none is required.
+ *
+ * Defaults live in {@link apply} rather than in the schema below, so an omitted
+ * field is observably omitted — a schema default would make the code's fallback
+ * unreachable and hide which layer chose the value.
+ */
+export interface Config {
+  /**
+   * Session root the JSONL backend writes under. Defaults to the same
+   * `dshHomePath('sessions')` the shipped `session-persistence-jsonl` row uses,
+   * so the two agree without being stated twice; a deployment that moves that
+   * root must set the same value here or the printed path will name a file that
+   * does not exist.
+   */
+  root?: string
+  /** The backend's artifact encoding, which decides the log's suffix. Defaults to `zstd`. */
+  compression?: LogCompression
+  /** How many trailing events the digest carries. `0` disables the tail. Defaults to 50. */
+  tailEvents?: number
+  /** Per-prompt character budget; a longer prompt is clipped with a marker. Defaults to 1200. */
+  promptChars?: number
+  /** How many prompts to keep. Omitted or `0` keeps every one of them. */
+  maxPrompts?: number
+  /** Per-event label budget inside the tail. Defaults to 120. */
+  labelChars?: number
+  /** First line of the injected message. Defaults to {@link DEFAULT_PREAMBLE}. */
+  preamble?: string
+}
+
+/** Physical encoding selected for JSONL session artifacts, as the backend names it. */
+export type LogCompression = 'zstd' | 'none'
+```
+
+Source: [`packages/session/session-recovery-context/src/index.ts:135`](../packages/session/session-recovery-context/src/index.ts)
+
 <a id="deepseek-aidsh-session-reference"></a>
 
 ## `@deepseek-ai/dsh-session-reference`
@@ -3098,7 +3188,7 @@ Source: [`packages/jobs/tool-jobs/src/index.ts:31`](../packages/jobs/tool-jobs/s
 
 ## `@deepseek-ai/dsh-tool-kernel`
 
-Requires: `tools` · `kernel` · `systemPrompt`
+Requires: `tools` · `kernel` · `systemPrompt` · `attachments`
 
 ```ts config-catalog
 /** Plugin config: the per-cell budget and the output cap. */
@@ -3114,7 +3204,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/kernel/tool-kernel/src/index.ts:59`](../packages/kernel/tool-kernel/src/index.ts)
+Source: [`packages/kernel/tool-kernel/src/index.ts:69`](../packages/kernel/tool-kernel/src/index.ts)
 
 <a id="deepseek-aidsh-tool-lsp"></a>
 
@@ -3229,6 +3319,28 @@ export interface Config {
 ```
 
 Source: [`packages/workflow/tool-ralph/src/index.ts:21`](../packages/workflow/tool-ralph/src/index.ts)
+
+<a id="deepseek-aidsh-tool-roster"></a>
+
+## `@deepseek-ai/dsh-tool-roster`
+
+```ts config-catalog
+/** Plugin config: the composition-layer roster, resolved under the user layer. */
+export interface Config {
+  /**
+   * Whether the conventional tool roster is available. Off, every non-kernel
+   * tool leaves the model's prompt and refuses to execute.
+   */
+  enabled?: boolean
+  /**
+   * Per-tool overrides. A name absent here is enabled, so a newly mounted tool
+   * is available until someone turns it off.
+   */
+  tools?: Record<string, boolean>
+}
+```
+
+Source: [`packages/kernel/tool-roster/src/index.ts:97`](../packages/kernel/tool-roster/src/index.ts)
 
 <a id="deepseek-aidsh-tool-session-query"></a>
 
@@ -3600,7 +3712,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/web/web-browser/src/index.ts:42`](../packages/web/web-browser/src/index.ts)
+Source: [`packages/web/web-browser/src/index.ts:52`](../packages/web/web-browser/src/index.ts)
 
 <a id="deepseek-aidsh-web-fetch-http"></a>
 
@@ -3793,10 +3905,12 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-schedule` ([`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-session` ([`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings` ([`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-settings-accounts` ([`packages/client/ui-settings-accounts/src/index.ts`](../packages/client/ui-settings-accounts/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-general` ([`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-models` ([`packages/client/ui-settings-models/src/index.ts`](../packages/client/ui-settings-models/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` ([`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-settings-plugins` ([`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-settings-tools` ([`packages/client/ui-settings-tools/src/index.ts`](../packages/client/ui-settings-tools/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar` ([`packages/client/ui-sidebar/src/index.ts`](../packages/client/ui-sidebar/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` ([`packages/client/ui-sidebar-documentpreview/src/index.ts`](../packages/client/ui-sidebar-documentpreview/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar-files` ([`packages/client/ui-sidebar-files/src/index.ts`](../packages/client/ui-sidebar-files/src/index.ts))
