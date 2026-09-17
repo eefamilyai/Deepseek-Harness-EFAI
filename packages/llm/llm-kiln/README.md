@@ -15,6 +15,8 @@ None of these providers has a `tools` field - `ds_direct` is a web chat session 
 
 The catalog is generated from the request's own `tools`, so the roster the harness composed is the roster the model is told about, and a tool that is switched off cannot linger in the prompt as an instruction to call something that no longer exists.
 
+Both halves live in [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) and are re-exported here. This adapter is where the format is **taught**, because it is the transport that has no other channel; the reader runs over **every** route, since which markup a model writes comes from the model rather than from the transport.
+
 ## Composition
 
 ```yaml
@@ -31,8 +33,7 @@ The catalog is generated from the request's own `tools`, so the roster the harne
 |---|---|
 | [`src/index.ts`](src/index.ts) | The Cordis plugin: registers every route, reads the settings document, launches the sidecar |
 | [`src/adapter.ts`](src/adapter.ts) | `KilnAdapter`: the registry as a harness adapter, and the message flattening |
-| [`src/protocol.ts`](src/protocol.ts) | The one tool-call format a Kiln route speaks, stated once |
-| [`src/dsml.ts`](src/dsml.ts) | The streaming reader for exactly that format |
+| [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) | The format statement and its streaming reader, shared with every other route |
 | [`src/bridge.ts`](src/bridge.ts) | The sidecar client over newline-delimited JSON |
 
 ## Model Experience
@@ -86,6 +87,30 @@ Flattened tool calls and results stay in the transcript for the rest of the sess
 #### KV Cache effect
 
 Append-only while the route and the flattened prefix stay unchanged.
+
+### Reader notes on a block that ran nothing, or needed repair
+
+#### What the model sees
+
+One bracketed line, appended after the block it is about, when the reader either could not run the block or had to repair a near-miss of the format to run it. This is the only correction channel a text transport has: a dropped block reads back to the model as a call that ran and returned nothing. A repaired call still runs, and its reminder states the shape that works rather than the spelling that was accepted — naming the accepted spelling would teach it. A turn written in the taught shape draws no note at all.
+
+##### Notes verbatim
+
+```markdown
+[no such tool — see the tool list in your instructions]
+[unfinished tool call — the tool exists, but this block never completed one; nothing ran]
+[malformed tool call — an <invoke> tag here carries no readable name="..."; nothing ran]
+[malformed tool call — a tool_calls block runs only <invoke name="TOOL">…</invoke>; nothing ran]
+[format reminder — one argument per `<parameter name="NAME">value</parameter>` inside `<invoke name="TOOL">`, as your instructions show. The block above was repaired to run; write it that way.]
+```
+
+#### Token effect
+
+One line on the turns that need one, at most one reminder per block. Each note then stays in the flattened transcript for the rest of the session, like any other assistant text.
+
+#### KV Cache effect
+
+Appended after the block it describes, so it extends the prefix rather than invalidating it; append-only.
 
 ## Known Limitations and Deferred Work
 

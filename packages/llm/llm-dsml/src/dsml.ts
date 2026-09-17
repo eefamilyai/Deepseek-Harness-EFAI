@@ -13,7 +13,15 @@
  * a real tool from a hallucinated one; an unknown name stays visible as text
  * rather than being silently dropped or coerced into some other tool.
  *
- * @module @deepseek-ai/dsh-llm-kiln/dsml
+ * The reader is provider-neutral on purpose. A model that learned this markup
+ * writes it wherever it is allowed to write — including through a provider
+ * whose native tool field the harness filled in correctly — so the text channel
+ * of EVERY route is read, while only a route with no native channel is told the
+ * format ({@link toolProtocolPrompt}). What separates the two is
+ * {@link DsmlOptions.notes}: a transport that taught the format may correct the
+ * model that misspelled it, and a transport that taught nothing says nothing.
+ *
+ * @module @deepseek-ai/dsh-llm-dsml/dsml
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -26,6 +34,27 @@ export type DsmlEvent =
   /** One complete tool call: the tool's registered name and JSON arguments. */
   | { readonly kind: 'tool-call'; readonly name: string; readonly arguments: string }
 
+/** How one reader treats output it could not turn into a call. */
+export interface DsmlOptions {
+  /**
+   * Whether the reader may append its own correction notes — the bracketed
+   * `[no such tool …]` lines and the {@link FORMAT_REMINDER} — to visible text.
+   *
+   * On (the default) for a transport that TAUGHT this format: there, a block
+   * that named nothing real is a mistake in the one channel the model was given,
+   * and the next turn's transcript is the only place to say so.
+   *
+   * Off for a transport that taught nothing. A provider with a native tool
+   * channel received the schemas in its own `tools` field; DSML in its text is
+   * read as a courtesy, and a note correcting the model's spelling of a format
+   * nobody asked it for would be the harness inventing a protocol dispute. With
+   * notes off the reader is silent: it converts what it can and passes every
+   * other character through exactly as written, which also makes it safe to run
+   * over a stream some adapter already read.
+   */
+  readonly notes?: boolean
+}
+
 /**
  * One tag's attribute run: everything between the tag name and the closing `>`.
  *
@@ -33,8 +62,19 @@ export type DsmlEvent =
  * branches disjoint on their first character, so the match stays linear — a
  * naive `(?:"[^"]*"|[^>])*` is ambiguous on a quote and backtracks
  * exponentially on a tag the model never closed.
+ *
+ * The trailing optional quote is for a run holding an ODD number of them, which
+ * is what a FUSED tag writes: `parameter name="invoke name="kernel"`. Every
+ * branch above needs its quotes paired, so one left over leaves the run unable
+ * to reach the `>` — and a tag that matches NOTHING is not degraded, it is
+ * invisible. That was the worst of the reported leaks: the block reached the
+ * user verbatim, no call ran, and no note said why, because every rule that
+ * could have explained it is keyed on a tag this one never became. Greedy
+ * pairing puts the odd quote out at the end, so allowing exactly one there
+ * covers any number of them, and one optional character is not a second way to
+ * read a quote — the run stays linear.
  */
-const ATTRIBUTE_RUN = '(?:"[^"]*"|\'[^\']*\'|[^>"\'])*'
+const ATTRIBUTE_RUN = '(?:"[^"]*"|\'[^\']*\'|[^>"\'])*["\']?'
 
 /** Matches one `<invoke …>…</invoke>`, capturing the attribute run and the body. */
 const INVOKE = new RegExp(`<invoke\\s+(${ATTRIBUTE_RUN})>([\\s\\S]*?)</invoke>`, 'gi')
@@ -61,6 +101,22 @@ const TOOL_CALLS_OPEN = '<tool_calls>'
 const TOOL_CALLS_CLOSE = '</tool_calls>'
 
 /**
+ * The same wrapper under the other name the training data gives it.
+ *
+ * `<function_calls>` wraps the identical `<invoke>`/`<parameter>` body; only
+ * the frame word differs. A model carries the word it learned into whatever
+ * transport it is speaking, and the word is not the part that says what to run,
+ * so it is read as the wrapper it is. Everything inside is parsed by the one
+ * set of rules below — there is no second dialect here, only a second spelling
+ * of the envelope.
+ */
+const FUNCTION_CALLS_OPEN = '<function_calls>'
+const FUNCTION_CALLS_CLOSE = '</function_calls>'
+
+/** Either envelope word, with the model's own token separators allowed inside. */
+const CALLS_WORD = /^(?:tool|function)[_▁]?calls?/
+
+/**
  * A taught envelope CLOSER — `</tool_calls>`, `</invoke>` or `</parameter>` —
  * reaching the prose path with no open block to close. It is structure, not
  * content: the model paired a native opener (which
@@ -76,7 +132,7 @@ const TOOL_CALLS_CLOSE = '</tool_calls>'
  * to — used to leak the raw pipe token and now leaks a clean-looking
  * `</parameter>`; neither is the model's answer, so neither is shown.
  */
-const ORPHAN_CLOSE = /<\/(?:tool_calls|invoke|parameter)\s*>/gi
+const ORPHAN_CLOSE = /<\/(?:tool_calls|function_calls|invoke|parameter)\s*>/gi
 
 /**
  * A run of the vertical-line character DeepSeek wraps its own special tokens in
@@ -143,6 +199,138 @@ const DSML_KEYWORD = /^([A-Za-z_▁][\w▁.-]*)\s*(=?)/
  */
 const DSML_WRAP = /<\/?DSML\s*\/?>/gi
 
+/**
+ * A taught tag opener that begins INSIDE the previous attribute's quoted value.
+ *
+ * `<｜｜DSML｜｜ parameter name="invoke name="kernel">` is ONE token carrying two
+ * tags: the model opened its native `parameter` token, then wrote the tag it
+ * actually meant inside that token's own `name=` value. The inner tag is the
+ * call and the outer one is a false start, so everything before the inner
+ * opener is discarded.
+ *
+ * Both halves of the pattern are load-bearing. The quote before the keyword is
+ * what distinguishes a fusion from an ordinary second attribute, so
+ * `<｜｜DSML｜｜kernel parameter name="code">` keeps its outer reading. The
+ * `name=` after it is what keeps a parameter LEGITIMATELY called `invoke` —
+ * `<｜｜DSML｜｜ parameter name="invoke">` — from being read as one.
+ */
+const FUSED_OPENER = /["'](?:(?:tool|function)[_▁]?calls?|invoke|parameter)\s+name\s*=/gi
+
+/**
+ * A taught tag written with `=` where its `name` attribute belongs:
+ * `<parameter=code>`, `<invoke=kernel>`, either one self-closing.
+ *
+ * A near-miss of a format is not the same failure as a different format. This
+ * tag names the right thing in the wrong punctuation, so reading it costs
+ * nothing and refusing it costs the turn — and refusing it cost more than the
+ * turn, because `invokeArguments` then saw no `<parameter>` element, fell
+ * through to its unlabelled-body path, and handed `kernel` the string
+ * `<parameter=code>print(1)</parameter>` to run as Python.
+ *
+ * Only the two taught tag words are read this way. An unrelated `<foo=bar>` is
+ * prose and stays prose, and a dialect that names tools some third way is still
+ * the prose the format statement says it is. Every repaired tag also books a
+ * {@link FORMAT_REMINDER}, so accepting the spelling does not teach it.
+ */
+const EQUALS_TAG = /<(invoke|parameter)\s*=\s*["']?([\w.:-]+)["']?\s*(\/?)>/gi
+
+/** A `<parameter>` opener carrying no name at all: `<parameter>` or `<parameter=>`. */
+const NAMELESS_PARAMETER = /<parameter\s*=?\s*>/i
+
+/**
+ * A `<parameter …>` element opening a LINE, which is how a call arrives with its
+ * `<invoke>` missing altogether — the model wrote the argument and dropped
+ * everything around it, wrapper included.
+ *
+ * Line-leading is the same test {@link DsmlTranslator.stripSuppressed} uses on
+ * the framing tag, for the same reason: writing a tag as a block delimiter is
+ * structure, writing it inside a sentence is a mention, and a mention is prose
+ * the reader must keep. The tool comes from the parameter's own name and only
+ * when exactly one declared tool could own it — see
+ * {@link DsmlTranslator.toolForParameter} — so the recited format statement,
+ * whose example names `PARAMETER_NAME`, resolves to nothing and runs nothing.
+ */
+const LEADING_PARAMETER = new RegExp(`^\\s*<parameter\\s+(?:${ATTRIBUTE_RUN})>`, 'i')
+
+/**
+ * The model's own frame word with the pipes worn off: `<calls>`, `</calls>`.
+ *
+ * `<｜｜DSML｜｜ calls>` is already stripped as the native frame it is, and this is
+ * the same token arriving bare — the pipes dropped somewhere between the model's
+ * head and the wire. It frames nothing the reader needs and has no taught
+ * equivalent, so it is removed rather than rewritten.
+ *
+ * The leading `[_▁]*` matches the model's own separators without ever reaching
+ * the taught `<tool_calls>`: that tag begins `<t`, and this pattern's first
+ * character after the optional slash and separators must be a `c`.
+ */
+const BARE_FRAME = /<\/?[_▁]*calls?\s*\/?>/gi
+
+/**
+ * Tool-call markup of the model's own: an invoke or wrapper tag either way up,
+ * or a native token left unresolved because it named nothing real.
+ *
+ * {@link DsmlTranslator.impliedInvoke} refuses to infer a tool once a turn has
+ * written any of these, and the unresolved token is the whole reason the test
+ * exists. `<｜｜DSML｜｜ name="rm_rf">` opens no block — the tool does not exist, so
+ * the token stays verbatim — and the `<parameter name="path">` under it then
+ * looks exactly like an orphaned argument. Inferring there does not recover a
+ * lost call, it redirects one: the model asked for a tool it was never given and
+ * would have had a DIFFERENT tool run on its argument.
+ */
+const MARKUP = new RegExp(`</?(?:invoke|tool_calls|function_calls)\\b|<${PIPES}`, 'i')
+
+/**
+ * The nameless opener above, and the closer that ends it.
+ *
+ * {@link invokeArguments} peels both off an unlabelled body. Every `</parameter>`
+ * is fair game there: a closer that belonged to a NAMED opener would have made
+ * that body labelled, so anything still standing is this wrapper's or an orphan.
+ */
+const NAMELESS_PARAMETER_PAIR = /<parameter\s*=?\s*>|<\/parameter\s*>/gi
+
+/**
+ * Markup an unlabelled body must never carry into an argument: a native pipe
+ * token no rewrite placed, or a `<parameter>`/`<invoke>` tag still standing.
+ *
+ * Tested BEFORE `unescapeXml`, so an escaped `&lt;parameter&gt;` in a genuine
+ * value is data and stays. What this refuses is a call that would RUN and be
+ * wrong, which costs a turn and teaches the model nothing; left visible as
+ * text, the block is the same answer this reader gives every other tag it
+ * cannot place. The pipe is matched fullwidth only — an ASCII `|` is an
+ * operator in every language these tools run.
+ */
+const UNPLACEABLE = /｜|<parameter\b|<invoke\b/i
+
+/**
+ * What the reader says once per block it had to REPAIR.
+ *
+ * A repaired call runs, so this is not an error report; it is the one thing the
+ * model can act on, sent through the only correction channel this transport has
+ * — the next turn's transcript. It states the shape that works and never the
+ * spelling that was accepted, for the same reason the format statement names no
+ * wrong format: a note that named it would teach the model the reader takes it.
+ */
+const FORMAT_REMINDER = '\n[format reminder — one argument per `<parameter name="NAME">value</parameter>` inside'
+  + ' `<invoke name="TOOL">`, as your instructions show. The block above was repaired to run; write it that way.]\n'
+
+/** One `<parameter …` opener, however it is spelled from there on. */
+const PARAMETER_OPEN = /<parameter\b/i
+
+/**
+ * Whether a body's `<parameter>` openers and closers fail to pair up.
+ *
+ * Counting rather than matching pairs is enough: `<parameter>` never nests, so
+ * equal counts mean every opener found its closer. One unpaired opener is
+ * exactly what "cut off mid-write" looks like, and it is what both dispatch
+ * passes measure before they call anything.
+ * @param body - the text between one invoke's tags, or up to the next invoke.
+ * @returns true when the body is a call still being written.
+ */
+function unbalanced(body: string): boolean {
+  return (body.match(/<parameter\b/gi) ?? []).length !== (body.match(/<\/parameter\s*>/gi) ?? []).length
+}
+
 /** Escape a tool name for embedding in a `RegExp`. Names are identifiers, but a stray metachar must never widen the match. */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -151,7 +339,7 @@ function escapeRegExp(value: string): string {
 /** The index of the LAST place `pattern` matches in `text`, or -1. */
 function lastMatchIndex(text: string, pattern: RegExp): number {
   let at = -1
-  for (const match of text.matchAll(pattern)) at = match.index ?? at
+  for (const match of text.matchAll(pattern)) at = match.index
   return at
 }
 
@@ -169,26 +357,34 @@ function lastMatchIndex(text: string, pattern: RegExp): number {
  *
  * @param reasoning - the full reasoning-block text.
  * @param tools - the request's declared tool schemas.
+ * @param options - reader options; only the recovered calls are returned either
+ * way, so this decides nothing visible and exists so one caller can hold one
+ * policy for both channels.
  * @returns the recovered call(s), or undefined when the tail is not a whole call.
  */
 export function trailingReasoningCalls(
   reasoning: string,
   tools: ReadonlyMap<string, ToolSchema>,
+  options: DsmlOptions = {},
 ): readonly { readonly name: string; readonly arguments: string }[] | undefined {
   // Anchor on the taught wrapper if the tail has one, so a multi-invoke block is
   // taken whole; otherwise on a bare invoke. An earlier quoted example sits
   // before this anchor and is excluded from the candidate.
-  const wrapper = lastMatchIndex(reasoning, /<tool_calls>/gi)
+  const wrapper = lastMatchIndex(reasoning, /<(?:tool|function)_calls>/gi)
   const at = wrapper >= 0 ? wrapper : lastMatchIndex(reasoning, /<invoke\b/gi)
   if (at < 0) return undefined
   const candidate = reasoning.slice(at)
-  const translator = new DsmlTranslator(tools)
+  const translator = new DsmlTranslator(tools, options)
   const events = [...translator.push(candidate.endsWith('\n') ? candidate : `${candidate}\n`), ...translator.end()]
   const calls: { name: string; arguments: string }[] = []
   let trailing = ''
   for (const event of events) {
     if (event.kind === 'tool-call') calls.push({ name: event.name, arguments: event.arguments })
-    else trailing += event.text
+    // A reminder is the READER's text, not the model's, so it cannot be the
+    // prose that disqualifies this tail. Counting it would make a repaired call
+    // in the reasoning channel unrecoverable — the one case where the repair
+    // and the recovery are both needed to get the turn to act at all.
+    else if (event.text !== FORMAT_REMINDER) trailing += event.text
   }
   // The tail must be JUST the call: real prose after it means this was a mention
   // mid-thought, not the model's closing action.
@@ -220,10 +416,58 @@ function attributes(run: string): Map<string, string> {
 }
 
 /**
+ * Read an unlabelled invoke body as the arguments OBJECT it is, or refuse it.
+ *
+ * `<invoke name="search_files">{ "query": "database connection" }</invoke>` is
+ * one of the shapes a model that learned a native tool-call API writes: the
+ * envelope came from this format and the arguments came from that one. Read by
+ * the single-slot rule below it becomes a string — the tool receives the
+ * literal text `{ "query": … }` as its query — which runs, returns nothing
+ * useful, and looks to the model like the tool disagreeing with it.
+ *
+ * The refusal is where the care goes, because a body that merely BEGINS with
+ * `{` is far more often a value than an arguments object: a Python dict, a JSON
+ * document being written to a file, a code cell. So an object is taken only
+ * when every one of its keys is a parameter this tool declares, and only when
+ * it declares at least one. `{"a": 1}` handed to a tool with no parameter `a`
+ * is a value and falls through to the rule that treats it as one.
+ * @param tool - the named tool's schema, when the request declared one.
+ * @param body - the invoke body with any nameless `<parameter>` wrapper peeled.
+ * @param declared - the tool's declared parameter names.
+ * @returns the arguments object, or undefined when the body is not one.
+ */
+function jsonBodyArguments(
+  tool: ToolSchema | undefined,
+  body: string,
+  declared: ReadonlySet<string>,
+): Record<string, unknown> | undefined {
+  if (declared.size === 0) return undefined
+  const trimmed = unescapeXml(body).trim()
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    // Not JSON at all: the body is text, and the single-slot rule reads it as
+    // the value it is. Inventing a repair for half-written JSON here would run
+    // a call on arguments the model never finished writing.
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
+  const entries = Object.entries(parsed as Record<string, unknown>)
+  if (entries.length === 0 || entries.some(([key]) => !declared.has(key))) return undefined
+  // The values arrive already typed by JSON. A string one still goes through
+  // the schema so a parameter the tool declares as `object` but the model sent
+  // as a quoted JSON string lands the same way it would from a `<parameter>`.
+  return Object.fromEntries(entries.map(([key, value]) =>
+    [key, typeof value === 'string' ? coerceParameter(tool, key, value) : value]))
+}
+
+/**
  * Build the arguments JSON for one invoke.
  *
- * Three shapes are read, in falling order of explicitness, because all three
- * are real DeepSeek web output and only the first is the taught one:
+ * Four shapes are read, in falling order of explicitness, because all four are
+ * real model output and only the first is the taught one:
  *
  * 1. `<parameter>` elements — the format {@link toolProtocolPrompt} states.
  * 2. Attributes on the `<invoke>` tag itself, accepted only for names the
@@ -231,7 +475,10 @@ function attributes(run: string): Map<string, string> {
  *    `description` writes `<invoke name="bash" description="…">` often enough
  *    that discarding it is a worse reading than honouring it, and restricting
  *    the harvest to declared names keeps it from inventing arguments.
- * 3. A bare body with no `<parameter>` wrapper, which fills the single
+ * 3. A JSON object as the whole body, which is how a model that learned a
+ *    native tool-call API writes the arguments it would have put in that API's
+ *    `arguments` field — see {@link jsonBodyArguments}.
+ * 4. A bare body with no `<parameter>` wrapper, which fills the single
  *    parameter still unaccounted for — preferring the required ones, since an
  *    unlabelled value is far likelier to be the argument the tool cannot run
  *    without than an optional knob.
@@ -265,15 +512,24 @@ export function invokeArguments(
     const missing = requiredNames(tool).filter(name => !(name in args))
     const candidates = missing.length > 0 ? missing : parameterNames(tool).filter(name => !(name in args))
     const only = candidates.length === 1 ? candidates[0] : undefined
-    const raw = unescapeXml(body).trim()
-    // A body still carrying a pipe token is a native tag no rewrite above
-    // placed, not an argument. Taking it anyway is how `kernel` ended up
-    // executing `<｜｜DSML｜｜parameter name="code">import os…` as Python and
-    // failing on U+FF5C — a call that RUNS and is wrong, which costs a turn and
-    // teaches the model nothing. Refusing here leaves the block visible as
-    // text, which is the same answer this reader gives every other tag it
-    // cannot place, and keeps the next unseen spelling from poisoning a call.
-    if (only !== undefined && raw.length > 0 && !raw.includes('｜')) {
+    // A `<parameter>` with no name has no slot to go in BY NAME, but its value is
+    // still the argument the model wrote, so the wrapper is peeled and the value
+    // placed by the single-slot rule below. Left in place it became part of the
+    // value: `kernel` ran the tag text itself as Python.
+    const peeled = body.replace(NAMELESS_PARAMETER_PAIR, '')
+    const json = jsonBodyArguments(tool, peeled, declared)
+    if (json !== undefined) {
+      for (const [key, value] of Object.entries(json)) {
+        if (!(key in args)) args[key] = value
+      }
+      return JSON.stringify(args)
+    }
+    const raw = unescapeXml(peeled).trim()
+    // A body still carrying a pipe token or a whole tag is markup no rewrite
+    // above placed, not an argument — see UNPLACEABLE. Taking it anyway is how
+    // `kernel` ended up executing `<｜｜DSML｜｜parameter name="code">import os…`
+    // as Python and failing on U+FF5C.
+    if (only !== undefined && raw.length > 0 && !UNPLACEABLE.test(peeled)) {
       args[only] = coerceParameter(tool, only, raw)
     }
   }
@@ -289,8 +545,9 @@ interface OpenBlock {
 /**
  * The earliest tool-call opener in a line, with the tag that will close it.
  *
- * Two openers are recognised: the taught `<tool_calls>` wrapper, closed by
- * `</tool_calls>`, and a bare `<invoke>` with no wrapper, closed by `</invoke>`.
+ * Three openers are recognised: the taught `<tool_calls>` wrapper, closed by
+ * `</tool_calls>`; the same envelope spelled `<function_calls>`, closed by its
+ * own word; and a bare `<invoke>` with no wrapper, closed by `</invoke>`.
  * The earliest wins, so a well-formed `<tool_calls><invoke>…` opens as one
  * `<tool_calls>` block — its inner `</invoke>` stays buffered until the wrapper
  * closes — while an unwrapped `<invoke>` opens on its own. The opener tag is
@@ -300,9 +557,11 @@ interface OpenBlock {
  */
 function firstOpener(rest: string): { readonly index: number; readonly closer: string } | undefined {
   const wrapped = rest.indexOf(TOOL_CALLS_OPEN)
+  const functional = rest.indexOf(FUNCTION_CALLS_OPEN)
   const bare = rest.search(/<invoke\b/i)
   const candidates: { index: number; closer: string }[] = []
   if (wrapped !== -1) candidates.push({ index: wrapped, closer: TOOL_CALLS_CLOSE })
+  if (functional !== -1) candidates.push({ index: functional, closer: FUNCTION_CALLS_CLOSE })
   if (bare !== -1) candidates.push({ index: bare, closer: '</invoke>' })
   if (candidates.length === 0) return undefined
   return candidates.reduce((best, candidate) => candidate.index < best.index ? candidate : best)
@@ -327,19 +586,29 @@ export class DsmlTranslator {
   private block: OpenBlock | undefined
   /** True while inside an echoed `<system_reminder>` span whose text is dropped. */
   private suppressing = false
+  /** True once a repair happened whose {@link FORMAT_REMINDER} is still owed. */
+  private repaired = false
+  /** True once this turn wrote tool-call markup of its own — see {@link MARKUP}. */
+  private sawMarkup = false
   private readonly tools: ReadonlyMap<string, ToolSchema>
   /** `<toolname …>` for every KNOWN tool, or undefined when none look like tags. */
   private readonly namedOpen: RegExp | undefined
   /** The matching `</toolname>` for the same set. */
   private readonly namedClose: RegExp | undefined
+  /** Whether this reader may write its own notes into the visible text. */
+  private readonly notes: boolean
+  /** True once the line being accumulated has already had text released — see {@link releasePartial}. */
+  private emitted = false
 
   /**
    * @param tools - the request's tool schemas, keyed by name; an empty map makes
    * every invoke unknown, which is the correct reading of a request that
    * declared no tools.
+   * @param options - reader options; see {@link DsmlOptions}.
    */
-  constructor(tools: ReadonlyMap<string, ToolSchema> = new Map()) {
+  constructor(tools: ReadonlyMap<string, ToolSchema> = new Map(), options: DsmlOptions = {}) {
     this.tools = tools
+    this.notes = options.notes ?? true
     // Only recognise a tool named as its own tag when the name is an
     // identifier, so the pattern can never widen into arbitrary markup, and
     // only for tools this request actually declared, so prose about some other
@@ -349,7 +618,7 @@ export class DsmlTranslator {
       const alt = names.join('|')
       // A lookahead pins a boundary after the name — `<run_code>` matches,
       // `<run_codex>` does not — without consuming the delimiter.
-      this.namedOpen = new RegExp(`<(${alt})(?=[\\s/>])((?:"[^"]*"|'[^']*'|[^>"'])*)>`, 'gi')
+      this.namedOpen = new RegExp(`<(${alt})(?=[\\s/>])(${ATTRIBUTE_RUN})>`, 'gi')
       this.namedClose = new RegExp(`</(${alt})\\s*>`, 'gi')
     }
   }
@@ -362,9 +631,42 @@ export class DsmlTranslator {
     while (newline !== -1) {
       this.consumeLine(this.partial.slice(0, newline), events)
       this.partial = this.partial.slice(newline + 1)
+      this.emitted = false
       newline = this.partial.indexOf('\n')
     }
+    this.releasePartial(events)
     return events
+  }
+
+  /**
+   * Release the part of an unfinished line that cannot be markup.
+   *
+   * The reader decides per LINE, because every tag it knows lives on one, so a
+   * held partial line is text the user has not been shown yet. Holding all of it
+   * would make every route stream a paragraph at a time — correct, and visibly
+   * worse than the token-by-token stream a native provider gives today.
+   *
+   * A partial with no `<` in it cannot become any tag this reader reads, so it
+   * is released immediately and the line continues to accumulate from there. The
+   * moment a `<` appears, the rest of the line is held again, because from there
+   * on it might be a call.
+   *
+   * What the release costs is the notion of "line-leading", which two rules
+   * depend on: {@link impliedInvoke} and the block-opener test in
+   * {@link stripSuppressed}. {@link emitted} records that this line already put
+   * text out, and both rules treat a line like that as what it is — a tag inside
+   * a sentence, which is a mention rather than a block.
+   */
+  private releasePartial(events: DsmlEvent[]): void {
+    if (this.block !== undefined || this.suppressing) return
+    if (this.partial.length === 0 || this.partial.includes('<')) return
+    // Whitespace alone is held: it is as likely to be the indentation in front
+    // of a tag, which the block consumes, as it is to be text. Releasing it
+    // would leave that indentation visible above a call that ran.
+    if (this.partial.trim().length === 0) return
+    events.push({ kind: 'text', text: this.partial })
+    this.partial = ''
+    this.emitted = true
   }
 
   /**
@@ -393,7 +695,25 @@ export class DsmlTranslator {
       if (produced.length > 0) events.push(...produced)
       else events.push({ kind: 'text', text: `${raw}\n` })
     }
+    // A repair nothing closed a block over — a tag mended in prose, or a block
+    // the model never terminated — still owes its reminder.
+    events.push(...this.reminder())
     return events
+  }
+
+  /**
+   * The {@link FORMAT_REMINDER} this turn owes, and clear the debt.
+   *
+   * At most one reminder per block, and none at all for a turn that wrote the
+   * taught shape: a note repeated after every call is read as decoration, and
+   * this transport has no channel to spend on decoration.
+   */
+  private reminder(): DsmlEvent[] {
+    if (!this.repaired) return []
+    this.repaired = false
+    // The debt is cleared either way: a silent reader still repaired the block,
+    // it just has no standing to correct a format it never stated.
+    return this.notes ? [{ kind: 'text', text: FORMAT_REMINDER }] : []
   }
 
   /**
@@ -421,8 +741,14 @@ export class DsmlTranslator {
    * @param payload - everything between the pipe run and the closing `>`.
    */
   private nativeToken(whole: string, closing: boolean, payload: string): string {
+    // Two tags fused into one token — see FUSED_OPENER. The inner opener is the
+    // tag the model meant, so the false start ahead of it is dropped and the
+    // rest of this routine reads the one tag that remains.
+    const fused = lastMatchIndex(payload, FUSED_OPENER)
+    const one = fused < 0 ? payload : payload.slice(fused + 1)
+    if (fused >= 0) this.repaired = true
     // A trailing `/` self-closes, exactly as it does on an ordinary tag.
-    const trimmed = payload.trim()
+    const trimmed = one.trim()
     const selfClosed = trimmed.endsWith('/')
     const body = (selfClosed ? trimmed.slice(0, -1) : trimmed).trim()
     const found = DSML_KEYWORD.exec(body)
@@ -435,11 +761,14 @@ export class DsmlTranslator {
     // The per-call separator frames nothing the reader needs and has no taught
     // equivalent, so it is simply removed.
     if (word.startsWith('sep')) return ''
-    // The taught `tool_calls` word worn inside the token is REWRITTEN, not
-    // stripped: the invoke inside is frequently self-closing with this wrapper
-    // as its only closer, so the block needs a real closer to buffer against.
-    // Stripping it would leave that invoke unbounded, swallowing the stream.
-    if (/^tool[_▁]?calls?/.test(word)) return closing ? TOOL_CALLS_CLOSE : TOOL_CALLS_OPEN
+    // An envelope word — `tool_calls`, or `function_calls` from the other
+    // dialect — worn inside the token is REWRITTEN, not stripped: the invoke
+    // inside is frequently self-closing with this wrapper as its only closer,
+    // so the block needs a real closer to buffer against. Stripping it would
+    // leave that invoke unbounded, swallowing the stream. Both words rewrite to
+    // the one taught wrapper, so an opener and closer that disagree about which
+    // word they used still pair.
+    if (CALLS_WORD.test(word)) return closing ? TOOL_CALLS_CLOSE : TOOL_CALLS_OPEN
     // The model's own frame, which always pairs with its own closer, so there
     // is nothing for an inner tag to bind to and stripping is safe. Removing it
     // rather than rewriting also keeps an EMPTY frame pair from surfacing as a
@@ -498,6 +827,18 @@ export class DsmlTranslator {
     // below is the call. Dropping it keeps the wrapper from surfacing as prose
     // around a call that did run.
     out = out.replace(DSML_WRAP, '')
+    // The taught tags written with `=` instead of ` name=` — see EQUALS_TAG.
+    out = out.replace(EQUALS_TAG, (_whole, tag: string, name: string, slash: string) => {
+      this.repaired = true
+      const word = tag.toLowerCase()
+      const open = `<${word} name="${name}">`
+      return slash === '/' ? `${open}</${word}>` : open
+    })
+    // A `<parameter>` that names nothing is left standing — only
+    // `invokeArguments` knows which slot is still open, and it peels the wrapper
+    // there — but it is a repair either way, so the reminder is booked here with
+    // the rest of them.
+    if (NAMELESS_PARAMETER.test(out)) this.repaired = true
     if (this.namedOpen !== undefined && this.namedClose !== undefined) {
       out = out.replace(this.namedOpen, (whole, name: string, run: string) => {
         if (!this.tools.has(name)) return whole
@@ -510,7 +851,67 @@ export class DsmlTranslator {
       })
       out = out.replace(this.namedClose, '</invoke>')
     }
-    return out
+    // The model's own frame word arriving with no pipes on it — see BARE_FRAME.
+    out = out.replace(BARE_FRAME, '')
+    // Read BEFORE the implied opener below, so the opener this reader writes
+    // itself is never the markup that blocks the next one.
+    const first = !this.sawMarkup
+    if (MARKUP.test(out)) this.sawMarkup = true
+    return first ? this.impliedInvoke(out) : out
+  }
+
+  /**
+   * Put the `<invoke>` back in front of an argument that arrived without one.
+   *
+   * A line-leading `<parameter name="code">…` with no block open is a whole call
+   * the model wrote the inside of and nothing else: no wrapper, no invoke, no
+   * tool named anywhere. It reaches the user as markup and reads back to the
+   * model as a call that returned nothing, which is the most expensive failure
+   * this transport has — the turn is spent and neither side knows why.
+   *
+   * The tool is inferred from the argument's own name, and only when one tool can
+   * own it, so this is a reading rather than a guess. The invoke is synthesized
+   * rather than the call dispatched here so that everything downstream — the
+   * block machinery, the parameter typing, the `whole call only` rule — applies
+   * unchanged, including a second `<parameter>` on the next line.
+   * @param line - the normalized line.
+   * @returns the line, with an `<invoke>` opener prepended when one is implied.
+   */
+  private impliedInvoke(line: string): string {
+    // Text already went out for this line, so this tag opens no line: it sits
+    // after prose, which makes it a mention. See {@link releasePartial}.
+    if (this.block !== undefined || this.emitted) return line
+    const bare = LEADING_PARAMETER.exec(line)
+    if (bare === null) return line
+    // An argument standing on its own is malformed whether or not its tool can
+    // be inferred, so the reminder is owed either way. The alternative is the
+    // failure this whole pass exists to end: markup reaching the user with not
+    // one word about why nothing ran.
+    this.repaired = true
+    const argument = attributes(bare[0]).get('name')?.trim() ?? ''
+    const tool = argument.length === 0 ? undefined : this.toolForParameter(argument)
+    if (tool === undefined) return line
+    return `<invoke name="${tool}">${line}`
+  }
+
+  /**
+   * The one tool a parameter of this name can only belong to.
+   *
+   * Two tools declaring the same parameter makes the inference a coin flip, and a
+   * coin flip that RUNS something is not a reading — `code` is `kernel`'s
+   * argument on one roster and two tools' argument on the next, so the answer has
+   * to come from the roster the request actually composed.
+   * @param name - the parameter name read off a bare `<parameter>` tag.
+   * @returns the sole declaring tool's name, or undefined when it is not sole.
+   */
+  private toolForParameter(name: string): string | undefined {
+    let found: string | undefined
+    for (const tool of this.tools.values()) {
+      if (!parameterNames(tool).includes(name)) continue
+      if (found !== undefined) return undefined
+      found = tool.name
+    }
+    return found
   }
 
   /**
@@ -553,7 +954,7 @@ export class DsmlTranslator {
         // A closer with no open span is a leftover token: drop it, keep the text.
         out += line.slice(idx, match.index)
         idx = SYSTEM_REMINDER_TAG.lastIndex
-      } else if (line.slice(0, match.index).trim().length === 0) {
+      } else if (!this.emitted && line.slice(0, match.index).trim().length === 0) {
         // A block opener: keep the text before it, then suppress until the
         // closer.
         out += line.slice(idx, match.index)
@@ -640,7 +1041,7 @@ export class DsmlTranslator {
     // self-closing pass below never reads an opener that already dispatched.
     const consumed: (readonly [number, number])[] = []
     for (const match of raw.matchAll(INVOKE)) {
-      const start = match.index ?? 0
+      const start = match.index
       consumed.push([start, start + match[0].length])
       const tagged = attributes(match[1] ?? '')
       const name = (tagged.get('name') ?? '').trim()
@@ -651,7 +1052,16 @@ export class DsmlTranslator {
         unknown = true
         continue
       }
-      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, match[2] ?? '', tagged) } })
+      // A closed `</invoke>` does not make the call inside it whole: a body
+      // whose last `<parameter>` never closed is a command cut off mid-write,
+      // and the model's next line was `</invoke>`, not the end of that command.
+      // Dispatching it ran the tag text as the argument until the check below
+      // existed, and refusing the argument alone only turned that into a call
+      // with NO argument — a tool invoked for nothing either way. This is the
+      // same measurement the wrapper-closed pass makes; see its note.
+      const body = match[2] ?? ''
+      if (unbalanced(body)) continue
+      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, body, tagged) } })
     }
     // Invokes with no `</invoke>` of their own, closed by an outer wrapper
     // instead (the `｜｜DSML｜｜` tool_calls shape, and the very common slip of
@@ -671,7 +1081,7 @@ export class DsmlTranslator {
     //     that requires one is an unfinished call — a bare `<invoke
     //     name="kernel">` about to grow a body — not an empty request to run.
     for (const match of raw.matchAll(INVOKE_OPEN)) {
-      const start = match.index ?? 0
+      const start = match.index
       if (consumed.some(([from, to]) => start >= from && start < to)) continue
       const tagged = attributes(match[1] ?? '')
       const name = (tagged.get('name') ?? '').trim()
@@ -685,15 +1095,23 @@ export class DsmlTranslator {
       const after = raw.slice(start + match[0].length)
       const nextInvoke = after.search(/<invoke\b/i)
       const region = nextInvoke === -1 ? after : after.slice(0, nextInvoke)
-      const openers = (region.match(/<parameter\b/gi) ?? []).length
-      if (openers > 0) {
-        // Counting rather than matching pairs is enough: `<parameter>` never
-        // nests, so equal counts mean every opener found its closer.
-        if (openers !== (region.match(/<\/parameter\s*>/gi) ?? []).length) continue
+      if (PARAMETER_OPEN.test(region)) {
+        if (unbalanced(region)) continue
         calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, region, tagged) } })
         continue
       }
       const declared = new Set(parameterNames(tool))
+      // A JSON arguments object is as complete a body as `<parameter>` elements
+      // are, so an invoke the wrapper closed carries its arguments either way.
+      // Only THIS shape is read out of the region — an arbitrary text body here
+      // is a call still being written, and the rule below keeps refusing it.
+      // The wrapper's own closer sits inside the region (nothing consumed it,
+      // since this invoke has no closer of its own), so it comes off first.
+      const bodied = region.replace(ORPHAN_CLOSE, '')
+      if (jsonBodyArguments(tool, bodied, declared) !== undefined) {
+        calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, bodied, tagged) } })
+        continue
+      }
       const hasArg = [...tagged].some(([key]) => key !== 'name' && declared.has(key))
       if (!hasArg && requiredNames(tool).length > 0) continue
       calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, '', tagged) } })
@@ -714,20 +1132,50 @@ export class DsmlTranslator {
     // the only correction channel this transport has, and a dropped block
     // reads to the model as a call that ran and returned nothing.
     if (produced.length === 0) {
-      // Three different mistakes, three different notes. A real tool left
-      // unfinished is not a tool that does not exist, and is not a tag with no
-      // name; told the wrong one, the model rewrites the part that was already
-      // right and arrives back here with the same block.
-      const note = unknown
-        ? '\n[no such tool — see the tool list in your instructions]\n'
-        : named
-          ? '\n[unfinished tool call — the tool exists, but this block never completed one; nothing ran]\n'
-          : raw.toLowerCase().includes('<invoke')
-            ? '\n[malformed tool call — an <invoke> tag here carries no readable name="..."; nothing ran]\n'
-            : ''
-      events.push({ kind: 'text', text: `${raw}\n${note}` })
+      events.push({ kind: 'text', text: `${raw}\n${this.blockNote(raw, named, unknown)}` }, ...this.reminder())
       return
     }
-    events.push(...produced)
+    events.push(...produced, ...this.reminder())
+  }
+
+  /**
+   * What to tell the model about a block that ran nothing.
+   *
+   * Three different mistakes, three different notes. A real tool left
+   * unfinished is not a tool that does not exist, and is not a tag with no
+   * name; told the wrong one, the model rewrites the part that was already
+   * right and arrives back here with the same block. A reader that taught this
+   * format says one of them; a reader that taught nothing says nothing — see
+   * {@link DsmlOptions.notes}.
+   * @param raw - the block exactly as the model wrote it.
+   * @param named - whether any invoke in it carried a readable name.
+   * @param unknown - whether one of those names is a tool this request never declared.
+   * @returns the note to append after the block, or `''`.
+   */
+  private blockNote(raw: string, named: boolean, unknown: boolean): string {
+    if (!this.notes) return ''
+    if (unknown) return '\n[no such tool — see the tool list in your instructions]\n'
+    if (named) return '\n[unfinished tool call — the tool exists, but this block never completed one; nothing ran]\n'
+    if (raw.toLowerCase().includes('<invoke')) {
+      return '\n[malformed tool call — an <invoke> tag here carries no readable name="..."; nothing ran]\n'
+    }
+    // No `<invoke>` at all, yet the block names a real tool: the model wrapped
+    // some OTHER notation — a JSON envelope, prose — in the taught wrapper.
+    // Saying so is the difference between a turn that ran nothing for a stated
+    // reason and one that silently did not; silence here is what this reader
+    // was reported for. A block naming no tool is the model DISCUSSING the
+    // format, and gets no note.
+    if (this.namesTool(raw)) {
+      return '\n[malformed tool call — a tool_calls block runs only <invoke name="TOOL">…</invoke>; nothing ran]\n'
+    }
+    return ''
+  }
+
+  /** Whether a block that produced nothing at least NAMES a tool this request declared. */
+  private namesTool(raw: string): boolean {
+    for (const name of this.tools.keys()) {
+      if (raw.includes(name)) return true
+    }
+    return false
   }
 }

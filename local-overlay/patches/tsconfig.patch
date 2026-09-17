@@ -17,10 +17,10 @@ index 494e4f762f..4ae0ba39e7 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c5a3f118b3..973162b9a3 100644
+index c5a3f118b3..3d1a101c1f 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -358,6 +358,23 @@
+@@ -358,6 +358,24 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -28,6 +28,7 @@ index c5a3f118b3..973162b9a3 100644
 +    { "path": "./apps/desktop" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/session/command-session-info" },
++    { "path": "./packages/llm/llm-dsml" },
 +    { "path": "./packages/llm/llm-kiln" },
 +    { "path": "./packages/fs/tool-notebook-edit" },
 +    { "path": "./packages/web/web-browser" },

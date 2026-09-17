@@ -361,6 +361,7 @@
     { "path": "./apps/desktop" },
     // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
     { "path": "./packages/session/command-session-info" },
+    { "path": "./packages/llm/llm-dsml" },
     { "path": "./packages/llm/llm-kiln" },
     { "path": "./packages/fs/tool-notebook-edit" },
     { "path": "./packages/web/web-browser" },

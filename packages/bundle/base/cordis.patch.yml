@@ -84,6 +84,25 @@
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
+    # DSH-FORK(dsml): text-channel tool calls, read on EVERY route.
+    #
+    # Which tool-call markup a model writes comes from the model, not from the
+    # transport: a request that filled a provider's native `tools` field can
+    # still get the call back as text — `<tool_calls>`, `<function_calls>`, or
+    # DeepSeek's pipe-wrapped `<｜｜DSML｜｜ …>` special tokens. Unread, that call
+    # reaches the user as markup and reads back to the model as an action that
+    # returned nothing.
+    #
+    # The pass is silent: it converts what it can parse into a real tool call
+    # and forwards everything else exactly as the adapter emitted it. Only an
+    # adapter with no native tool channel (llm-kiln) TEACHES this format, and
+    # only that adapter corrects the model about it.
+    - id: llm-dsml
+      name: '@deepseek-ai/dsh-llm-dsml'
+      config:
+        reasoningRecovery: true
+        excludeProviders: []
+
     # User-settings document (`$DSH_HOME/settings.yaml`, hot-reloaded): a
     # `llm-deepseek:` or `llm-pi-ai:` section there overrides the adapter entries
     # below without a restart, and is what the web Models page writes.
@@ -136,6 +155,25 @@
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
       config:
         root: !!js dshHomePath('sessions')
+
+    # DSH-FORK(kernel): what a compacted turn gets back. Compaction keeps a
+    # summary and drops the transcript, including every word the operator wrote,
+    # so the turn after one is the turn most likely to resume the wrong task.
+    # This injects the record instead of instructing the model to fetch it: one
+    # message per compaction carrying the operator's prompts and the tail of the
+    # log, folded from the log as it commits rather than scanned back. It also
+    # registers `{{session_log}}`, `{{session_dir}}`, and `{{session_id}}`, so a
+    # deployment persona can name this session's own log file.
+    #
+    # `root` mirrors the backend row above and must move with it: the two derive
+    # the same path, and a mismatch prints a file that does not exist.
+    # EXIT: upstream ships post-compaction grounding, or the persistence
+    # capability answers with the log location it already models for errors.
+    - id: session-recovery-context
+      name: '@deepseek-ai/dsh-session-recovery-context'
+      config:
+        root: !!js dshHomePath('sessions')
+        tailEvents: 50
 
     # Durable image bytes live outside the append-only session log. Messages
     # keep content-addressed references that this shared backend resolves for

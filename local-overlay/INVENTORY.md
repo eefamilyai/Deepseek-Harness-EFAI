@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **134** in **23** patch(es).
+Tier-2 files: **137** in **23** patch(es).
 
 ## Patches
 
@@ -203,9 +203,12 @@ Tier-2 files: **134** in **23** patch(es).
 - `packages/session/session-format-v0-to-v1/src/validation.ts`
 - `packages/session/session-format-v0-to-v1/tests/relationships.spec.ts`
 
-### `patches/docs.patch` — 4 file(s)
+### `patches/docs.patch` — 7 file(s)
 
+- `docs/config-catalog.zh.md`
+- `docs/event-producer-consumer.i18n.yaml`
 - `docs/event-producer-consumer.md`
+- `docs/event-producer-consumer.zh.md`
 - `docs/subsystems/llm-streaming.i18n.yaml`
 - `docs/subsystems/llm-streaming.md`
 - `docs/subsystems/llm-streaming.zh.md`
@@ -427,14 +430,14 @@ These 273 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-roster/src/invariant.ts`
 - `packages/kernel/tool-roster/tests/roster.spec.ts`
 - `packages/kernel/tool-roster/tsconfig.json`
+- `packages/llm/llm-dsml/src/dsml.ts`
+- `packages/llm/llm-dsml/src/protocol.ts`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
 - `packages/llm/llm-kiln/src/adapter.ts`
 - `packages/llm/llm-kiln/src/bridge.ts`
-- `packages/llm/llm-kiln/src/dsml.ts`
 - `packages/llm/llm-kiln/src/index.ts`
 - `packages/llm/llm-kiln/src/invariant.ts`
-- `packages/llm/llm-kiln/src/protocol.ts`
 - `packages/llm/llm-kiln/tests/dsml.spec.ts`
 - `packages/llm/llm-kiln/tests/images.spec.ts`
 - `packages/llm/llm-kiln/tests/pinning.spec.ts`

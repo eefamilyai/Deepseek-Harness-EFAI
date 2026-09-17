@@ -1,8 +1,34 @@
 diff --git a/packages/bundle/base/cordis.patch.yml b/packages/bundle/base/cordis.patch.yml
-index f906ea8601..10eee93929 100644
+index f906ea8601..27e98b00f1 100644
 --- a/packages/bundle/base/cordis.patch.yml
 +++ b/packages/bundle/base/cordis.patch.yml
-@@ -107,6 +107,31 @@
+@@ -84,6 +84,25 @@
+     - id: llm-retry
+       name: '@deepseek-ai/dsh-llm-retry'
+ 
++    # DSH-FORK(dsml): text-channel tool calls, read on EVERY route.
++    #
++    # Which tool-call markup a model writes comes from the model, not from the
++    # transport: a request that filled a provider's native `tools` field can
++    # still get the call back as text — `<tool_calls>`, `<function_calls>`, or
++    # DeepSeek's pipe-wrapped `<｜｜DSML｜｜ …>` special tokens. Unread, that call
++    # reaches the user as markup and reads back to the model as an action that
++    # returned nothing.
++    #
++    # The pass is silent: it converts what it can parse into a real tool call
++    # and forwards everything else exactly as the adapter emitted it. Only an
++    # adapter with no native tool channel (llm-kiln) TEACHES this format, and
++    # only that adapter corrects the model about it.
++    - id: llm-dsml
++      name: '@deepseek-ai/dsh-llm-dsml'
++      config:
++        reasoningRecovery: true
++        excludeProviders: []
++
+     # User-settings document (`$DSH_HOME/settings.yaml`, hot-reloaded): a
+     # `llm-deepseek:` or `llm-pi-ai:` section there overrides the adapter entries
+     # below without a restart, and is what the web Models page writes.
+@@ -107,11 +126,55 @@
      - id: llm-pi-ai
        name: '@deepseek-ai/dsh-llm-pi-ai'
  
@@ -34,7 +60,31 @@ index f906ea8601..10eee93929 100644
      - id: session-persistence-jsonl
        name: '@deepseek-ai/dsh-session-persistence-jsonl'
        config:
-@@ -243,6 +268,37 @@
+         root: !!js dshHomePath('sessions')
+ 
++    # DSH-FORK(kernel): what a compacted turn gets back. Compaction keeps a
++    # summary and drops the transcript, including every word the operator wrote,
++    # so the turn after one is the turn most likely to resume the wrong task.
++    # This injects the record instead of instructing the model to fetch it: one
++    # message per compaction carrying the operator's prompts and the tail of the
++    # log, folded from the log as it commits rather than scanned back. It also
++    # registers `{{session_log}}`, `{{session_dir}}`, and `{{session_id}}`, so a
++    # deployment persona can name this session's own log file.
++    #
++    # `root` mirrors the backend row above and must move with it: the two derive
++    # the same path, and a mismatch prints a file that does not exist.
++    # EXIT: upstream ships post-compaction grounding, or the persistence
++    # capability answers with the log location it already models for errors.
++    - id: session-recovery-context
++      name: '@deepseek-ai/dsh-session-recovery-context'
++      config:
++        root: !!js dshHomePath('sessions')
++        tailEvents: 50
++
+     # Durable image bytes live outside the append-only session log. Messages
+     # keep content-addressed references that this shared backend resolves for
+     # provider requests and authorized history reads.
+@@ -243,6 +306,37 @@
      - id: shell-env
        name: '@deepseek-ai/dsh-shell-env'
  
@@ -72,7 +122,7 @@ index f906ea8601..10eee93929 100644
      - id: tool-bash
        name: '@deepseek-ai/dsh-tool-bash'
        disabled: !!js process.platform === 'win32'
-@@ -265,6 +321,87 @@
+@@ -265,6 +359,87 @@
        config:
          sampleOverCapGlobResults: false
  
@@ -160,7 +210,7 @@ index f906ea8601..10eee93929 100644
      - id: agent-instructions
        name: '@deepseek-ai/dsh-agent-instructions'
        config:
-@@ -289,6 +426,9 @@
+@@ -289,6 +464,9 @@
      - id: command-feedback
        name: '@deepseek-ai/dsh-command-feedback'
  
@@ -170,7 +220,7 @@ index f906ea8601..10eee93929 100644
      - id: goal
        name: '@deepseek-ai/dsh-goal'
  
-@@ -415,6 +555,11 @@
+@@ -415,6 +593,11 @@
          subagentProvider: spawn
          maxRounds: 64
  
@@ -182,7 +232,7 @@ index f906ea8601..10eee93929 100644
      # Consecutive-repeat reminders on the tool chain.
      - id: repeat-tool-reminder
        name: '@deepseek-ai/dsh-repeat-tool-reminder'
-@@ -453,6 +598,19 @@
+@@ -453,6 +636,19 @@
          fetch: true
          searchTimeoutMs: 60000
  
@@ -202,7 +252,7 @@ index f906ea8601..10eee93929 100644
      # ── rows every mode mounts, whose values each overlay may state ──────────────
  
      # The tool registry. Presentation mode is a deployment choice; omitting it here
-@@ -485,3 +643,9 @@
+@@ -485,3 +681,9 @@
      # choice.
      - id: llm-deepseek
        name: '@deepseek-ai/dsh-llm-deepseek'
@@ -213,7 +263,7 @@ index f906ea8601..10eee93929 100644
 +    - id: tool-roster
 +      name: '@deepseek-ai/dsh-tool-roster'
 diff --git a/packages/bundle/base/package.json b/packages/bundle/base/package.json
-index abe58f9588..1cdc467968 100644
+index abe58f9588..ffdff89cfb 100644
 --- a/packages/bundle/base/package.json
 +++ b/packages/bundle/base/package.json
 @@ -45,6 +45,7 @@
@@ -224,7 +274,15 @@ index abe58f9588..1cdc467968 100644
      "@deepseek-ai/dsh-commands": "workspace:^",
      "@deepseek-ai/dsh-compaction-basic": "workspace:^",
      "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
-@@ -102,9 +103,11 @@
+@@ -59,6 +60,7 @@
+     "@deepseek-ai/dsh-api-gateway": "workspace:^",
+     "@deepseek-ai/dsh-llm": "workspace:^",
+     "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
++    "@deepseek-ai/dsh-llm-dsml": "workspace:^",
+     "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
+     "@deepseek-ai/dsh-llm-retry": "workspace:^",
+     "@deepseek-ai/dsh-permission-presets": "workspace:^",
+@@ -102,9 +104,11 @@
      "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
      "@deepseek-ai/dsh-tool-ralph": "workspace:^",
      "@deepseek-ai/dsh-tool-skill": "workspace:^",
@@ -236,7 +294,7 @@ index abe58f9588..1cdc467968 100644
      "@deepseek-ai/dsh-tool-todo": "workspace:^",
      "@deepseek-ai/dsh-tool-web": "workspace:^",
      "@deepseek-ai/dsh-tool-workflow": "workspace:^",
-@@ -114,6 +117,7 @@
+@@ -114,6 +118,7 @@
      "@deepseek-ai/dsh-user-approval": "workspace:^",
      "@deepseek-ai/dsh-user-questions": "workspace:^",
      "@deepseek-ai/dsh-web": "workspace:^",

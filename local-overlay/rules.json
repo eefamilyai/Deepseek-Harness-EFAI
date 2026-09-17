@@ -228,6 +228,7 @@
     "desktop/",
     "python/kiln/",
     "packages/kernel/",
+    "packages/llm/llm-dsml/",
     "packages/llm/llm-kiln/",
     "packages/web/web-browser/",
     "packages/host/sidebar-bridge/",

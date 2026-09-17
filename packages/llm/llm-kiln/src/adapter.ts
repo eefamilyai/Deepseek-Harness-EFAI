@@ -36,8 +36,16 @@ import type {
   TokenUsage,
   ToolSchema,
 } from '@deepseek-ai/dsh-llm'
-import { DsmlTranslator, trailingReasoningCalls } from './dsml.ts'
-import { DSML_CLOSE, DSML_OPEN, escapeXml, renderParameter, toolProtocolPrompt } from './protocol.ts'
+import {
+  DSML_CLOSE,
+  DSML_OPEN,
+  DsmlTranslator,
+  escapeXml,
+  renderParameter,
+  toolIndex,
+  toolProtocolPrompt,
+  trailingReasoningCalls,
+} from '@deepseek-ai/dsh-llm-dsml'
 import type { KilnBridge, KilnMessage, KilnProvider, KilnUploadFile } from './bridge.ts'
 
 /** Constructor options: the sidecar and the route mapping the plugin owns. */
@@ -358,11 +366,6 @@ const RATE_LIMIT_RE = /rate.?limit|too many requests|请求过于频繁|访问�
  */
 export function isRateLimit(message: string): boolean {
   return RATE_LIMIT_RE.test(message)
-}
-
-/** Index the request's tool schemas by name for the translator. */
-export function toolIndex(tools: readonly ToolSchema[] | undefined): Map<string, ToolSchema> {
-  return new Map((tools ?? []).map(tool => [tool.name, tool]))
 }
 
 /**

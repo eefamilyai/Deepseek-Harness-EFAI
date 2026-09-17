@@ -47,7 +47,7 @@ import { KilnAdapter } from './adapter.ts'
 import { KilnBridge } from './bridge.ts'
 import type { KilnProvider } from './bridge.ts'
 
-export { KilnAdapter, buildTurns, flattenMessage, isRateLimit, mintCallId, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions, toolIndex } from './adapter.ts'
+export { KilnAdapter, buildTurns, flattenMessage, isRateLimit, mintCallId, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions } from './adapter.ts'
 export type { KilnAdapterOptions } from './adapter.ts'
 export { KilnBridge } from './bridge.ts'
 export type {
@@ -61,9 +61,14 @@ export type {
   KilnUploadFile,
   KilnUploadResult,
 } from './bridge.ts'
-export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from './dsml.ts'
-export type { DsmlEvent } from './dsml.ts'
-export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requiredNames, toolProtocolPrompt, unescapeXml } from './protocol.ts'
+// The reader and the format statement moved to `@deepseek-ai/dsh-llm-dsml`,
+// which reads every route's text channel rather than only the ones that have
+// no other channel. They are re-exported here because this adapter is still
+// where the format is TAUGHT, so a consumer holding a Kiln route finds both
+// halves of the transport in one place.
+export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from '@deepseek-ai/dsh-llm-dsml'
+export type { DsmlEvent } from '@deepseek-ai/dsh-llm-dsml'
+export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requiredNames, toolIndex, toolProtocolPrompt, unescapeXml } from '@deepseek-ai/dsh-llm-dsml'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'llm-kiln'

@@ -1,12 +1,17 @@
 /**
- * The one tool-call format a Kiln route speaks, stated once.
+ * The one text-channel tool-call format, stated once.
  *
- * None of these providers has a `tools` field — `ds_direct` is a web chat
- * session and physically cannot have one — so the harness's tool schemas reach
- * the model only as text, and a tool call comes back only as text. That makes
- * the encoding a transport concern, and this module is the single place it is
- * defined: {@link toolProtocolPrompt} writes the format down, and
- * {@link DsmlTranslator} reads exactly what was written down.
+ * A route with no `tools` field — a web chat session, a bare completion
+ * endpoint — can carry the harness's tool schemas only as text, and a tool call
+ * can come back only as text. That makes the encoding a transport concern, and
+ * this module is the single place it is defined: {@link toolProtocolPrompt}
+ * writes the format down, and {@link DsmlTranslator} reads exactly what was
+ * written down.
+ *
+ * Only a transport that has no native channel STATES the format. Reading it is
+ * unconditional — a model trained on this markup writes it through any
+ * transport, native tool field or not — which is why the reader lives in a
+ * provider-neutral package and the statement is asked for per adapter.
  *
  * The catalog here is GENERATED from `GenerateOptions.tools` — the same
  * schemas a native provider would receive in its `tools` field. Nothing about
@@ -14,7 +19,7 @@
  * roster the model is told about, so a tool that is switched off cannot linger
  * in the prompt as an instruction to call something that no longer exists.
  *
- * @module @deepseek-ai/dsh-llm-kiln/protocol
+ * @module @deepseek-ai/dsh-llm-dsml/protocol
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'

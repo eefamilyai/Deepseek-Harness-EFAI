@@ -215,6 +215,11 @@ describe('native tool-call dialects', () => {
   })
 
   it('does not run a DSML block that names a tool the request never declared', () => {
+    // Also the guard on inferring a tool from a lone `<parameter>`: this token
+    // names nothing real, so it opens no block and the argument under it looks
+    // orphaned. Inferring there would not recover a lost call, it would run
+    // `read_file` — the one tool that declares `path` — on the argument of a
+    // call the model meant for something it was never given.
     const chunks = [`${dsml(' name="rm_rf"')}\n<parameter name="path">/</parameter>\n${dsmlEnd}\n`]
     expect(calls(chunks, NATIVE)).toEqual([])
   })
@@ -440,6 +445,21 @@ describe('native tool-call dialects', () => {
     expect(prose(chunks, NATIVE).trim()).toBe('')
   })
 
+  it('strips the frame word arriving with its pipes worn off', () => {
+    // Reported: a bare `</calls>` left over in the visible answer. It is the
+    // same native frame token the pipe-wrapped pass already strips, minus the
+    // pipes, and it frames nothing the reader needs either way.
+    const chunks = ['<calls>\n<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n</invoke>\n</calls>\n']
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: '1+1' }]])
+    expect(prose(chunks, NATIVE).trim()).toBe('')
+  })
+
+  it('keeps the taught <tool_calls> tag clear of that strip', () => {
+    // The frame pattern starts at a `c`; the taught wrapper starts at a `t`.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">1+1</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks, NATIVE)).toEqual([['kernel', { code: '1+1' }]])
+  })
+
   it('refuses to pass an unplaced native token through as an argument', () => {
     // The safety net under every spelling still unseen. A token this reader
     // cannot place must not become the tool's argument via the unlabelled-body
@@ -448,6 +468,173 @@ describe('native tool-call dialects', () => {
     const chunks = [`<invoke name="run_code">\n<${P}${P}DSML${P}${P}mystery x="1">1+1\n</invoke>\n`]
     expect(calls(chunks, NATIVE)).toEqual([['run_code', {}]])
     expect(prose(chunks, NATIVE)).not.toContain('SyntaxError')
+  })
+})
+
+describe('near-misses of the taught format', () => {
+  // A dialect the reader does not know is a wasted turn; a NEAR-MISS of the one
+  // it does know used to be worse than that, because the repair was partial. A
+  // tag the scanner could not match at all left no trace for any note to hang
+  // on, and an argument wrapper it did not recognise became part of the argument
+  // — the call ran, on the markup. Each case here is one of those, and each
+  // repair books one reminder so accepting the spelling does not teach it.
+  const P = '｜'
+  /** A tool whose own parameter is called `invoke`, so the fusion rule must be exact. */
+  const ODDLY: ToolSchema = {
+    name: 'oddly',
+    description: 'A tool whose parameter shares the structure\'s name.',
+    parameters: { type: 'object', properties: { invoke: { type: 'string' } }, required: ['invoke'] },
+  }
+
+  it('reads the token that fused a parameter opener around the invoke it meant', () => {
+    // The reported leak, verbatim: `<｜｜DSML｜｜ parameter name="invoke name="kernel">`.
+    // Three quotes in one attribute run left the token matching NOTHING, so it
+    // was not a native token, not an invoke, and not a tag any note is keyed
+    // on — the whole block reached the user as prose with no explanation, and
+    // the model saw a call that returned nothing.
+    const chunks = [`<tool_calls>\n<${P}${P}DSML${P}${P} parameter name="invoke name="kernel">\n`
+      + '<parameter name="code"># Check router wiring\nimport re</parameter>\n'
+      + '</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: '# Check router wiring\nimport re' }]])
+    expect(prose(chunks)).not.toContain('DSML')
+    expect(prose(chunks)).toContain('format reminder')
+  })
+
+  it('leaves a parameter legitimately called `invoke` alone', () => {
+    // The fusion rule is "a taught opener quoted inside the previous attribute's
+    // value", and the `name=` after that opener is what makes it a rule rather
+    // than a keyword hunt. Without it, this tool's own argument name would be
+    // read as the structure and the call would lose it.
+    const chunks = [`<tool_calls>\n<invoke name="oddly">\n<${P}${P}DSML${P}${P} parameter name="invoke">1+1</parameter>\n`
+      + '</invoke>\n</tool_calls>\n']
+    expect(calls(chunks, [ODDLY])).toEqual([['oddly', { invoke: '1+1' }]])
+  })
+
+  it('reads the taught tags written with `=` instead of ` name=`', () => {
+    const chunks = ['<tool_calls>\n<invoke=kernel>\n<parameter=code>print(1)</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: 'print(1)' }]])
+  })
+
+  it('stops an equals-spelled parameter from becoming the argument', () => {
+    // The expensive half of this shape: the invoke was well-formed, so the call
+    // RAN — with `<parameter=code>print(1)</parameter>` as the cell, because the
+    // unlabelled-body path took the wrapper along with the value.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter=code>print(1)</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: 'print(1)' }]])
+  })
+
+  it('reads a self-closing equals tag as the empty argument it states', () => {
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter=code/>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: '' }]])
+  })
+
+  it('absorbs a parameter that names nothing and fills the one open slot with it', () => {
+    // `<parameter>` with no name cannot be placed BY name, but the value between
+    // its tags is still the argument, and `code` is the only slot left to hold
+    // it — the same rule that reads a bare invoke body.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter>print(1)</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: 'print(1)' }]])
+  })
+
+  it('absorbs a stray parameter beside the named ones instead of leaking it', () => {
+    // Nothing names the slot this value belongs in and every slot is already
+    // filled, so it is dropped — but it is dropped silently INTO the call,
+    // never shown to the user as the debris of a call that ran.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">print(1)</parameter>\n'
+      + '<parameter=>42</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: 'print(1)' }]])
+    expect(prose(chunks)).not.toContain('42')
+  })
+
+  it('reminds once per block, however many repairs that block needed', () => {
+    const chunks = ['<tool_calls>\n<invoke=kernel>\n<parameter=code>print(1)</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(prose(chunks).match(/format reminder/g)).toHaveLength(1)
+  })
+
+  it('says nothing at all about a block written in the taught shape', () => {
+    // A note after every call is read as decoration, and this transport has no
+    // channel to spend on decoration.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">print(1)</parameter>\n</invoke>\n</tool_calls>\n']
+    expect(prose(chunks)).toBe('')
+  })
+
+  it('still sends the reminder when no block ever closed around the repair', () => {
+    // Two repairs at once and no `</invoke>` anywhere: the equals spelling, and
+    // the invoke the argument never had. The call is recovered at end of stream,
+    // where no `closeBlock` runs — so the reminder has to be owed, not emitted
+    // by whichever path happened to finish the block.
+    const chunks = ['<parameter=code>print(1)</parameter>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: 'print(1)' }]])
+    expect(prose(chunks)).toContain('format reminder')
+  })
+
+  it('refuses a call whose last parameter never closed, `</invoke>` or not', () => {
+    // A closed `</invoke>` does not finish the command inside it. Dispatching
+    // this ran the tag text as Python; refusing only the argument turned that
+    // into `kernel` called with nothing. Neither is what the model asked for,
+    // and the block says so on its own once it is shown.
+    const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">print(1\n</invoke>\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([])
+    expect(prose(chunks)).toContain('unfinished tool call')
+  })
+
+  it('says a wrapper around some OTHER notation ran nothing', () => {
+    // A JSON envelope inside the taught wrapper: no `<invoke>`, so every note
+    // keyed on one stayed silent and the turn ended with no stated reason.
+    const chunks = ['<tool_calls>\n{"name": "kernel", "arguments": {"code": "1+1"}}\n</tool_calls>\n']
+    expect(calls(chunks)).toEqual([])
+    expect(prose(chunks)).toContain('nothing ran')
+  })
+
+  it('stays quiet when the model is only discussing the format', () => {
+    // The same empty wrapper, naming no tool, is the model TALKING about tool
+    // calls. Noting it would answer a sentence with an error report.
+    const chunks = ['Wrap it in <tool_calls></tool_calls> and it runs.\n']
+    expect(calls(chunks)).toEqual([])
+    expect(prose(chunks)).not.toContain('nothing ran')
+  })
+
+  it('puts the invoke back in front of an argument that arrived without one', () => {
+    // Reported: no wrapper, no invoke, no tool named anywhere — just the
+    // argument, with the model's cell inside it. It reached the user as markup
+    // and read back to the model as a call that returned nothing, so the turn
+    // was spent and neither side could see why.
+    const chunks = ['<parameter name="code" string="true"># Read the request body\nimport re</parameter>\n']
+    expect(calls(chunks)).toEqual([['kernel', { code: '# Read the request body\nimport re' }]])
+    expect(prose(chunks)).toContain('format reminder')
+  })
+
+  it('leaves the same tag alone inside a sentence', () => {
+    // Line-leading is structure; the identical tag inside prose is the model
+    // describing the format, and running it would act on a sentence.
+    const chunks = ['Write it as <parameter name="code">print(1)</parameter> to run code.\n']
+    expect(calls(chunks)).toEqual([])
+  })
+
+  it('refuses the inference when two tools could own the argument', () => {
+    // `code` is one tool's argument on this roster and two tools' argument on
+    // the next, so the answer comes from the roster the request composed — and
+    // when it is ambiguous there is no answer, because a coin flip that RUNS
+    // something is not a reading.
+    const twin: ToolSchema = { ...KERNEL, name: 'run_code' }
+    expect(calls(['<parameter name="code">1+1</parameter>\n'], [KERNEL, twin])).toEqual([])
+  })
+
+  it('never dispatches the format statement the model recited back', () => {
+    // The statement's own example names `PARAMETER_NAME`, which no roster
+    // declares, so recitation resolves to nothing and runs nothing.
+    expect(calls(['<parameter name="PARAMETER_NAME">value</parameter>\n'])).toEqual([])
+    expect(calls(['<parameter name="nope">print(1)</parameter>\n'])).toEqual([])
+  })
+
+  it('reminds but runs nothing for a bare parameter that names no argument', () => {
+    // Two spellings of the same dead end: no attributes at all, and attributes
+    // that never say which argument this is. Nothing can be placed either way,
+    // so the value stays visible — with a word about why it did not run.
+    for (const chunks of [['<parameter>print(1)</parameter>\n'], ['<parameter string="true">print(1)</parameter>\n']]) {
+      expect(calls(chunks)).toEqual([])
+      expect(prose(chunks)).toContain('format reminder')
+    }
   })
 })
 
@@ -921,6 +1108,16 @@ describe('a call the model left in its reasoning channel', () => {
   it('unit: trailingReasoningCalls reads the same tail', () => {
     expect(trailingReasoningCalls(REASONED_CALL, toolIndex([CORDIS]))).toEqual([
       { name: 'cordis_inspect_list', arguments: JSON.stringify({ platform: 'host' }) },
+    ])
+  })
+
+  it('recovers a REPAIRED call at the tail, reminder and all', () => {
+    // The tail must be JUST the call, and the reader's own reminder is not the
+    // model's prose — counting it would make a repaired call in the reasoning
+    // channel unrecoverable, which is the one case that needs both.
+    const tail = 'Let me check.\n<tool_calls>\n<invoke=kernel>\n<parameter=code>1+1</parameter>\n</invoke>\n</tool_calls>'
+    expect(trailingReasoningCalls(tail, toolIndex([KERNEL]))).toEqual([
+      { name: 'kernel', arguments: JSON.stringify({ code: '1+1' }) },
     ])
   })
 
