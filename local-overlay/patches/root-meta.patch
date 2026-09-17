@@ -30,7 +30,7 @@ index ac01e65042..3a52d077c6 100644
 +# whitespace error. Exempt them from the whitespace check.
 +*.patch -whitespace
 diff --git a/.gitignore b/.gitignore
-index fb999f93fb..a56f6d6c51 100644
+index fb999f93fb..56afe75a9b 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -34,6 +34,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
@@ -44,7 +44,7 @@ index fb999f93fb..a56f6d6c51 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -44,3 +48,42 @@ worktrees/
+@@ -44,3 +48,53 @@ worktrees/
  .agents/worktrees/
  .typert-*/
  native/system/test/bin/
@@ -87,6 +87,17 @@ index fb999f93fb..a56f6d6c51 100644
 +
 +# Harness desktop shell: CDP discovery record, regenerated at every launch
 +.cdp-target.json
++
++# Local scratch: agent working files, merge tooling, and ad-hoc captures. None of
++# this is source, and none of it belongs on a shared branch.
++.merge-port/
++.scratch/
++.committens/
++.dbg_extract.py
++.tmp-*
++_show_block.txt
++_t.png
++e2e-shot.png
 diff --git a/README.i18n.yaml b/README.i18n.yaml
 index 904c7928d2..a3ef4b1d18 100644
 --- a/README.i18n.yaml

@@ -87,3 +87,14 @@ screenshots/
 
 # Harness desktop shell: CDP discovery record, regenerated at every launch
 .cdp-target.json
+
+# Local scratch: agent working files, merge tooling, and ad-hoc captures. None of
+# this is source, and none of it belongs on a shared branch.
+.merge-port/
+.scratch/
+.committens/
+.dbg_extract.py
+.tmp-*
+_show_block.txt
+_t.png
+e2e-shot.png
