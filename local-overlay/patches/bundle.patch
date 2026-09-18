@@ -263,7 +263,7 @@ index f906ea8601..27e98b00f1 100644
 +    - id: tool-roster
 +      name: '@deepseek-ai/dsh-tool-roster'
 diff --git a/packages/bundle/base/package.json b/packages/bundle/base/package.json
-index abe58f9588..ffdff89cfb 100644
+index abe58f9588..0a10f7c7d0 100644
 --- a/packages/bundle/base/package.json
 +++ b/packages/bundle/base/package.json
 @@ -45,6 +45,7 @@
@@ -282,7 +282,15 @@ index abe58f9588..ffdff89cfb 100644
      "@deepseek-ai/dsh-llm-pi-ai": "workspace:^",
      "@deepseek-ai/dsh-llm-retry": "workspace:^",
      "@deepseek-ai/dsh-permission-presets": "workspace:^",
-@@ -102,9 +104,11 @@
+@@ -74,6 +76,7 @@
+     "@deepseek-ai/dsh-session-projection": "workspace:^",
+     "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
+     "@deepseek-ai/dsh-session-query-sqlite": "workspace:^",
++    "@deepseek-ai/dsh-session-recovery-context": "workspace:^",
+     "@deepseek-ai/dsh-session-telemetry-otel": "workspace:^",
+     "@deepseek-ai/dsh-session-title": "workspace:^",
+     "@deepseek-ai/dsh-session-title-first-prompt-llm": "workspace:^",
+@@ -102,9 +105,11 @@
      "@deepseek-ai/dsh-tool-pwsh": "workspace:^",
      "@deepseek-ai/dsh-tool-ralph": "workspace:^",
      "@deepseek-ai/dsh-tool-skill": "workspace:^",
@@ -294,7 +302,7 @@ index abe58f9588..ffdff89cfb 100644
      "@deepseek-ai/dsh-tool-todo": "workspace:^",
      "@deepseek-ai/dsh-tool-web": "workspace:^",
      "@deepseek-ai/dsh-tool-workflow": "workspace:^",
-@@ -114,6 +118,7 @@
+@@ -114,6 +119,7 @@
      "@deepseek-ai/dsh-user-approval": "workspace:^",
      "@deepseek-ai/dsh-user-questions": "workspace:^",
      "@deepseek-ai/dsh-web": "workspace:^",
