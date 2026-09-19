@@ -1,56 +1,64 @@
 /**
- * Post-compaction recovery context, and the session's own log path as a prompt
- * fact.
+ * Context initialization after compaction.
  *
  * Compaction keeps a summary and drops the transcript. What it drops includes
  * the operator's own words — the prompt the work was commissioned with, and every
  * correction since — so the turn after a compaction is the turn most likely to
- * resume the wrong task, confidently. This plugin answers that turn by PUTTING
- * THE RECORD BACK rather than by telling the model to go looking for it: one
- * message, injected once per compaction, carrying the operator prompts and the
- * tail of the log. An instruction to fetch it would cost a turn and can be
- * skipped; an injected message cannot.
+ * resume the wrong task, confidently.
+ *
+ * This plugin answers that turn with a dedicated initialization step instead of
+ * an extra paragraph inside a normal one. During compaction, CODE — never a
+ * model — extracts the record into `compaction-[id]-[session-id].md`. On the
+ * next step the harness sends that document and nothing else: no system prompt,
+ * no other injections, and one instruction to reply with nothing but `OK`. Once
+ * that acknowledgement is absorbed, the operator's own prompt and the normal
+ * initialization injections proceed as they would have.
  *
  * Nothing here scans history. A Session projection folds the prompts, the event
  * tail, and the latest compaction as they commit, exactly as the
  * [synchronous-read rule](../../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md)
  * prescribes, so the state survives resume and costs one pure fold per event.
- * The injection is idempotent through the log itself: the message it appends
- * records this plugin as its source, and the same fold reads that back as "this
- * compaction has been answered".
- *
- * The same session facts are registered as prompt variables, so a deployment can
- * write `{{session_log}}` into its own persona text and get the exact file the
- * writer is appending to.
- *
- * ```yaml
- * - id: session-recovery-context
- *   name: '@deepseek-ai/dsh-session-recovery-context'
- *   config:
- *     tailEvents: 50
- * ```
- *
  * @module @deepseek-ai/dsh-session-recovery-context
  */
 
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
-import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
-// Type-only: the `compaction/*` SessionEventMap merges. Without it
-// `compaction/summary` is not a member of the event union and the watermark
-// comparison below is a type error, not a runtime one.
+import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
+// Type-only: resolves the `compaction/*` events this plugin folds on.
 import type {} from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import {
+  DEFAULT_COMPACTION_EVENTS,
+  compactionLogFilename,
+  renderCompactionLog,
+  type CompactionLogEvent,
+} from './compaction-log.ts'
 import { sessionDir, sessionLogPath } from './log-path.ts'
 import type { LogCompression } from './log-path.ts'
 
 export { encodeSegment, projectDir, projectKey, sessionDir, sessionLogPath } from './log-path.ts'
 export type { LogCompression } from './log-path.ts'
+export {
+  COMPACTION_LOG_PREFIX,
+  DEFAULT_COMPACTION_EVENTS,
+  compactionLogFilename,
+  renderCompactionLog,
+  selectCompactionEvents,
+} from './compaction-log.ts'
+export type {
+  CompactionLogEvent,
+  CompactionLogInput,
+  CompactionLogPrompt,
+} from './compaction-log.ts'
 
 /** Cordis plugin name used by loader diagnostics, and this plugin's message source. */
 export const name = 'session-recovery-context'
@@ -68,6 +76,13 @@ export const inject = ['agents', 'sessionProjections']
  */
 const LOG_CONTEXT_ORDER = 125
 
+/** The single instruction the initialization step carries. */
+export const DEFAULT_INSTRUCTION = 'Read the compaction record above and reply with nothing but "OK".'
+  + ' Do not summarize it, do not act on it, and do not add anything else.'
+
+/** Marker `form` this plugin stamps on the two messages it owns. */
+const RECOVERY_FORM = 'snapshot'
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     /** Folded operator prompts, event tail, and compaction watermark. */
@@ -83,23 +98,29 @@ const promptSchema = zod.object({
 })
 
 const digestSchema = zod.object({
-  /** Sequence number of the event. */
+  /** Sequence number of the committed event. */
   seq: zod.number(),
-  /** The event type, verbatim. */
+  /** The event type. */
   type: zod.string(),
   /** A short label read out of the event's own payload, or `''` when it has none. */
   label: zod.string(),
 })
 
 const stateSchema = zod.object({
-  /** Every operator prompt, oldest first. */
+  /** Every turn-starting operator prompt, oldest first. */
   prompts: zod.array(promptSchema),
   /** The most recent events, oldest first, bounded by `tailEvents`. */
   tail: zod.array(digestSchema),
   /** Sequence number of the newest `compaction/summary`, or null. */
   compactionSeq: zod.number().nullable(),
-  /** The compaction this plugin has already answered, or null. */
-  answeredSeq: zod.number().nullable(),
+  /** The compaction id of the newest `compaction/summary`, or null. */
+  compactionId: zod.string().nullable(),
+  /** The summary text of the newest `compaction/summary`. */
+  summary: zod.string(),
+  /** The compaction whose recovery step this session has already emitted, or null. */
+  recoverySentSeq: zod.number().nullable(),
+  /** The compaction whose acknowledgement has been absorbed, or null. */
+  absorbedSeq: zod.number().nullable(),
 })
 
 /** Folded recovery state for one session. */
@@ -111,67 +132,42 @@ export type RecoveryPrompt = zod.infer<typeof promptSchema>
 /** One event as the tail keeps it. */
 export type RecoveryDigest = zod.infer<typeof digestSchema>
 
-/** The wording a deployment overrides rather than rewrites. */
-export const DEFAULT_PREAMBLE = 'Context was compacted. Below is the durable record the compaction did not keep:'
-  + ' every instruction the operator gave, and the tail of this session\'s log.'
-  + ' Treat the operator prompts as the authority on what the task is.'
-
 /** Trailing events the digest carries when the deployment states no bound. */
-export const DEFAULT_TAIL_EVENTS = 50
+export const DEFAULT_TAIL_EVENTS = 200
 
 /** Per-prompt character budget when the deployment states none. */
 export const DEFAULT_PROMPT_CHARS = 1200
 
 /** Per-event label budget when the deployment states none. */
-export const DEFAULT_LABEL_CHARS = 120
+export const DEFAULT_EVENT_CHARS = 120
 
-/**
- * Plugin config. Every field bounds state or wording; none is required.
- *
- * Defaults live in {@link apply} rather than in the schema below, so an omitted
- * field is observably omitted — a schema default would make the code's fallback
- * unreachable and hide which layer chose the value.
- */
+/** Plugin config. Every field bounds state or wording; none is required. */
 export interface Config {
-  /**
-   * Session root the JSONL backend writes under. Defaults to the same
-   * `dshHomePath('sessions')` the shipped `session-persistence-jsonl` row uses,
-   * so the two agree without being stated twice; a deployment that moves that
-   * root must set the same value here or the printed path will name a file that
-   * does not exist.
-   */
+  /** The session root directory; defaults to the harness home's `sessions`. */
   root?: string
-  /** The backend's artifact encoding, which decides the log's suffix. Defaults to `zstd`. */
-  compression?: LogCompression
-  /** How many trailing events the digest carries. `0` disables the tail. Defaults to 50. */
-  tailEvents?: number
-  /** Per-prompt character budget; a longer prompt is clipped with a marker. Defaults to 1200. */
+  /** Per-prompt character budget. */
   promptChars?: number
-  /** How many prompts to keep. Omitted or `0` keeps every one of them. */
-  maxPrompts?: number
-  /** Per-event label budget inside the tail. Defaults to 120. */
-  labelChars?: number
-  /** First line of the injected message. Defaults to {@link DEFAULT_PREAMBLE}. */
-  preamble?: string
+  /** Per-event label budget. */
+  eventChars?: number
+  /** Trailing events the fold keeps. */
+  tailEvents?: number
+  /** Events the written record carries. */
+  compactionEvents?: number
+  /** The instruction the initialization step carries. */
+  instruction?: string
+  /** The artifact encoding the session writer uses. */
+  logCompression?: LogCompression
 }
 
-/** Schemastery validation for {@link Config}. Invalid values fail plugin load. */
 export const Config: z<Config> = z.object({
-  root: z.string(),
-  compression: z.union([z.const('zstd'), z.const('none')]),
-  tailEvents: z.natural(),
-  promptChars: z.natural(),
-  maxPrompts: z.natural(),
-  labelChars: z.natural(),
-  preamble: z.string(),
+  root: z.string().description('The session root directory.'),
+  promptChars: z.number().description('Per-prompt character budget.'),
+  eventChars: z.number().description('Per-event label budget.'),
+  tailEvents: z.number().description('Trailing events the fold keeps.'),
+  compactionEvents: z.number().description('Events the written record carries.'),
+  instruction: z.string().description('The instruction the initialization step carries.'),
+  logCompression: z.union([z.const('zstd'), z.const('none')]).description('The artifact encoding the session writer uses.'),
 })
-
-/** Collapse whitespace and clip to a budget, marking a clip rather than hiding it. */
-function clip(text: string, budget: number): string {
-  const flat = text.replace(/\s+/g, ' ').trim()
-  if (budget <= 0 || flat.length <= budget) return flat
-  return `${flat.slice(0, budget)}… [+${flat.length - budget} chars, whole text in the session log]`
-}
 
 /** The text of a content-block array, when the value has that shape. */
 function blockText(value: unknown): string {
@@ -183,6 +179,12 @@ function blockText(value: unknown): string {
     if (typeof text === 'string') parts.push(text)
   }
   return parts.join(' ')
+}
+
+/** Clip one string to a budget, marking the cut. */
+function clip(text: string, budget: number): string {
+  if (budget <= 0 || text.length <= budget) return text
+  return `${text.slice(0, Math.max(0, budget - 1))}…`
 }
 
 /**
@@ -202,7 +204,7 @@ export function eventLabel(event: SessionEvent, budget: number): string {
   const record = data as Record<string, unknown>
   const text = blockText(record.content)
   if (text.length > 0) return clip(text, budget)
-  for (const key of ['name', 'summary', 'reason', 'mode', 'title'] as const) {
+  for (const key of ['name', 'summary', 'reason', 'mode', 'title', 'error'] as const) {
     const value = record[key]
     if (typeof value === 'string' && value.length > 0) return clip(value, budget)
   }
@@ -238,109 +240,212 @@ function appendPrompt(
   return [next[0] as RecoveryPrompt, ...next.slice(next.length - (limit - 1))]
 }
 
+/**
+ * Whether one `user/message` event starts a turn rather than steering one.
+ *
+ * Only an instructional prompt restates the task, and only a turn-starting one
+ * survives as an operator instruction; a steering message is a mid-turn nudge
+ * whose meaning depends on the step it interrupted.
+ * @param event - the committed `user/message`.
+ * @returns true when the message opened a turn.
+ */
+export function startsTurn(event: SessionEvent<'user/message'>): boolean {
+  const data = event.data as { steering?: unknown; turn?: unknown }
+  if (data.steering === true) return false
+  if (typeof data.turn === 'number') return true
+  return true
+}
+
 /** Whether one `user/message` event is this plugin's own injection. */
 function isOwnInjection(event: SessionEvent<'user/message'>): boolean {
-  const source = event.data.source as { kind?: unknown; plugin?: unknown }
-  return source.kind === 'plugin' && source.plugin === name
+  const source = event.data.source as { kind?: unknown; plugin?: unknown; form?: unknown }
+  return source.kind === 'plugin' && source.plugin === name && source.form === RECOVERY_FORM
 }
 
 /**
- * Render the recovery message the model reads after a compaction.
- * @param state - the folded prompts and event tail.
- * @param preamble - the message's first line.
- * @param logPath - the session's log file, omitted when there is no session to name.
- * @returns the message text, without a trailing newline.
+ * Messages a session has claimed for a real turn but not yet admitted, held
+ * between the initialization step and the step that follows it.
+ *
+ * Process-local on purpose: the acknowledgement is absorbed within one process,
+ * and a resumed session simply has nothing stashed.
  */
-export function renderRecovery(
-  state: SessionRecoveryProjection,
-  preamble: string,
-  logPath: string | undefined,
+const deferred = new WeakMap<Session, UserMessage[]>()
+
+/** Compactions whose record file has already been written in this process. */
+const written = new WeakSet<Session>()
+
+/**
+ * The absolute path of one compaction's record.
+ * @param root - the session root directory.
+ * @param session - the session the record belongs to.
+ * @param compactionId - the compaction id.
+ * @returns the record's path.
+ */
+export function compactionLogPath(
+  root: string,
+  session: Session,
+  compactionId: string,
 ): string {
-  const sections = [preamble, '', '## Operator prompts, oldest first']
-  if (state.prompts.length === 0) sections.push('(none recorded)')
-  else sections.push(...state.prompts.map((prompt, index) => `${index + 1}. [seq ${prompt.seq}] ${prompt.text}`))
-  if (state.tail.length > 0) {
-    sections.push('', `## Last ${state.tail.length} session events, oldest first`)
-    sections.push(...state.tail.map(entry => `[seq ${entry.seq}] ${entry.type}${entry.label === '' ? '' : ` — ${entry.label}`}`))
-  }
-  if (logPath !== undefined) {
-    sections.push('', `The whole record, including everything clipped above, is in this session's log: ${logPath}`)
-  }
-  return sections.join('\n')
+  return join(sessionDir(root, session.header.cwd, session.id), compactionLogFilename(compactionId, session.id))
 }
 
 /**
- * Register the recovery projection, the prompt facts, and the pre-step injector.
- * @param ctx - plugin context; every registration is disposed with it.
- * @param config - state bounds, the backend's path inputs, and the message wording.
+ * Write one compaction's record, exactly once per session.
+ * @param root - the session root directory.
+ * @param session - the session the record belongs to.
+ * @param state - the folded recovery state.
+ * @param eventLimit - events the record carries.
+ * @returns the record's path, or undefined when there is nothing to write.
  */
-export function apply(ctx: Context, config: Config): void {
-  const root = config.root ?? dshHomePath('sessions')
-  const compression = config.compression ?? 'zstd'
-  const tailEvents = config.tailEvents ?? DEFAULT_TAIL_EVENTS
-  const promptChars = config.promptChars ?? DEFAULT_PROMPT_CHARS
-  const maxPrompts = config.maxPrompts ?? 0
-  const labelChars = config.labelChars ?? DEFAULT_LABEL_CHARS
-  const preamble = config.preamble ?? DEFAULT_PREAMBLE
+async function writeCompactionLog(
+  root: string,
+  session: Session,
+  state: SessionRecoveryProjection,
+  eventLimit: number,
+): Promise<string | undefined> {
+  if (state.compactionSeq === null || state.compactionId === null) return undefined
+  if (written.has(session)) return undefined
+  const events: CompactionLogEvent[] = state.tail.map(entry => ({ ...entry }))
+  const text = renderCompactionLog({
+    compactionId: state.compactionId,
+    sessionId: session.id,
+    summary: state.summary,
+    prompts: state.prompts.map(prompt => ({ ...prompt })),
+    events,
+    eventLimit,
+  })
+  const path = compactionLogPath(root, session, state.compactionId)
+  await mkdir(sessionDir(root, session.header.cwd, session.id), { recursive: true })
+  await writeFile(path, text, 'utf8')
+  written.add(session)
+  return path
+}
 
-  /** The log file for one session, or undefined without a session to name. */
-  const logOf = (session: Session | undefined): string | undefined =>
-    session === undefined ? undefined : sessionLogPath(root, session.header.cwd, session.id, compression)
+/**
+ * Whether this session's next step is the initialization step.
+ * @param state - the folded recovery state.
+ * @returns true when a compaction awaits its acknowledgement.
+ */
+export function awaitingAcknowledgement(state: SessionRecoveryProjection): boolean {
+  return state.compactionSeq !== null && state.compactionSeq !== state.absorbedSeq
+}
+
+/** Render the initialization message: the record, then the one instruction. */
+function renderRecovery(record: string, instruction: string): string {
+  return [record, '', '---', '', instruction].join('\n')
+}
+
+/**
+ * Install the projection, the initialization step, and the log-path facts.
+ * @param ctx - the plugin context.
+ * @param config - the deployment's bounds and wording.
+ */
+export function apply(ctx: Context, config: Config = {}): void {
+  const promptChars = config.promptChars ?? DEFAULT_PROMPT_CHARS
+  const eventChars = config.eventChars ?? DEFAULT_EVENT_CHARS
+  const tailEvents = config.tailEvents ?? DEFAULT_TAIL_EVENTS
+  const compactionEvents = config.compactionEvents ?? DEFAULT_COMPACTION_EVENTS
+  const instruction = config.instruction ?? DEFAULT_INSTRUCTION
+  const compression: LogCompression = config.logCompression ?? 'zstd'
+  const root = config.root ?? dshHomePath('sessions')
 
   ctx.sessionProjections.register({
     key: 'sessionRecovery',
-    stateVersion: 1,
+    stateVersion: 2,
     stateSchema,
-    init: () => ({ prompts: [], tail: [], compactionSeq: null, answeredSeq: null }),
-    // Every event advances the tail, so this fold returns a fresh state each
-    // time rather than preserving the reference an uninterested unit would. The
-    // unit publishes no `wire` view, so that churn reaches no client.
+    init: () => ({
+      prompts: [],
+      tail: [],
+      compactionSeq: null,
+      compactionId: null,
+      summary: '',
+      recoverySentSeq: null,
+      absorbedSeq: null,
+    }),
     apply: (state, event) => {
       let next = state
-      if (event.type === 'compaction/summary') next = { ...next, compactionSeq: Number(event.seq) }
+      if (event.type === 'compaction/summary') {
+        const data = event.data as { compactionId?: unknown; summary?: unknown }
+        next = {
+          ...next,
+          compactionSeq: Number(event.seq),
+          compactionId: typeof data.compactionId === 'string' ? data.compactionId : null,
+          summary: blockText(data.summary),
+          recoverySentSeq: null,
+        }
+      }
       if (event.type === 'user/message') {
-        const message = event
-        if (isOwnInjection(message)) next = { ...next, answeredSeq: next.compactionSeq }
-        else if (message.data.source.kind === 'user') {
-          const text = clip(blockText(message.data.content), promptChars)
+        if (isOwnInjection(event)) {
+          next = { ...next, absorbedSeq: next.compactionSeq, recoverySentSeq: next.compactionSeq }
+        } else if (startsTurn(event) && !isOwnInjection(event)) {
+          const text = blockText((event.data as { content?: unknown }).content)
           if (text.length > 0) {
-            next = { ...next, prompts: appendPrompt(next.prompts, { seq: Number(event.seq), text }, maxPrompts) }
+            next = {
+              ...next,
+              prompts: appendPrompt(next.prompts, { seq: Number(event.seq), text: clip(text, promptChars) }, 0),
+            }
           }
         }
       }
-      if (tailEvents === 0) return next
-      return { ...next, tail: appendDigest(next.tail, event, tailEvents, labelChars) }
+      return { ...next, tail: appendDigest(next.tail, event, tailEvents, eventChars) }
     },
   })
 
-  ctx.on('agent/pre-step', async ({ agent, signal }, next): Promise<PreStepDecision> => {
-    const decision = await next()
-    if (decision.kind === 'reject' || signal.aborted) return decision
-    const state = ctx.sessionProjections.stateOf(agent.session, 'sessionRecovery') as SessionRecoveryProjection
-    // Nothing to answer: no compaction yet, or the log already holds this
-    // plugin's answer to the newest one.
-    if (state.compactionSeq === null || state.compactionSeq === state.answeredSeq) return decision
-    const text = renderRecovery(state, preamble, logOf(agent.session))
+  ctx.on('agent/pre-step', async (
+    { agent, messages, signal },
+    next,
+  ): Promise<PreStepDecision> => {
+    const base = await next()
+    if (base.kind === 'reject') return base
+    const session = agent.session
+    const state = ctx.sessionProjections.stateOf(session, 'sessionRecovery') as SessionRecoveryProjection
+
+    // Past the acknowledgement: admit the messages this plugin deferred for the
+    // real turn, then let the ordinary injections run.
+    const stashed = deferred.get(session)
+    if (stashed !== undefined && !awaitingAcknowledgement(state)) {
+      deferred.delete(session)
+      return { ...base, messages: [...stashed, ...base.messages] }
+    }
+    // Nothing to answer: no compaction yet, or this compaction already answered.
+    if (state.compactionSeq === null || state.recoverySentSeq === state.compactionSeq) return base
+
+    await writeCompactionLog(root, session, state, compactionEvents)
+    const path = compactionLogPath(root, session, state.compactionId ?? String(state.compactionSeq))
+    const record = await readRecord(path)
+    // The initialization step owns the exchange. The operator's claimed messages
+    // wait for the step that follows the acknowledgement, so this step carries
+    // the record and its instruction and nothing else.
+    deferred.set(session, [...messages])
+    signal.throwIfAborted()
     return {
-      ...decision,
+      kind: 'enter',
+      startsRequestSeries: true,
       messages: [
-        ...decision.messages,
         createUserMessage({
-          content: [{ type: 'text', text }],
-          source: { kind: 'plugin', plugin: name, form: 'snapshot', sections: [{ name, text }] },
+          content: [{ type: 'text', text: renderRecovery(record, instruction) }],
+          source: { kind: 'plugin', plugin: name, form: RECOVERY_FORM, sections: [{ name, text: record }] },
         }),
       ],
     }
   }, { prepend: true })
 
+  // The initialization step carries no system prompt and no other injections.
+  ctx.on('system-prompt/assemble', async (assembly: PromptAssembly, context, next) => {
+    const agent = context.agent
+    if (agent === undefined) return next()
+    const state = ctx.sessionProjections.stateOf(agent.session, 'sessionRecovery') as SessionRecoveryProjection
+    if (!awaitingAcknowledgement(state)) return next()
+    return { sections: [], contexts: [], tools: assembly.tools, variables: assembly.variables }
+  }, { prepend: true })
+
   // The prompt facts are optional: a composition without a system prompt still
-  // gets the recovery injection, which is the part that changes behavior.
-  //
-  // Variable names are snake_case because the registry enforces
-  // `/^[a-z][a-z0-9_]*$/` and a rejected name throws inside this fiber, where
-  // the failure is swallowed: one camelCase name took the whole block —
-  // every variable AND the context section — down silently.
+  // gets the initialization step, which is the part that changes behavior.
   ctx.inject(['systemPrompt'], (scope: Context) => {
+    const logOf = (session: Session | undefined): string | undefined => {
+      if (session === undefined) return undefined
+      return sessionLogPath(root, session.header.cwd, session.id, compression)
+    }
     scope.systemPrompt.variable('session_id', context => context.agent?.session.id)
     scope.systemPrompt.variable('session_log', context => logOf(context.agent?.session))
     scope.systemPrompt.variable('session_dir', (context) => {
@@ -356,4 +461,14 @@ export function apply(ctx: Context, config: Config): void {
       },
     })
   })
+}
+
+/** Read the record back, tolerating a missing file by rendering nothing. */
+async function readRecord(path: string): Promise<string> {
+  const { readFile } = await import('node:fs/promises')
+  try {
+    return await readFile(path, 'utf8')
+  } catch {
+    return `(the compaction record at ${path} could not be read)`
+  }
 }
