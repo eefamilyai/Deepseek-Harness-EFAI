@@ -1,0 +1,103 @@
+# FORKED COPY of the upstream preset of the same id.
+#
+# This file is fork-owned: `@deepseek-ai/dsh-efai-presets` drops upstream's
+# shipped root and supplies this roster instead, because the roster carries
+# the fork's acting surface (the `kernel` tool) and upstream's copy cannot.
+#
+# The cost is that upstream roster changes no longer arrive on their own.
+# `node local-overlay/verify-efai-presets.mjs` fails when upstream's version of
+# this preset moves; re-apply that change here, then re-record the baseline.
+# The `minimal` agent preset: a fixed-prompt, single-tool coding-agent composition.
+#
+# The persona is the complete system prompt, so global identity, Web orientation,
+# tool guidance, and later assembly listeners cannot add prompt text. Runtime
+# context snapshots are suppressed for this preset. Context compaction is absent.
+#
+# Which single tool the model composes depends on the `kernel.enabled` setting
+# (see the standard preset's header for the switch itself). ON: `kernel` alone.
+# OFF: the persistent shell (`bash` on POSIX, `pwsh` on win32), exactly as this
+# preset ships upstream.
+#
+# A complete persona suppresses the kernel's own prompt section along with every
+# other one, so under the switch the model gets the tool's description and
+# nothing more. That is this preset's whole point, and the description carries
+# what a caller must know: the namespace persists, and the output is only what
+# the cell captured.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    prefix: You are a helpful software engineer assistant.
+    complete: true
+    includeRuntimeContext: false
+
+# ── the kernel ──────────────────────────────────────────────────────────────
+
+# The model-facing tool only. The kernel SEAM and its Python backend stay on the
+# host plane: the backend owns one interpreter probe and one child process, and
+# an entry-local realm here would mean a second interpreter resolution — and a
+# second kernel — for every preset a session mounts.
+# The row mounts unconditionally, like every other roster row in this file.
+# Which acting surface the model actually sees — the `kernel` tool or the RLM
+# engine's `rlm` tool — is decided per turn by `tool-roster` from
+# `kernel.enabled` and `rlm.enabled`, so switching either one lands when the
+# model stops generating rather than at the next boot.
+- id: tool-kernel
+  name: '@deepseek-ai/dsh-tool-kernel'
+  config:
+    timeoutMs: 180000
+
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into this agent's scoped catalog.
+# Exactly one shell stack mounts per host: the bash stack gates off win32 and
+# its pwsh twin gates off POSIX, mirroring the one-shot shell rows.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+    - id: terminal-pwsh
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        shellDialect: pwsh
+        timeoutMs: 300000
+
+    - id: persistent-pwsh
+      name: '@deepseek-ai/dsh-tool-pwsh-persistent'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a PowerShell shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * State is persistent across command calls and discussions with the user.
+          * Use native Windows paths (C:\...) and $env:NAME variables; this is PowerShell, not bash.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'Start-Job' or start a server with Start-Process.

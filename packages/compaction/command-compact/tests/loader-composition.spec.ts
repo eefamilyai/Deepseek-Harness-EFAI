@@ -118,8 +118,6 @@ describe('command-compact real Loader composition', () => {
       status: 'idle',
       options: {},
       reserveTurnAdmission: () => () => undefined,
-      // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: follows packages/compaction/command-compact/src/index.ts.
-      whenIdle: async () => {},
     } as unknown as Agent
     expect(context.commands.list(agent)).toContainEqual({
       definitionId: '@deepseek-ai/dsh-command-compact',

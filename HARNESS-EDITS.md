@@ -6,6 +6,8 @@ This file is the fork's own contract. It records every deviation from upstream, 
 
 Read [Rules](#the-standard) before you edit any file that upstream also owns. Read [Updating to a new upstream release](#updating-to-a-new-upstream-release) before you merge.
 
+For what the fork *is* — every plugin it adds, where each mounts, and which switch turns it on — read [HARNESS.md](HARNESS.md). This file covers only the seam with upstream.
+
 ## Where the fork stands
 
 | | commit | note |
@@ -13,16 +15,14 @@ Read [Rules](#the-standard) before you edit any file that upstream also owns. Re
 | Fork point | `47f943859b` | upstream merge of PR #2519, 2026-08-13 |
 | Upstream base | `c291e7961a` | `deepseek-harness` 0.1.5-rc.2; recorded in `local-overlay/BASE` |
 | Upstream merge landed | `0dfe2170bd` | `deepseek-harness` 0.1.5-rc.2 absorbed into the fork |
-| `master` | merge + 87 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider |
+| `master` | merge + 43 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider, session-recovery-context |
 | `upstream/master` | `c291e7961a` | 1,934 commits past the previous base |
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against the base `c291e7961a`, `master`'s surface is **354 paths** (221 added, 132 modified, 1 deleted). `local-overlay/INVENTORY.md` enumerates them from the rules that produce the patches, so it cannot drift from the tree the way a hand-written table can.
+Measured against the base `c291e7961a`, the fork modifies **92 upstream files** (17 patch groups), regenerates 23 more, and deletes one symlink. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
 
-Of the 221 added paths, all are free: upstream owns no path among them, so they merge untouched, forever.
-
-The remaining 133 paths are the entire cost of every future update: 118 are patched, and the other 15 are files a generator owns, which is why they are excluded from the patches and regenerated instead.
+Those 92 files are the entire cost of every future update, and the list is **frozen**: `local-overlay/SEAM.json` records it, and `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file absent from it.
 
 The seam below is grouped by why each edit exists, because the fix differs per group.
 
@@ -34,10 +34,23 @@ Paths upstream does not and will not use. Nothing here can conflict.
 
 | What | Path | Size |
 |---|---|---|
-| Python kernel seam | `packages/kernel/**` | 33 files |
+| Python kernel seam | `packages/kernel/**` | 44 files |
 | Kiln LLM provider registry | `packages/llm/llm-kiln` | 10 files |
-| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 41 files |
-| Browser capability | `packages/web/web-browser` | 10 files |
+| Text-channel tool-call reader | `packages/llm/llm-dsml` | 8 files |
+| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 44 files |
+| Browser capability | `packages/web/web-browser` | 11 files |
+| Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
+| Post-compaction context | `packages/session/session-recovery-context` | 10 files |
+| The fork's own composition | `packages/bundle/{efai-base,efai-web}` | 8 files |
+| The fork's agent rosters | `packages/preset/efai-presets` | 15 files |
+| The identity opener | `packages/core/efai-identity` | 4 files |
+| The `/version` route | `packages/host/version-route` | 4 files |
+| The fork compaction provider | `packages/compaction/compaction-efai` | 4 files |
+| Lifetime usage projection | `packages/llm/token-usage-lifetime` | 4 files |
+| Skill-body injection | `packages/skill/skill-injection` | 4 files |
+| Advanced settings section | `packages/client/ui-settings-advanced` | 9 files |
+| Flow-accent theme layer | `packages/client/ui-flow-accents` | 7 files |
+| Profile-bundle registration for the launchers | `efai/ensure-profile-bundles.mjs` | 1 file |
 | Sidebar host bridge | `packages/host/sidebar-bridge` | 4 files |
 | Client sidebar terminal and effects | `packages/client/{ui-sidebar-terminal,ui-effects}` | 31 files |
 | Session-info command | `packages/session/command-session-info` | 5 files |
@@ -45,44 +58,48 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Publish script | `upload_to_git.py` | 1 file |
 | This document | `HARNESS-EDITS.md` | 1 file |
 | Merge record | `.merge-port/**` | 2 files |
-| Agent Notes the fork added | `.agents/notes/implemented/**` | 7 files |
+| Agent Notes the fork added | `.agents/notes/implemented/**` | 10 files |
 | Windows desktop browser shell — Electron `BaseWindow` with `WebContentsView` panes, a native toolbar, and a CDP endpoint that `python/kiln/runtime/browser_tools.py` attaches to | `desktop/harness-desktop` | 8 files |
 
-Each **Size** is the count of tracked files under that row's path. The 221 fork-owned
-paths are the authority and this table is a curated selection of them, not a partition:
-`local-overlay/INVENTORY.md` lists the remaining 74: 29 under `local-overlay/` (the tooling and the
-patch set), 11 in `packages/agent-memory/`, 11 in `packages/rlm/`, 8 in `packages/client/` (ui-chat,
-ui-primitives, ui-settings-general, ui-theme, ui-tool), 6 in `packages/fs/tool-notebook-edit/`, 5 under
-`.agents/`, 3 loose root files, and 1 in `packages/session/`. The Agent Notes row is the exception to
-the section's premise — upstream owns `.agents/notes/implemented/` and keeps 926 files there; the 7
-counted are the notes the fork added, and they are fork-owned because upstream holds no file by those
-names.
+Each **Size** is the count of files under that row's path. `local-overlay/INVENTORY.md` is the
+authority — it enumerates every fork-owned path from the tree, and this table is a curated selection
+rather than a partition. The Agent Notes row is the exception to the section's premise: upstream owns
+`.agents/notes/implemented/` and keeps 926 files there, and the notes counted here are fork-owned
+only because upstream holds no file by those names. Six packages in this table are untracked until
+the next commit, so the generated counts lag them by that much.
+
+Five files are still *added inside* packages upstream owns — two in `ui-brand-official`, one each in
+`ui-chat`, `ui-primitives`, and `ui-tool`. They never conflict, which is exactly the risk: if
+upstream restructures the package, the file survives the merge and fails to compile far from the
+cause. The four that used to sit inside `ui-settings-general` and `ui-theme` are gone — they moved
+into `ui-settings-advanced` and `ui-flow-accents`. See T2-J.
 
 `desktop/` is deliberately outside every workspace glob in `pnpm-workspace.yaml` and every tsconfig, so the shell is never a pnpm workspace member, never enters the lockfile, and never enters a project reference. Adding it under `apps/` would make it all three.
 
 ### Tier 2 — the seam with upstream (the whole problem)
 
-The seam is **118 patched paths**. The groups below are a curated selection — the
-edits worth understanding before a merge — not an exhaustive partition of those 118;
+The seam is **92 patched paths**, down from 138: composition, the identity opener, compaction,
+skill injection, usage projection, and two client surfaces all moved into fork-owned packages. The groups below are a curated selection — the edits worth understanding before
+a merge — not an exhaustive partition of those 92;
 `local-overlay/INVENTORY.md` is the authority for the full list, and
 `local-overlay/rules.json` for which group owns which path. The counts in each heading
 are that group's curated membership as written, not the total for its subsystem.
 
 Grouped by why the edit exists, because the fix differs per group.
 
-**T2-A · Registration lists and manifests — 9 files, mechanical**
+**T2-A · Registration lists and manifests — 3 files, mechanical**
 
-`tsconfig.base.json` (+20), `tsconfig.host.json` (+8), `tsconfig.client.json` (+2), `pnpm-lock.yaml` (+287), and five manifests: `apps/cli/package.json`, `packages/bundle/{base,web-app}/package.json`, `packages/client/ui-settings-general/{package.json,tsconfig.json}`.
+`tsconfig.host.json`, `tsconfig.client.json`, and `apps/cli/package.json` (two bundle names). `tsconfig.base.json` and `pnpm-lock.yaml` are generated, so neither is patched or merged by hand.
 
-Adding a package requires an entry in each. `tsconfig.base.json` is generated by `pnpm run gen-tsconfig-paths` and is currently in sync, so it should never be merged by hand. The rest are hand-maintained lists, and they conflict on any release where upstream also adds a package — which is most of them.
+Adding a package requires an entry in each. They conflict on any release where upstream also adds a package — which is most of them — and they are the irreducible floor: a package that lives in this repository has to be listed by this repository. Fork entries stay in one contiguous `DSH-FORK`-fenced block so each file conflicts once.
 
-**T2-B · Composition edited inside upstream files — 6 files**
+**T2-B · Composition edited inside upstream files — RETIRED**
 
-`packages/preset/agent-presets/presets/{standard,minimal,ptc,cordis}/agent.cordis.yml` (+52, +29, +17, +17) and `packages/bundle/{base,web-app}/cordis.patch.yml` (+94, +21).
+This group was six files — upstream's four shipped presets and both bundle patches — and it was the largest recurring conflict source, because upstream reshuffles preset rosters on most releases and the fork's rows sat in the middle of them.
 
-These add the `kernel.enabled` switch and the `llm-kiln` route to upstream's shipped presets and bundles. This is the largest recurring conflict source: upstream reshuffles preset rosters on most releases, and the fork's edits sit in the middle of them.
+It is gone. The fork's rows live in `packages/bundle/efai-base/cordis.patch.yml` and `efai-web/`, stacked after upstream's bundles by the profile's own layer list; the rosters live in `packages/preset/efai-presets/presets/`, mounted by a fork plugin that drops upstream's shipped root. `efai/ensure-profile-bundles.mjs` keeps the profile naming both bundles, and upstream's six files are pristine.
 
-**T2-C · Behavior injected into upstream source — 11 files**
+**T2-C · Behavior injected into upstream source — 9 files**
 
 | File | Δ | What it adds |
 |---|---|---|
@@ -90,7 +107,6 @@ These add the `kernel.enabled` switch and the `llm-kiln` route to upstream's shi
 | `packages/compaction/compaction-basic/src/summarizer.ts` | +113 −14 | compaction prompt and summary parsing |
 | `packages/llm/token-meter/src/usage-projection.ts` | +85 −29 | usage projection |
 | `packages/extensions/tool-cordis/src/api-catalog.ts` | +80 | catalog entries |
-| `packages/boot/app-boot/src/index.ts` | +62 | `dshSettingFlag()` — a settings reader injected into the Loader `!!js` scope |
 | `packages/client/ui-settings-general/src/client/index.ts` | +14 | settings surface |
 | `packages/llm/token-meter/src/projection.ts` | +13 | |
 | `packages/llm/token-meter/src/index.ts` | +9 −4 | |
@@ -160,7 +176,7 @@ Seven concrete failures, in order of cost.
 
 **4. Generated files are committed as hand edits.** T2-F is ~260 lines that a generator rewrites in seconds. Every one is a conflict that costs review attention and yields a catalog describing the previous release.
 
-**5. The marker convention is applied unevenly.** Rule 2 asks every Tier-2 edit to carry a marker, and most do: `DSH-FORK` appears in 98 of the 118 patched paths. The other 20 are invisible to the convention — 5 `package.json` manifests, 5 `README.i18n.yaml` pairs, one package `tsconfig.json`, the two generated catalog modules (`packages/extensions/tool-cordis/src/api-catalog.ts`, `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`), one client spec, one client component (`packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`), and 4 `docs/` pages. The 20th path, `.claude/skills`, is the one file the fork deletes — a symlink, with nowhere to put a comment. Markers are not the inventory and cannot be: a grep cannot tell a marked edit from a marked file, and a diff against `upstream/master` is mostly upstream's own churn across 1,934 commits. `local-overlay/INVENTORY.md` supplies the inventory mechanically. What the 20 unmarked files cost is legibility at conflict time: the resolver reads a hunk with no stated reason and no exit condition.
+**5. The marker convention is applied unevenly.** Rule 2 asks every Tier-2 edit to carry a marker, and most do: `DSH-FORK` appears in 109 of the 138 patched paths. The other 29 are invisible to the convention — 5 `package.json` manifests, 6 `README.i18n.yaml` files, the three `compaction-basic` README pages, one package `tsconfig.json`, the two generated catalog modules (`packages/extensions/tool-cordis/src/api-catalog.ts`, `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`), two specs, one client component (`packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`), and 8 `docs/` pages. The 29th path, `.claude/skills`, is the one file the fork deletes — a symlink, with nowhere to put a comment. Markers are not the inventory and cannot be: a grep cannot tell a marked edit from a marked file, and a diff against `upstream/master` is mostly upstream's own churn across 1,934 commits. `local-overlay/INVENTORY.md` supplies the inventory mechanically. What the 29 unmarked files cost is legibility at conflict time: the resolver reads a hunk with no stated reason and no exit condition.
 
 **6. `doc-sync` is red on five gates, and the fork packages cause two of them.** `pnpm run test:docs` fails on markdown links, translation pairing, markdown wrap, package README summaries, and the documentation-standard spec. The fork's own packages drive the last two: the sixteen READMEs under `packages/kernel/*`, `packages/rlm/*`, `packages/agent-memory/*`, `packages/client/{ui-sidebar-terminal,ui-effects}`, `packages/host/sidebar-bridge`, `packages/web/web-browser`, `packages/llm/llm-kiln`, `packages/fs/tool-notebook-edit`, and `packages/session/command-session-info` were written without the `## Summary` heading the summaries gate requires, and without the frontmatter, Table of Contents, and Dev Note the doc-standard spec requires. The documentation exists and is detailed; it does not carry the skeleton the gates read. The cost is that five red gates hide a sixth real breakage: a genuine documentation regression lands on top of known failures and nobody notices.
 
@@ -200,7 +216,7 @@ The two checks are not redundant. `verify.mjs` re-derives the diffs from the wor
 
 **Tier 1, fork-owned.** A path upstream does not use. New packages, `python/kiln/`, root fork docs, `.merge-port/`. No conflict is possible. **Put everything here that can go here.**
 
-**Tier 2, seam.** An upstream file the fork must touch. Every one is listed in [the seam register](#the-seam-register) with a reason and an exit plan, and covered by a patch group in `local-overlay/rules.json`. Adding to this list is a decision, not a side effect.
+**Tier 2, seam.** An upstream file the fork must touch. Every one is listed in [the seam register](#the-seam-register) with a reason and an exit plan, covered by a patch group in `local-overlay/rules.json`, and **recorded in `local-overlay/SEAM.json`**. That last file is what makes "a decision, not a side effect" enforceable: `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file the list does not already carry. The list shrinks freely — retiring an edit is the whole point — and grows only when someone records the growth in the same commit.
 
 **Tier 3, upstream-owned.** Everything else. **Never edit.** An edit here is a defect in the change, not a feature of it — move it to Tier 1, or send it upstream.
 
@@ -213,13 +229,13 @@ This document is the contract a maintainer reads. `local-overlay/rules.json` is 
 One line, immediately above the edit, in the file's comment syntax:
 
 ```ts
-// DSH-FORK(kernel): dshSettingFlag lets a Loader `disabled` expression read the
-// settings document. EXIT: upstream ships a settings reader in the !!js scope.
+// DSH-FORK(fix): installModelSelection is re-entrant on resume and redeclares the
+// accessor. EXIT: upstream PR — this is an upstream bug, not a fork feature.
 ```
 
 ```yaml
-# DSH-FORK(kernel): kernel.enabled picks the acting roster.
-# EXIT: move to packages/bundle/efai-kernel/cordis.patch.yml.
+# DSH-FORK(all): the fork's own gate, which upstream's hook config cannot know about.
+# EXIT: upstream gains a hook-extension point a fork can register into.
 ```
 
 The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `rlm`, `fix`, `brand`. Use `all` only for a file the whole fork shares, such as a tsconfig or the lockfile. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
@@ -230,11 +246,13 @@ After editing an upstream-owned file, fold the edit into its patch and re-prove 
 
 ### Rule 3 — Choose the mechanism in this order
 
-1. **A new fork-owned package.** Register on a documented extension point. Zero merge cost. Always try this first.
-2. **A fork-owned bundle.** `packages/bundle/efai-<feature>/cordis.patch.yml` — the harness's own patch-layer mechanism, applied by `dsh --profile`. Composition changes belong here, not in upstream presets.
-3. **A settings value.** If it varies per deployment it is `Config`, per `AGENTS.md`: *"No hardcoded tunables in plugins"*.
-4. **An upstream pull request.** For anything that is a bug, or that upstream would plausibly accept.
-5. **A marked Tier-2 edit.** Last resort. Smallest possible hunk, marker, exit plan, register entry.
+1. **A row in a fork-owned bundle.** `packages/bundle/efai-base/cordis.patch.yml`, or `efai-web/` for the browser profile. A later bundle layer inserts rows, replaces a row's whole `config`, and switches a row off by id — everything composition can express. The profile names the bundles, and `efai/ensure-profile-bundles.mjs` keeps them there.
+2. **A new fork-owned package on a documented extension point.** Zero merge cost, forever. `efai-identity` rewrites the prompt opener on `system-prompt/assemble`; `version-route` adds an HTTP route; `tool-roster` filters the roster per turn.
+3. **A preset in the fork's own root.** `packages/preset/efai-presets/presets/` supplies the four roster ids; upstream's shipped root is dropped, and `verify-efai-presets` reports when upstream's copy of one moves.
+4. **A switch decided at runtime.** Own the setting in a `*-mode` package and enforce it where the decision belongs — the roster for tool visibility, the mode plugin itself for a subsystem that must stop running. Never a Loader `disabled: !!js` expression: it is read once at boot, which makes the setting a restart and unmounts the plugin that would publish the switch in its off position.
+5. **A settings value.** If it varies per deployment it is `Config`, per `AGENTS.md`: *"No hardcoded tunables in plugins"*.
+6. **An upstream pull request.** For anything that is a bug, or that upstream would plausibly accept.
+7. **A recorded seam edit.** Last resort. Smallest possible hunk, marker, exit plan, register entry, patch group, and `verify-seam-frozen --record` in the same commit.
 
 ### Rule 4 — Never hand-merge a generated file
 
@@ -316,33 +334,33 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 
 | # | Files | Tag | Why it is in an upstream file | Exit |
 |---|---|---|---|---|
-| 1 | 4 preset `agent.cordis.yml` | `kernel` | `kernel.enabled` switches the acting roster | Move to `packages/bundle/efai-kernel/cordis.patch.yml` |
-| 2 | `bundle/{base,web-app}/cordis.patch.yml` | `kernel` `kiln` | mounts `tool-kernel` and `llm-kiln` | Same — a fork-owned bundle, applied by profile |
-| 3 | `boot/app-boot/src/index.ts` | `kernel` | `dshSettingFlag()` in the Loader `!!js` scope | Upstream PR: a settings reader is generally useful |
+| ~~1~~ | 4 preset `agent.cordis.yml` | `kernel` | **RETIRED** — the rosters are fork-owned (`packages/preset/efai-presets`), upstream's presets are pristine | done |
+| ~~2~~ | `bundle/{base,web-app}/cordis.patch.yml` | `kernel` `kiln` | **RETIRED** — every fork row moved to `packages/bundle/efai-base` and `efai-web` | done |
+| ~~3~~ | `boot/app-boot/src/index.ts` | `kernel` | **RETIRED** — no composition row reads a setting any more, so `dshSettingFlag` was deleted; the three switches decide at runtime | done |
 | 4 | `llm/llm/src/index.ts` | `kiln` | `registerAccountProvider` on `LlmRuntime` | Upstream PR, or a fork-owned service that wraps it |
-| 5 | `compaction-basic/{index,summarizer}.ts` | `kiln` | prompt and parsing for text-only routes | A fork-owned compaction provider — the seam already supports one |
-| 6 | `llm/token-meter/**` (3 files) | `kiln` | usage projection for Kiln routes | Upstream PR, or a provider-supplied projection |
-| 7 | `extensions/tool-cordis/src/api-catalog.ts` | `kernel` | catalog entries | Regenerate if generated; otherwise upstream PR |
-| 8 | `client/ui-settings-general/**` (6 files) | `kernel` | settings surface for the kernel switch | Register the section from `kernel-mode` instead |
+| ~~5~~ | `compaction-basic/{index,summarizer}.ts` | `kiln` | **RETIRED** — `packages/compaction/compaction-efai` subclasses the engine on its documented `summarize` hook; upstream's compaction package and `/compact` command are pristine | done |
+| ~~6~~ | `llm/token-meter/**` (3 files) | `kiln` | **RETIRED** — `packages/llm/token-usage-lifetime` registers its own projection unit beside upstream's | done |
+| ~~7~~ | `extensions/tool-cordis/src/api-catalog.ts` | `kernel` | **RETIRED** — the file is generated (`gen-cordis-api`), so it is declared generated and regenerated rather than patched; the client slot catalog went with it | done |
+| ~~8~~ | `client/ui-settings-general/**` (6 files) | `kernel` | **RETIRED** — the Advanced section is `packages/client/ui-settings-advanced`, a `settings.section` slot registration; upstream's settings package is pristine | done |
 | 9 | `core/agent/src/model-selection.ts` | `fix` | **upstream bug** — accessor re-entrancy on resume | **Upstream PR** |
 | 10 | `tsdown.config.ts` | `fix` | **upstream bug** — manifest-less workspace members | **Upstream PR** |
-| 11 | `core/system-prompt/src/index.ts` | `brand` | one-line identity string | A prompt section registered by a fork plugin |
-| 12 | 2 CSS modules, 3 `locales.ts` | `brand` | styling and copy | Fork-owned client package or locale overlay |
+| ~~11~~ | `core/system-prompt/src/index.ts` | `brand` | **RETIRED** — `packages/core/efai-identity` rewrites the opener on `system-prompt/assemble`, and upstream's own tests pass unmodified again | done |
+| 12 | 2 CSS modules, 3 `locales.ts` | `brand` | styling and copy inside upstream components; the *token* half retired into `packages/client/ui-flow-accents` | Upstream adopts the chrome, or the components are forked |
 | 13 | 3 `scripts/gen-*.ts` | `kernel` | generators must see fork packages | Upstream PR if the change is general |
 | 14 | `tsconfig.{host,client}.json` | `all` | project references | Contiguous fenced block (Rule 6) |
 | 15 | `pnpm-lock.yaml` | `all` | dependencies | `merge=ours` + regenerate (Rule 7) |
 | 16 | `.gitignore`, `.gitattributes` | `all` | credentials, CRLF for `*.cmd` | Permanent; append at end of file only |
 | 17 | `docs/subsystems/llm-streaming.*` | `kiln` | hand-written docs for a fork feature | Move to fork-owned `docs/` pages |
 | 18 | 8 test files | various | mirror 3–6 above | Follows whatever those become |
-| 19 | 2 files inside `client/ui-settings-general` | `kernel` | new files placed in an upstream package directory | Move to a fork-owned client package |
+| ~~19~~ | 2 files inside `client/ui-settings-general` | `kernel` | **RETIRED** — both moved into the fork-owned `ui-settings-advanced` package | done |
 | 20 | `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}` | `browser` | collapsible per-provider groups in the model dropdown, with account routes folded under a single base-provider header and an account picker | Upstream adopts provider collapse and account grouping in `ModelSelect` |
-| 21 | `packages/skill/tool-skill/src/index.ts` | `kernel` | `@skill <name>` is a second user-explicit skill load gesture beside `/name` | Upstream PR, or a fork-owned pre-step plugin |
-| 22 | `packages/skill/tool-skill/src/index.ts` | `kernel` | `alwaysLoadSkills` re-injects a named skill body whenever compaction prunes it from the surface, so a recovery procedure survives context loss | Upstream gains a per-skill declaration that keeps a body on the surface across compaction |
+| ~~21~~ | `packages/skill/tool-skill/src/index.ts` | `kernel` | **RETIRED** — the `@skill <name>` gesture is a second `agent/pre-step` listener in `packages/skill/skill-injection` | done |
+| ~~22~~ | `packages/skill/tool-skill/src/index.ts` | `kernel` | **RETIRED** — `alwaysLoadSkills` moved to `packages/skill/skill-injection`, which re-injects a pruned body from the same hook | done |
 | 23 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
 | 24 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |
-| 25 | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | mounts `rlm-mode`/`rlm` engine rows with `rlm.enabled` defaulting on; `rlm.enabled` unmounts the standalone `tool-kernel` and mounts the engine, while the subsumed shell/fs/search/jobs rows follow `kernel.enabled` | Move to `packages/bundle/efai-rlm/cordis.patch.yml` (a fork-owned bundle applied by profile) |
+| ~~25~~ | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | **RETIRED** — the engine mounts unconditionally in `efai-base`; `tool-roster` decides per turn whether `kernel` or `rlm` is the acting surface | done |
 | 26 | `client/ui-chat/src/client/{chat/ChatNodeSeat.tsx,contract/store.ts,contract/snapshot.ts,contract/turn-process.ts,conversation-nodes/turn-process-presentation.ts,stores.ts}`, with `tests/{chat-view.client.spec.tsx,chat-store.client.spec.ts}` | `brand` | the folded Turn-process row exists while the Turn is still running and lets the reader fold it; `store.ts`/`stores.ts` record the reader's open/closed choice so a running Turn can default expanded and keep that choice across `turn/end`; `turn-process.ts` keeps `steering` out of `TURN_PROCESS_INDEPENDENT_KINDS` so a mid-turn steer folds with the process, `snapshot.ts`/`turn-process-presentation.ts` publish the opening human anchor that keeps the Turn's own input outside the fold, and `turn-process-presentation.ts` only tightens the collapsed answer gap for a human row that stays outside it | Upstream keeps the folded process row to a finalized Turn, or lets a reader fold a running one; upstream also renders a mid-turn steer outside the collapsed process row |
-| 27 | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | the base bundle mounts the `agent-memory-mode`/`agent-memory` rows gated by `agent-memory.enabled` (default off), and `apps/cli` must declare both packages because it is the installation dependency closure the profile module fallback mirrors | Move the bundle rows to `packages/bundle/efai-memory/cordis.patch.yml` (a fork-owned bundle applied by profile); the `apps/cli` manifest row stays until profiles resolve bundles from the checkout |
+| ~~27~~ | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | **RETIRED** — `agent-memory-mode` mounts and unmounts the engine from the live setting, in `efai-base`; `apps/cli` now declares only the two fork bundles | done |
 | 28 | `.agents/skills/dsh-code-review/SKILL.md`, `.agents/skills/dsh-pre-push-checks/SKILL.md` | `all` | upstream's review and pre-push skills cannot know about this fork: the tier split, the `DSH-FORK` marker, `local-overlay/`, or the `verify-fork-overlay` gate. Each carries one added section plus its marker. | Permanent fork delta: the upstream skills would need a fork-extensibility mechanism for these sections to move out. |
 | 29 | `scripts/verify-package-readme-model-experience.ts` | `all` | the fork ships package READMEs for fork-owned packages, so the audited `NO_MODEL_EXPERIENCE_SECTION` / `SENTENCE_MODEL_EXPERIENCE` allowlists must name them; without entries the gate rejects a correct README. | Upstream accepts a model-experience declaration inside each package manifest, so the allowlists stop being a central file. |
 | 30 | `client/ui-brand-official/**` (3 `README*`, `src/client/Brand.tsx`, `src/client/index.ts`, `tests/browser-plugin.client.spec.tsx`), `apps/web/tests/built-boot.expected.e2e.ts` | `brand` | the sidebar brand is the fork's in **every** build profile — upstream gates the registration behind `DSH_CLIENT_BUILD_PROFILE=official`, so an unprofiled build falls through to the shell's `DSH Local Build` label and its version badge; the name is live text carrying a specular sweep rather than the upstream name artwork, and the built-boot smoke pins that wordmark instead of the profile-dependent shell brand | A fork-owned client package owns the sidebar chrome, so the registration stops being a gate on an upstream package |
@@ -382,7 +400,7 @@ Then, in order:
 
 **2. Resolve the lockfile by regenerating.** Rule 7. Do not read that conflict either.
 
-**3. Resolve real conflicts using the register.** A remaining conflict usually shows a `DSH-FORK` marker on the fork's side, carrying the reason and the `EXIT:` clause. A hunk with no marker is not proof that the edit was never registered — 22 patched paths carry none — so look the path up in `local-overlay/INVENTORY.md` before concluding anything about it.
+**3. Resolve real conflicts using the register.** A remaining conflict usually shows a `DSH-FORK` marker on the fork's side, carrying the reason and the `EXIT:` clause. A hunk with no marker is not proof that the edit was never registered — 29 patched paths carry none — so look the path up in `local-overlay/INVENTORY.md` before concluding anything about it.
 
 **4. Re-apply the mod and regenerate everything.**
 
@@ -433,7 +451,7 @@ Ordered by how much each removes from the next merge.
 
 1. **Send rows 9 and 10 upstream.** Two self-contained bug fixes; they leave the fork's diff entirely when they land.
 2. **Create `packages/bundle/efai-kernel` and `packages/bundle/efai-kiln`.** Moves rows 1 and 2 — six files, the highest-churn upstream files the fork touches — to Tier 1.
-3. **Finish the marker pass.** 20 of the 118 patched paths still carry no marker; the list and the grouping are in failure 5. Each one is a conflict a resolver reads cold.
+3. **Finish the marker pass.** 29 of the 138 patched paths still carry no marker; the list and the grouping are in failure 5. Each one is a conflict a resolver reads cold.
 4. **Fence the `tsconfig.host.json` / `tsconfig.client.json` entries.** Ten minutes; turns eight conflicts into two.
 5. **`pnpm-lock.yaml merge=ours`.** One line; removes the single largest conflicting file.
 6. **Move `ds_config.json` and `ds_sessions.json` out of the repository tree.**

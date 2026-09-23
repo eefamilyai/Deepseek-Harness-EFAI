@@ -77,6 +77,12 @@ try {
   Say 'Building...'
   pnpm run build
   if ($LASTEXITCODE -ne 0) { Die 'the build failed.' }
+  # The fork's composition ships as profile bundles, and what names a bundle is
+  # the profile. Doing this here means `dsh web` carries the fork even when it
+  # is started without start.cmd; the launcher repeats it, writing nothing when
+  # the profile is already current.
+  Say 'Registering the fork profile bundles...'
+  node efai\ensure-profile-bundles.mjs
 } finally { Pop-Location }
 
 if (-not (Test-Path (Join-Path $SrcDir 'apps\cli\lib\bin.js'))) {

@@ -43,6 +43,15 @@ export const inject = ['kernel']
 export const PROVIDER_ID = 'kiln-python'
 
 /**
+ * The settings namespace carrying `browserWindow`, owned by `kernel-mode`.
+ *
+ * Named here rather than imported: this provider depends on the kernel seam,
+ * not on the switch package, and a composition may mount it without either a
+ * switch or a settings service.
+ */
+export const KERNEL_SETTINGS_NAMESPACE = 'kernel'
+
+/**
  * Interpreters probed when config names none, in preference order. `py` leads
  * on Windows because the launcher is what a stock python.org install puts on
  * PATH, while the bare `python` there is often the Microsoft Store shim that
@@ -140,6 +149,33 @@ export async function resolvePython(configured?: string): Promise<string | undef
 }
 
 /**
+ * Whether the kernel's browser may put a window on the desktop.
+ *
+ * The user's document outranks the composition, and an explicit
+ * `KILN_BROWSER_HEADED` outranks both (handled at the call site). The settings
+ * service is read through `ctx.get` rather than injected: this provider must
+ * still mount in a composition that carries no settings service at all — the
+ * headless and test profiles — where the composition's own value is the whole
+ * answer.
+ *
+ * The value reaches the kernel as a child-process environment variable, and
+ * the runtime reads it once per process, so a change lands on the next kernel
+ * start rather than on the next cell.
+ * @param ctx - the plugin context, which may or may not carry `settings`.
+ * @param config - the composition-layer configuration.
+ * @returns whether a real window is allowed.
+ */
+export function resolveBrowserWindow(ctx: Context, config: Config): boolean {
+  const settings = ctx.get('settings') as { get(ns: string): unknown } | undefined
+  const section = settings?.get(KERNEL_SETTINGS_NAMESPACE)
+  if (typeof section === 'object' && section !== null) {
+    const value = (section as { browserWindow?: unknown }).browserWindow
+    if (typeof value === 'boolean') return value
+  }
+  return config.browserWindow === true
+}
+
+/**
  * Resolve the launch facts, start no process, and register the backend.
  *
  * The kernel process itself is lazy: it starts on the first cell, so a
@@ -197,7 +233,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       // this once per process, so it is resolved here rather than per action,
       // and an explicit environment value still wins for a one-off run.
       KILN_BROWSER_HEADED: process.env.KILN_BROWSER_HEADED
-        ?? (config.browserWindow === true ? '1' : '0'),
+        ?? (resolveBrowserWindow(ctx, config) ? '1' : '0'),
       // The runtime's own modules resolve relative to the script, but a cell
       // that imports one of them needs the directory on the path too.
       PYTHONPATH: [dirname(script), process.env.PYTHONPATH].filter(part => part !== undefined && part.length > 0).join(process.platform === 'win32' ? ';' : ':'),

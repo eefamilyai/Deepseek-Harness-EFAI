@@ -142,14 +142,6 @@
         compressionLevel: 1
         compressionThresholdBytes: 1024
 
-    # DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: move to a fork-owned bundle applied by profile.
-    # Sidebar panels' host surface: a dedicated user PTY at ws /kiln/terminal and
-    # the agent's shared browser at /kiln/browser (live state.json + screenshots
-    # + drive-by-action). Self-contained over the webserver carrier; browserDir
-    # defaults to the same KILN_BROWSER_DIR the kernel hands the Python runtime.
-    - id: sidebar-bridge
-      name: '@deepseek-ai/dsh-host-sidebar-bridge'
-
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
@@ -209,9 +201,6 @@
     - id: ui-theme
       name: '@deepseek-ai/dsh-client-ui-theme'
 
-    - id: ui-effects
-      name: '@deepseek-ai/dsh-client-ui-effects'
-
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
 
@@ -245,11 +234,6 @@
     - id: ui-sidebar-files
       name: '@deepseek-ai/dsh-client-ui-sidebar-files'
 
-    # The right Sidebar's terminal tab type: a live shell in the session
-    # workspace over the sidebar-bridge PTY endpoint.
-    - id: ui-sidebar-terminal
-      name: '@deepseek-ai/dsh-client-ui-sidebar-terminal'
-
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'
 
@@ -258,18 +242,6 @@
 
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
-
-    # DSH-FORK(kernel): the Tools settings section — independent kernel and
-    # conventional-tool switches, one switch per registered tool. EXIT: upstream
-    # ships a runtime tool-roster surface of its own.
-    - id: ui-settings-tools
-      name: '@deepseek-ai/dsh-client-ui-settings-tools'
-
-    # DSH-FORK(kiln): the Accounts settings section — add a DeepSeek web login
-    # from the UI instead of editing ds_config.json by hand. EXIT: upstream
-    # ships an account-management surface of its own.
-    - id: ui-settings-accounts
-      name: '@deepseek-ai/dsh-client-ui-settings-accounts'
 
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
@@ -496,14 +468,6 @@
   disabled: true
 
 - id: tool-web
-  disabled: true
-
-# The kernel moves behind presets with every other model-facing tool: the seam
-# and its Python backend stay on the host plane (one interpreter probe, one
-# process owner per agent), while `tool-kernel` is what a preset mounts to give
-# its agent the cell-execution verb at all.
-
-- id: tool-kernel
   disabled: true
 
 # The preset roster. The shipped presets are bundled inside

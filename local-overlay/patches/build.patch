@@ -1,5 +1,5 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index ed81fccc1f..d74695090c 100644
+index ed81fccc1f..4590d612d3 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
 @@ -64,6 +64,8 @@ export const SERVICE_PAGE: Record<string, string> = {
@@ -11,7 +11,7 @@ index ed81fccc1f..d74695090c 100644
    commands: 'commands.md',
    compaction: 'compaction.md',
    cordisInspect: 'extensions.md',
-@@ -150,9 +152,11 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+@@ -150,6 +152,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
    appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
    appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
    cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -19,11 +19,7 @@ index ed81fccc1f..d74695090c 100644
    configuredAgentIdentities: 'not a service: launcher-provided boot-context value (ConfiguredAgentIdentities | undefined) — packages/core/agent-loop/README.md owns this launcher contract',
    launcherSessionQueryPath: 'not a service: launcher-provided boot-context value (string | undefined) — packages/session-query/session-query-sqlite/README.md owns this launcher contract',
    dshHomePath: 'not a service: boot-provided root accessor function (typeof dshHomePath | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
-+  dshSettingFlag: 'not a service: boot-provided root accessor function (typeof dshSettingFlag | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
-   launchEnvironment: 'not a service: launcher-provided root accessor value (LaunchEnvironmentSnapshot | undefined) — packages/util/launch-environment/README.md owns this launcher contract',
-   connection: 'interface-typed (HostConnectionHandle); implementing class HostConnectionService is declared in rpc-host.ts — packages/client/connection/README.md owns the API',
-   fileUpload: 'client-side browser upload service — packages/client/file-upload/README.md owns the API',
-@@ -281,6 +285,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+@@ -281,6 +284,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmConfigurableProvider: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
@@ -33,7 +29,7 @@ index ed81fccc1f..d74695090c 100644
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -700,6 +707,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -700,6 +706,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-presets/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',

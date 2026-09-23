@@ -51,28 +51,6 @@
   name: '@deepseek-ai/dsh-tool-pwsh'
   disabled: !!js process.platform !== 'win32'
 
-# ── the kernel ──────────────────────────────────────────────────────────────
-
-# The model-facing tool only. The kernel SEAM and its Python backend stay on the
-# host plane: the backend owns one interpreter probe and one child process, and
-# an entry-local realm here would mean a second interpreter resolution — and a
-# second kernel — for every preset a session mounts.
-# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
-# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
-# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
-# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
-# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
-# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
-# is the sole acting surface, while kernel-off cleanly restores the shell roster.
-# EXIT: move these gates and the switch rows into a fork-owned
-# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
-# bundle chain exists (see HARNESS-EDITS.md seam register).
-- id: tool-kernel
-  name: '@deepseek-ai/dsh-tool-kernel'
-  disabled: !!js (typeof dshSettingFlag === 'function' && !dshSettingFlag('rlm.enabled', false)) === false
-  config:
-    timeoutMs: 180000
-
 # ── filesystem ──────────────────────────────────────────────────────────────
 
 # Both register into the host `tools` registry and provide nothing, so

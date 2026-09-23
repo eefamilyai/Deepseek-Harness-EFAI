@@ -26,9 +26,6 @@ import type {
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
-// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: kernel-mode registers the section itself.
-import { AdvancedSection } from './AdvancedSection.tsx'
-import type { AdvancedSectionInjected } from './AdvancedSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { SettingsDocumentStore } from './settings-document-store.ts'
@@ -183,16 +180,4 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
-
-  const advancedInjected = (): AdvancedSectionInjected => ({
-    settings: ctx.remote.settings,
-  })
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'advanced',
-    order: 100,
-    label: () => t('advanced.nav'),
-    locale: NS,
-    inject: advancedInjected,
-  }, AdvancedSection))
 }

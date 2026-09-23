@@ -9,9 +9,6 @@
   ],
   "references": [
     {
-      "path": "../../util/values"
-    },
-    {
       "path": "../../../vendor/cordis"
     },
     {

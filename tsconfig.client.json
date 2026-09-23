@@ -122,6 +122,8 @@
     { "path": "./packages/client/ui-effects" },
     { "path": "./packages/client/ui-settings-tools" },
     { "path": "./packages/client/ui-settings-accounts" },
+    { "path": "./packages/client/ui-settings-advanced" },
+    { "path": "./packages/client/ui-flow-accents" },
     // DSH-FORK end
   ]
 }

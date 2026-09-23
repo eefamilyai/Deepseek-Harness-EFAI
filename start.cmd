@@ -183,6 +183,12 @@ if defined BUILD_ONLY (
 )
 
 :run
+rem The fork ships its composition as profile bundles rather than as edits to
+rem upstream's. What names a bundle is the profile, so the launcher keeps the
+rem fork's two bundles on the web profile before every start. Writing nothing
+rem when they are already there, this costs one process and no output.
+node efai\ensure-profile-bundles.mjs web
+
 rem Prefer the built CLI when it exists: source mode (`pnpm dsh web`) re-runs
 rem the whole TypeScript tree through tsx on every cold start, which costs
 rem ~10x the startup time of the built entry.

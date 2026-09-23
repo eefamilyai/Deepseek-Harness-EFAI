@@ -66,6 +66,18 @@ const RUN_CODE_NAME = 'run_code'
 /** The one tool the kernel category switch owns. */
 const KERNEL_TOOL_NAME = 'kernel'
 
+/** The settings namespace the RLM switch lives in, owned by rlm-mode. */
+export const RLM_SETTINGS_NAMESPACE = 'rlm'
+
+/**
+ * The tool the RLM engine registers.
+ *
+ * It and `kernel` are the two acting surfaces over the same Python namespace,
+ * and exactly one of them is offered: the engine drives the REPL recursively,
+ * so a model holding both would be told to act two ways at once.
+ */
+const RLM_TOOL_NAME = 'rlm'
+
 /**
  * Tool names registered into an AGENT's own scope rather than the global layer.
  *
@@ -89,6 +101,12 @@ export interface Roster {
   readonly toolsEnabled: boolean
   /** Whether the kernel tool is available. */
   readonly kernelEnabled: boolean
+  /**
+   * Whether the RLM engine owns acting. On, the `rlm` tool is the kernel
+   * category's surface and the `kernel` tool is withdrawn; off, the reverse.
+   * Both require `kernelEnabled`, because the engine runs on the same seam.
+   */
+  readonly rlmEnabled: boolean
   /** Per-tool overrides; a name absent here is enabled. */
   readonly overrides: Readonly<Record<string, boolean>>
 }
@@ -131,7 +149,8 @@ function normalize(toolName: string): string {
  */
 export function toolVisible(roster: Roster, toolName: string): boolean {
   if (toolName === RUN_CODE_NAME) return true
-  if (toolName === KERNEL_TOOL_NAME) return roster.kernelEnabled
+  if (toolName === KERNEL_TOOL_NAME) return roster.kernelEnabled && !roster.rlmEnabled
+  if (toolName === RLM_TOOL_NAME) return roster.kernelEnabled && roster.rlmEnabled
   if (!roster.toolsEnabled) return false
   // Keyed by the normalized name: a switch is written against a section's
   // spelling, and the registry's spelling of the same tool can differ by a dash.
@@ -166,14 +185,16 @@ export function sectionHidden(hidden: ReadonlySet<string>, sectionName: string):
 }
 
 /**
- * Read the two namespaces and resolve them into one roster.
+ * Read the three namespaces and resolve them into one roster.
  * @param tools - the `tools` namespace section, when registered.
  * @param kernelEnabled - the `kernel.enabled` value.
+ * @param rlmEnabled - the `rlm.enabled` value.
  * @returns the roster those settings describe.
  */
 export function resolveRoster(
   tools: { enabled?: boolean; tools?: Record<string, boolean> } | undefined,
   kernelEnabled: boolean,
+  rlmEnabled: boolean,
 ): Roster {
   const overrides: Record<string, boolean> = {}
   for (const [tool, enabled] of Object.entries(tools?.tools ?? {})) {
@@ -182,6 +203,7 @@ export function resolveRoster(
   return {
     toolsEnabled: tools?.enabled ?? TOOLS_ENABLED_DEFAULT,
     kernelEnabled,
+    rlmEnabled,
     overrides,
   }
 }
@@ -195,6 +217,7 @@ export function resolveRoster(
 export function sameRoster(left: Roster, right: Roster): boolean {
   if (left.toolsEnabled !== right.toolsEnabled) return false
   if (left.kernelEnabled !== right.kernelEnabled) return false
+  if (left.rlmEnabled !== right.rlmEnabled) return false
   const names = new Set([...Object.keys(left.overrides), ...Object.keys(right.overrides)])
   for (const tool of names) {
     if ((left.overrides[tool] ?? true) !== (right.overrides[tool] ?? true)) return false
@@ -216,6 +239,7 @@ export function apply(ctx: Context, config: Config): void {
   const initial: Roster = {
     toolsEnabled: configured,
     kernelEnabled: true,
+    rlmEnabled: false,
     overrides: config.tools ?? {},
   }
   // `active` is the roster the model is currently working under; `pending` is
@@ -240,19 +264,32 @@ export function apply(ctx: Context, config: Config): void {
       applies: 'live',
     })
 
-    const readKernel = (): boolean => {
-      const raw = runtime.settings.get(KERNEL_SETTINGS_NAMESPACE)
-      if (typeof raw !== 'object' || raw === null) return active.kernelEnabled
+    // Both switches are read from the document rather than from a Loader
+    // expression: a `disabled:` expression is evaluated once at boot, which
+    // would make either switch a restart, and neither plugin is unmounted in
+    // its off position anyway.
+    const readFlag = (namespace: string, fallback: boolean): boolean => {
+      const raw = runtime.settings.get(namespace)
+      if (typeof raw !== 'object' || raw === null) return fallback
       const enabled = (raw as { enabled?: unknown }).enabled
-      return typeof enabled === 'boolean' ? enabled : active.kernelEnabled
+      return typeof enabled === 'boolean' ? enabled : fallback
     }
     const refresh = (): void => {
-      pending = resolveRoster(section.get(), readKernel())
+      pending = resolveRoster(
+        section.get(),
+        readFlag(KERNEL_SETTINGS_NAMESPACE, active.kernelEnabled),
+        readFlag(RLM_SETTINGS_NAMESPACE, active.rlmEnabled),
+      )
     }
     refresh()
+    // The turn boundary exists to hold a CHANGE back, not to delay what the
+    // document already said when the process started: no turn is in flight
+    // here, and leaving `active` on the composition defaults would offer the
+    // model a tool the operator had switched off before boot.
+    active = pending
     section.watch(() => { refresh() })
     runtime.on('settings/updated', (ns: string) => {
-      if (ns === KERNEL_SETTINGS_NAMESPACE) refresh()
+      if (ns === KERNEL_SETTINGS_NAMESPACE || ns === RLM_SETTINGS_NAMESPACE) refresh()
     })
 
     // 1. The prompt: drop a hidden tool's schema and its guidance together. The

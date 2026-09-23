@@ -73,6 +73,13 @@ pnpm run build
 
 [ -f apps/cli/lib/bin.js ] || die "the build finished but apps/cli/lib/bin.js is missing."
 
+# The fork's composition ships as profile bundles, and what names a bundle is
+# the profile. Doing this here means `dsh web` carries the fork even when it is
+# started without start.sh; the launcher repeats it, writing nothing when the
+# profile is already current.
+say "Registering the fork profile bundles..."
+node efai/ensure-profile-bundles.mjs
+
 # ── Bundled Python, best effort ──────────────────────────────────────────
 # The kernel tool and the Kiln providers want their own interpreter. start.sh
 # provisions this on every web-UI launch; doing it once here keeps the `dsh`

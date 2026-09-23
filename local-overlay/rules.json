@@ -39,24 +39,6 @@
       ]
     },
     {
-      "name": "bundle",
-      "paths": [
-        "packages/bundle/"
-      ]
-    },
-    {
-      "name": "presets",
-      "paths": [
-        "packages/preset/"
-      ]
-    },
-    {
-      "name": "boot",
-      "paths": [
-        "packages/boot/"
-      ]
-    },
-    {
       "name": "core",
       "paths": [
         "packages/core/"
@@ -66,24 +48,6 @@
       "name": "llm",
       "paths": [
         "packages/llm/"
-      ]
-    },
-    {
-      "name": "compaction",
-      "paths": [
-        "packages/compaction/"
-      ]
-    },
-    {
-      "name": "extensions",
-      "paths": [
-        "packages/extensions/"
-      ]
-    },
-    {
-      "name": "skill",
-      "paths": [
-        "packages/skill/"
       ]
     },
     {
@@ -219,31 +183,66 @@
     {
       "path": "snapshots/web/lifecycle-chrome/plan-active.expected.md",
       "regenerate": "pnpm run test:snapshot:record"
+    },
+    {
+      "path": "packages/extensions/tool-cordis/src/api-catalog.ts",
+      "regenerate": "pnpm run gen-cordis-api"
+    },
+    {
+      "path": "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts",
+      "regenerate": "pnpm run gen-client-catalog"
+    },
+    {
+      "path": "docs/event-producer-consumer.md",
+      "regenerate": "pnpm run gen-doc-graphs"
+    },
+    {
+      "path": "docs/event-producer-consumer.zh.md",
+      "regenerate": "pnpm run gen-doc-graphs"
+    },
+    {
+      "path": "docs/event-producer-consumer.i18n.yaml",
+      "regenerate": "pnpm run gen-doc-graphs"
+    },
+    {
+      "path": "docs/config-catalog.zh.md",
+      "regenerate": "pnpm run gen-config-catalog"
+    },
+    {
+      "path": "docs/config-catalog.i18n.yaml",
+      "regenerate": "pnpm run gen-config-catalog"
     }
   ],
   "tier1Prefixes": [
     ".agents/",
     ".merge-port/",
-    "local-overlay/",
+    "AI_BIG_PROJECT_DESIGN.md",
+    "HARNESS-EDITS.md",
+    "HARNESS.md",
     "desktop/",
-    "python/kiln/",
+    "efai/",
+    "install.ps1",
+    "install.sh",
+    "local-overlay/",
+    "packages/agent-memory/",
+    "packages/bundle/efai-base/",
+    "packages/bundle/efai-web/",
+    "packages/client/ui-effects/",
+    "packages/client/ui-sidebar-terminal/",
+    "packages/core/efai-identity/",
+    "packages/fs/tool-notebook-edit/",
+    "packages/host/sidebar-bridge/",
+    "packages/host/version-route/",
     "packages/kernel/",
     "packages/llm/llm-dsml/",
     "packages/llm/llm-kiln/",
-    "packages/web/web-browser/",
-    "packages/host/sidebar-bridge/",
-    "packages/client/ui-sidebar-terminal/",
-    "packages/client/ui-effects/",
-    "packages/session/command-session-info/",
-    "packages/agent-memory/",
+    "packages/preset/efai-presets/",
     "packages/rlm/",
-    "packages/fs/tool-notebook-edit/",
+    "packages/session/command-session-info/",
+    "packages/web/web-browser/",
+    "python/kiln/",
     "start.cmd",
     "start.sh",
-    "install.sh",
-    "install.ps1",
-    "upload_to_git.py",
-    "HARNESS-EDITS.md",
-    "AI_BIG_PROJECT_DESIGN.md"
+    "upload_to_git.py"
   ]
 }

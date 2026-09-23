@@ -1,0 +1,202 @@
+# The efai-base bundle patch: every row this fork adds to a base-backed
+# profile, applied as ONE insert over upstream's `dsh-base` layer.
+#
+# This file exists so the fork touches no upstream composition. It is stacked
+# after `@deepseek-ai/dsh-base` by the profile's bundle list, which the fork's
+# launcher keeps current (`start.cmd`, `start.sh`, `install.ps1`, `install.sh`);
+# a profile without it runs upstream's harness unchanged, which is exactly what
+# a profile without it should do.
+#
+# No row here carries a `!!js` settings expression. A Loader expression is read
+# once at boot, so gating composition on a setting makes that setting a restart
+# by construction. The three switches this fork ships decide at runtime instead:
+#
+#   kernel.enabled / rlm.enabled  — `tool-roster` filters the assembled prompt
+#                                   and guards execution, per turn.
+#   agent-memory.enabled          — `agent-memory-mode` mounts and unmounts the
+#                                   engine itself, because the engine writes to
+#                                   disk and hiding a tool would not stop it.
+#
+# Row order carries no load semantics (activation is service-availability
+# driven); `tool-roster` is last only because it seeds a per-tool default from
+# whatever the registry already holds.
+
+- insert:
+    # The identity opener: the first line the model reads, replacing the
+    # harness's shipped one. A plugin rather than an edit to the prompt
+    # package, because the opener has to hold however that package is
+    # configured — including a later patch layer restating its config.
+    - id: efai-identity
+      name: '@deepseek-ai/dsh-efai-identity'
+
+    # Text-channel tool calls, read on EVERY route.
+    #
+    # Which tool-call markup a model writes comes from the model, not from the
+    # transport: a request that filled a provider's native `tools` field can
+    # still get the call back as text — `<tool_calls>`, `<function_calls>`, or
+    # DeepSeek's pipe-wrapped `<｜｜DSML｜｜ …>` special tokens. Unread, that call
+    # reaches the user as markup and reads back to the model as an action that
+    # returned nothing.
+    #
+    # The pass is silent: it converts what it can parse into a real tool call
+    # and forwards everything else exactly as the adapter emitted it. Only an
+    # adapter with no native tool channel (llm-kiln) TEACHES this format, and
+    # only that adapter corrects the model about it.
+    - id: llm-dsml
+      name: '@deepseek-ai/dsh-llm-dsml'
+      config:
+        reasoningRecovery: true
+        excludeProviders: []
+
+    # The Kiln provider registry: sixteen presets (Anthropic, OpenAI, Gemini,
+    # OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together,
+    # Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio) plus
+    # `ds_direct`, DeepSeek's free web session. Routes are named `kiln-<id>` so
+    # they cannot collide with `deepseek-official` or the pi-ai catalog names.
+    #
+    # Keys are never configuration: each preset names the environment variable
+    # holding its key, resolved per request by the Python sidecar. A route with
+    # no key stays visible and selectable, and fails per request with the
+    # registry's own message naming the variable to set.
+    - id: llm-kiln
+      name: '@deepseek-ai/dsh-llm-kiln'
+      config:
+        routePrefix: kiln-
+        onlyConfigured: false
+
+    # What a compacted turn gets back. Compaction keeps a summary and drops the
+    # transcript, including every word the operator wrote, so the turn after one
+    # is the turn most likely to resume the wrong task. This injects the record
+    # instead of instructing the model to fetch it: one message per compaction
+    # carrying the operator's prompts and the tail of the log, folded from the
+    # log as it commits rather than scanned back. It also registers
+    # `{{session_log}}`, `{{session_dir}}`, and `{{session_id}}`, so a
+    # deployment persona can name this session's own log file.
+    #
+    # `root` mirrors upstream's `session-persistence-jsonl` row and must move
+    # with it: the two derive the same path, and a mismatch prints a file that
+    # does not exist.
+    - id: session-recovery-context
+      name: '@deepseek-ai/dsh-session-recovery-context'
+      config:
+        root: !!js dshHomePath('sessions')
+        tailEvents: 50
+
+    # ── the acting surface ──────────────────────────────────────────────────
+    #
+    # `kernel-mode` owns `kernel.enabled` and nothing else. It stays mounted in
+    # BOTH positions of its own switch: a switch that vanished when switched off
+    # could never be switched back on.
+    - id: kernel-mode
+      name: '@deepseek-ai/dsh-kernel-mode'
+      config:
+        enabled: true
+
+    # The kernel seam, its Kiln-backed Python process, and the model-facing
+    # tool. The process is lazy — nothing spawns until the first cell — but the
+    # interpreter is resolved at load, so a machine without Python reports an
+    # unavailable provider at selection time rather than mid-cell.
+    - id: kernel
+      name: '@deepseek-ai/dsh-kernel'
+      config:
+        defaultTimeoutMs: 180000
+
+    # `browserWindow` is not stated here: the provider reads `kernel.browserWindow`
+    # from the settings document when a settings service is mounted, and falls
+    # back to its own default otherwise. The value reaches the kernel as a child
+    # environment variable read once per process, so a change lands on the next
+    # kernel start.
+    - id: kernel-python
+      name: '@deepseek-ai/dsh-kernel-python'
+      config:
+        cwd: !!js process.env.DSH_KERNEL_CWD
+
+    # The host-plane tool row. The agent plane mounts its own (see
+    # `@deepseek-ai/dsh-efai-presets`), and `tool-roster` decides per turn which
+    # of `kernel` and `rlm` the model actually sees.
+    - id: tool-kernel
+      name: '@deepseek-ai/dsh-tool-kernel'
+      config:
+        timeoutMs: 180000
+
+    # RLM context-as-variable read-back: an async system-prompt/assemble
+    # listener that reads the live kernel `answer`/binds via ctx.kernel and
+    # contributes them as runtime context the agent loop already renders. The
+    # RLM engine itself reads `parseRlmDump` from this same package.
+    - id: kernel-rlm-context
+      name: '@deepseek-ai/dsh-kernel-rlm-context'
+
+    # `rlm-mode` owns `rlm.enabled` (default off) and, like `kernel-mode`, stays
+    # mounted in both positions.
+    - id: rlm-mode
+      name: '@deepseek-ai/dsh-rlm-mode'
+      config:
+        enabled: false
+
+    # The engine mounts unconditionally and publishes `ctx.rlm` plus the `rlm`
+    # tool. Which of the two acting surfaces the model is offered is the
+    # roster's decision, taken per turn: `rlm` when `rlm.enabled`, `kernel`
+    # otherwise, and neither when `kernel.enabled` is off — the engine runs on
+    # the same seam, so kernel-off withdraws both.
+    - id: rlm
+      name: '@deepseek-ai/dsh-rlm'
+
+    # The memory switch AND its mount: the engine observes every tool result and
+    # writes evidence to disk, so its off position has to be "not running",
+    # which this row's plugin decides live rather than at boot.
+    - id: agent-memory-mode
+      name: '@deepseek-ai/dsh-agent-memory-mode'
+      config:
+        enabled: false
+
+    # Lifetime token usage: the same durable samples upstream's token-meter
+    # folds, without the per-compaction reset, which is what /session-info
+    # reports as the session total.
+    - id: token-usage-lifetime
+      name: '@deepseek-ai/dsh-token-usage-lifetime'
+
+    # Two ways a skill body reaches the model that upstream does not provide:
+    # the `@skill <name>` gesture the client picker lands, and the names whose
+    # body re-enters after a compaction prunes it.
+    - id: skill-injection
+      name: '@deepseek-ai/dsh-skill-injection'
+      config:
+        alwaysLoadSkills: ['dsh-session-history']
+
+    - id: command-session-info
+      name: '@deepseek-ai/dsh-command-session-info'
+
+    # Upstream's editor tool, which upstream's own base bundle does not mount.
+    - id: tool-str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000
+
+    # A self-hosted headless browser (Playwright). It mounts two things. The
+    # `browser` tool lets the model read a page as text and act by element ref —
+    # for JS-rendered sites and multi-step flows a plain fetch cannot handle.
+    # The browser-rendered fetch provider registers with the web seam too,
+    # dormant until web_fetch is turned on and its fetchProvider is pointed at
+    # `browser`. Both need a one-time `npx playwright install chromium`; a launch
+    # without the binary fails with that exact instruction rather than a stack
+    # trace.
+    - id: web-browser
+      name: '@deepseek-ai/dsh-web-browser'
+
+    # The fork compaction provider: upstream's engine with a summarizer system
+    # prompt for text-only routes, a prune before the manual path summarizes,
+    # and a /compact that waits out the turn in flight instead of refusing.
+    # Upstream's own engine row is switched off below — both provide ctx.compaction.
+    - id: compaction-efai
+      name: '@deepseek-ai/dsh-compaction-efai'
+
+    # The runtime roster, last so its seeded per-tool defaults see the whole
+    # registry. It owns the `tools` namespace, the `kernel`/`rlm` swap, and the
+    # turn boundary that holds a change back until the model stops generating.
+    - id: tool-roster
+      name: '@deepseek-ai/dsh-tool-roster'
+
+# Upstream's compaction engine, replaced by the fork provider inserted above.
+# Both publish ctx.compaction, so exactly one may be active.
+- id: compaction-basic
+  disabled: true

@@ -253,6 +253,7 @@
   height: 12px;
   padding: 0 5px;
   border-radius: 999px;
+  corner-shape: round;
   color: var(--dsw-alias-label-primary-foreground);
   background: var(--dsw-alias-state-business-primary);
   font-family: var(--ds-font-family-code);

@@ -1,29 +1,5 @@
 # The `standard` agent preset: the full coding agent, mounted once per process.
 #
-# ── the acting-roster switches ──────────────────────────────────────────────
-#
-# TWO independent categories, both live, both owned by settings:
-#
-#   kernel — `kernel.enabled` (owned by `kernel-mode`). The persistent Python
-#            namespace.
-#   tools  — `tools.enabled` plus one `tools.tools.<name>` per tool (owned by
-#            `tool-roster`). The conventional roster below.
-#
-# Either can be switched off alone, and both can be on at once. That replaces
-# the earlier either/or arrangement, where the kernel REPLACED the shell,
-# filesystem, search, and job rows and only one side could be mounted.
-#
-# Every roster row below therefore mounts unconditionally, except for the
-# platform gates, which are not roster questions. Visibility is decided per
-# turn by `@deepseek-ai/dsh-tool-roster` (mounted in the base bundle), which
-# filters the assembled prompt — tool schemas AND their guidance sections
-# together — and guards execution. Nothing has to be unmounted to withdraw a
-# tool, so the switch needs no restart: it lands when the model stops
-# generating.
-#
-# The rows the kernel REPLACES are still listed here rather than only in the
-# kernel namespace, because which tools a preset offers is a preset decision.
-#
 # This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
 # standing scope; every session naming it joins by scope parentage, so the
 # tools and prompt sections registered here cover each joined agent while a
@@ -66,9 +42,6 @@
 # never reached the model's shell at all. Both shell tools consume the host
 # registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
 # host-plane too.
-#
-# Both rows carry two gates now: the platform one they always had, and the
-# kernel switch. `sh("...")` inside a cell is the same capability.
 - id: tool-bash
   name: '@deepseek-ai/dsh-tool-bash'
   disabled: !!js process.platform === 'win32'
@@ -77,35 +50,10 @@
   name: '@deepseek-ai/dsh-tool-pwsh'
   disabled: !!js process.platform !== 'win32'
 
-# ── the kernel ──────────────────────────────────────────────────────────────
-
-# The model-facing tool only. The kernel SEAM and its Python backend stay on the
-# host plane: the backend owns one interpreter probe and one child process, and
-# an entry-local realm here would mean a second interpreter resolution — and a
-# second kernel — for every preset a session mounts. What a preset chooses is
-# whether its agent can execute cells at all.
-# DSH-FORK(rlm): `rlm.enabled` owns the acting-role swap. The `tool-kernel` row
-# below unmounts when RLM is on (a negated `rlm.enabled` gate), and the `rlm`
-# engine row (host-side in `packages/bundle/base/cordis.patch.yml`) mounts only
-# when BOTH `kernel.enabled` and `rlm.enabled` are true. The subsumed rows —
-# shell, filesystem, search, and background jobs — keep their `kernel.enabled`
-# gate, because the RLM engine requires the kernel seam: RLM-on implies the REPL
-# is the sole acting surface, while kernel-off cleanly restores the shell roster.
-# EXIT: move these gates and the switch rows into a fork-owned
-# `packages/bundle/efai-rlm/cordis.patch.yml`, applied by profile, once that
-# bundle chain exists (see HARNESS-EDITS.md seam register).
-- id: tool-kernel
-  name: '@deepseek-ai/dsh-tool-kernel'
-  disabled: !!js (typeof dshSettingFlag === 'function' && !dshSettingFlag('rlm.enabled', false)) === false
-  config:
-    timeoutMs: 180000
-
 # ── filesystem ──────────────────────────────────────────────────────────────
 
 # Both register into the host `tools` registry and provide nothing, so
 # they need no realm. The `fs` service and its policy stay in the host.
-# `read_file` / `write_file` / `edit_file` and `find` / `glob` are preloaded in
-# the kernel namespace, so both rows step aside while the switch is on.
 - id: tool-fs
   name: '@deepseek-ai/dsh-tool-fs'
 
@@ -123,10 +71,6 @@
 # unavailable" while these controls sat in the catalog. The registry is keyed by
 # owning agent anyway, so one host instance serves every session. What a preset
 # chooses is whether its agent can collect and stop background work at all.
-#
-# A cell that wants to run something long does it with `subprocess` in the
-# kernel namespace, whose lifetime is the namespace's, so this row follows the
-# shell tools off while the switch is on.
 - id: tool-jobs
   name: '@deepseek-ai/dsh-tool-jobs'
 

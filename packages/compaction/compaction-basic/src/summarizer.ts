@@ -1,4 +1,3 @@
-// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a fork-owned compaction provider supplies this.
 /**
  * Default one-shot summarization and durable checkpoint framing.
  *
@@ -23,32 +22,14 @@ const SUMMARY_OPEN_TAG = '<compacted-summary>'
 const SUMMARY_CLOSE_TAG = '</compacted-summary>'
 
 /**
- * A dedicated summarizer system prompt that overrides the conversation's own
- * agent system prompt for the compaction call. The replayed transcript is a
- * coding-agent session — an agent system prompt plus hundreds of tool calls —
- * and continuing that role is exactly what made free-web DeepSeek answer the
- * compaction request with a `<tool_calls>` block instead of prose. Restating,
- * as the system prompt, that this turn is summarization-only with no tools is
- * the strongest lever against that. The compaction call already runs in an
- * isolated one-shot chat (see the llm-kiln adapter), so there is no warm prefix
- * cache to preserve by reusing the conversation's system prompt.
- */
-const COMPACTION_SYSTEM = [
-  'You are a transcript-summarization engine, not an interactive agent.',
-  'You have NO tools and cannot act. The tool schemas, system prompt, and agent role in the conversation above governed the assistant whose work you are summarizing — none of them apply to you.',
-  'Your ONLY output is the requested Markdown checkpoint, written as plain prose. Never emit a tool call, a <tool_calls> block, an <invoke> tag, runnable code, or any attempt to continue the task. You are condensing what already happened, not doing more of it.',
-].join('\n')
-
-/**
  * The summarization directive, delivered as the FINAL user message after the
- * replayed conversation. It pairs with {@link COMPACTION_SYSTEM}; the anti-action
- * directive leads here too because the transcript's tool-call examples are strong
- * enough that the reminder has to sit right next to the request.
+ * replayed conversation rather than as a distinct summarizer system prompt.
+ * Keeping the conversation's own system prompt, tools, and message prefix in
+ * front of it makes the auxiliary call a genuine prefix of the last routed
+ * request, so the provider's KV cache is reused instead of invalidated.
  */
 const COMPACTION_INSTRUCTION = [
-  'Summarize the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context. This is a summarization task ONLY: do not continue the work, do not call any tool, and do not emit a <tool_calls> block, an <invoke> tag, or runnable code. If the conversation above is full of tool calls, SUMMARIZE them — never imitate them. Output prose only.',
-  '',
-  'The reader is a fresh model that CANNOT see the conversation above — only your checkpoint. It must know, without guessing: where the work stands right now, the exact next action to take, and every fact needed to take it. Make "## Current Work" and "## Next Step" unambiguous and self-sufficient; those two sections are what the reader acts on first.',
+  'You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.',
   '',
   'Output EXACTLY the Markdown structure below: keep every section, in order. Use terse bullets, not prose paragraphs. Write "(none)" for an empty section — never drop a section.',
   '',
@@ -68,10 +49,10 @@ const COMPACTION_INSTRUCTION = [
   '- [explicitly requested work not yet completed]',
   '',
   '## Current Work',
-  '- [the exact position right now: which file/function, what was just done, what is half-finished, any command or tool call mid-flight and its state]',
+  '- [precisely what was in progress at this checkpoint]',
   '',
   '## Next Step',
-  '- [the single concrete next action the reader should take — the specific edit, command, or tool call, not a vague direction — directly in line with the most recent request, or "(none)"]',
+  '- [the single next action, directly in line with the most recent request, or "(none)"]',
   '',
   '## Critical Context',
   '- [decisions and their rationale, constraints, user preferences, open questions, data needed to continue]',
@@ -80,31 +61,13 @@ const COMPACTION_INSTRUCTION = [
   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
   '- Do NOT mention this summarization request or that the context was compacted.',
-  '- Output only the checkpoint text. Never call a tool or emit tool-call markup (<tool_calls>, <invoke>, or code to run); the transcript above is material to condense, not a pattern to continue.',
+  '- Output only the checkpoint text: do not call any tool or take any other action.',
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')
 
-/**
- * Framing that makes the replacement user message established context, and makes the
- * authoritative session log a standing instruction rather than a fallback.
- *
- * DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream supplies its own
- * framing. A compacted agent cannot tell that its context is a lossy summary, so it
- * guesses at an omitted path or hash, or asks the operator to repeat a requirement the
- * session log already records. The read is therefore unconditional and covers all four
- * triggers — after compaction, recovering history, checking a detail, and any doubt
- * about what the summary dropped — because a reader that cannot see what was removed is
- * the worst judge of whether anything was. The block stays no longer than upstream's so
- * the checkpoint still prices below the span it replaces; the reader's full procedure
- * lives in the dsh-session-history skill.
- *
- * @returns the preamble block for the replacement user message.
- */
-function checkpointPreamble(): string {
-  return [
-    'Automatically generated checkpoint condensing earlier context. The session log is authoritative: read it after compaction, to recover history, or to check any detail — `node .agents/skills/dsh-session-history/session-read.mjs resume`. That ONE call prints the goal, the instructional prompt, this checkpoint summary whole, and the prompts sent since — start there before any other mode. Then continue from the messages that follow.',
-  ].join('\n')
-}
+/** Framing that makes the replacement user message established context. */
+const CHECKPOINT_PREAMBLE =
+  'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.'
 
 /**
  * The replayed conversation surface the summarizer condenses. Reproducing the
@@ -113,11 +76,9 @@ function checkpointPreamble(): string {
  * compaction instruction is then the only novel input.
  */
 export interface SummarizationInput {
-  /** The conversation's own system prompt, reused for prefix-cache alignment; absent for a system-less request. */
-  readonly system?: string
   /** The conversation's tool schemas, reused for prefix-cache alignment; absent when the request carried none. */
   readonly tools?: readonly ToolSchema[]
-  /** The shadowed region, in surface order, that precedes the compaction instruction. */
+  /** The derived system head, when present, followed by the shadowed region in surface order. */
   readonly messages: readonly Message[]
 }
 
@@ -187,42 +148,23 @@ export async function summarizeWithLlm(
       source: { kind: 'plugin', plugin: 'dsh-compaction-basic' },
     }),
   ]
-  // A summarizer must never emit a tool call. Two things make free-web DeepSeek
-  // answer the compaction request WITH a tool call instead of prose, and both
-  // are countered here:
-  //   1. Tools: replaying the conversation's tool roster advertised callable
-  //      tools, so the model called one. Withholding tools keeps the call
-  //      text-only. (A leaked block then also can't be parsed as a real call,
-  //      so summaryText() strips its markup rather than landing it as prose.)
-  //   2. Role: the replayed agent system prompt told the model it was a tool-
-  //      using coder, and it continued that loop. COMPACTION_SYSTEM overrides it
-  //      with a summarizer-only role. The isolated one-shot chat has no warm
-  //      prefix cache to preserve, so dropping the conversation's system prompt
-  //      costs nothing.
-  // Correctness before cache reuse.
   const options: GenerateOptions = {
     provider: target.provider,
     model: target.model,
     messages,
-    system: COMPACTION_SYSTEM,
+    ...input.tools === undefined ? {} : { tools: [...input.tools] },
     maxTokens: config.maxTokens,
     sessionId: agent.session.id,
     purpose: 'compaction',
     ...signal === undefined ? {} : { signal },
   }
   for await (const chunk of ctx.llm.stream(options)) assembler.push(chunk)
+  const error = finishError(assembler.finish)
+  if (error !== undefined) throw error
 
   const rawOutput = assembler.blocks()
-  const finish = assembler.finish
-  const streamError = finishError(finish)
-  if (streamError !== undefined) {
-    ctx.logger.warn(compactionDiagnostic('stream error', input, rawOutput, finish, streamError))
-    throw streamError
-  }
-
   const summary = summaryText(rawOutput)
   if (!summary.some(block => block.text.trim().length > 0)) {
-    ctx.logger.warn(compactionDiagnostic('no text output', input, rawOutput, finish))
     throw new Error('summarization produced no text summary content')
   }
   return {
@@ -243,7 +185,7 @@ export async function summarizeWithLlm(
  */
 export function frameSummary(summary: readonly ContentBlock[]): ContentBlock[] {
   return [
-    { type: 'text', text: `${checkpointPreamble()}\n\n${SUMMARY_OPEN_TAG}` },
+    { type: 'text', text: `${CHECKPOINT_PREAMBLE}\n\n${SUMMARY_OPEN_TAG}` },
     ...summary,
     { type: 'text', text: SUMMARY_CLOSE_TAG },
   ]
@@ -268,75 +210,12 @@ function finishError(finish: FinishReason): Error | undefined {
   }
 }
 
-/**
- * Excise any tool-call markup the model echoed into its prose.
- *
- * The compaction call withholds the tool schemas, so the DSML translator cannot
- * recognise a `<tool_calls>`/`<invoke>`/`<tool_call>` block and forwards it as
- * literal text — which, unstripped, lands raw tool-call markup inside the
- * checkpoint (the exact symptom that motivated this backstop). Only balanced
- * blocks are removed, so prose that merely mentions the tag names survives; a
- * reply that was ONLY a tool call strips to empty and fails closed as
- * "no text summary content", leaving the conversation unchanged.
- */
-function stripToolMarkup(text: string): string {
-  return text
-    .replace(/<tool_calls\b[\s\S]*?<\/tool_calls>/gi, '')
-    .replace(/<tool_call\b[\s\S]*?<\/tool_call>/gi, '')
-    .replace(/<invoke\b[\s\S]*?<\/invoke>/gi, '')
-    // DeepSeek's native tool-call markup (fullwidth-pipe DSML tokens), which a
-    // tools-withheld compaction call leaks as text just like the taught format:
-    // first a complete `<｜｜DSML｜｜ name="…">…</｜｜DSML｜｜>` block, then any
-    // leftover `<｜｜DSML｜｜_calls>` frame tokens.
-    .replace(/<[|｜]+\s*DSML[\s\S]*?<\/[|｜]+\s*DSML[|｜]*>/gi, '')
-    .replace(/<[|｜]*\/?[|｜]*DSML[|｜]*[_▁](?:calls?|sep)[^>]*>/gi, '')
-    .trim()
-}
-
-/** Reject visual output, keep only text, and strip any leaked tool-call markup. */
+/** Reject visual output and keep only text before synthesizing a user message. */
 function summaryText(
   blocks: readonly ContentBlock[],
 ): Array<Extract<ContentBlock, { type: 'text' }>> {
   if (contentHasImage(blocks)) {
     throw new LlmError('compaction summary cannot contain image output', 'UNSUPPORTED_CONTENT')
   }
-  return blocks
-    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
-    .map(block => ({ ...block, text: stripToolMarkup(block.text) }))
-}
-
-/**
- * One-line reason a compaction summarization call yielded no usable summary.
- * Distinguishes an oversized/errored request (`finish=error`, large input) from
- * the model answering with non-text — a tool call or reasoning-only reply
- * (`finish=tool-calls`/`stop`, `output` without a `text` entry).
- */
-function compactionDiagnostic(
-  reason: string,
-  input: SummarizationInput,
-  output: readonly ContentBlock[],
-  finish: FinishReason,
-  error?: Error & { code?: string },
-): string {
-  const blockCounts: Record<string, number> = {}
-  let outputTextChars = 0
-  for (const block of output) {
-    blockCounts[block.type] = (blockCounts[block.type] ?? 0) + 1
-    if (block.type === 'text') outputTextChars += block.text.length
-  }
-  const inputChars = input.messages.reduce((total, message) => total + JSON.stringify(message).length, 0)
-  const fields = [
-    `compaction summarize failed (${reason})`,
-    `finish=${finish.kind}`,
-    `inputMsgs=${input.messages.length}`,
-    `~inputChars=${inputChars}`,
-    `system=${input.system === undefined ? 'none' : `${input.system.length}c`}`,
-    `tools=${input.tools?.length ?? 0}`,
-    `output=${JSON.stringify(blockCounts)}`,
-    `outputTextChars=${outputTextChars}`,
-  ]
-  if (error !== undefined) {
-    fields.push(`err=${error.message}${error.code === undefined ? '' : ` [${error.code}]`}`)
-  }
-  return fields.join(' ')
+  return blocks.filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
 }

@@ -1,127 +1,79 @@
 diff --git a/.agents/skills/dsh-code-review/SKILL.md b/.agents/skills/dsh-code-review/SKILL.md
-index 7453e110ef..be52e32bb7 100644
+index 7453e110ef..1d5271e776 100644
 --- a/.agents/skills/dsh-code-review/SKILL.md
 +++ b/.agents/skills/dsh-code-review/SKILL.md
-@@ -28,6 +28,64 @@ description: Use when reviewing a pull request in the deepseek-harness repo —
+@@ -28,25 +28,24 @@ description: Use when reviewing a pull request in the deepseek-harness repo —
  6. **Required evidence exists.** Verify the author ran the [relevant local checks](../../../AGENTS.md#run-relevant-checks-locally) for the diff and that CI covers the exhaustive matrix; review the semantic gaps neither can detect.
  7. **Client UI copy is locale-owned.** Reject product text embedded in JSX, templates, helper returns, accessibility attributes, or primitive defaults. Require typed dictionary keys, the standard `t` seat or explicit localized props, `verify-client-ui-i18n`, and behavior evidence in each affected locale; preserve user/model/wire data and code tokens verbatim.
  
-+<!-- DSH-FORK(all): the fork's own commit and push obligations. Upstream's skills cannot know about local-overlay/, the DSH-FORK marker, or verify-fork-overlay. EXIT: permanent fork delta. -->
+-## Manual checks
+-
+-- **Intent and interface contracts:** trace both sides of every changed interface. Confirm the implementation matches the PR and any Agent Note, including errors, cancellation, ownership, and disposal.
+-- **Lifecycle and concurrency:** for async setup, callbacks, processes, or teardown, apply [defensive-patterns.md](../../../docs/defensive-patterns.md). Check races before publication, cancellation during awaits, independent error reporting, callback containment, ownership before reentry, complete detach cleanup, and quiescent disposal.
+-- **Capability and consumer fit:** trace every current consumer, then flag consumer-specific behavior leaking into the interface under [the package rules](../../../packages/AGENTS.md). Flag the inverse too: a new public method on a generic service (registry, session, agent) whose only caller is one internal consumer is an unnecessary API expansion — require a private capability closure handed to that consumer at construction instead.
+-- **Scope, ownership, and necessity:** map each abstraction, state machine, option, defensive copy, and compatibility path to its current contract, production consumer, and owning plugin or service. Challenge unrelated features and speculative generality, then test the PR against [the root rules](../../../AGENTS.md#conventions).
+-- **Configuration and public choices:** ask what current-consumer evidence or prior art supports each default, public operation set, format, or imported external concept. Require an explicit choice or deferral when that evidence is absent.
+-- **Model perspective:** inspect the exact prompts, tool schemas, results, and diagnostics the model receives across affected modes. Flag concepts outside the model's task, then verify stable text verbatim and dynamic behavior through snapshots or end-to-end coverage.
+-- **Enforcement:** follow every denial path to the operation that executes it; exercise direct and alternate callers that can bypass schemas, prompts, facades, wrappers, or listener ordering.
+-- **Borrowed and derived state:** determine whether each retained value is borrowed or owned under the package contract, then trace notifications and every cache, prompt, UI echo, replay, and query view to the documented success point and authoritative source.
+-- **Bounds cover the final operation:** locate the owner of the complete emitted or retained result, including wrappers and metadata. Probe tiny and exact limits, oversized single chunks, and multibyte text for byte limits.
+-- **Real entry path:** tests exercise the shipped Loader, bin, worker, ACP bridge, or subprocess where relevant. A hand-mounted plugin does not catch invalid Loader exports; a function plugin must named-export its namespace and have no default export.
+-- **Test strength:** assertions fail on the intended regression and verify external state, logs, events, or disposal rather than restating the implementation or trusting an agent's report. Coverage is necessary but not evidence that the scenario is correct.
+-- **Test reliability:** for a resource-owning, asynchronous, platform-sensitive, or flaky test, apply [dsh-ci-test-reliability](../dsh-ci-test-reliability/SKILL.md) to the real worker/job topology, resource allocation, global-state restoration, synchronization, timeout budget, and quiescent teardown.
+-- **Invariant lifecycle and negative controls:** verify candidate observations are rejected before publication where possible, session-backed checks reconstruct durable history after late loading or HMR, and a deliberately invalid case fails through the real runner for the intended rule.
+-- **Implemented Agent Notes match shipped reality:** when a PR implements a proposed Agent Note, move and rewrite it as present-tense shipped state in the same diff, then verify paths, names, and mechanisms against the implementation.
+-- **Transcript changes:** editor-visible or model-visible changes update snapshots or explain why no snapshot applies. Review expected-output diffs as behavior changes, not formatting noise.
+-- **Bilingual changes:** compare meaning and terminology on both sides; a green pairing hash does not prove translation quality.
+-
+-## Reporting findings
+-
+-State the defect, location, impact, and evidence. Place a localized defect inline on the tightest relevant diff range; use a PR-level comment for cross-cutting architecture, scope, or review-wide synthesis. Separate blockers from suggestions and omit issues already enforced by a green gate. Use the existing GitHub review thread for replies. When receiving review, verify each claim and fix or rebut it on technical grounds without performative agreement.
++<!-- DSH-FORK(all): this fork freezes upstream-owned files, which upstream review has no concept of. EXIT: permanent fork delta — a pointer, so the substance lives in the fork-owned skill. -->
 +
 +## Reviewing a change in this fork
 +
-+`origin` is `eefamilyai/Deepseek-Harness-EFAI`; `upstream` is
-+`deepseek-ai/deepseek-harness`. The fork carries local features on a codebase
-+upstream rewrites continuously, so a change here has a review dimension upstream
-+review does not have: **what does it cost at the next upstream merge?**
-+
-+Classify every changed path with git, not memory. The recorded base is the
-+authority:
++This repository is a fork of `deepseek-ai/deepseek-harness`, and a change here carries
++one question upstream review does not ask: **does it modify a file upstream owns?**
 +
 +```sh
-+git diff --name-status -M "$(head -1 local-overlay/BASE)"
++pnpm run verify-fork-overlay   # patches current, and the recorded seam did not grow
 +```
 +
-+- **Added paths are Tier 1.** Upstream owns no path among them, so they can never
-+  conflict. Nothing further to check.
-+- **Modified upstream-owned paths are Tier 2** — the seam. Each one is a recurring
-+  merge cost, and it must carry three things:
-+  1. a `DSH-FORK` marker on the line above the edit, with an `EXIT:` clause;
-+  2. a `patchGroups` entry in `local-overlay/rules.json` claiming the path;
-+  3. a matching row in the seam register in `HARNESS-EDITS.md`.
++A red `verify-seam-frozen` is a blocking finding, not a formality: the fork just took
++on an upstream file it will re-resolve at every release. Ask for the fork-owned
++mechanism instead — a bundle row, a plugin on an extension point, a preset, or a
++runtime switch. [dsh-harness-edit](../dsh-harness-edit/SKILL.md) owns that decision
++order, the marker and register obligations for an edit that genuinely has no other
++form, and the recipes for each mechanism.
 +
-+An unmasked Tier-2 edit is a blocking finding: it will be re-litigated by hand at
-+every release. So is a `DSH-FORK` marker with no exit plan, because an edit with
-+no exit is a permanent tax that nobody wrote down.
-+
-+Ask these of any Tier-2 edit, in order:
-+
-+- **Could it be Tier 1 instead?** A fork-owned package on a documented extension
-+  point, or a fork-owned bundle (`packages/bundle/efai-<feature>/cordis.patch.yml`),
-+  costs nothing forever. `dsh-harness-edit` owns the full decision order.
-+- **Is it a bug in upstream code?** Then it belongs upstream as a PR, kept locally
-+  only until it lands. `HARNESS-EDITS.md` Rule 5 owns this, and rows 9 and 10 are
-+  the two outstanding examples.
-+- **Is the hunk the smallest that expresses the change?** A large hunk in an
-+  upstream file is a large conflict.
-+
-+### Prove the mod layer
-+
-+A review of a Tier-2 change is incomplete without this, because it is the only
-+evidence that the patch set still describes the tree:
-+
-+```sh
-+pnpm run verify-fork-overlay
-+```
-+
-+A stale patch set passes every upstream check and fails at the next merge, which
-+is exactly the failure this fork's contract exists to prevent. Treat a failing
-+gate as a blocking finding.
-+
-+### What not to flag
-+
-+Do not review `HARNESS-EDITS.md`, `local-overlay/**`, `.agents/skills/**`, or
-+`.merge-port/**` against upstream conventions. They are fork-owned; upstream has
-+no counterpart to compare them to, and their conventions are this fork's.
-+
- ## Manual checks
- 
- - **Intent and interface contracts:** trace both sides of every changed interface. Confirm the implementation matches the PR and any Agent Note, including errors, cancellation, ownership, and disposal.
++Do not review `HARNESS.md`, `HARNESS-EDITS.md`, `local-overlay/**`, `efai/**`, or
++`.merge-port/**` against upstream conventions. They are fork-owned; upstream has no
++counterpart to compare them to.
 diff --git a/.agents/skills/dsh-pre-push-checks/SKILL.md b/.agents/skills/dsh-pre-push-checks/SKILL.md
-index c07d097e40..308ae3f6fc 100644
+index c07d097e40..67d9e99c6d 100644
 --- a/.agents/skills/dsh-pre-push-checks/SKILL.md
 +++ b/.agents/skills/dsh-pre-push-checks/SKILL.md
-@@ -24,6 +24,54 @@ pnpm --silent run change-scope --base <verified-base-ref>
+@@ -24,6 +24,24 @@ pnpm --silent run change-scope --base <verified-base-ref>
  
  The command never guesses or fetches a base. Supply the ref verified from current remote or stack state; use `--head <ref>` when inspecting a commit other than `HEAD`. Its versioned JSON records committed paths relative to the resolved merge base, while staged, unstaged, and untracked paths describe the current worktree. After merging a changed base, rerun the report, reassess which behavior the combined scope can affect, and rerun only checks invalidated by the merge.
  
-+<!-- DSH-FORK(all): the fork's own commit and push obligations. Upstream's skills cannot know about local-overlay/, the DSH-FORK marker, or verify-fork-overlay. EXIT: permanent fork delta. -->
++<!-- DSH-FORK(all): this fork freezes upstream-owned files and carries a patch layer, neither of which upstream hooks know about. EXIT: permanent fork delta — a pointer, so the substance lives in the fork-owned skill. -->
 +
 +### This fork's own gate
 +
-+The checks above are the upstream harness's. This repository is a fork, and it
-+has one gate upstream does not: `pnpm run verify-fork-overlay`. Run it whenever
-+the outgoing change touches a file **upstream also owns** — a Tier-2 seam edit.
++The checks above are the upstream harness's. This repository is a fork and has one
++gate upstream does not. Run it before every push, not only when a seam file changed:
++the patch layer goes stale from fork-owned work too, and the seam check is what
++catches an upstream file taken on by accident.
 +
 +```sh
-+pnpm run verify-fork-overlay     # rebuild --check, verify, apply --check
++pnpm run verify-fork-overlay   # rebuild --check, verify, apply --check, seam-frozen, efai-presets
 +```
-+
-+It proves three things no other check does:
-+
-+- `rebuild --check` — `local-overlay/patches/*.patch` describes the current tree,
-+  so the mod layer is not stale.
-+- `verify.mjs` — base + patches reproduces the working tree byte for byte.
-+- `apply.mjs --check` — the committed patch files still apply to a pristine base.
 +
 +The pre-commit and pre-push hooks do not run it. A push without it can publish a
-+patch set that no longer matches the tree, which is what silently breaks the next
-+upstream merge.
-+
-+Classify the outgoing paths first; only a Tier-2 path needs this gate:
-+
-+```sh
-+git diff --name-status -M "$(head -1 local-overlay/BASE)"
-+```
-+
-+When a path is Tier-2 and has no `DSH-FORK` marker, the edit is not finished.
-+Every Tier-2 edit carries **three** obligations, all of which must be present in the
-+outgoing diff, and a fourth for the commit that introduces them:
-+
-+| Obligation | Where |
-+|---|---|
-+| `DSH-FORK` marker comment naming a concrete `EXIT:` clause | in the edited file, next to the change |
-+| `patchGroups` entry covering the path | `local-overlay/rules.json` |
-+| Seam-register row | `HARNESS-EDITS.md` |
-+
-+An unmasked Tier-2 path, a path no `patchGroup` claims, or a marked file with no
-+register row each fails a different gate; see
-+[dsh-harness-edit](../dsh-harness-edit/SKILL.md) for the full procedure and
-+`HARNESS-EDITS.md` for the current seam register.
-+
-+Two Tier-2 files cannot carry a marker at all — `package.json` and `tsconfig*.json`
-+— because JSON has no comment syntax. They are marked by their `patchGroups` entry
-+and seam-register row alone. Do not "fix" them by adding a sibling marker file.
++patch set that no longer matches the tree, or a new edit to a file upstream owns —
++both of which surface as conflicts at the next upstream merge rather than here.
++[dsh-harness-edit](../dsh-harness-edit/SKILL.md) owns what to do when it fails.
 +
  ## Select relevant evidence
  

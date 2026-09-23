@@ -110,6 +110,12 @@ if [ -n "$FORCE_BUILD" ] || [ ! -f apps/cli/lib/bin.js ]; then
   pnpm run build
 fi
 
+# The fork ships its composition as profile bundles rather than as edits to
+# upstream's. What names a bundle is the profile, so the launcher keeps the
+# fork's two bundles on the web profile before every start; an already-current
+# profile is left untouched.
+node efai/ensure-profile-bundles.mjs web
+
 if [ -f apps/cli/lib/bin.js ]; then
   echo "[start] Starting the harness web UI (built binary)..."
   exec node apps/cli/lib/bin.js web ${DSH_ARGS[@]+"${DSH_ARGS[@]}"}

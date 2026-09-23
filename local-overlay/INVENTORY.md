@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **138** in **23** patch(es).
+Tier-2 files: **92** in **17** patch(es).
 
 ## Patches
 
@@ -40,65 +40,16 @@ Tier-2 files: **138** in **23** patch(es).
 - `apps/cli/package.json`
 - `apps/web/tests/built-boot.expected.e2e.ts`
 
-### `patches/bundle.patch` — 6 file(s)
-
-- `packages/bundle/base/cordis.patch.yml`
-- `packages/bundle/base/package.json`
-- `packages/bundle/web-app/cordis.patch.yml`
-- `packages/bundle/web-app/package.json`
-- `packages/bundle/web-app/src/index.ts`
-- `packages/bundle/web-app/tests/web-app.spec.ts`
-
-### `patches/presets.patch` — 4 file(s)
-
-- `packages/preset/agent-presets/presets/cordis/agent.cordis.yml`
-- `packages/preset/agent-presets/presets/minimal/agent.cordis.yml`
-- `packages/preset/agent-presets/presets/ptc/agent.cordis.yml`
-- `packages/preset/agent-presets/presets/standard/agent.cordis.yml`
-
-### `patches/boot.patch` — 2 file(s)
-
-- `packages/boot/app-boot/src/index.ts`
-- `packages/boot/app-boot/tests/app-boot.spec.ts`
-
-### `patches/core.patch` — 5 file(s)
+### `patches/core.patch` — 3 file(s)
 
 - `packages/core/agent/src/model-selection.ts`
 - `packages/core/agent/tests/model-selection.spec.ts`
-- `packages/core/system-prompt/src/index.ts`
-- `packages/core/system-prompt/tests/system-prompt.spec.ts`
 - `packages/core/tools/tests/gen-tool-catalog.spec.ts`
 
-### `patches/llm.patch` — 6 file(s)
+### `patches/llm.patch` — 2 file(s)
 
 - `packages/llm/llm/src/index.ts`
 - `packages/llm/llm/src/types.ts`
-- `packages/llm/token-meter/src/index.ts`
-- `packages/llm/token-meter/src/projection.ts`
-- `packages/llm/token-meter/src/usage-projection.ts`
-- `packages/llm/token-meter/tests/token-usage-projection.spec.ts`
-
-### `patches/compaction.patch` — 9 file(s)
-
-- `packages/compaction/command-compact/src/index.ts`
-- `packages/compaction/command-compact/tests/command-compact.spec.ts`
-- `packages/compaction/command-compact/tests/loader-composition.spec.ts`
-- `packages/compaction/compaction-basic/README.i18n.yaml`
-- `packages/compaction/compaction-basic/README.md`
-- `packages/compaction/compaction-basic/README.zh.md`
-- `packages/compaction/compaction-basic/src/index.ts`
-- `packages/compaction/compaction-basic/src/summarizer.ts`
-- `packages/compaction/compaction-basic/tests/compaction-basic.spec.ts`
-
-### `patches/extensions.patch` — 2 file(s)
-
-- `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`
-- `packages/extensions/tool-cordis/src/api-catalog.ts`
-
-### `patches/skill.patch` — 2 file(s)
-
-- `packages/skill/tool-skill/src/index.ts`
-- `packages/skill/tool-skill/tests/tool-skill.spec.ts`
 
 ### `patches/client-locale.patch` — 2 file(s)
 
@@ -148,14 +99,8 @@ Tier-2 files: **138** in **23** patch(es).
 - `packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts`
 - `packages/client/ui-primitives/tests/icons.client.spec.tsx`
 
-### `patches/client-settings.patch` — 7 file(s)
+### `patches/client-settings.patch` — 1 file(s)
 
-- `packages/client/ui-settings-general/package.json`
-- `packages/client/ui-settings-general/src/client/index.ts`
-- `packages/client/ui-settings-general/src/client/locales.ts`
-- `packages/client/ui-settings-general/tests/apply.client.spec.ts`
-- `packages/client/ui-settings-general/tests/shell.client.spec.ts`
-- `packages/client/ui-settings-general/tsconfig.json`
 - `packages/client/ui-settings/src/client/settings-scope.ts`
 
 ### `patches/client-brand.patch` — 6 file(s)
@@ -167,7 +112,7 @@ Tier-2 files: **138** in **23** patch(es).
 - `packages/client/ui-brand-official/src/client/index.ts`
 - `packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx`
 
-### `patches/client-shell.patch` — 26 file(s)
+### `patches/client-shell.patch` — 22 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx`
@@ -184,10 +129,6 @@ Tier-2 files: **138** in **23** patch(es).
 - `packages/client/ui-skill/src/client/SkillRow.module.css`
 - `packages/client/ui-skill/src/client/index.ts`
 - `packages/client/ui-skill/tests/browser-plugin.client.spec.ts`
-- `packages/client/ui-theme/README.i18n.yaml`
-- `packages/client/ui-theme/README.md`
-- `packages/client/ui-theme/README.zh.md`
-- `packages/client/ui-theme/src/styles/design-platform.css`
 - `packages/client/ui-tool/README.i18n.yaml`
 - `packages/client/ui-tool/README.md`
 - `packages/client/ui-tool/README.zh.md`
@@ -203,13 +144,8 @@ Tier-2 files: **138** in **23** patch(es).
 - `packages/session/session-format-v0-to-v1/src/validation.ts`
 - `packages/session/session-format-v0-to-v1/tests/relationships.spec.ts`
 
-### `patches/docs.patch` — 8 file(s)
+### `patches/docs.patch` — 3 file(s)
 
-- `docs/config-catalog.i18n.yaml`
-- `docs/config-catalog.zh.md`
-- `docs/event-producer-consumer.i18n.yaml`
-- `docs/event-producer-consumer.md`
-- `docs/event-producer-consumer.zh.md`
 - `docs/subsystems/llm-streaming.i18n.yaml`
 - `docs/subsystems/llm-streaming.md`
 - `docs/subsystems/llm-streaming.zh.md`
@@ -240,10 +176,17 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 | `THIRD_PARTY_NOTICES.md` | `pnpm run gen-third-party-notices` |
 | `snapshots/web/lifecycle-chrome/hero.expected.md` | `pnpm run test:snapshot:record` |
 | `snapshots/web/lifecycle-chrome/plan-active.expected.md` | `pnpm run test:snapshot:record` |
+| `packages/extensions/tool-cordis/src/api-catalog.ts` | `pnpm run gen-cordis-api` |
+| `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts` | `pnpm run gen-client-catalog` |
+| `docs/event-producer-consumer.md` | `pnpm run gen-doc-graphs` |
+| `docs/event-producer-consumer.zh.md` | `pnpm run gen-doc-graphs` |
+| `docs/event-producer-consumer.i18n.yaml` | `pnpm run gen-doc-graphs` |
+| `docs/config-catalog.zh.md` | `pnpm run gen-config-catalog` |
+| `docs/config-catalog.i18n.yaml` | `pnpm run gen-config-catalog` |
 
 ## Fork-owned, no patch needed
 
-These 289 paths do not exist upstream, so no patch covers them and none can conflict.
+These 351 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -264,6 +207,7 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `.merge-port/apiproxy-and-fixtures.patch`
 - `AI_BIG_PROJECT_DESIGN.md`
 - `HARNESS-EDITS.md`
+- `HARNESS.md`
 - `desktop/harness-desktop/README.md`
 - `desktop/harness-desktop/chrome/browser-start.html`
 - `desktop/harness-desktop/chrome/toolbar-preload.js`
@@ -272,18 +216,18 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `desktop/harness-desktop/main.js`
 - `desktop/harness-desktop/package-lock.json`
 - `desktop/harness-desktop/package.json`
+- `efai/ensure-profile-bundles.mjs`
 - `install.ps1`
 - `install.sh`
 - `local-overlay/BASE`
 - `local-overlay/INVENTORY.md`
 - `local-overlay/README.md`
+- `local-overlay/SEAM.json`
 - `local-overlay/apply.mjs`
 - `local-overlay/lib.mjs`
 - `local-overlay/patches/agent-skills.patch`
 - `local-overlay/patches/apps.patch`
-- `local-overlay/patches/boot.patch`
 - `local-overlay/patches/build.patch`
-- `local-overlay/patches/bundle.patch`
 - `local-overlay/patches/client-brand.patch`
 - `local-overlay/patches/client-chat.patch`
 - `local-overlay/patches/client-input-trigger.patch`
@@ -292,22 +236,21 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/client-primitives.patch`
 - `local-overlay/patches/client-settings.patch`
 - `local-overlay/patches/client-shell.patch`
-- `local-overlay/patches/compaction.patch`
 - `local-overlay/patches/core.patch`
 - `local-overlay/patches/docs.patch`
-- `local-overlay/patches/extensions.patch`
 - `local-overlay/patches/llm.patch`
-- `local-overlay/patches/presets.patch`
 - `local-overlay/patches/root-meta.patch`
 - `local-overlay/patches/session-format-migration.patch`
-- `local-overlay/patches/skill.patch`
 - `local-overlay/patches/tsconfig.patch`
 - `local-overlay/rebuild.mjs`
 - `local-overlay/rules.json`
+- `local-overlay/verify-efai-presets.mjs`
+- `local-overlay/verify-seam-frozen.mjs`
 - `local-overlay/verify.mjs`
 - `packages/agent-memory/agent-memory-mode/README.md`
 - `packages/agent-memory/agent-memory-mode/package.json`
 - `packages/agent-memory/agent-memory-mode/src/index.ts`
+- `packages/agent-memory/agent-memory-mode/tests/agent-memory-mode.spec.ts`
 - `packages/agent-memory/agent-memory-mode/tsconfig.json`
 - `packages/agent-memory/agent-memory/README.md`
 - `packages/agent-memory/agent-memory/package.json`
@@ -316,6 +259,16 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/agent-memory/agent-memory/src/spec.ts`
 - `packages/agent-memory/agent-memory/tests/memory.spec.ts`
 - `packages/agent-memory/agent-memory/tsconfig.json`
+- `packages/bundle/efai-base/README.md`
+- `packages/bundle/efai-base/cordis.patch.yml`
+- `packages/bundle/efai-base/package.json`
+- `packages/bundle/efai-base/src/index.ts`
+- `packages/bundle/efai-base/tsconfig.json`
+- `packages/bundle/efai-web/README.md`
+- `packages/bundle/efai-web/cordis.patch.yml`
+- `packages/bundle/efai-web/package.json`
+- `packages/bundle/efai-web/src/index.ts`
+- `packages/bundle/efai-web/tsconfig.json`
 - `packages/client/ui-brand-official/src/client/Brand.module.css`
 - `packages/client/ui-brand-official/src/css-modules.d.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
@@ -334,6 +287,13 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-effects/src/invariant.ts`
 - `packages/client/ui-effects/tsconfig.json`
 - `packages/client/ui-effects/tsdown.config.ts`
+- `packages/client/ui-flow-accents/package.json`
+- `packages/client/ui-flow-accents/src/client/index.ts`
+- `packages/client/ui-flow-accents/src/client/tokens.ts`
+- `packages/client/ui-flow-accents/src/index.ts`
+- `packages/client/ui-flow-accents/tests/flow-accent-tokens.client.spec.ts`
+- `packages/client/ui-flow-accents/tsconfig.json`
+- `packages/client/ui-flow-accents/tsdown.config.ts`
 - `packages/client/ui-primitives/src/terminal-bridge.ts`
 - `packages/client/ui-settings-accounts/README.md`
 - `packages/client/ui-settings-accounts/package.json`
@@ -346,8 +306,15 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-accounts/src/index.ts`
 - `packages/client/ui-settings-accounts/tsconfig.json`
 - `packages/client/ui-settings-accounts/tsdown.config.ts`
-- `packages/client/ui-settings-general/src/client/AdvancedSection.module.css`
-- `packages/client/ui-settings-general/src/client/AdvancedSection.tsx`
+- `packages/client/ui-settings-advanced/package.json`
+- `packages/client/ui-settings-advanced/src/client/AdvancedSection.module.css`
+- `packages/client/ui-settings-advanced/src/client/AdvancedSection.tsx`
+- `packages/client/ui-settings-advanced/src/client/index.ts`
+- `packages/client/ui-settings-advanced/src/client/locales.ts`
+- `packages/client/ui-settings-advanced/src/css-modules.d.ts`
+- `packages/client/ui-settings-advanced/src/index.ts`
+- `packages/client/ui-settings-advanced/tsconfig.json`
+- `packages/client/ui-settings-advanced/tsdown.config.ts`
 - `packages/client/ui-settings-tools/README.md`
 - `packages/client/ui-settings-tools/package.json`
 - `packages/client/ui-settings-tools/src/client/ToolsSection.module.css`
@@ -375,8 +342,16 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-sidebar-terminal/src/index.ts`
 - `packages/client/ui-sidebar-terminal/tsconfig.json`
 - `packages/client/ui-sidebar-terminal/tsdown.config.ts`
-- `packages/client/ui-theme/tests/flow-accent-tokens.client.spec.ts`
 - `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
+- `packages/compaction/compaction-efai/package.json`
+- `packages/compaction/compaction-efai/src/index.ts`
+- `packages/compaction/compaction-efai/tests/compaction-efai.spec.ts`
+- `packages/compaction/compaction-efai/tsconfig.json`
+- `packages/core/efai-identity/README.md`
+- `packages/core/efai-identity/package.json`
+- `packages/core/efai-identity/src/index.ts`
+- `packages/core/efai-identity/tests/efai-identity.spec.ts`
+- `packages/core/efai-identity/tsconfig.json`
 - `packages/fs/tool-notebook-edit/README.md`
 - `packages/fs/tool-notebook-edit/package.json`
 - `packages/fs/tool-notebook-edit/src/index.ts`
@@ -387,6 +362,11 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/host/sidebar-bridge/package.json`
 - `packages/host/sidebar-bridge/src/index.ts`
 - `packages/host/sidebar-bridge/tsconfig.json`
+- `packages/host/version-route/README.md`
+- `packages/host/version-route/package.json`
+- `packages/host/version-route/src/index.ts`
+- `packages/host/version-route/tests/version-route.spec.ts`
+- `packages/host/version-route/tsconfig.json`
 - `packages/kernel/kernel-mode/README.md`
 - `packages/kernel/kernel-mode/package.json`
 - `packages/kernel/kernel-mode/src/index.ts`
@@ -401,6 +381,7 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/src/invariant.ts`
 - `packages/kernel/kernel-python/src/provider.ts`
 - `packages/kernel/kernel-python/src/seam.ts`
+- `packages/kernel/kernel-python/tests/browser-window.spec.ts`
 - `packages/kernel/kernel-python/tests/fixtures/fake-kernel.py`
 - `packages/kernel/kernel-python/tests/images.e2e.spec.ts`
 - `packages/kernel/kernel-python/tests/seam-tools-call.e2e.spec.ts`
@@ -449,6 +430,26 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/tests/images.spec.ts`
 - `packages/llm/llm-kiln/tests/pinning.spec.ts`
 - `packages/llm/llm-kiln/tsconfig.json`
+- `packages/llm/token-usage-lifetime/package.json`
+- `packages/llm/token-usage-lifetime/src/index.ts`
+- `packages/llm/token-usage-lifetime/tests/token-usage-lifetime.spec.ts`
+- `packages/llm/token-usage-lifetime/tsconfig.json`
+- `packages/preset/efai-presets/README.md`
+- `packages/preset/efai-presets/UPSTREAM-BASELINE.json`
+- `packages/preset/efai-presets/package.json`
+- `packages/preset/efai-presets/presets/cordis/agent.cordis.yml`
+- `packages/preset/efai-presets/presets/cordis/preset.yml`
+- `packages/preset/efai-presets/presets/cordis/skills/cordis-plugin-development/SKILL.md`
+- `packages/preset/efai-presets/presets/cordis/skills/editing-cordis-compositions/SKILL.md`
+- `packages/preset/efai-presets/presets/minimal/agent.cordis.yml`
+- `packages/preset/efai-presets/presets/minimal/preset.yml`
+- `packages/preset/efai-presets/presets/ptc/agent.cordis.yml`
+- `packages/preset/efai-presets/presets/ptc/preset.yml`
+- `packages/preset/efai-presets/presets/standard/agent.cordis.yml`
+- `packages/preset/efai-presets/presets/standard/preset.yml`
+- `packages/preset/efai-presets/src/index.ts`
+- `packages/preset/efai-presets/tests/efai-presets.spec.ts`
+- `packages/preset/efai-presets/tsconfig.json`
 - `packages/rlm/rlm-mode/README.md`
 - `packages/rlm/rlm-mode/package.json`
 - `packages/rlm/rlm-mode/src/index.ts`
@@ -476,6 +477,10 @@ These 289 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/session-recovery-context/tests/log-path-oracle.spec.ts`
 - `packages/session/session-recovery-context/tests/session-recovery-context.spec.ts`
 - `packages/session/session-recovery-context/tsconfig.json`
+- `packages/skill/skill-injection/package.json`
+- `packages/skill/skill-injection/src/index.ts`
+- `packages/skill/skill-injection/tests/skill-injection.spec.ts`
+- `packages/skill/skill-injection/tsconfig.json`
 - `packages/web/web-browser/README.md`
 - `packages/web/web-browser/package.json`
 - `packages/web/web-browser/src/browser.ts`

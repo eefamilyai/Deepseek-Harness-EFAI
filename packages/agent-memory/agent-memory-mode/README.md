@@ -1,37 +1,47 @@
+---
+description: "The agent-memory switch: one setting deciding whether the durable memory engine runs, and the mount that holds the engine to it."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-agent-memory-mode
 
-The on/off switch for the first-party durable memory engine ([`@deepseek-ai/dsh-agent-memory`](../agent-memory)).
+## Summary
 
-This package owns exactly one thing: the `agent-memory.enabled` setting. It mounts the engine when the setting is true and nothing when it is false; the gating itself is composition, in `packages/bundle/base/cordis.patch.yml`.
+`dsh-agent-memory-mode` owns `agent-memory.enabled` and the mount it controls. On, it plugs `@deepseek-ai/dsh-agent-memory` into its own context; off, it disposes that fiber, which unwinds the engine's tools, its prompt block, and its tool-result observer together. The switch stays mounted in both of its own positions, so it can always be flipped back.
 
-It mirrors `@deepseek-ai/dsh-kernel-mode` and `@deepseek-ai/dsh-rlm-mode` deliberately:
+## Table of Contents
 
-- the switch plugin is **not** gated by its own setting, because a switch that vanished when switched off could never be switched back on, and
-- the setting declares `applies: 'restart'`, because the `disabled` expression that reads it is evaluated once at boot.
+- [Use this package](#use-this-package)
+- [Why the switch owns the mount](#why-the-switch-owns-the-mount)
+- [Dev Note](#dev-note)
 
-Mounting is a Loader fact, and Loader facts are decided at boot. Hiding a tool at runtime is not the same as not mounting it: a mounted plugin has already contributed its system-prompt section, so a merely-hidden engine would leave the model reading instructions for tools it cannot call. Not mounting takes both.
+<a id="use-this-package"></a>
+## Use this package
+
+Mount it in a composition carrying `settings`; `packages/bundle/efai-base` does. The engine row is not mounted separately — this package mounts it.
 
 ```yaml
 - id: agent-memory-mode
   name: '@deepseek-ai/dsh-agent-memory-mode'
   config:
-    enabled: true
+    enabled: false
 ```
 
-## Model Experience
+| Field | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Whether the engine runs. Applies immediately. |
+| `engine` | `{}` | Engine settings, passed through verbatim to `@deepseek-ai/dsh-agent-memory` when it mounts. |
 
-Indirectly, through the memory engine it mounts, which owns the injected index and the memory tools.
+A composition with no settings service still works: the switch has nothing to publish, and the composition's own `enabled` is the whole answer.
 
-#### KV Cache effect
+<a id="why-the-switch-owns-the-mount"></a>
+## Why the switch owns the mount
 
-No direct invalidation; the engine it mounts owns any request-prefix changes.
+Hiding a tool is enough for a tool. It is not enough here: the engine observes every tool result and writes the evidence to disk, so "off" has to mean "not running", which in Cordis means "not mounted".
 
-## Known Limitations and Deferred Work
+The decision could have been a Loader `disabled: !!js …` expression on the engine's own row, and was until 2026-09-20. That is a worse interface for two reasons. The expression is evaluated once at boot, so the setting becomes a restart; and it gates the engine's row only, which means nothing publishes the switch when the engine is off — the user would have no way back. Keeping both halves here fixes both.
 
-These limits define what this package does not provide. They are current package constraints, not a roadmap.
+<a id="dev-note"></a>
+## Dev Note
 
-- **A change requires a restart** - the setting declares `applies: 'restart'`, so toggling it mid-session does not mount or unmount the engine.
-- **The switch owns no model surface of its own** - it contributes no prompt section, tool, or schema; every model-visible effect belongs to the engine it gates.
-- **Off by default** - a composition that never sets `agent-memory.enabled` gets no durable memory at all.
-
-It is a fork-owned package (`packages/agent-memory/agent-memory-mode`), so it touches no upstream file. See `HARNESS-EDITS.md` for the fork's tier rules; this package is Tier 1.
+`sync` compares the wanted state against whether a fiber exists, so writing the value the switch already holds does nothing — a settings write that changes another field in the same namespace does not remount the engine and lose its in-memory state.

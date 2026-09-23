@@ -1,0 +1,53 @@
+{
+  "name": "@deepseek-ai/dsh-efai-web",
+  "description": "The fork's rows for the browser profile as a bundle: sidebar bridge, terminal and effects surfaces, settings sections, and the fork preset roster",
+  "version": "0.1.0-local.1",
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/bundle/efai-web"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-client-ui-effects": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-flow-accents": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings-accounts": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings-advanced": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-settings-tools": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-sidebar-terminal": "workspace:^",
+    "@deepseek-ai/dsh-efai-presets": "workspace:^",
+    "@deepseek-ai/dsh-host-sidebar-bridge": "workspace:^",
+    "@deepseek-ai/dsh-host-version-route": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  }
+}

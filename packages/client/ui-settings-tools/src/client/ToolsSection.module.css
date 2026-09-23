@@ -49,7 +49,7 @@
 }
 
 .row + .row {
-  border-top: 1px solid var(--dsw-alias-border-l3);
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .text {
@@ -79,5 +79,5 @@
   display: flex;
   flex-direction: column;
   padding-left: 14px;
-  border-left: 2px solid var(--dsw-alias-border-l3);
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
 }

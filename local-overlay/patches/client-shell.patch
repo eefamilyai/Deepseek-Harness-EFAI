@@ -201,7 +201,7 @@ index ee694d0067..08cffccd48 100644
  ### 全局面板入口
  
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
-index f899b50c53..c82f526f3d 100644
+index f899b50c53..447809c8fc 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
 +++ b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
 @@ -135,6 +135,16 @@
@@ -248,7 +248,7 @@ index f899b50c53..c82f526f3d 100644
  }
  
  .iconButton {
-@@ -229,19 +242,24 @@
+@@ -229,19 +242,25 @@
    color: var(--dsw-alias-label-primary);
  }
  
@@ -268,6 +268,7 @@ index f899b50c53..c82f526f3d 100644
 +  height: 12px;
 +  padding: 0 5px;
 +  border-radius: 999px;
++  corner-shape: round;
 +  color: var(--dsw-alias-label-primary-foreground);
 +  background: var(--dsw-alias-state-business-primary);
    font-family: var(--ds-font-family-code);
@@ -508,232 +509,6 @@ index 189d961bcf..0edceb5e1f 100644
 +    expect(payloads).toEqual([])
 +  })
 +})
-diff --git a/packages/client/ui-theme/README.i18n.yaml b/packages/client/ui-theme/README.i18n.yaml
-index 36b96066e3..dafcc53e95 100644
---- a/packages/client/ui-theme/README.i18n.yaml
-+++ b/packages/client/ui-theme/README.i18n.yaml
-@@ -2,5 +2,5 @@
- # side as of the last confirmed-consistent state. Both languages carry equal authority;
- # after editing either side, bring the other along and re-record with:
- #   pnpm run verify-translation-pairing --write packages/client/ui-theme/README.md
--README.md: 291492b9b41df6570722fb2dbd14565c660ec350
--README.zh.md: 08cef7aca2f6df648fe75b3d27aed93c44a2d30c
-+README.md: 2685d86c6ca2ca13ed8756b07a92076d8d62ad3a
-+README.zh.md: 846592fe2715391e91f356705ca1c58e8bb5a52a
-diff --git a/packages/client/ui-theme/README.md b/packages/client/ui-theme/README.md
-index 291492b9b4..2685d86c6c 100644
---- a/packages/client/ui-theme/README.md
-+++ b/packages/client/ui-theme/README.md
-@@ -5,6 +5,8 @@ kind: "package-reference"
- 
- # @deepseek-ai/dsh-client-ui-theme
- 
-+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
-+
- English | [中文](README.zh.md)
- 
- ## Summary
-@@ -55,6 +57,8 @@ The service owns theme and font-size state and publishes snapshots. The ui-layou
- 
- `corner-shape.css` smooths every rounded corner: inside `@supports (corner-shape: superellipse(1.5))` it defines `--dsw-corner-shape` and applies it to all elements and their `::before`/`::after` through the universal selector, so engines without `corner-shape` keep circular corners. Full-round shapes — `border-radius: 50%` circles and pill radii — pair `corner-shape: round` with their radius in the owning component sheet because a superellipse deforms them; the corner-shape stylesheet spec enforces that pairing across every package stylesheet.
- 
-+`design-platform.css` also declares the `--dsw-alias-flow-*` accent group: one hue per compact flow-row family — `think`, `search`, `read`, `mutate` (write and edit), `shell`, `code`, `instruct` (context injection, system prompt, and the skill row), and `generic` (a tool call with no specific presentation). `DisclosureRow` publishes the rebinding seam: a row that sets `--dsh-row-accent` on its `.row` recolours the leading glyph and the title, and each row applies the same value to its hover chevron and separator dot. Bind on the row, not an outer wrapper — a tool call's subcalls render as nested rows and would inherit the parent's hue. The group sits apart from `--dsw-alias-state-*`, which means run state, and no flow hue sits on the error or warn ramps, so an accent never reads as a failed or interrupted row. Both themes take the most chromatic value their surface allows at a 4.5:1 floor against `--dsw-alias-bg-base`: near-fluorescent on dark, full-chroma mid-tones on light, where a fluorescent value cannot carry 13px text.
-+
- `gradient-shadow-text.css` derives `--dsh-content-font-delta` from `--dsh-content-font-size` and shifts the Markdown heading and base-text ladder by that increment. It also derives the secondary tier `--dsh-content-font-size-secondary` (setting −1 at ≤14, setting −2 above; 13px at the default) with its own `--dsh-content-font-delta-secondary` for the table variants and the flow rows one step under the body. Dense small and code variants stay fixed. Outside the ladder, the user bubble and composer draft read the body pair directly, and flow-row titles and summaries read the secondary pair. The sheet also owns the shadow scale (`--dsw-shadow-lv*`) and the elevation tokens: `--dsw-elevation-stroke` draws a 0.5px hairline through the rebindable `--dsw-elevation-stroke-color`, and `--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft` (the composer's larger-blur, lower-alpha tier) layer two faint soft shadows over that stroke, so elevated surfaces set `border: 0` and carry no layout-consuming outline; the derived tokens are re-declared per element so a surface's stroke-color rebind takes effect.
- 
- ### Scrollbar rebinding
-diff --git a/packages/client/ui-theme/README.zh.md b/packages/client/ui-theme/README.zh.md
-index 08cef7aca2..846592fe27 100644
---- a/packages/client/ui-theme/README.zh.md
-+++ b/packages/client/ui-theme/README.zh.md
-@@ -5,6 +5,8 @@ kind: "package-reference"
- 
- # @deepseek-ai/dsh-client-ui-theme
- 
-+<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned theme package owns this. -->
-+
- [English](README.md) | 中文
- 
- ## 概述
-@@ -55,6 +57,8 @@ kind: "package-reference"
- 
- `corner-shape.css` 平滑所有圆角：在 `@supports (corner-shape: superellipse(1.5))` 内定义 `--dsw-corner-shape`，并通过通配选择器应用到所有元素及其 `::before`/`::after`，因此不支持 `corner-shape` 的引擎保持普通圆弧。正圆形状——`border-radius: 50%` 的圆与胶囊半径——因超级椭圆会使其变形，须在所属组件样式表中把 `corner-shape: round` 与半径声明配对；corner-shape 样式表 spec 跨全部包样式表强制这一配对。
- 
-+`design-platform.css` 还声明了 `--dsw-alias-flow-*` 强调色组：为每类紧凑流内行各配一种色相——`think`、`search`、`read`、`mutate`（write 与 edit）、`shell`、`code`、`instruct`（context injection、system prompt 与 skill 行）与 `generic`（没有专门呈现的工具调用）。`DisclosureRow` 公开重新绑定接缝：某一行在自己的 `.row` 上设置 `--dsh-row-accent` 即可为前导字形与标题上色，各行再把同一个值应用到自己的 hover chevron 与分隔点。要绑定在 row 上而非外层容器——工具调用的子调用会渲染成嵌套行，绑在外层会让它们继承父行的色相。该组与表示运行状态的 `--dsw-alias-state-*` 分开，且没有任何流内色相落在 error 或 warn 色阶上，因此强调色不会被读成失败或中断的行。两套主题都在对 `--dsw-alias-bg-base` 保持 4.5:1 下限的前提下取各自表面所能承受的最高彩度：深色表面接近荧光色，浅色表面取全彩度中间调——在浅色表面上荧光值撑不起 13px 文本。
-+
- `gradient-shadow-text.css` 从 `--dsh-content-font-size` 派生 `--dsh-content-font-delta`，并以该增量移动 Markdown 标题与基础文本阶梯。它同时派生低一档变量 `--dsh-content-font-size-secondary`（设置 ≤14 时为设置值 −1，>14 时为设置值 −2；默认设置下为 13 px）及配套的 `--dsh-content-font-delta-secondary`，供表格变体与比正文低一档的流内行使用。紧凑的小号文本与代码变体保持固定字号。阶梯之外，用户气泡与 composer 草稿直接读取正文字号变量对，流内行的标题及摘要读取低一档变量对。该表还持有阴影阶（`--dsw-shadow-lv*`）与 elevation token：`--dsw-elevation-stroke` 经可重绑的 `--dsw-elevation-stroke-color` 画 0.5 px 发丝描边，`--dsw-elevation-panel`/`--dsw-elevation-prominent`/`--dsw-elevation-soft`（composer 专用的更大模糊、更低透明度档）在描边之上叠两层极淡柔光，因此高层级表面设 `border: 0`，不再有占布局的轮廓；派生 token 逐元素重声明，使表面对描边色的重绑真实生效。
- 
- ### 滚动条重新绑定
-diff --git a/packages/client/ui-theme/src/styles/design-platform.css b/packages/client/ui-theme/src/styles/design-platform.css
-index bc4712b223..ea668e870f 100644
---- a/packages/client/ui-theme/src/styles/design-platform.css
-+++ b/packages/client/ui-theme/src/styles/design-platform.css
-@@ -1,6 +1,22 @@
-+/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's flow-row accent tokens move to a fork-owned theme layer. */
- /* Figma font-weight 510 (an SF Pro variable-font weight) always renders as
-    font-weight: 500 in this UI — non-variable webfonts snap intermediate
--   weights unpredictably across platforms. */
-+   weights unpredictably across platforms.
-+
-+   The --dsw-alias-flow-* group and the saturated steps feeding it (blue-350/700,
-+   cyan, green-350, lime, orange, pink, violet, yellow) are harness additions to
-+   the projected design system: one hue per compact flow-row family — think,
-+   search, read, mutate, shell, code, instruct, generic — so a scrolled
-+   transcript indexes by colour. They are deliberately outside the
-+   --dsw-alias-state-* group, which means run state; an accent borrowing the
-+   error red or the warn amber would read as a failed or warning row, which is
-+   also why no flow hue sits on those two ramps.
-+
-+   Both themes take the most chromatic value their surface allows at a 4.5:1
-+   floor against --dsw-alias-bg-base: near-fluorescent on the dark surface,
-+   full-chroma mid-tones on the light one, where a fluorescent value cannot
-+   carry 13px text. The gap is widest on yellow and cyan, whose hues are
-+   intrinsically light. */
- body {
-   --dsw-static-amber-100: rgb(254, 245, 231);
-   --dsw-static-amber-400: rgb(247, 173, 49);
-@@ -9,16 +25,20 @@ body {
-   --dsw-static-amber-900: rgb(39, 36, 31);
-   --dsw-static-blue-100: rgb(219, 234, 254);
-   --dsw-static-blue-300: rgb(147, 197, 253);
-+  --dsw-static-blue-350: rgb(77, 143, 255);
-   --dsw-static-blue-400: rgb(96, 165, 250);
-   --dsw-static-blue-450: rgb(77, 147, 248);
-   --dsw-static-blue-500: rgb(59, 130, 246);
-   --dsw-static-blue-50: rgb(239, 246, 255);
-   --dsw-static-blue-50p: rgb(234, 243, 255);
-   --dsw-static-blue-600: rgb(37, 99, 235);
-+  --dsw-static-blue-700: rgb(0, 102, 255);
-   --dsw-static-blue-75: rgb(229, 240, 255);
-   --dsw-static-blue-800: rgb(30, 64, 175);
-   --dsw-static-blue-900: rgb(14, 48, 116);
-   --dsw-static-blue-950: rgb(23, 37, 84);
-+  --dsw-static-cyan-400: rgb(34, 233, 255);
-+  --dsw-static-cyan-700: rgb(0, 125, 158);
-   --dsw-static-deepseek-100: rgb(228, 237, 253);
-   --dsw-static-deepseek-200: rgb(211, 226, 255);
-   --dsw-static-deepseek-300: rgb(183, 200, 254);
-@@ -31,9 +51,13 @@ body {
-   --dsw-static-deepseek-800: rgb(52, 65, 91);
-   --dsw-static-deepseek-900: rgb(40, 49, 66);
-   --dsw-static-green-100: rgb(230, 250, 237);
-+  --dsw-static-green-350: rgb(61, 255, 158);
-   --dsw-static-green-400: rgb(78, 209, 126);
-   --dsw-static-green-500: rgb(34, 197, 94);
-+  --dsw-static-green-700: rgb(0, 131, 47);
-   --dsw-static-green-900: rgb(35, 60, 44);
-+  --dsw-static-lime-400: rgb(163, 255, 41);
-+  --dsw-static-lime-700: rgb(76, 124, 0);
-   --dsw-static-neutral-00: rgb(255, 255, 255);
-   --dsw-static-neutral-1000: rgb(0, 0, 0);
-   --dsw-static-neutral-100: rgb(245, 245, 245);
-@@ -69,12 +93,20 @@ body {
-   --dsw-static-neutral-bluish-875: rgb(35, 35, 36);
-   --dsw-static-neutral-bluish-900: rgb(27, 27, 28);
-   --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
-+  --dsw-static-orange-400: rgb(255, 138, 26);
-+  --dsw-static-orange-700: rgb(212, 53, 0);
-+  --dsw-static-pink-400: rgb(255, 77, 196);
-+  --dsw-static-pink-700: rgb(224, 0, 122);
-   --dsw-static-red-100: rgb(254, 226, 226);
-   --dsw-static-red-400: rgb(242, 90, 90);
-   --dsw-static-red-500: rgb(239, 68, 68);
-   --dsw-static-red-50: rgb(254, 242, 242);
-   --dsw-static-red-600: rgb(236, 19, 19);
-   --dsw-static-red-900: rgb(87, 12, 12);
-+  --dsw-static-violet-400: rgb(196, 123, 255);
-+  --dsw-static-violet-600: rgb(124, 45, 240);
-+  --dsw-static-yellow-400: rgb(255, 224, 26);
-+  --dsw-static-yellow-700: rgb(143, 98, 0);
- }
- 
- body[data-ds-dark-theme] {
-@@ -85,16 +117,20 @@ body[data-ds-dark-theme] {
-   --dsw-static-amber-900: rgb(39, 36, 31);
-   --dsw-static-blue-100: rgb(219, 234, 254);
-   --dsw-static-blue-300: rgb(147, 197, 253);
-+  --dsw-static-blue-350: rgb(77, 143, 255);
-   --dsw-static-blue-400: rgb(96, 165, 250);
-   --dsw-static-blue-450: rgb(77, 147, 248);
-   --dsw-static-blue-500: rgb(59, 130, 246);
-   --dsw-static-blue-50: rgb(239, 246, 255);
-   --dsw-static-blue-50p: rgb(234, 243, 255);
-   --dsw-static-blue-600: rgb(37, 99, 235);
-+  --dsw-static-blue-700: rgb(0, 102, 255);
-   --dsw-static-blue-75: rgb(229, 240, 255);
-   --dsw-static-blue-800: rgb(30, 64, 175);
-   --dsw-static-blue-900: rgb(14, 48, 116);
-   --dsw-static-blue-950: rgb(23, 37, 84);
-+  --dsw-static-cyan-400: rgb(34, 233, 255);
-+  --dsw-static-cyan-700: rgb(0, 125, 158);
-   --dsw-static-deepseek-100: rgb(228, 237, 253);
-   --dsw-static-deepseek-200: rgb(211, 226, 255);
-   --dsw-static-deepseek-300: rgb(183, 200, 254);
-@@ -107,9 +143,13 @@ body[data-ds-dark-theme] {
-   --dsw-static-deepseek-800: rgb(52, 65, 91);
-   --dsw-static-deepseek-900: rgb(40, 49, 66);
-   --dsw-static-green-100: rgb(230, 250, 237);
-+  --dsw-static-green-350: rgb(61, 255, 158);
-   --dsw-static-green-400: rgb(78, 209, 126);
-   --dsw-static-green-500: rgb(34, 197, 94);
-+  --dsw-static-green-700: rgb(0, 131, 47);
-   --dsw-static-green-900: rgb(35, 60, 44);
-+  --dsw-static-lime-400: rgb(163, 255, 41);
-+  --dsw-static-lime-700: rgb(76, 124, 0);
-   --dsw-static-neutral-00: rgb(255, 255, 255);
-   --dsw-static-neutral-1000: rgb(0, 0, 0);
-   --dsw-static-neutral-100: rgb(245, 245, 245);
-@@ -145,12 +185,20 @@ body[data-ds-dark-theme] {
-   --dsw-static-neutral-bluish-875: rgb(35, 35, 36);
-   --dsw-static-neutral-bluish-900: rgb(27, 27, 28);
-   --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
-+  --dsw-static-orange-400: rgb(255, 138, 26);
-+  --dsw-static-orange-700: rgb(212, 53, 0);
-+  --dsw-static-pink-400: rgb(255, 77, 196);
-+  --dsw-static-pink-700: rgb(224, 0, 122);
-   --dsw-static-red-100: rgb(254, 226, 226);
-   --dsw-static-red-400: rgb(242, 90, 90);
-   --dsw-static-red-500: rgb(239, 68, 68);
-   --dsw-static-red-50: rgb(254, 242, 242);
-   --dsw-static-red-600: rgb(236, 19, 19);
-   --dsw-static-red-900: rgb(87, 12, 12);
-+  --dsw-static-violet-400: rgb(196, 123, 255);
-+  --dsw-static-violet-600: rgb(124, 45, 240);
-+  --dsw-static-yellow-400: rgb(255, 224, 26);
-+  --dsw-static-yellow-700: rgb(143, 98, 0);
- }
- 
- body {
-@@ -193,6 +241,14 @@ body {
-   --dsw-alias-button-tool-bar-fill-invisible: rgba(31, 31, 31, 0.36);
-   --dsw-alias-button-tool-bar-fill: rgba(84, 85, 87, 0.5);
-   --dsw-alias-button-tool-bar-hover: rgba(84, 85, 87, 0.6);
-+  --dsw-alias-flow-code: var(--dsw-static-yellow-700);
-+  --dsw-alias-flow-generic: var(--dsw-static-lime-700);
-+  --dsw-alias-flow-instruct: var(--dsw-static-pink-700);
-+  --dsw-alias-flow-mutate: var(--dsw-static-green-700);
-+  --dsw-alias-flow-read: var(--dsw-static-cyan-700);
-+  --dsw-alias-flow-search: var(--dsw-static-blue-700);
-+  --dsw-alias-flow-shell: var(--dsw-static-orange-700);
-+  --dsw-alias-flow-think: var(--dsw-static-violet-600);
-   --dsw-alias-interactive-bg-active: rgba(38, 49, 72, 0.1);
-   --dsw-alias-interactive-bg-hover-accent: rgba(38, 49, 72, 0.14);
-   --dsw-alias-interactive-bg-hover-danger: rgba(236, 19, 19, 0.05);
-@@ -286,6 +342,14 @@ body[data-ds-dark-theme] {
-   --dsw-alias-button-tool-bar-fill-invisible: rgba(31, 31, 31, 0.36);
-   --dsw-alias-button-tool-bar-fill: rgba(84, 85, 87, 0.5);
-   --dsw-alias-button-tool-bar-hover: rgba(84, 85, 87, 0.6);
-+  --dsw-alias-flow-code: var(--dsw-static-yellow-400);
-+  --dsw-alias-flow-generic: var(--dsw-static-lime-400);
-+  --dsw-alias-flow-instruct: var(--dsw-static-pink-400);
-+  --dsw-alias-flow-mutate: var(--dsw-static-green-350);
-+  --dsw-alias-flow-read: var(--dsw-static-cyan-400);
-+  --dsw-alias-flow-search: var(--dsw-static-blue-350);
-+  --dsw-alias-flow-shell: var(--dsw-static-orange-400);
-+  --dsw-alias-flow-think: var(--dsw-static-violet-400);
-   --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.14);
-   --dsw-alias-interactive-bg-hover-accent: rgba(255, 255, 255, 0.24);
-   --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15);
 diff --git a/packages/client/ui-tool/README.i18n.yaml b/packages/client/ui-tool/README.i18n.yaml
 index ad0a426ba6..dc9eb9bf9c 100644
 --- a/packages/client/ui-tool/README.i18n.yaml

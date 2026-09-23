@@ -1,0 +1,63 @@
+{
+  "name": "@deepseek-ai/dsh-efai-base",
+  "description": "The fork's shared rows as a profile bundle: the kernel, the RLM engine, the Kiln routes, memory, and the runtime roster, stacked over dsh-base",
+  "version": "0.1.0-local.1",
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/bundle/efai-base"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-agent-memory-mode": "workspace:^",
+    "@deepseek-ai/dsh-command-session-info": "workspace:^",
+    "@deepseek-ai/dsh-compaction-efai": "workspace:^",
+    "@deepseek-ai/dsh-efai-identity": "workspace:^",
+    "@deepseek-ai/dsh-kernel": "workspace:^",
+    "@deepseek-ai/dsh-kernel-mode": "workspace:^",
+    "@deepseek-ai/dsh-kernel-python": "workspace:^",
+    "@deepseek-ai/dsh-kernel-rlm-context": "workspace:^",
+    "@deepseek-ai/dsh-llm-dsml": "workspace:^",
+    "@deepseek-ai/dsh-llm-kiln": "workspace:^",
+    "@deepseek-ai/dsh-rlm": "workspace:^",
+    "@deepseek-ai/dsh-rlm-mode": "workspace:^",
+    "@deepseek-ai/dsh-session-recovery-context": "workspace:^",
+    "@deepseek-ai/dsh-skill-injection": "workspace:^",
+    "@deepseek-ai/dsh-token-usage-lifetime": "workspace:^",
+    "@deepseek-ai/dsh-tool-kernel": "workspace:^",
+    "@deepseek-ai/dsh-tool-roster": "workspace:^",
+    "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:^",
+    "@deepseek-ai/dsh-web-browser": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  }
+}

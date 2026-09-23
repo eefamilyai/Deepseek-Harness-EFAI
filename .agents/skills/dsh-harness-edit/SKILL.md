@@ -1,6 +1,6 @@
 ---
 name: dsh-harness-edit
-description: Use before editing any file in the deepseek-harness fork, and again after the edit before committing, to place the change in the correct ownership tier, mark it per HARNESS-EDITS.md, and fold it into the local-overlay patch set so a future upstream release reapplies cleanly. Required whenever a request changes harness source, composition, docs, tests, or scripts rather than only reading them.
+description: Use before editing any file in the deepseek-harness fork, and again before committing. Upstream-owned files are frozen — the fork's composition, prompt text, rosters, switches, and new behavior all ship as fork-owned packages, bundle rows, and presets, and `verify-seam-frozen` fails a build that modifies an upstream file it has not already taken on. This skill names the mechanism to use instead, and the overlay commands that keep the recorded seam honest. Required whenever a request changes harness source, composition, docs, tests, or scripts rather than only reading them.
 ---
 
 # Editing the deepseek-harness fork
@@ -14,34 +14,48 @@ Two artifacts make that cost bounded, and both must stay current:
 
 Read `HARNESS-EDITS.md` before touching anything. It is fork-owned, so it never conflicts. This skill is the operating procedure; `HARNESS-EDITS.md` and `rules.json` are authoritative when they disagree with it.
 
-## Make the edit a mod, not a source change
+## The seam is frozen
 
-This is the skill's whole purpose, so it is the first decision, not the last. Every
-fork edit is either a **mod** — a patch the overlay carries and reapplies — or a
-**source change** that the next upstream release must be reconciled by hand. Prefer
-the mod. Reach for direct source editing only when no mod can express the change,
-and then only with a marker and an exit plan.
+**Do not edit a file upstream owns.** The list of upstream files this fork modifies
+is recorded in `local-overlay/SEAM.json`, and a path that is not on it fails the
+gate:
 
-Ask these in order and stop at the first that works. Each step is strictly cheaper
-to maintain than the one below it.
+```sh
+pnpm run verify-seam-frozen
+```
 
-| # | Ask | If yes, the edit is |
-|---|---|---|
-| 1 | Can this be a **new fork-owned package** registered on a documented extension point? | Tier 1. Zero merge cost, forever. |
-| 2 | Can this ship as a **fork-owned bundle** (`packages/bundle/efai-<feature>/cordis.patch.yml`) applied by profile? | Tier 1. Composition never touches upstream presets. |
-| 3 | Is this a **settings value** that varies per deployment? | Tier 1. It is `Config`; `AGENTS.md` forbids hardcoded tunables. |
-| 4 | Is this a **bug in upstream code**, or something upstream would plausibly accept? | An **upstream PR**. Keep a local copy in `.merge-port/upstream-prs/<name>.patch` with a register row, and delete the local delta when it lands. |
-| 5 | None of the above. | A **marked Tier-2 edit**: smallest possible hunk, `DSH-FORK` marker, `EXIT:` clause, seam-register row, `patchGroups` entry. |
+The list may shrink whenever an edit moves into fork-owned code; that is the
+direction of travel, and the gate prints the retired paths so the list can be
+re-recorded. It grows only by a deliberate, reviewed act — you record the growth in
+the same commit, and the diff shows exactly which upstream file the fork just took
+on and pays for at every release forever.
 
-Steps 1–4 produce a change upstream can never conflict with. Step 5 is the only one
-that costs a conflict resolution on every release, so it is the last resort and not
-the default.
+So the question is never "where do I put this edit". It is **"which fork-owned
+mechanism expresses it"**. Ask these in order and stop at the first that works; each
+is strictly cheaper than the one below it, and every one of them is already carrying
+real behavior in this repository, so none of them is theoretical.
 
-**A mod is not a smaller source change; it is a different artifact.** The working
-tree still carries the edit — that is how the fork builds — but `patches/*.patch` is
-what a future release reapplies. An edit that only exists in the working tree is not
-a mod, and it will be lost at the next merge. Run the three-command sequence below
-before you consider the edit finished.
+| # | Ask | If yes | Precedent in this tree |
+|---|---|---|---|
+| 1 | Is this **composition** — a plugin to mount, a row's config to change, a row to switch off? | A row in `packages/bundle/efai-base/cordis.patch.yml`, or `efai-web/` for the browser profile. | Every fork row the harness runs. |
+| 2 | Is this **behavior** that a documented extension point can carry? | A new fork-owned package mounted by that bundle. | `efai-identity` rewrites the prompt opener on `system-prompt/assemble`; `compaction-efai` subclasses the engine on its `summarize` hook; `skill-injection` is a second `agent/pre-step` listener; `token-usage-lifetime` registers its own projection unit; `ui-settings-advanced` is a `settings.section` slot registration; `ui-flow-accents` is a theme override layer. |
+| 3 | Is this the **agent roster** a session composes from? | A preset in `packages/preset/efai-presets/presets/`. | The four rosters; upstream's shipped root is dropped, and `verify-efai-presets` reports when upstream's copy moves. |
+| 4 | Is this a **switch** someone should be able to flip? | A settings namespace read at runtime, never a Loader `!!js` gate. | `kernel.enabled`/`rlm.enabled` through `tool-roster`; `agent-memory.enabled` mounts and unmounts the engine. |
+| 5 | Is this a **value that varies per deployment**? | A `Config` field. `AGENTS.md` forbids hardcoded tunables in plugins. | Every fork package's `Config`. |
+| 6 | Is this a **bug in upstream code**, or something upstream would plausibly accept? | An **upstream PR**. Keep a local copy in `.merge-port/upstream-prs/<name>.patch` with a register row, and delete the local delta when it lands. | Seam-register rows 9 and 10. |
+| 7 | None of the above, and you can say why in one sentence. | A recorded seam edit: smallest possible hunk, `DSH-FORK` marker, `EXIT:` clause, seam-register row, `patchGroups` entry, **and** `verify-seam-frozen --record`. | 92 paths, and every one of them is a cost. |
+
+A Loader `disabled: !!js …` expression that reads a setting is never the answer to
+step 4. The expression is evaluated once at boot, so gating composition on a setting
+makes that setting a restart by construction — and the plugin it gates is unmounted,
+which means the switch cannot even publish itself in its own off position. Decide at
+runtime instead: filter what the model sees (`tool-roster`), or mount and unmount the
+subsystem from its own switch (`agent-memory-mode`).
+
+**A recorded seam edit is a mod, not a source change.** The working tree carries it —
+that is how the fork builds — but `patches/*.patch` is what a future release
+reapplies. An edit that only exists in the working tree is not a mod and is lost at
+the next merge. Run the sequence below before you consider it finished.
 
 ## When this skill applies
 
@@ -87,31 +101,24 @@ So a modified upstream file is Tier 2 because a patch group claims it, and an ad
 
 A prefix match is `path === prefix || path.startsWith(prefix)`, evaluated group by group in declaration order. The first group with any matching prefix wins, so a narrow group must be declared before the broader group that would otherwise swallow it.
 
-## Choose the mechanism before choosing the hunk
+## A fork package is a real package
 
-Try these in order and stop at the first that works. Rule 3 of `HARNESS-EDITS.md` owns this list.
+README, JSDoc on every export, tests, and a catalog entry. `pnpm run doc-sync` is the gate, and [Wiring a new package](#wiring-a-new-package) is the checklist that makes the Loader able to load it at all.
 
-1. **A new fork-owned package on a documented extension point.** Zero merge cost. Always try this first.
-2. **A fork-owned bundle.** `packages/bundle/efai-<feature>/cordis.patch.yml`, applied by profile. Composition changes belong here, not in upstream's shipped presets.
-3. **A settings value.** If it varies per deployment it is `Config`; `AGENTS.md` forbids hardcoded tunables in plugins.
-4. **An upstream pull request.** For any bug in upstream code, or anything upstream would plausibly accept. Keep a local copy at `.merge-port/upstream-prs/<name>.patch` with a register row, and delete the local delta when the PR lands.
-5. **A marked Tier-2 edit.** Last resort. Smallest possible hunk, marker, exit plan, register row, patch group.
-
-A fork package is a real package: README, JSDoc on every export, tests, and a catalog entry. `pnpm run doc-sync` is the gate.
+The order in which to reach for each mechanism is [The seam is frozen](#the-seam-is-frozen) above; Rule 3 of `HARNESS-EDITS.md` owns the same list for maintainers.
 
 ## The `DSH-FORK` marker
 
 Every Tier-2 edit carries a marker on the line immediately above it, in the file's own comment syntax:
 
 ```ts
-// DSH-FORK(kernel): dshSettingFlag lets a Loader `disabled` expression read the
-// settings document. EXIT: upstream ships a settings reader in the !!js scope.
-export function dshSettingFlag(...) { ... }
+// DSH-FORK(fix): installModelSelection is re-entrant on resume and redeclares the
+// accessor. EXIT: upstream PR — this is an upstream bug, not a fork feature.
 ```
 
 ```yaml
-# DSH-FORK(kernel): kernel.enabled picks the acting roster.
-# EXIT: move to packages/bundle/efai-kernel/cordis.patch.yml.
+# DSH-FORK(all): the fork's own gate, which upstream's hook config cannot know about.
+# EXIT: upstream gains a hook-extension point a fork can register into.
 ```
 
 ```css
@@ -165,10 +172,17 @@ All four run from the repository root, take no required arguments, and read only
 
 `patches/` and `INVENTORY.md` are generated. `rules.json` is the single source of truth for patch grouping; a patch file is never hand-edited, and `INVENTORY.md` is never hand-edited.
 
-The same sequence is wired as one script, which is what CI and a push hook should call:
+Two more gates guard the boundary itself rather than the patches:
+
+| Script | What it does |
+| --- | --- |
+| `node local-overlay/verify-seam-frozen.mjs` | Fails when the tree modifies an upstream file that is not in `SEAM.json`. Reports retired paths so the list can shrink. `--record` rewrites it. |
+| `node local-overlay/verify-efai-presets.mjs` | Fails when upstream's copy of a preset the fork forked has moved, so the fork's copy can be re-forked instead of silently going stale. `--record` re-records the baseline. |
+
+The whole sequence is wired as one script, which is what CI and a push hook should call:
 
 ```sh
-pnpm run verify-fork-overlay          # rebuild --check, verify, then apply --check
+pnpm run verify-fork-overlay          # rebuild --check, verify, apply --check, seam-frozen, efai-presets
 pnpm run verify-fork-overlay:rebuild  # the write side, when drift is intentional
 ```
 
@@ -198,9 +212,42 @@ No patch and no marker. Confirm the tree and the manifest still agree:
 node local-overlay/rebuild.mjs --check
 ```
 
-## Adding a seam edit
+## Recipes: the same change, without touching upstream
 
-A new Tier-2 path needs a `patchGroups` entry whose `paths` prefix covers it, placed before any broader group that would otherwise claim it.
+Four patterns cover nearly everything this fork has needed. Each names a worked
+example in the tree, so the next one is a copy rather than a design.
+
+**Mount something, or change what a row does.** Add or patch a row in
+`packages/bundle/efai-base/cordis.patch.yml` (`efai-web/` for browser-only rows).
+A later bundle layer can insert rows, replace a row's whole `config`, and switch a
+row off by id — that is how `efai-web` disables upstream's `agent-presets` row and
+mounts the fork's roster in its place. Declare the package in that bundle's
+`dependencies`, or the Loader cannot resolve it at boot.
+
+**Change text the harness puts in the prompt.** Register a listener on
+`system-prompt/assemble` and rewrite the assembled sections; the return value is
+authoritative. `packages/core/efai-identity` replaces the identity opener this way
+and holds whether upstream's opener is present, absent, or replaced by a third
+party. Editing the string in `packages/core/system-prompt` instead would break
+upstream's own tests, which byte-compare it.
+
+**Give the model a different roster.** Add or edit a preset under
+`packages/preset/efai-presets/presets/`. The package mounts upstream's roster
+machinery against its own root and drops the shipped one, so the fork owns the four
+ids outright. Re-fork when `verify-efai-presets` says upstream's copy moved.
+
+**Add a switch.** Own the setting in a small `*-mode` package, and enforce it at
+runtime in whatever already decides: `tool-roster` for tool visibility,
+`agent-memory-mode` for a subsystem that has to actually stop running. Never gate
+the row in YAML.
+
+## Recording a seam edit
+
+Only after all of the above have been ruled out. Besides the marker and the register
+row, a new Tier-2 path needs a `patchGroups` entry whose `paths` prefix covers it,
+placed before any broader group that would otherwise claim it, and a re-record of
+the frozen seam (`node local-overlay/verify-seam-frozen.mjs --record`) in the same
+commit.
 
 ```jsonc
 {

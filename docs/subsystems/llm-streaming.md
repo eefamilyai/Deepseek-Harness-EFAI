@@ -973,6 +973,24 @@ listAccountProviders(): string[]
 async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
 
 /**
+ * Remote read of the routes that accept account additions.
+ * @returns the registered account-provider routes, in registration order.
+ */
+@Remote('listAccountProviders') async remoteListAccountProviders(): Promise<string[]>
+
+/**
+ * Remote adapter that tests and adds one account login. The password rides
+ * this call only and is never stored or returned; the reply is the new
+ * account id and route, or a plain failure reason.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login to test.
+ * @returns the added account and route, or the failure reason.
+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts,
+ *   or when the draft is missing a password or an email/mobile.
+ */
+@Remote('addAccount') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
+
+/**
  * Remote adapter for one draft provider interrogation.
  * @param settingsNs - namespace whose registered discovery serves this draft.
  * @param request - endpoint, protocol, and one-shot credential to use.

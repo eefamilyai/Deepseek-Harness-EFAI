@@ -1296,6 +1296,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the added account and route, or the failure reason.',
       },
       {
+        signature: '@Remote(\'listAccountProviders\') async remoteListAccountProviders(): Promise<string[]>',
+        description: 'Remote read of the routes that accept account additions.',
+        parameters: [],
+        returns: 'the registered account-provider routes, in registration order.',
+      },
+      {
+        signature: '@Remote(\'addAccount\') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>',
+        description: 'Remote adapter that tests and adds one account login. The password rides this call only and is never stored or returned; the reply is the new account id and route, or a plain failure reason.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
+        returns: 'the added account and route, or the failure reason.',
+        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts, or when the draft is missing a password or an email/mobile.'],
+      },
+      {
         signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
         description: 'Remote adapter for one draft provider interrogation.',
         parameters: [{ name: 'settingsNs', description: 'namespace whose registered discovery serves this draft.' }, { name: 'request', description: 'endpoint, protocol, and one-shot credential to use.' }, { name: 'signal', description: 'caller cancellation supplied by the Remote carrier.' }],
@@ -4414,10 +4427,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ImageBlock {\n    type: \'image\';\n    attachment: ImageAttachmentRef;\n}',
   },
   {
-    name: 'ImageMediaType',
-    declaration: 'export type ImageMediaType = \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'image/gif\';',
-  },
-  {
     name: 'ImageRequestPolicy',
     declaration: 'export interface ImageRequestPolicy {\n    maxPixels: number;\n    maxBytes: number;\n}',
   },
@@ -4543,7 +4552,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KernelExecuteResult',
-    declaration: 'export interface KernelExecuteResult {\n    readonly output: string;\n    readonly outcome: KernelOutcome;\n    readonly restarted: boolean;\n}',
+    declaration: 'export interface KernelExecuteResult {\n    readonly output: string;\n    readonly outcome: KernelOutcome;\n    readonly restarted: boolean;\n    readonly images?: readonly KernelCellImage[];\n}',
   },
   {
     name: 'KernelOutcome',
@@ -4651,7 +4660,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async res /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'listAccountProviders\')\n    async remoteListAccountProviders(): Promise<string[]>;\n    @Remote(\'addAccount\')\n    async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(re /* …truncated — full shape in source */',
   },
   {
     name: 'LspHover',

@@ -1,0 +1,9 @@
+{
+  "_comment": "sha256 of each upstream agent.cordis.yml the fork copy in presets/ was forked from. Re-record with --record after re-forking.",
+  "presets": {
+    "standard": "08a029c64fdeaabe415a5627ef73ce6f6c6bc61dadaf9989d11f9e15608907f6",
+    "minimal": "e75af996ab8c4cc966f8c5b54cd8dc354d7ac71bfcedbe07c8896f63bb7f073b",
+    "ptc": "2a62e2dd692e65b86c792519a6d6f617404be59d9878acf0727c6b92dd077134",
+    "cordis": "2b8d89c3137ce685f3d97f65aea5bd1c5099e08bba6c16815768245f8fb61d2d"
+  }
+}

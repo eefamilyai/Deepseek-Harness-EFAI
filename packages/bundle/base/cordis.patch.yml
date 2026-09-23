@@ -84,25 +84,6 @@
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
-    # DSH-FORK(dsml): text-channel tool calls, read on EVERY route.
-    #
-    # Which tool-call markup a model writes comes from the model, not from the
-    # transport: a request that filled a provider's native `tools` field can
-    # still get the call back as text — `<tool_calls>`, `<function_calls>`, or
-    # DeepSeek's pipe-wrapped `<｜｜DSML｜｜ …>` special tokens. Unread, that call
-    # reaches the user as markup and reads back to the model as an action that
-    # returned nothing.
-    #
-    # The pass is silent: it converts what it can parse into a real tool call
-    # and forwards everything else exactly as the adapter emitted it. Only an
-    # adapter with no native tool channel (llm-kiln) TEACHES this format, and
-    # only that adapter corrects the model about it.
-    - id: llm-dsml
-      name: '@deepseek-ai/dsh-llm-dsml'
-      config:
-        reasoningRecovery: true
-        excludeProviders: []
-
     # User-settings document (`$DSH_HOME/settings.yaml`, hot-reloaded): a
     # `llm-deepseek:` or `llm-pi-ai:` section there overrides the adapter entries
     # below without a restart, and is what the web Models page writes.
@@ -126,54 +107,10 @@
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
 
-    # The Kiln provider registry: sixteen presets (Anthropic, OpenAI, Gemini,
-    # OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together,
-    # Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio) plus
-    # `ds_direct`, DeepSeek's free web session. Routes are named `kiln-<id>` so
-    # they cannot collide with `deepseek-official` or the pi-ai catalog names.
-    #
-    # None of these providers has a `tools` field — ds_direct is a web chat
-    # session and cannot have one — so the harness's tool schemas reach the
-    # model as text and a tool call comes back as text: one `<tool_calls>`
-    # block, generated from and parsed against the request's own tool schemas.
-    # That single encoding is what makes a text-only route a usable agent here.
-    # No provider in the Python runtime adds a prompt of its own; the system
-    # slot carries the harness's prompt and the format statement, and nothing
-    # else.
-    #
-    # Keys are never configuration: each preset names the environment variable
-    # holding its key, resolved per request by the Python sidecar. A route with
-    # no key stays visible and selectable, and fails per request with the
-    # registry's own message naming the variable to set.
-    - id: llm-kiln
-      name: '@deepseek-ai/dsh-llm-kiln'
-      config:
-        routePrefix: kiln-
-        onlyConfigured: false
-
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
       config:
         root: !!js dshHomePath('sessions')
-
-    # DSH-FORK(kernel): what a compacted turn gets back. Compaction keeps a
-    # summary and drops the transcript, including every word the operator wrote,
-    # so the turn after one is the turn most likely to resume the wrong task.
-    # This injects the record instead of instructing the model to fetch it: one
-    # message per compaction carrying the operator's prompts and the tail of the
-    # log, folded from the log as it commits rather than scanned back. It also
-    # registers `{{session_log}}`, `{{session_dir}}`, and `{{session_id}}`, so a
-    # deployment persona can name this session's own log file.
-    #
-    # `root` mirrors the backend row above and must move with it: the two derive
-    # the same path, and a mismatch prints a file that does not exist.
-    # EXIT: upstream ships post-compaction grounding, or the persistence
-    # capability answers with the log location it already models for errors.
-    - id: session-recovery-context
-      name: '@deepseek-ai/dsh-session-recovery-context'
-      config:
-        root: !!js dshHomePath('sessions')
-        tailEvents: 50
 
     # Durable image bytes live outside the append-only session log. Messages
     # keep content-addressed references that this shared backend resolves for
@@ -306,37 +243,6 @@
     - id: shell-env
       name: '@deepseek-ai/dsh-shell-env'
 
-    # ── the acting-roster switches ──────────────────────────────────────────
-    #
-    # TWO independent categories, each with its own live switch:
-    #
-    #   kernel — `kernel.enabled`. The persistent Python namespace: reading a
-    #            file, editing it, searching the tree, running a command are
-    #            function calls inside it.
-    #   tools  — `tools.enabled`, plus one `tools.tools.<name>` per tool. The
-    #            conventional roster: shell, filesystem, search, jobs.
-    #
-    # They are separate so either can be switched off alone, and both can be on
-    # at once. That replaces the original either/or switch, where the kernel
-    # REPLACED those rows and only one side could ever be mounted.
-    #
-    # Every tool row below is therefore mounted unconditionally, except for the
-    # platform gates, which are not roster questions. `tool-roster` decides
-    # visibility at runtime instead. Mounting everything is what makes the
-    # switch live: a Loader `disabled` expression is read once at boot, so
-    # gating composition on a setting is a restart-shaped interface by
-    # construction — and a tool plugin registers its system-prompt section when
-    # it mounts, so a tool merely hidden without also filtering the assembled
-    # prompt would leave instructions for a function the model cannot call.
-    #
-    # `kernel-mode` still owns only its setting and is NOT gated: a switch that
-    # vanished in one of its own positions could never be flipped back.
-    #
-    - id: kernel-mode
-      name: '@deepseek-ai/dsh-kernel-mode'
-      config:
-        enabled: true
-
     - id: tool-bash
       name: '@deepseek-ai/dsh-tool-bash'
       disabled: !!js process.platform === 'win32'
@@ -358,87 +264,6 @@
       name: '@deepseek-ai/dsh-tool-fs-search'
       config:
         sampleOverCapGlobResults: false
-
-    # The kernel seam, its Kiln-backed Python process, and the model-facing
-    # tool. The process is lazy — nothing spawns until the first cell — but the
-    # interpreter is resolved at load, so a machine without Python reports an
-    # unavailable provider at selection time rather than mid-cell.
-    - id: kernel
-      name: '@deepseek-ai/dsh-kernel'
-      config:
-        defaultTimeoutMs: 180000
-
-    - id: kernel-python
-      name: '@deepseek-ai/dsh-kernel-python'
-      config:
-        cwd: !!js process.env.DSH_KERNEL_CWD
-        browserWindow: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('kernel.browserWindow', false)) === true
-
-    - id: tool-kernel
-      name: '@deepseek-ai/dsh-tool-kernel'
-      config:
-        timeoutMs: 180000
-
-    # RLM context-as-variable read-back: an async system-prompt/assemble
-    # listener that reads the live kernel `answer`/binds via ctx.kernel and
-    # contributes them as runtime context the agent loop already renders. The
-    # RLM engine itself reads `parseRlmDump` from this same package.
-    - id: kernel-rlm-context
-      name: '@deepseek-ai/dsh-kernel-rlm-context'
-
-    # ── the RLM switch ─────────────────────────────────────────────────────
-    #
-    # `rlm.enabled` (default false) is an independent engine switch, not a
-    # position of the acting-roster switch. It mirrors `kernel-mode`: the
-    # plugin owns only the setting
-    # and stays mounted in BOTH positions so the switch can always be flipped
-    # back. The engine below needs the persistent kernel seam underneath, so it
-    # mounts only when BOTH `kernel.enabled` and `rlm.enabled` are true. The
-    # standalone `tool-kernel` row unmounts under RLM in the shipped presets;
-    # the other subsumed rows follow `kernel.enabled` alone (RLM requires
-    # the kernel, so RLM-on still removes them transitively).
-    #
-    # DSH-FORK(rlm): a second settings namespace turning the model's acting
-    # tool from the standalone kernel into the recursive RLM engine.
-    # EXIT: move to packages/bundle/efai-rlm/cordis.patch.yml (a fork-owned
-    # bundle applied by profile) once the profile-boot bundle chain exists.
-    - id: rlm-mode
-      name: '@deepseek-ai/dsh-rlm-mode'
-      config:
-        enabled: false
-
-    # The first-party recursive RLM engine. It provides `rlm` (a one-shot tool)
-    # and the `ctx.rlm` service; both consume `ctx.kernel`, so this row is
-    # gated by BOTH switches. The presets unmount `tool-kernel` under RLM (a
-    # negated `rlm.enabled` gate) and leave the other subsumed rows on the
-    # `kernel.enabled` gate they already had.
-    - id: rlm
-      name: '@deepseek-ai/dsh-rlm'
-      disabled: !!js (typeof dshSettingFlag === 'function' && (dshSettingFlag('kernel.enabled', true) && dshSettingFlag('rlm.enabled', false))) === false
-
-    # ── agent memory (non-default) ─────────────────────────────────────────
-    #
-    # Durable, cache-friendly memory as a toggle. On, the engine adds
-    # memory_add/memory_recall/memory_map, auto-records tool output through a
-    # host-side `tools/result` observer, and re-injects a bounded index each
-    # turn. `agent-memory.enabled` (default false) is the switch, and it mirrors
-    # `kernel-mode`/`rlm-mode` exactly: the mode plugin owns only the setting and
-    # stays mounted in BOTH positions so the switch can always be flipped back,
-    # while `applies: 'restart'` matches the Loader `disabled` expression below
-    # being read once at boot.
-    #
-    # DSH-FORK(memory): a third settings namespace toggling the durable memory
-    # engine. EXIT: move to packages/bundle/efai-memory/cordis.patch.yml (a
-    # fork-owned bundle applied by profile) once the profile-boot bundle chain
-    # exists.
-    - id: agent-memory-mode
-      name: '@deepseek-ai/dsh-agent-memory-mode'
-      config:
-        enabled: false
-
-    - id: agent-memory
-      name: '@deepseek-ai/dsh-agent-memory'
-      disabled: !!js (typeof dshSettingFlag === 'function' && dshSettingFlag('agent-memory.enabled', false)) === false
 
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'
@@ -463,9 +288,6 @@
 
     - id: command-feedback
       name: '@deepseek-ai/dsh-command-feedback'
-
-    - id: command-session-info
-      name: '@deepseek-ai/dsh-command-session-info'
 
     - id: goal
       name: '@deepseek-ai/dsh-goal'
@@ -593,11 +415,6 @@
         subagentProvider: spawn
         maxRounds: 64
 
-    - id: tool-str-replace-editor
-      name: '@deepseek-ai/dsh-tool-str-replace-editor'
-      config:
-        maxOutputChars: 16000
-
     # Consecutive-repeat reminders on the tool chain.
     - id: repeat-tool-reminder
       name: '@deepseek-ai/dsh-repeat-tool-reminder'
@@ -636,19 +453,6 @@
         fetch: true
         searchTimeoutMs: 60000
 
-    # DSH-FORK(browser): a self-hosted headless browser (Playwright). It mounts
-    # two things. The `browser` tool lets the model read a page as text and act
-    # by element ref — for JS-rendered sites and multi-step flows a plain fetch
-    # cannot handle. The browser-rendered fetch provider registers with the web
-    # seam too, dormant until web_fetch is turned on and its fetchProvider is
-    # pointed at `browser`. Both need a one-time `npx playwright install
-    # chromium`; a launch without the binary fails with that exact instruction
-    # rather than a stack trace.
-    # EXIT: move to packages/bundle/efai-browser/cordis.patch.yml, a fork-owned
-    # bundle applied by profile.
-    - id: web-browser
-      name: '@deepseek-ai/dsh-web-browser'
-
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 
     # The tool registry. Presentation mode is a deployment choice; omitting it here
@@ -681,9 +485,3 @@
     # choice.
     - id: llm-deepseek
       name: '@deepseek-ai/dsh-llm-deepseek'
-
-    # DSH-FORK(kernel): the runtime roster. Mounted after every tool row so its
-    # seeded per-tool defaults see the whole registry. EXIT: upstream ships a
-    # runtime tool-visibility filter of its own.
-    - id: tool-roster
-      name: '@deepseek-ai/dsh-tool-roster'

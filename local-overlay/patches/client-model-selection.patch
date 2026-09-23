@@ -1,5 +1,5 @@
 diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.module.css b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
-index b2cb715287..6eb0f8d63c 100644
+index b2cb715287..638c4aab34 100644
 --- a/packages/client/ui-model-selection/src/client/ModelSelect.module.css
 +++ b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
 @@ -176,6 +176,27 @@
@@ -68,7 +68,7 @@ index b2cb715287..6eb0f8d63c 100644
 +  gap: 2px;
 +  margin: 2px 8px 4px;
 +  padding: 4px;
-+  border: 1px solid var(--dsw-alias-border-inverted);
++  border: 0.5px solid var(--dsw-alias-border-inverted);
 +  border-radius: 10px;
 +}
 +

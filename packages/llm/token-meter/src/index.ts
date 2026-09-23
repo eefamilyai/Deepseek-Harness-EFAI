@@ -30,8 +30,7 @@ import type {
   TokenMeterConfig,
 } from './types.ts'
 import { contextBreakdownProjectionDefinition } from './breakdown-projection.ts'
-// DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: a provider-supplied usage projection replaces this.
-import { contextPressureProjectionDefinition, tokenUsageLifetimeProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
+import { contextPressureProjectionDefinition, tokenUsageProjectionDefinition } from './usage-projection.ts'
 import { estimateContent, estimateMessage, estimateToolsTokens, ROLE_OVERHEAD } from './estimate.ts'
 import { commitSurfaceTokens, planSurfaceTokens } from './surface-fold.ts'
 import type { MeterSurfaceNode } from './surface-fold.ts'
@@ -112,7 +111,6 @@ export class TokenMeter extends Service {
     validateConfigKeys(config)
 
     ctx.sessionProjections.register(tokenUsageProjectionDefinition)
-    ctx.sessionProjections.register(tokenUsageLifetimeProjectionDefinition)
     ctx.sessionProjections.register(contextPressureProjectionDefinition)
     ctx.sessionProjections.register(contextBreakdownProjectionDefinition)
 

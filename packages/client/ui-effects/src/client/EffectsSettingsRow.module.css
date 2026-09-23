@@ -47,6 +47,7 @@
   width: 36px;
   height: 20px;
   border-radius: 999px;
+  corner-shape: round;
   background: rgba(128, 144, 168, 0.28);
   transition: background 150ms ease;
 }
@@ -62,6 +63,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
+  corner-shape: round;
   background: #fff;
   transition: transform 150ms ease;
 }

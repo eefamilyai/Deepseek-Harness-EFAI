@@ -1,0 +1,75 @@
+# The efai-web bundle patch: the fork's rows for the browser profile, applied
+# over upstream's `dsh-web-app` layer and the fork's own `dsh-efai-base`.
+#
+# Stacked by the profile's bundle list, which the fork's launcher keeps current.
+# A profile without it runs upstream's Web surface unchanged.
+
+- insert:
+    # Sidebar panels' host surface: a dedicated user PTY at ws /kiln/terminal and
+    # the agent's shared browser at /kiln/browser (live state.json + screenshots
+    # + drive-by-action). Self-contained over the webserver carrier; browserDir
+    # defaults to the same KILN_BROWSER_DIR the kernel hands the Python runtime.
+    - id: sidebar-bridge
+      name: '@deepseek-ai/dsh-host-sidebar-bridge'
+
+    # Which commit the running host was started from, at GET /version. Upstream's
+    # web-app row carries no such route, and an operator confirming that the page
+    # they are looking at is the code they just edited should not have to read the
+    # process table.
+    - id: version-route
+      name: '@deepseek-ai/dsh-host-version-route'
+
+    # Frame-wide visual effects: the ambient backdrop, the focus lock, and their
+    # Settings toggles.
+    # The per-family accent palette, as a theme override layer. The row
+    # chrome that reads these tokens ships in upstream's own module stylesheets;
+    # this row is what declares them.
+    - id: ui-flow-accents
+      name: '@deepseek-ai/dsh-client-ui-flow-accents'
+
+    - id: ui-effects
+      name: '@deepseek-ai/dsh-client-ui-effects'
+
+    # The right Sidebar's terminal tab type: a live shell in the session
+    # workspace over the sidebar-bridge PTY endpoint.
+    - id: ui-sidebar-terminal
+      name: '@deepseek-ai/dsh-client-ui-sidebar-terminal'
+
+    # The Tools settings section — independent kernel and conventional-tool
+    # switches, one switch per registered tool, over `tool-roster`.
+    - id: ui-settings-tools
+      name: '@deepseek-ai/dsh-client-ui-settings-tools'
+
+    # The Accounts settings section — add a DeepSeek web login from the UI
+    # instead of editing ds_config.json by hand.
+    - id: ui-settings-accounts
+      name: '@deepseek-ai/dsh-client-ui-settings-accounts'
+
+    # The Advanced settings section: a raw JSON editor over every registered
+    # namespace. Upstream ships no such surface, and it is a slot registration,
+    # so it needs no position inside upstream's settings package.
+    - id: ui-settings-advanced
+      name: '@deepseek-ai/dsh-client-ui-settings-advanced'
+
+    # The fork's preset roster, replacing the row disabled below. Same service,
+    # same default, same user root — a different set of shipped presets, because
+    # the fork's rosters carry the kernel acting surface and upstream's cannot.
+    # The path of that preset directory is inside the package, so a plugin is
+    # what names it; see `@deepseek-ai/dsh-efai-presets`.
+    - id: efai-presets
+      name: '@deepseek-ai/dsh-efai-presets'
+      config:
+        default: standard
+
+# Upstream's roster row, replaced by the fork's above. Both mount the same
+# service, so exactly one of them may be active.
+- id: agent-presets
+  disabled: true
+
+# The kernel moves behind presets with every other model-facing tool: the seam
+# and its Python backend stay on the host plane (one interpreter probe, one
+# process owner per agent), while `tool-kernel` is what a preset mounts to give
+# its agent the cell-execution verb at all. The host-plane row from
+# `dsh-efai-base` is therefore switched off here.
+- id: tool-kernel
+  disabled: true

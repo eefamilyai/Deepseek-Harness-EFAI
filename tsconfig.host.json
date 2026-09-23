@@ -376,7 +376,15 @@
     { "path": "./packages/agent-memory/agent-memory" },
     { "path": "./packages/agent-memory/agent-memory-mode" },
     { "path": "./packages/host/sidebar-bridge" },
-    { "path": "./packages/session/session-recovery-context" }
+    { "path": "./packages/session/session-recovery-context" },
+    { "path": "./packages/host/version-route" },
+    { "path": "./packages/core/efai-identity" },
+    { "path": "./packages/compaction/compaction-efai" },
+    { "path": "./packages/llm/token-usage-lifetime" },
+    { "path": "./packages/skill/skill-injection" },
+    { "path": "./packages/preset/efai-presets" },
+    { "path": "./packages/bundle/efai-base" },
+    { "path": "./packages/bundle/efai-web" }
     // DSH-FORK end
   ]
 }

@@ -139,34 +139,6 @@ index 5bddd71019..cfb1d573df 100644
 +    await ctx.fiber.dispose()
 +  })
  })
-diff --git a/packages/core/system-prompt/src/index.ts b/packages/core/system-prompt/src/index.ts
-index d83cc4d216..c9721e6e64 100644
---- a/packages/core/system-prompt/src/index.ts
-+++ b/packages/core/system-prompt/src/index.ts
-@@ -420,7 +420,8 @@ export class SystemPrompt extends Service {
-       this.section({
-         name: 'harness:identity',
-         order: this.getSectionOrder('HARNESS_IDENTITY'),
--        text: 'You are an AI agent powered by DeepSeek Harness.',
-+        // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork plugin registers the identity as a prompt section.
-+        text: 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. *In large directories, use optimised ways to search through the directory. Or write optimized code in general.*',
-       })
-     }
-     this.section({
-diff --git a/packages/core/system-prompt/tests/system-prompt.spec.ts b/packages/core/system-prompt/tests/system-prompt.spec.ts
-index 8e60ea2bec..832b0ea0f1 100644
---- a/packages/core/system-prompt/tests/system-prompt.spec.ts
-+++ b/packages/core/system-prompt/tests/system-prompt.spec.ts
-@@ -12,7 +12,8 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
-  * their own sections; the built-ins' behavior is pinned by its own describe.
-  */
- const BUILT_IN = ['harness:identity', 'deployment:persona-prefix', 'deployment:persona-suffix']
--const IDENTITY = 'You are an AI agent powered by DeepSeek Harness.'
-+// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/core/system-prompt/src/index.ts.
-+const IDENTITY = 'You are an AI agent in a fully enclosed sandbox for windows related testing and software development. Put in maximum effort no matter how long the task takes, even if it takes hours; quality is the ultimate goal. *In large directories, use optimised ways to search through the directory. Or write optimized code in general.*'
- const SECTION_ORDER_NAMES = [
-   'HARNESS_IDENTITY', 'DEPLOYMENT_PERSONA_PREFIX',
-   'PLAN_POLICY', 'TEAM_POLICY', 'PTC_ONLY', 'FILE_REFERENCE', 'TOOL_BASH',
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
 index c26ef3ff28..c593d831d8 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
