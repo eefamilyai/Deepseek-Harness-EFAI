@@ -1,15 +1,15 @@
-diff --git a/packages/client/ui-settings/src/client/settings-scope.ts b/packages/client/ui-settings/src/client/settings-scope.ts
-index e795ef4afc..1de64d56d1 100644
---- a/packages/client/ui-settings/src/client/settings-scope.ts
-+++ b/packages/client/ui-settings/src/client/settings-scope.ts
-@@ -29,10 +29,19 @@ import type {} from '@deepseek-ai/dsh-api-remotes/types'
+diff --git a/packages/client/ui-settings/src/client/config-form.ts b/packages/client/ui-settings/src/client/config-form.ts
+index cf77536a97..7b614c6c4a 100644
+--- a/packages/client/ui-settings/src/client/config-form.ts
++++ b/packages/client/ui-settings/src/client/config-form.ts
+@@ -25,10 +25,19 @@ import type {} from '@deepseek-ai/dsh-api-remotes/types'
  // never — the owning package's client-safe, type-only subpath supplies the
  // cordis `Events` entry (and with it the branded `SettingsNamespace`).
  import type {} from '@deepseek-ai/dsh-settings/types'
 -import type { SettingsSchemaService } from './schema.ts'
-+// DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the kernel switch reads settings through the public scope.
++// DSH-FORK(settings-freeze): fork edit on an upstream-owned file. EXIT: upstream memoizes the decoded section per raw value.
 +import type { SchemaNode, SettingsSchemaService } from './schema.ts'
- import type { SettingsScope, SettingsScopeSnapshot, SettingsScopeSpec } from './settings-contract.ts'
+ import type { ConfigForm, ConfigFormSnapshot } from './config-form-types.ts'
  import { SettingsDescribeMirror, type SettingsDescribeFace } from './settings-mirror.ts'
  
 +function sameRawSection(left: unknown, right: unknown): boolean {
@@ -20,10 +20,10 @@ index e795ef4afc..1de64d56d1 100644
 +  return JSON.stringify(left) === JSON.stringify(right)
 +}
 +
- /**
-  * One namespace's derived view over the shared describe mirror, plus that
-  * namespace's serialized Host writes. Writes carry the latest known namespace
-@@ -51,6 +60,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
+ /** Domain-owned description of one settings namespace consumed by a browser plugin. */
+ interface ConfigFormSpec<T> {
+   /** Settings namespace registered by the owning Host plugin. */
+@@ -59,6 +68,11 @@ export class ConfigFormController<T> implements ConfigForm<T> {
     * its fence from here first.
     */
    private pendingRevision: number | undefined
@@ -35,7 +35,7 @@ index e795ef4afc..1de64d56d1 100644
  
    /**
     * @param ctx - the providing plugin's context, whose `remote.settings`
-@@ -187,7 +201,22 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
+@@ -196,7 +210,22 @@ export class ConfigFormController<T> implements ConfigForm<T> {
        })
        return
      }
@@ -59,7 +59,7 @@ index e795ef4afc..1de64d56d1 100644
      this.store.update((draft) => {
        draft.revision = view.revision
        draft.base = view.base
-@@ -206,7 +235,11 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
+@@ -215,7 +244,11 @@ export class ConfigFormController<T> implements ConfigForm<T> {
      if (typeof view.value !== 'object' || view.value === null || Array.isArray(view.value)) return undefined
      let failure: string | undefined
      try {

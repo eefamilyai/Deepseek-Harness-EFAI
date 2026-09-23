@@ -4,7 +4,7 @@
  * document with process-local fallback when settings are unavailable.
  */
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   DEFAULT_FOCUS_ENABLED, DEFAULT_WHALE_ENABLED, DEFAULT_WHALE_OPACITY, DEFAULT_WHALE_SIZE, DEFAULT_WHALE_STATIC,
   FOCUS_ENABLED_FIELD, WHALE_ENABLED_FIELD, WHALE_OPACITY_FIELD, WHALE_SIZE_FIELD, WHALE_STATIC_FIELD,
@@ -21,10 +21,10 @@ export class EffectsSettingsPolicy {
   readonly whaleOpacity: SnapshotStore<number> = createSnapshotStore(DEFAULT_WHALE_OPACITY)
   readonly whaleSize: SnapshotStore<number> = createSnapshotStore(DEFAULT_WHALE_SIZE)
   readonly whaleStatic: SnapshotStore<boolean> = createSnapshotStore(DEFAULT_WHALE_STATIC)
-  private readonly host: SettingsScope<EffectsSettings> | undefined
+  private readonly host: ConfigForm<EffectsSettings> | undefined
 
   /** @param host - durable preference scope owned by the settings surface. */
-  constructor(host?: SettingsScope<EffectsSettings>) {
+  constructor(host?: ConfigForm<EffectsSettings>) {
     this.host = host
     if (host !== undefined) {
       host.subscribe(() => { this.adopt(host) })
@@ -64,7 +64,7 @@ export class EffectsSettingsPolicy {
     void this.host?.set(WHALE_STATIC_FIELD, value)
   }
 
-  private adopt(host: SettingsScope<EffectsSettings>): void {
+  private adopt(host: ConfigForm<EffectsSettings>): void {
     const section = host.getSnapshot().value
     if (section === undefined) return
     if (this.whaleEnabled.getSnapshot() !== section.whaleEnabled) {

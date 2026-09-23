@@ -7,7 +7,7 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-agent-memory-mode` owns `agent-memory.enabled` and the mount it controls. On, it plugs `@deepseek-ai/dsh-agent-memory` into its own context; off, it disposes that fiber, which unwinds the engine's tools, its prompt block, and its tool-result observer together. The switch stays mounted in both of its own positions, so it can always be flipped back.
+`dsh-agent-memory-mode` owns its live `enabled` field and the mount it controls. On, it plugs `@deepseek-ai/dsh-agent-memory` into its own context; off, it disposes that fiber, which unwinds the engine's tools, its prompt block, and its tool-result observer together. The switch stays mounted in both of its own positions, so it can always be flipped back.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount it in a composition carrying `settings`; `packages/bundle/efai-base` does. The engine row is not mounted separately — this package mounts it.
+`packages/bundle/efai-base` mounts it. The engine row is not mounted separately — this package mounts it.
 
 ```yaml
 - id: agent-memory-mode
@@ -32,7 +32,7 @@ Mount it in a composition carrying `settings`; `packages/bundle/efai-base` does.
 | `enabled` | `false` | Whether the engine runs. Applies immediately. |
 | `engine` | `{}` | Engine settings, passed through verbatim to `@deepseek-ai/dsh-agent-memory` when it mounts. |
 
-A composition with no settings service still works: the switch has nothing to publish, and the composition's own `enabled` is the whole answer.
+`enabled` is declared `.volatile()`: Settings edits it by this row's id, the Loader commits the value without remounting the row, and `loader/volatile-update` tells the plugin to mount or dispose the engine. A composition with no settings surface still works — the composition's own `enabled` is the whole answer.
 
 <a id="why-the-switch-owns-the-mount"></a>
 ## Why the switch owns the mount
@@ -44,4 +44,4 @@ The decision could have been a Loader `disabled: !!js …` expression on the eng
 <a id="dev-note"></a>
 ## Dev Note
 
-`sync` compares the wanted state against whether a fiber exists, so writing the value the switch already holds does nothing — a settings write that changes another field in the same namespace does not remount the engine and lose its in-memory state.
+`sync` compares the wanted state against whether a fiber exists, so writing the value the switch already holds does nothing — an edit that changes another field of this row does not remount the engine and lose its in-memory state.

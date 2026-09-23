@@ -9,17 +9,18 @@
 #
 # No row here carries a `!!js` settings expression. A Loader expression is read
 # once at boot, so gating composition on a setting makes that setting a restart
-# by construction. The three switches this fork ships decide at runtime instead:
+# by construction. The fork's switches are live config fields of the rows that
+# enforce them instead, edited from Settings by row id:
 #
-#   kernel.enabled / rlm.enabled  — `tool-roster` filters the assembled prompt
+#   tool-roster: kernel / rlm / enabled / tools — filters the assembled prompt
 #                                   and guards execution, per turn.
-#   agent-memory.enabled          — `agent-memory-mode` mounts and unmounts the
-#                                   engine itself, because the engine writes to
-#                                   disk and hiding a tool would not stop it.
+#   agent-memory-mode: enabled    — mounts and unmounts the engine itself,
+#                                   because the engine writes to disk and hiding
+#                                   a tool would not stop it.
+#   kernel-python: browserWindow  — read when the kernel process starts.
 #
 # Row order carries no load semantics (activation is service-availability
-# driven); `tool-roster` is last only because it seeds a per-tool default from
-# whatever the registry already holds.
+# driven).
 
 - insert:
     # The identity opener: the first line the model reads, replacing the
@@ -84,14 +85,6 @@
 
     # ── the acting surface ──────────────────────────────────────────────────
     #
-    # `kernel-mode` owns `kernel.enabled` and nothing else. It stays mounted in
-    # BOTH positions of its own switch: a switch that vanished when switched off
-    # could never be switched back on.
-    - id: kernel-mode
-      name: '@deepseek-ai/dsh-kernel-mode'
-      config:
-        enabled: true
-
     # The kernel seam, its Kiln-backed Python process, and the model-facing
     # tool. The process is lazy — nothing spawns until the first cell — but the
     # interpreter is resolved at load, so a machine without Python reports an
@@ -111,9 +104,11 @@
       config:
         cwd: !!js process.env.DSH_KERNEL_CWD
 
-    # The host-plane tool row. The agent plane mounts its own (see
-    # `@deepseek-ai/dsh-efai-presets`), and `tool-roster` decides per turn which
-    # of `kernel` and `rlm` the model actually sees.
+    # The kernel tool stays on the host plane in every profile. The tools
+    # registry is layered, so a host registration reaches every preset agent's
+    # catalog, and each call resolves its own agent (`exec.agent`), so one row
+    # serves every session. `tool-roster` decides per turn which of `kernel`
+    # and `rlm` the model actually sees.
     - id: tool-kernel
       name: '@deepseek-ai/dsh-tool-kernel'
       config:
@@ -126,18 +121,11 @@
     - id: kernel-rlm-context
       name: '@deepseek-ai/dsh-kernel-rlm-context'
 
-    # `rlm-mode` owns `rlm.enabled` (default off) and, like `kernel-mode`, stays
-    # mounted in both positions.
-    - id: rlm-mode
-      name: '@deepseek-ai/dsh-rlm-mode'
-      config:
-        enabled: false
-
     # The engine mounts unconditionally and publishes `ctx.rlm` plus the `rlm`
     # tool. Which of the two acting surfaces the model is offered is the
-    # roster's decision, taken per turn: `rlm` when `rlm.enabled`, `kernel`
-    # otherwise, and neither when `kernel.enabled` is off — the engine runs on
-    # the same seam, so kernel-off withdraws both.
+    # roster's decision, taken per turn: `rlm` when its `rlm` switch is on,
+    # `kernel` otherwise, and neither when its `kernel` switch is off — the
+    # engine runs on the same seam, so kernel-off withdraws both.
     - id: rlm
       name: '@deepseek-ai/dsh-rlm'
 
@@ -183,20 +171,8 @@
     - id: web-browser
       name: '@deepseek-ai/dsh-web-browser'
 
-    # The fork compaction provider: upstream's engine with a summarizer system
-    # prompt for text-only routes, a prune before the manual path summarizes,
-    # and a /compact that waits out the turn in flight instead of refusing.
-    # Upstream's own engine row is switched off below — both provide ctx.compaction.
-    - id: compaction-efai
-      name: '@deepseek-ai/dsh-compaction-efai'
-
-    # The runtime roster, last so its seeded per-tool defaults see the whole
-    # registry. It owns the `tools` namespace, the `kernel`/`rlm` swap, and the
-    # turn boundary that holds a change back until the model stops generating.
+    # The runtime roster. It owns the kernel, RLM, and conventional-tool
+    # switches as live config fields, and the turn boundary that holds a change
+    # back until the model stops generating.
     - id: tool-roster
-      name: '@deepseek-ai/dsh-tool-roster'
-
-# Upstream's compaction engine, replaced by the fork provider inserted above.
-# Both publish ctx.compaction, so exactly one may be active.
-- id: compaction-basic
-  disabled: true
+      name: '@deepseek-ai/dsh-roster'

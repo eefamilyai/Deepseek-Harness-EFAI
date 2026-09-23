@@ -99,7 +99,7 @@ async function fire(
 ): Promise<UserMessage[]> {
   const proposed = createUserMessage({
     content: [{ type: 'text', text: 'proposal' }],
-    source: { kind: 'plugin', plugin: 'recovery-test' },
+    source: { kind: 'user' },
   })
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
@@ -116,7 +116,7 @@ async function fire(
 function acknowledge(session: Session): void {
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'OK' }],
-    source: { kind: 'plugin', plugin: recovery.name, form: 'snapshot', sections: [] },
+    source: { kind: recovery.RECOVERY_SOURCE_KIND, form: 'snapshot', sections: [] },
   }), { surfaceOp: 'append' })
 }
 

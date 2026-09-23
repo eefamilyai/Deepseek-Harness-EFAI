@@ -1,18 +1,18 @@
 diff --git a/apps/cli/package.json b/apps/cli/package.json
-index 97881b4cfa..07969c1bce 100644
+index b433c2407f..1772bdf5a4 100644
 --- a/apps/cli/package.json
 +++ b/apps/cli/package.json
-@@ -46,6 +46,8 @@
-     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
-     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
-     "@deepseek-ai/dsh-cordis-client-runner": "workspace:^",
-+    "@deepseek-ai/dsh-efai-base": "workspace:^",
-+    "@deepseek-ai/dsh-efai-web": "workspace:^",
-     "@deepseek-ai/dsh-fs-local": "workspace:^",
-     "@deepseek-ai/dsh-goal": "workspace:^",
-     "@deepseek-ai/dsh-goal-round-driver": "workspace:^",
+@@ -38,6 +38,8 @@
+     "@deepseek-ai/dsh-compaction-basic": "workspace:*",
+     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
+     "@deepseek-ai/dsh-cordis-client-runner": "workspace:*",
++    "@deepseek-ai/dsh-efai-base": "workspace:*",
++    "@deepseek-ai/dsh-efai-web": "workspace:*",
+     "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:*",
+     "@deepseek-ai/dsh-fs-local": "workspace:*",
+     "@deepseek-ai/dsh-goal": "workspace:*",
 diff --git a/apps/web/tests/built-boot.expected.e2e.ts b/apps/web/tests/built-boot.expected.e2e.ts
-index d7292382df..0726d48faa 100644
+index 7ab01184fc..4238867943 100644
 --- a/apps/web/tests/built-boot.expected.e2e.ts
 +++ b/apps/web/tests/built-boot.expected.e2e.ts
 @@ -61,20 +61,20 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn

@@ -1,17 +1,17 @@
 diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
-index 56da231c15..3d07bda598 100644
+index aab4735316..f89602e5bc 100644
 --- a/packages/client/ui-conversation/src/client/locales.ts
 +++ b/packages/client/ui-conversation/src/client/locales.ts
-@@ -116,6 +116,8 @@ export const zh = {
+@@ -299,6 +299,8 @@ export const zh = {
    'tool.title.stopCordis': '停止 Cordis 插件',
    'tool.title.removeCordis': '移除 Cordis 插件',
-   'tool.title.pwsh': 'Pwsh',
-+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/locale/src/locales/en.ts.
+   'tool.title.pwsh': '运行命令',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
 +  'tool.title.kernel': 'Python',
    'tool.title.readImage': '读取图片',
-   'tool.title.grep': 'Grep',
-   'tool.title.glob': 'Glob',
-@@ -282,6 +284,7 @@ export const en = {
+   'tool.title.grep': '搜索文件内容',
+   'tool.title.glob': '查找文件',
+@@ -651,6 +653,7 @@ export const en = {
    'tool.title.stopCordis': 'Stop Cordis Plugin',
    'tool.title.removeCordis': 'Remove Cordis Plugin',
    'tool.title.pwsh': 'Pwsh',
@@ -19,51 +19,8 @@ index 56da231c15..3d07bda598 100644
    'tool.title.readImage': 'Read image',
    'tool.title.grep': 'Grep',
    'tool.title.glob': 'Glob',
-diff --git a/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx b/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx
-index dfb515bde6..bc40678733 100644
---- a/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx
-+++ b/packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx
-@@ -59,6 +59,8 @@ function WidthHandle(props: {
-   const base = useRef(0)
-   const origin = useRef(0)
-   const latest = useRef(0)
-+  const pointerY = useRef(0)
-+  const handleEl = useRef<HTMLDivElement | null>(null)
-   const frame = useRef<number | null>(null)
-   const callbacks = useRef(props)
-   callbacks.current = props
-@@ -79,13 +81,26 @@ function WidthHandle(props: {
-     base.current = callbacks.current.onStart()
-     setDragging(true)
-   }, [])
-+  // DSH-FORK(dock): read the handle's box inside the rAF tick instead of on
-+  // every raw pointermove — a per-event layout read fights the resize write
-+  // and makes the drag stutter. Hover (no capture) keeps the synchronous
-+  // glow update because it never competes with the resize path.
-   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
--    const box = e.currentTarget.getBoundingClientRect()
--    e.currentTarget.style.setProperty('--dsh-width-handle-pointer-y', `${e.clientY - box.top}px`)
--    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) {
-+      const box = e.currentTarget.getBoundingClientRect()
-+      e.currentTarget.style.setProperty('--dsh-width-handle-pointer-y', `${e.clientY - box.top}px`)
-+      return
-+    }
-     latest.current = e.clientX
-+    pointerY.current = e.clientY
-+    handleEl.current = e.currentTarget
-     frame.current ??= requestAnimationFrame(() => {
-       frame.current = null
-+      const el = handleEl.current
-+      if (el !== null) {
-+        const box = el.getBoundingClientRect()
-+        el.style.setProperty('--dsh-width-handle-pointer-y', `${pointerY.current - box.top}px`)
-+      }
-       callbacks.current.onDrag(outwardWidth())
-     })
-   }, [])
 diff --git a/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx b/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx
-index 9ac7ae573b..3d5c3273c1 100644
+index 40df87269b..2129a1c803 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx
 @@ -150,9 +150,9 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
@@ -118,10 +75,10 @@ index d47e0bfe2f..c3f763abc9 100644
     hover rules target the hitbox so a slot-occupant mark swims too. */
  .fishHitbox {
 diff --git a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
-index f515f20ce1..d5a20a686a 100644
+index 90a9bab137..b45b40da11 100644
 --- a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
 +++ b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
-@@ -325,11 +325,12 @@ function mount(
+@@ -379,11 +379,12 @@ function mount(
  }
  
  describe('Hero chrome', () => {
@@ -136,28 +93,28 @@ index f515f20ce1..d5a20a686a 100644
      expect(renderSlot).toHaveBeenCalledOnce()
      expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
      const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
-@@ -476,7 +477,6 @@ describe('ConversationRoot resident composer', () => {
-     expect(host).not.toBeNull()
-     expect(header?.getAttribute('aria-hidden')).toBe('true')
+@@ -547,7 +548,6 @@ describe('ConversationRoot resident composer', () => {
+     expect(b.slotCalls).not.toContain('conversation.session.header.utilities')
+     expect(b.slotCalls).not.toContain('conversation.session.header.actions')
      expect(b.view.getByText('探索未至之境')).toBeTruthy()
 -    expect(b.view.getByText('预览版')).toBeTruthy()
      expect(b.view.queryByTestId('view-chat')).toBeNull()
      // The same machine-backed textarea is live in the hero, and the
      // persistence mirror stays bound (ConversationSession mounts chrome-hidden
 diff --git a/packages/client/ui-sidebar/README.i18n.yaml b/packages/client/ui-sidebar/README.i18n.yaml
-index aae3d04125..5a285cec9c 100644
+index 72b5b20666..fec5d38b98 100644
 --- a/packages/client/ui-sidebar/README.i18n.yaml
 +++ b/packages/client/ui-sidebar/README.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write packages/client/ui-sidebar/README.md
--README.md: 1b520213809ca98a6819483a4ee5ea4f451841d2
--README.zh.md: ee694d0067db50eff52051d8d9f8fd3baac0fc27
-+README.md: 854ccad92d11afacc02a58c3d4d41c827faf6c11
-+README.zh.md: 08cffccd482644a67e6f4302723d9bf545546bea
+-README.md: 94bb3a70ca8c06b5838f41436bb0f2ba2751501e
+-README.zh.md: 86f54882ba1c96b9b50898993931757f7afef4e5
++README.md: 8a8de2440c8958bc31d27eaf135d4715583eca22
++README.zh.md: ba586959d656d4dc079bd9ce14537b308be7679e
 diff --git a/packages/client/ui-sidebar/README.md b/packages/client/ui-sidebar/README.md
-index 1b52021380..854ccad92d 100644
+index 94bb3a70ca..8a8de2440c 100644
 --- a/packages/client/ui-sidebar/README.md
 +++ b/packages/client/ui-sidebar/README.md
 @@ -5,6 +5,8 @@ kind: "package-reference"
@@ -179,7 +136,7 @@ index 1b52021380..854ccad92d 100644
  ### Global panel entries
  
 diff --git a/packages/client/ui-sidebar/README.zh.md b/packages/client/ui-sidebar/README.zh.md
-index ee694d0067..08cffccd48 100644
+index 86f54882ba..ba586959d6 100644
 --- a/packages/client/ui-sidebar/README.zh.md
 +++ b/packages/client/ui-sidebar/README.zh.md
 @@ -5,6 +5,8 @@ kind: "package-reference"
@@ -201,10 +158,10 @@ index ee694d0067..08cffccd48 100644
  ### 全局面板入口
  
 diff --git a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
-index f899b50c53..447809c8fc 100644
+index 144070ba3f..871b880189 100644
 --- a/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
 +++ b/packages/client/ui-sidebar/src/client/SidebarRoot.module.css
-@@ -135,6 +135,16 @@
+@@ -271,6 +271,16 @@
    min-width: 0;
  }
  
@@ -221,7 +178,7 @@ index f899b50c53..447809c8fc 100644
  .brandMark {
    flex: none;
    display: inline-flex;
-@@ -160,21 +170,24 @@
+@@ -296,21 +306,24 @@
    white-space: nowrap;
  }
  
@@ -248,7 +205,7 @@ index f899b50c53..447809c8fc 100644
  }
  
  .iconButton {
-@@ -229,19 +242,25 @@
+@@ -368,19 +381,25 @@
    color: var(--dsw-alias-label-primary);
  }
  
@@ -282,19 +239,19 @@ index f899b50c53..447809c8fc 100644
  }
  
 diff --git a/packages/client/ui-skill/README.i18n.yaml b/packages/client/ui-skill/README.i18n.yaml
-index b5491aded0..7320490455 100644
+index 5885d41e4e..806dd3b01b 100644
 --- a/packages/client/ui-skill/README.i18n.yaml
 +++ b/packages/client/ui-skill/README.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write packages/client/ui-skill/README.md
--README.md: a1e9e7047f102f2610160905727450833b540082
--README.zh.md: d7669b11fc7249c857e20f3c52f93b8bfd214281
-+README.md: 2620cff5e786e136696f57fb06a9ff3735770f3b
-+README.zh.md: f317149268af065d46c2b8b377f4271226e8e997
+-README.md: fdd8cb7fddb54cf73d897bb278086428d0e41214
+-README.zh.md: 2090711d5f91bf1efba2f8e19d8d361f9ffb99d9
++README.md: 4d52f4ae4a231b6ecb5b1e9f13d299cfdf43a4d3
++README.zh.md: bfac149cd4b132ac477b92dc1c1b5baef4449a75
 diff --git a/packages/client/ui-skill/README.md b/packages/client/ui-skill/README.md
-index a1e9e7047f..2620cff5e7 100644
+index fdd8cb7fdd..4d52f4ae4a 100644
 --- a/packages/client/ui-skill/README.md
 +++ b/packages/client/ui-skill/README.md
 @@ -5,6 +5,8 @@ kind: "package-reference"
@@ -310,13 +267,13 @@ index a1e9e7047f..2620cff5e7 100644
  
  ### The skill tool row
  
--A collapsed row renders the skill glyph, `Skill` title, and requested skill name; running calls carry the transcript shimmer, failures replace the name with the first error line, and interrupted calls use the warning state. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
-+A collapsed row renders the skill glyph, `Skill` title, and requested skill name in the `instruct` family accent it shares with the context-injection and system-prompt rows ([token group](../ui-theme/README.md)) — a loaded skill and an injected instruction file are the same kind of material. This row builds its own chrome instead of composing `DisclosureRow`, so it rebinds `--dsh-row-accent` itself. Running calls carry the transcript shimmer, failures replace the name with the first error line, and interrupted calls use the warning state. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
+-A collapsed row renders the skill glyph, `Skill` title, and requested skill name on the same secondary font-size axis, line height, row height, and glyph scaling as ordinary Tool rows. Every lifecycle state retains the ordinary skill glyph; running calls carry the transcript shimmer, while failures replace the name with the first error line and interruptions retain their explicit status text. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available; this expanded card keeps its own typography. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
++A collapsed row renders the skill glyph, `Skill` title, and requested skill name on the same secondary font-size axis, line height, row height, and glyph scaling as ordinary Tool rows. Its glyph, title, and name take the `instruct` family accent it shares with the context-injection and system-prompt rows ([token group](../ui-theme/README.md)) — a loaded skill and an injected instruction file are the same kind of material. This row builds its own chrome instead of composing `DisclosureRow`, so it rebinds `--dsh-row-accent` itself. Every lifecycle state retains the ordinary skill glyph; running calls carry the transcript shimmer, while failures replace the name with the first error line and interruptions retain their explicit status text. A settled row expands into a bounded `Instructions` card containing the exact durable tool output, with the standard trajectory `Inspect` affordance when available; this expanded card keeps its own typography. The row derives its name, lifecycle, and body only from the frozen call/result slice supplied by ui-tool, never from the current catalog, so replay stays stable when installed skills or their descriptions change.
  
  Hovering over `/name` highlights the entire reference. Clicking a known skill opens its provider-supplied `SKILL.md` path in the right Sidebar while keeping the token editable. An uncached click shares the per-Session catalog fetch and opens when it completes, retaining the clicked Session address. Preset changes, connection resets, and plugin disposal cancel pending previews; a later click fetches the current catalog again. Skills without a file path remain invocable but have no file preview.
  
 diff --git a/packages/client/ui-skill/README.zh.md b/packages/client/ui-skill/README.zh.md
-index d7669b11fc..f317149268 100644
+index 2090711d5f..bfac149cd4 100644
 --- a/packages/client/ui-skill/README.zh.md
 +++ b/packages/client/ui-skill/README.zh.md
 @@ -5,6 +5,8 @@ kind: "package-reference"
@@ -332,13 +289,13 @@ index d7669b11fc..f317149268 100644
  
  ### skill 工具行
  
--收起的行显示 skill 图标、`Skill` 标题与请求加载的 skill 名称；运行中的调用带有 transcript（文本记录）的扫光效果，失败时用错误首行替换名称，中断的调用使用警告状态。已结算的行展开为一个尺寸受限的 `Instructions` 卡片，其中原样呈现持久化的工具输出；可用时还会提供标准轨迹的 `Inspect` 入口。该行的名称、生命周期与正文只派生自 ui-tool 提供的冻结调用／结果切片，绝不读取当前目录，因此即使已安装的 skill 或其描述发生变化，回放仍保持稳定。
-+收起的行以与 context injection 行、system prompt 行共用的 `instruct` 族强调色（[token 组](../ui-theme/README.zh.md)）显示 skill 图标、`Skill` 标题与请求加载的 skill 名称——加载的 skill 与注入的指令文件属于同一类材料。该行自建行内结构而非组合 `DisclosureRow`，因此自行重新绑定 `--dsh-row-accent`。运行中的调用带有 transcript（文本记录）的扫光效果，失败时用错误首行替换名称，中断的调用使用警告状态。已结算的行展开为一个尺寸受限的 `Instructions` 卡片，其中原样呈现持久化的工具输出；可用时还会提供标准轨迹的 `Inspect` 入口。该行的名称、生命周期与正文只派生自 ui-tool 提供的冻结调用／结果切片，绝不读取当前目录，因此即使已安装的 skill 或其描述发生变化，回放仍保持稳定。
+-收起的行显示 skill 图标、`Skill` 标题与请求加载的 skill 名称，并与普通工具行使用相同的 secondary 字号轴、行高、行高度和图标缩放。所有生命周期状态都保留普通 skill 图标；运行中的调用带有 transcript（文本记录）的扫光效果，失败时以错误首行替换名称，中断则保留明确状态文本。已结算的行展开为一个尺寸受限的 `Instructions` 卡片，其中原样呈现持久化的工具输出；可用时还会提供标准轨迹的 `Inspect` 入口，展开卡片保留自身排版。该行的名称、生命周期与正文只派生自 ui-tool 提供的冻结调用／结果切片，绝不读取当前目录，因此即使已安装的 skill 或其描述发生变化，回放仍保持稳定。
++收起的行显示 skill 图标、`Skill` 标题与请求加载的 skill 名称，并与普通工具行使用相同的 secondary 字号轴、行高、行高度和图标缩放。图标、标题与名称采用与 context injection 行、system prompt 行共用的 `instruct` 族强调色（[token 组](../ui-theme/README.zh.md)）——加载的 skill 与注入的指令文件属于同一类材料。该行自建行内结构而非组合 `DisclosureRow`，因此自行重新绑定 `--dsh-row-accent`。所有生命周期状态都保留普通 skill 图标；运行中的调用带有 transcript（文本记录）的扫光效果，失败时以错误首行替换名称，中断则保留明确状态文本。已结算的行展开为一个尺寸受限的 `Instructions` 卡片，其中原样呈现持久化的工具输出；可用时还会提供标准轨迹的 `Inspect` 入口，展开卡片保留自身排版。该行的名称、生命周期与正文只派生自 ui-tool 提供的冻结调用／结果切片，绝不读取当前目录，因此即使已安装的 skill 或其描述发生变化，回放仍保持稳定。
  
  鼠标移入 `/name` 时，背景覆盖整个引用。点击已知 skill 会在右侧栏打开提供方给出的 `SKILL.md` 路径，同时保留文本的可编辑性。缓存未就绪时，点击复用该 Session 的目录请求，在完成后按点击时的 Session 地址打开预览。切换预设、重置连接和插件释放会取消待处理的预览；后续点击重新获取当前目录。没有文件路径的 skill 仍可调用，但没有文件预览。
  
 diff --git a/packages/client/ui-skill/src/client/SkillRow.module.css b/packages/client/ui-skill/src/client/SkillRow.module.css
-index 4dd75f8498..5d30cecc04 100644
+index 34f255483d..083e0fab53 100644
 --- a/packages/client/ui-skill/src/client/SkillRow.module.css
 +++ b/packages/client/ui-skill/src/client/SkillRow.module.css
 @@ -38,6 +38,16 @@
@@ -358,12 +315,16 @@ index 4dd75f8498..5d30cecc04 100644
  .leading {
    position: relative;
    flex: none;
-@@ -47,11 +57,11 @@
+@@ -47,7 +57,7 @@
    align-items: center;
    justify-content: center;
    margin-right: 6px;
 -  color: var(--dsw-alias-label-tertiary);
 +  color: var(--dsh-row-accent);
+ }
+ 
+ .leading svg {
+@@ -56,7 +66,7 @@
  }
  
  .chevron {
@@ -372,16 +333,16 @@ index 4dd75f8498..5d30cecc04 100644
  }
  
  .iconIdle {
-@@ -80,7 +90,7 @@
+@@ -85,7 +95,7 @@
    flex: none;
-   font-size: 14px;
-   line-height: 24px;
+   font-size: var(--dsh-content-font-size-secondary, 13px);
+   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
 -  color: var(--dsw-alias-label-secondary);
 +  color: var(--dsh-row-accent);
  }
  
  .separator {
-@@ -89,7 +99,7 @@
+@@ -94,7 +104,7 @@
    height: 2px;
    border-radius: 1px;
    margin: 0 8px;
@@ -391,10 +352,10 @@ index 4dd75f8498..5d30cecc04 100644
  
  .summary {
 diff --git a/packages/client/ui-skill/src/client/index.ts b/packages/client/ui-skill/src/client/index.ts
-index 65f2dee986..660ad9b5cb 100644
+index 2b6cd12ea2..d752ebede0 100644
 --- a/packages/client/ui-skill/src/client/index.ts
 +++ b/packages/client/ui-skill/src/client/index.ts
-@@ -217,4 +217,52 @@ export function apply(ctx: ClientContext): void {
+@@ -236,4 +236,52 @@ export function apply(ctx: ClientContext): void {
        clearAll()
      }
    }, 'ui-skill: source')
@@ -448,10 +409,10 @@ index 65f2dee986..660ad9b5cb 100644
 +  ctx.effect(() => inputTriggers.registerSource(atSource), 'ui-skill: @skills source')
  }
 diff --git a/packages/client/ui-skill/tests/browser-plugin.client.spec.ts b/packages/client/ui-skill/tests/browser-plugin.client.spec.ts
-index 189d961bcf..0edceb5e1f 100644
+index ead382b4ac..a28281ff69 100644
 --- a/packages/client/ui-skill/tests/browser-plugin.client.spec.ts
 +++ b/packages/client/ui-skill/tests/browser-plugin.client.spec.ts
-@@ -65,7 +65,15 @@ async function bench(list: ListFn, addressed?: SessionId) {
+@@ -66,7 +66,15 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
    const openResource = vi.fn()
    ctx.provide('sidebarRight', { openResource })
    let captured: InputTriggerSource | undefined
@@ -465,19 +426,19 @@ index 189d961bcf..0edceb5e1f 100644
 +      return () => {}
 +    },
 +  })
-   ctx.provide('sessions', {
-     list: { getSnapshot: () => ({ byId: {} }) },
-     subagentAddress: (id: SessionId) => id === addressed
-@@ -77,7 +85,7 @@ async function bench(list: ListFn, addressed?: SessionId) {
+   const sessions = new TestSessions(async (action) => { await action() }, ctx)
+   ctx.provide('sessions', sessions)
+   onTestFinished(async () => {
+@@ -84,7 +92,7 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
    const fiber = ctx.plugin({ inject: [...inject], apply })
    onTestFinished(async () => { await fiber.dispose() })
    await fiber.await()
--  return { ctx, source: captured!, remote, fiber, openResource }
-+  return { ctx, source: captured!, atSource: atCaptured!, remote, fiber, openResource }
+-  return { ctx, source: captured!, remote, fiber, openResource, sessions }
++  return { ctx, source: captured!, atSource: atCaptured!, remote, fiber, openResource, sessions }
  }
  
  const CATALOG: SkillRow[] = [
-@@ -479,3 +487,31 @@ describe('reference preview', () => {
+@@ -540,3 +548,31 @@ describe('reference preview', () => {
      expect(openResource).not.toHaveBeenCalled()
    })
  })
@@ -510,19 +471,19 @@ index 189d961bcf..0edceb5e1f 100644
 +  })
 +})
 diff --git a/packages/client/ui-tool/README.i18n.yaml b/packages/client/ui-tool/README.i18n.yaml
-index ad0a426ba6..dc9eb9bf9c 100644
+index b5dd281e0e..99d6f2fcc8 100644
 --- a/packages/client/ui-tool/README.i18n.yaml
 +++ b/packages/client/ui-tool/README.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write packages/client/ui-tool/README.md
--README.md: b8dd2a5e3c6743e496d585a2de238714f00e9f6b
--README.zh.md: 0f777981ff6ccc6945e516d3c9853a236cde82d7
-+README.md: cb3988d2be2628a7152b992524177c6121297b87
-+README.zh.md: bb15f44e79f2a084aa2b4f66ffa612e9fe2968f9
+-README.md: 622dbd89c93f8a21bece72f2267613a4fa81b4d6
+-README.zh.md: c3fec14cb7a5d2e2448743204b59dcac73380849
++README.md: e65ccdc42cd8467b831d82b3685bd96190d5f1c7
++README.zh.md: b57119a249837d539a337f3ab3928643cf6e6e99
 diff --git a/packages/client/ui-tool/README.md b/packages/client/ui-tool/README.md
-index b8dd2a5e3c..cb3988d2be 100644
+index 622dbd89c9..e65ccdc42c 100644
 --- a/packages/client/ui-tool/README.md
 +++ b/packages/client/ui-tool/README.md
 @@ -5,6 +5,8 @@ kind: "package-reference"
@@ -534,17 +495,17 @@ index b8dd2a5e3c..cb3988d2be 100644
  English | [中文](README.zh.md)
  
  ## Summary
-@@ -43,7 +45,7 @@ The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the frozen `blo
+@@ -45,7 +47,7 @@ The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the frozen `blo
  
  ### Built-in views
  
--This package owns the generic fallback and the built-in shell/pwsh, read, read_image, write/edit, running `str_replace_editor` `create`/`str_replace`, grep/glob, web, todo, question, and Code Dispatch presentations. Structured cards derive directly from first-party raw event fields; Host `presentCall` and `presentResult` values never enter the Client. Running and settled foreground standard `bash`/`pwsh` and `terminal_send` calls use terminal cards at the root and in Code Dispatch children, subject to the same argument, result, and error checks. Persistent `bash`/`pwsh` calls use terminal cards only while running. Shell output ending in a recognized spill-policy notice uses expandable generic output in shell rows and generic output in Details; a displaced or omitted exit marker cannot establish success. Settled persistent-shell results stay generic because reset and partial-output diagnostics do not always describe one process exit status; root persistent results are expandable, while background acknowledgements remain collapsed. A successful question row pairs call questions with result answers by their stable ids and shows readable question/answer lines when expanded. A cancelled or interrupted row shows its verdict and original questions without inventing answers. Unsupported, malformed, or ambiguous inputs fall back to flattened Tool input/result text. `ui-skill` demonstrates a business-owned registration for `skill`.
-+This package owns the generic fallback and the built-in shell/pwsh, read, read_image, write/edit, running `str_replace_editor` `create`/`str_replace`, grep/glob, web, todo, question, and Code Dispatch presentations. Structured cards derive directly from first-party raw event fields; Host `presentCall` and `presentResult` values never enter the Client. Running and settled foreground standard `bash`/`pwsh` and `terminal_send` calls use terminal cards at the root and in Code Dispatch children, subject to the same argument, result, and error checks. Persistent `bash`/`pwsh` calls use terminal cards only while running. Shell output ending in a recognized spill-policy notice uses expandable generic output in shell rows and generic output in Details; a displaced or omitted exit marker cannot establish success. Settled persistent-shell results stay generic because reset and partial-output diagnostics do not always describe one process exit status; root persistent results are expandable, while background acknowledgements remain collapsed. A successful question row pairs call questions with result answers by their stable ids and shows readable question/answer lines when expanded. A cancelled or interrupted row shows its verdict and original questions without inventing answers. Unsupported, malformed, or ambiguous inputs fall back to flattened Tool input/result text. `ui-skill` demonstrates a business-owned registration for `skill`. Each row variant carries the family accent of its `--dsw-alias-flow-*` token ([token group](../ui-theme/README.md)) on the leading glyph, title, hover chevron, and separator dot, the unclassified generic row included; `cordis_*` calls override that with the product accent. The rebind sits on each row rather than the call wrapper, so a subcall never inherits its parent's hue. A failed or interrupted call replaces the glyph with its state dot, so run state still outranks the family hue.
+-This package owns the generic fallback and the built-in shell/pwsh, read, read_image, write/edit, running `str_replace_editor` `create`/`str_replace`, grep/glob, web, todo, question, and PTC dispatch presentations. Structured cards derive directly from first-party raw event fields; Host `presentCall` and `presentResult` values never enter the Client. Running and settled foreground standard `bash`/`pwsh` and `terminal_send` calls use terminal cards at the root and in PTC dispatch children, subject to the same argument, result, and error checks. Persistent `bash`/`pwsh` calls use terminal cards only while running. Shell output ending in a recognized spill-policy notice uses expandable generic output in shell rows and generic output in Details; a displaced or omitted exit marker cannot establish success. Settled persistent-shell results stay generic because reset and partial-output diagnostics do not always describe one process exit status; root persistent results are expandable, while background acknowledgements remain collapsed. A native or PTC dispatch failure carrying `AUTO_REVIEW_DENIED` shows the Auto review verdict in its collapsed row and one normalized not-executed reason when expanded; a missing or whitespace-only reason uses localized fallback text. A successful question row pairs call questions with result answers by their stable ids and shows readable question/answer lines when expanded. A cancelled or interrupted row shows its verdict and original questions without inventing answers. Unsupported, malformed, or ambiguous inputs fall back to flattened Tool input/result text. `ui-skill` demonstrates a business-owned registration for `skill`.
++This package owns the generic fallback and the built-in shell/pwsh, read, read_image, write/edit, running `str_replace_editor` `create`/`str_replace`, grep/glob, web, todo, question, and PTC dispatch presentations. Structured cards derive directly from first-party raw event fields; Host `presentCall` and `presentResult` values never enter the Client. Running and settled foreground standard `bash`/`pwsh` and `terminal_send` calls use terminal cards at the root and in PTC dispatch children, subject to the same argument, result, and error checks. Persistent `bash`/`pwsh` calls use terminal cards only while running. Shell output ending in a recognized spill-policy notice uses expandable generic output in shell rows and generic output in Details; a displaced or omitted exit marker cannot establish success. Settled persistent-shell results stay generic because reset and partial-output diagnostics do not always describe one process exit status; root persistent results are expandable, while background acknowledgements remain collapsed. A native or PTC dispatch failure carrying `AUTO_REVIEW_DENIED` shows the Auto review verdict in its collapsed row and one normalized not-executed reason when expanded; a missing or whitespace-only reason uses localized fallback text. A successful question row pairs call questions with result answers by their stable ids and shows readable question/answer lines when expanded. A cancelled or interrupted row shows its verdict and original questions without inventing answers. Unsupported, malformed, or ambiguous inputs fall back to flattened Tool input/result text. `ui-skill` demonstrates a business-owned registration for `skill`. Each row variant carries the family accent of its `--dsw-alias-flow-*` token ([token group](../ui-theme/README.md)) on the leading glyph, title, hover chevron, and separator dot, the unclassified generic row included; `cordis_*` calls override that with the product accent. The rebind sits on each row rather than the call wrapper, so a subcall never inherits its parent's hue. A failed or interrupted call replaces the glyph with its state dot, so run state still outranks the family hue.
  
  -----
  
 diff --git a/packages/client/ui-tool/README.zh.md b/packages/client/ui-tool/README.zh.md
-index 0f777981ff..bb15f44e79 100644
+index c3fec14cb7..b57119a249 100644
 --- a/packages/client/ui-tool/README.zh.md
 +++ b/packages/client/ui-tool/README.zh.md
 @@ -5,6 +5,8 @@ kind: "package-reference"
@@ -556,20 +517,20 @@ index 0f777981ff..bb15f44e79 100644
  [English](README.md) | 中文
  
  ## 概述
-@@ -43,7 +45,7 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
+@@ -45,7 +47,7 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
  
  ### 内置视图
  
--本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、运行中的 `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 Code Dispatch 的内置展示。结构化卡片直接从第一方原始事件字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。运行中与已完成的前台标准 `bash`/`pwsh` 和 `terminal_send` 调用，无论位于根还是 Code Dispatch 子调用中，都在通过相同的参数、结果和错误检查后使用 terminal 卡片。持久 `bash`/`pwsh` 调用仅在运行中使用 terminal 卡片。以已识别的 spill 策略提示结尾的 shell 输出，在 shell 行中使用可展开的 generic 输出，在 Details 中使用 generic 输出；位置被改变或被省略的退出标记无法证明成功。已完成的持久 shell 结果保持 generic 展示，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；根调用的持久 shell 结果可展开，后台启动回执则保持折叠。成功的问题行按稳定 id 配对调用中的问题与结果中的回答，展开后显示可读的问答行。已取消或已中断的问题行显示其裁决与原始问题，不虚构回答。不受支持、格式错误或含糊的输入回退为压平的工具输入／结果文本。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。
-+本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、运行中的 `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 Code Dispatch 的内置展示。结构化卡片直接从第一方原始事件字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。运行中与已完成的前台标准 `bash`/`pwsh` 和 `terminal_send` 调用，无论位于根还是 Code Dispatch 子调用中，都在通过相同的参数、结果和错误检查后使用 terminal 卡片。持久 `bash`/`pwsh` 调用仅在运行中使用 terminal 卡片。以已识别的 spill 策略提示结尾的 shell 输出，在 shell 行中使用可展开的 generic 输出，在 Details 中使用 generic 输出；位置被改变或被省略的退出标记无法证明成功。已完成的持久 shell 结果保持 generic 展示，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；根调用的持久 shell 结果可展开，后台启动回执则保持折叠。成功的问题行按稳定 id 配对调用中的问题与结果中的回答，展开后显示可读的问答行。已取消或已中断的问题行显示其裁决与原始问题，不虚构回答。不受支持、格式错误或含糊的输入回退为压平的工具输入／结果文本。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。每种行变体——含未分类的通用行——都在前导字形、标题、hover chevron 与分隔点上带有其 `--dsw-alias-flow-*` token 的族强调色（[token 组](../ui-theme/README.zh.md)）；`cordis_*` 调用以产品强调色覆盖它。重新绑定落在每一行上而非调用容器上，因此子调用不会继承父行的色相。失败或中断的调用会把字形换成状态点，因此运行状态仍然压过族色相。
+-本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、运行中的 `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 PTC dispatch 的内置展示。结构化卡片直接从第一方原始 event 字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。运行中与已完成的前台标准 `bash`/`pwsh` 和 `terminal_send` 调用，无论位于根还是 PTC dispatch 子调用中，都在通过相同的参数、结果和错误检查后使用 terminal 卡片。持久 `bash`/`pwsh` 调用仅在运行中使用 terminal 卡片。以已识别的 spill 策略提示结尾的 shell 输出，在 shell 行中使用可展开的 generic 输出，在 Details 中使用 generic 输出；位置被改变或被省略的退出标记无法证明成功。已完成的持久 shell 结果保持 generic 展示，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；根调用的持久 shell 结果可展开，后台启动回执则保持折叠。带有 `AUTO_REVIEW_DENIED` 的原生或 PTC dispatch 失败会在折叠行显示 Auto review 裁决，展开时显示一行归一化后的“未执行”原因；原因缺失或只有空白时使用本地化 fallback 文案。成功的问题行按稳定 id 配对调用中的问题与结果中的回答，展开后显示可读的问答行。已取消或已中断的问题行显示其裁决与原始问题，不虚构回答。不受支持、格式错误或含糊的输入回退为压平的工具输入／结果文本。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。
++本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、运行中的 `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 PTC dispatch 的内置展示。结构化卡片直接从第一方原始 event 字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。运行中与已完成的前台标准 `bash`/`pwsh` 和 `terminal_send` 调用，无论位于根还是 PTC dispatch 子调用中，都在通过相同的参数、结果和错误检查后使用 terminal 卡片。持久 `bash`/`pwsh` 调用仅在运行中使用 terminal 卡片。以已识别的 spill 策略提示结尾的 shell 输出，在 shell 行中使用可展开的 generic 输出，在 Details 中使用 generic 输出；位置被改变或被省略的退出标记无法证明成功。已完成的持久 shell 结果保持 generic 展示，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；根调用的持久 shell 结果可展开，后台启动回执则保持折叠。带有 `AUTO_REVIEW_DENIED` 的原生或 PTC dispatch 失败会在折叠行显示 Auto review 裁决，展开时显示一行归一化后的“未执行”原因；原因缺失或只有空白时使用本地化 fallback 文案。成功的问题行按稳定 id 配对调用中的问题与结果中的回答，展开后显示可读的问答行。已取消或已中断的问题行显示其裁决与原始问题，不虚构回答。不受支持、格式错误或含糊的输入回退为压平的工具输入／结果文本。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。每种行变体——含未分类的通用行——都在前导字形、标题、hover chevron 与分隔点上带有其 `--dsw-alias-flow-*` token 的族强调色（[token 组](../ui-theme/README.zh.md)）；`cordis_*` 调用以产品强调色覆盖它。重新绑定落在每一行上而非调用容器上，因此子调用不会继承父行的色相。失败或中断的调用会把字形换成状态点，因此运行状态仍然压过族色相。
  
  -----
  
 diff --git a/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css b/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css
-index f1933dc068..5132158ecc 100644
+index 5e54eeb7e5..d930f9f8f0 100644
 --- a/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css
 +++ b/packages/client/ui-tool/src/client/tool/components/ToolRow.module.css
-@@ -46,23 +46,70 @@
+@@ -15,23 +15,70 @@
    flex-shrink: 0;
  }
  
@@ -647,7 +608,7 @@ index f1933dc068..5132158ecc 100644
  }
  
  .title {
-@@ -75,7 +122,7 @@
+@@ -45,7 +92,7 @@
    height: 2px;
    border-radius: 1px;
    margin: 0 8px;
@@ -657,10 +618,10 @@ index f1933dc068..5132158ecc 100644
  
  .summary {
 diff --git a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-index ccea766eea..28bb861f3b 100644
+index 79e211a028..3b97b6a726 100644
 --- a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
 +++ b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-@@ -56,6 +56,8 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
+@@ -62,6 +62,8 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
    write: 'write',
    edit: 'edit',
    run_code: 'code',
@@ -669,7 +630,7 @@ index ccea766eea..28bb861f3b 100644
    cordis_package_inspect: 'read',
    cordis_runtime_inspect: 'read',
    // The three run-control verbs take one package id and produce a receipt, so
-@@ -69,6 +71,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
+@@ -75,6 +77,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
  
  /** Tool-owned titles that refine a generic row variant without replacing it. */
  const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
@@ -677,30 +638,8 @@ index ccea766eea..28bb861f3b 100644
    cordis_package_inspect: 'tool.title.inspect',
    cordis_runtime_inspect: 'tool.title.inspect',
    cordis_run: 'tool.title.runCordis',
-diff --git a/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx b/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
-index 726395d00c..b3d4f17c70 100644
---- a/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
-+++ b/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
-@@ -1,6 +1,7 @@
- import type { ReactNode } from 'react'
- import {
--  IconApiOutline14, IconBrowseOutline16, IconCodeOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
-+  // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this view.
-+  IconApiOutline14, IconBracesOutline16, IconBrowseOutline16, IconEditOutline16, IconSearchOutline16, IconSparkle16,
- } from '@deepseek-ai/dsh-client-ui-primitives'
- import type { ToolCallOwnerProps, ToolTreeProps } from '../../contract/slots.ts'
- import { readCardModel } from '../models/read-card-model.ts'
-@@ -18,7 +19,7 @@ const VARIANT_ICONS: Record<ToolRowVariant, ReactNode> = {
-   bash: <IconApiOutline14 size={14} />,
-   write: <IconEditOutline16 size={14} />,
-   edit: <IconEditOutline16 size={14} />,
--  code: <IconCodeOutline16 size={14} />,
-+  code: <IconBracesOutline16 size={14} />,
-   others: <IconSparkle16 size={14} />,
- }
- 
 diff --git a/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css b/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css
-index ab93cbbaeb..40a9c21749 100644
+index 9ef5b4b829..bc3c7d4742 100644
 --- a/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css
 +++ b/packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css
 @@ -84,7 +84,13 @@
@@ -714,10 +653,10 @@ index ab93cbbaeb..40a9c21749 100644
 +   rule never reaches a real bash call, which dispatches to this keyed view. */
  .root {
 +  --dsh-row-accent: var(--dsw-alias-flow-shell);
-   position: relative; /* sweep-glare overlay anchor */
-   overflow: hidden;
    display: flex;
-@@ -125,7 +131,7 @@
+   align-items: center;
+   height: calc(24px + var(--dsh-content-font-delta, 0px));
+@@ -100,7 +106,7 @@
    align-items: center;
    justify-content: center;
    margin-right: 6px;
@@ -726,7 +665,7 @@ index ab93cbbaeb..40a9c21749 100644
  }
  
  /* Same glyph-scaling rule as DisclosureRow's leading: the CSS edge overrides
-@@ -141,7 +147,7 @@
+@@ -115,7 +121,7 @@
  }
  
  .chevron {
@@ -735,16 +674,16 @@ index ab93cbbaeb..40a9c21749 100644
  }
  
  /* Hover preview on the expandable row: the idle icon crossfades (100ms) into
-@@ -172,7 +178,7 @@
+@@ -146,7 +152,7 @@
    flex: none;
    font-size: var(--dsh-content-font-size-secondary, 13px);
    line-height: calc(24px + var(--dsh-content-font-delta, 0px));
 -  color: var(--dsw-alias-label-secondary);
 +  color: var(--dsh-row-accent);
+   transition: color 100ms ease;
  }
  
- .sep {
-@@ -181,7 +187,7 @@
+@@ -156,7 +162,7 @@
    height: 2px;
    border-radius: 1px;
    margin: 0 8px;

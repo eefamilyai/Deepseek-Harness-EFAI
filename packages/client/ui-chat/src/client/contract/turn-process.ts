@@ -20,13 +20,8 @@ export interface TurnProcessSpec {
 const TURN_PROCESS_INDEPENDENT_KIND_LIST = [
   'system-prompt',
   'user',
-  // DSH-FORK(brand): a steer admitted mid-Turn is part of that Turn's work, so
-  // it folds with the rest of the process window instead of floating after the
-  // collapsed summary. `user` stays independent, and the Turn's opening human
-  // input — whichever kind carries it — is excluded by the opening anchor, so
-  // the message that opened the Turn is never hidden.
-  // EXIT: upstream lists `steering` here and renders a mid-Turn steer outside
-  // the collapsed process row.
+  'steering',
+  'turn-trigger',
   'turn-process',
   'turn-error',
   'turn-max-tokens',
@@ -64,4 +59,16 @@ export function sameTurnProcessSpec(left: TurnProcessSpec, right: TurnProcessSpe
  */
 export function isSubagentDelegationTool(name: string): boolean {
   return name === 'subagent' || name.startsWith('subagent_')
+}
+
+/**
+ * Keep live, stopped, and failed Turns open.
+ * @param node - Node carrying the owning Turn.
+ * @returns whether whole-Turn collapse is unavailable.
+ */
+export function turnProcessAlwaysOpen(node: ChatNode | undefined): boolean {
+  const location = node?.location
+  if (location?.kind !== 'turn' && location?.kind !== 'step') return false
+  const reason = location.turn.end?.data.reason.kind
+  return location.turn.status === 'open' || reason === 'aborted' || reason === 'error'
 }

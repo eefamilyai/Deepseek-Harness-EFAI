@@ -37,17 +37,19 @@
 
 import { existsSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-attachment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-settings'
+// The Loader's `loader/volatile-update` event and `fiber.entry`.
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmAccountAdder } from '@deepseek-ai/dsh-llm'
 import { KilnAdapter } from './adapter.ts'
 import { KilnBridge } from './bridge.ts'
 import type { KilnProvider } from './bridge.ts'
 
-export { KilnAdapter, buildTurns, flattenMessage, isRateLimit, mintCallId, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions } from './adapter.ts'
+export { KilnAdapter, SUMMARIZER_SYSTEM, buildTurns, flattenMessage, isRateLimit, mintCallId, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions } from './adapter.ts'
 export type { KilnAdapterOptions } from './adapter.ts'
 export { KilnBridge } from './bridge.ts'
 export type {
@@ -83,8 +85,12 @@ export const name = 'llm-kiln'
  */
 export const inject = ['llm']
 
-/** Settings namespace for the Kiln adapter (deepseek-web credentials + routing knobs). */
-export const LLM_KILN_SETTINGS_NAMESPACE = 'llm-kiln'
+/**
+ * The profile entry id the adapter is composed under by default, which is also
+ * the id the Models page edits its DeepSeek-web credentials by. The live id wins
+ * when a composition names the row differently.
+ */
+export const LLM_KILN_ENTRY_ID = 'llm-kiln'
 
 /** Default prefix keeping Kiln routes clear of every other adapter's names. */
 export const DEFAULT_ROUTE_PREFIX = 'kiln-'
@@ -113,34 +119,38 @@ export interface Config {
    *
    * `token` + `cookie` are the live bearer/WAF pair. The optional login fields
    * let ds_direct refresh those credentials itself when DeepSeek rotates them,
-   * so the bridge keeps working without a new copy-paste from devtools.
+   * so the bridge keeps working without a new copy-paste from devtools. Live: an
+   * edit reaches the running sidecar without restarting it.
    */
-  deepseek?: {
-    /** DeepSeek web bearer token. */
-    token?: string
-    /** DeepSeek web WAF cookie. */
-    cookie?: string
-    /** Login email for automatic token refresh. */
-    email?: string
-    /** Login mobile for automatic token refresh. */
-    mobile?: string
-    /** Login area code (for mobile). */
-    areaCode?: string
-    /** Login password for automatic token refresh. */
-    password?: string
-    /**
-     * The Shumei `device_id` this machine presents on every DeepSeek login.
-     *
-     * A real fingerprint minted by the web client's anti-abuse SDK, replayed
-     * unchanged. It is per DEVICE, not per account, so one value covers every
-     * login on this machine. Leave it blank to fall back to the captured or
-     * derived machine identity.
-     */
-    deviceId?: string
-  }
+  deepseek: Volatile<DeepseekCredentials | undefined>
 }
 
-export const Config: z<Config> = z.object({
+/** The DeepSeek web login material the sidecar accepts. */
+export interface DeepseekCredentials {
+  /** DeepSeek web bearer token. */
+  token?: string
+  /** DeepSeek web WAF cookie. */
+  cookie?: string
+  /** Login email for automatic token refresh. */
+  email?: string
+  /** Login mobile for automatic token refresh. */
+  mobile?: string
+  /** Login area code (for mobile). */
+  areaCode?: string
+  /** Login password for automatic token refresh. */
+  password?: string
+  /**
+   * The Shumei `device_id` this machine presents on every DeepSeek login.
+   *
+   * A real fingerprint minted by the web client's anti-abuse SDK, replayed
+   * unchanged. It is per DEVICE, not per account, so one value covers every
+   * login on this machine. Leave it blank to fall back to the captured or
+   * derived machine identity.
+   */
+  deviceId?: string
+}
+
+export const Config = z.object({
   routePrefix: z.string().default(DEFAULT_ROUTE_PREFIX),
   onlyConfigured: z.boolean().default(false),
   python: z.string(),
@@ -155,7 +165,7 @@ export const Config: z<Config> = z.object({
     areaCode: z.string(),
     password: z.string().role('secret'),
     deviceId: z.string(),
-  }),
+  }).volatile(),
 })
 
 /** The bridge shipped with this repository: `python/kiln`. */
@@ -259,7 +269,6 @@ export function rebuildRoutes(
  * which of them have keys stays a per-request fact the sidecar resolves.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  let current: () => Config = () => config
   const bridgeDir = config.bridgeDir ?? defaultBridgeDir()
   const script = join(bridgeDir, 'provider_bridge.py')
   if (!existsSync(script)) {
@@ -281,47 +290,24 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     env: { KILN_STATE_DIR: stateDir },
   })
 
-  ctx.inject(['settings'], (settingsCtx) => {
-    settingsCtx.settings.installSection(ctx, LLM_KILN_SETTINGS_NAMESPACE, Config, config, {
-      setSource: (source) => {
-        current = source
-      },
-      // Credentials are applied to the long-lived sidecar process; the route
-      // graph does not change for a token/cookie edit, so no re-registration
-      // is required here.
-      onChange: () => {
-        const next = current()
-        const ds = next.deepseek
-        if (ds !== undefined) {
-          void bridge.configure('deepseek', {
-            token: ds.token ?? '',
-            cookie: ds.cookie ?? '',
-            email: ds.email ?? '',
-            mobile: ds.mobile ?? '',
-            area_code: ds.areaCode ?? '',
-            password: ds.password ?? '',
-            device_id: ds.deviceId ?? '',
-          })
-        }
-      },
+  // Credentials are applied to the long-lived sidecar process; the route graph
+  // does not change for a token/cookie edit, so no re-registration is needed.
+  const configureDeepseek = (): void => {
+    const ds = config.deepseek.get()
+    if (ds === undefined) return
+    void bridge.configure('deepseek', {
+      token: ds.token ?? '',
+      cookie: ds.cookie ?? '',
+      email: ds.email ?? '',
+      mobile: ds.mobile ?? '',
+      area_code: ds.areaCode ?? '',
+      password: ds.password ?? '',
+      device_id: ds.deviceId ?? '',
     })
-  })
-  // Seed the sidecar with any stored credentials from launch/settings.
-  {
-    const seeded = current()
-    const ds = seeded.deepseek
-    if (ds !== undefined) {
-      void bridge.configure('deepseek', {
-        token: ds.token ?? '',
-        cookie: ds.cookie ?? '',
-        email: ds.email ?? '',
-        mobile: ds.mobile ?? '',
-        area_code: ds.areaCode ?? '',
-        password: ds.password ?? '',
-        device_id: ds.deviceId ?? '',
-      })
-    }
   }
+  // Seed the sidecar with any stored credentials, then follow every edit.
+  configureDeepseek()
+  ctx.on('loader/volatile-update', configureDeepseek)
 
   const prefix = config.routePrefix ?? DEFAULT_ROUTE_PREFIX
   // One base route per provider, plus one per pooled login. Which ACCOUNT serves
@@ -349,7 +335,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       directory = ctx.llm.registerConfigurableProviders([{
         provider: dsRoute,
         displayName: dsEntry.name,
-        settingsNs: LLM_KILN_SETTINGS_NAMESPACE,
+        settingsNs: ctx.fiber.entry?.options.id ?? LLM_KILN_ENTRY_ID,
         settingsPath: ['deepseek'],
       }])
     }

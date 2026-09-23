@@ -1,5 +1,5 @@
 ---
-description: "The fork's rows for the browser profile as a bundle: sidebar bridge, terminal and effects surfaces, settings sections, the version route, and the fork preset roster."
+description: "The fork's rows for the browser profile as a bundle: the version route, the effects and accent layers, and the Tools and Accounts settings sections."
 kind: "package-reference"
 ---
 
@@ -7,12 +7,12 @@ kind: "package-reference"
 
 ## Summary
 
-`dsh-efai-web` is the fork's second profile bundle: the rows that only a browser profile wants, stacked after upstream's `@deepseek-ai/dsh-web-app` and the fork's own `dsh-efai-base`. It mounts the sidebar host bridge and its client surfaces, the two settings sections, the `/version` route, and swaps upstream's preset roster for the fork's.
+`dsh-efai-web` is the fork's second profile bundle: the rows that only a browser profile wants, stacked after upstream's `@deepseek-ai/dsh-web-app` and the fork's own `dsh-efai-base`. It mounts the `/version` route, the visual-effects and accent layers, and the Tools and Accounts settings sections. It switches nothing of upstream's off: the terminal, the presets, and the settings pages are upstream's own.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
-- [The two rows it switches off](#the-two-rows-it-switches-off)
+- [Why it disables nothing](#why-it-disables-nothing)
 - [Dev Note](#dev-note)
 
 <a id="use-this-package"></a>
@@ -20,12 +20,10 @@ kind: "package-reference"
 
 A profile names it; nothing imports it. `efai/ensure-profile-bundles.mjs` places it directly after `@deepseek-ai/dsh-web-app` in the profile's layer list.
 
-<a id="the-two-rows-it-switches-off"></a>
-## The two rows it switches off
+<a id="why-it-disables-nothing"></a>
+## Why it disables nothing
 
-`agent-presets` — upstream's roster row, replaced by `efai-presets`, because both provide the same service and exactly one may be active.
-
-`tool-kernel` — the host-plane row from `dsh-efai-base`. Under presets the kernel tool is an agent-plane row that each preset mounts, so the host-plane copy would be a duplicate; the seam and its Python backend stay on the host plane either way.
+The kernel tool stays where `dsh-efai-base` puts it, on the host plane. The tools registry is layered, so a host registration reaches every preset agent's catalog, and each call resolves the agent that made it, so one row serves every session. That is why this bundle no longer carries a preset roster of its own: upstream's presets are used as shipped, and a preset's own tool choices are edited in upstream's preset editor.
 
 <a id="dev-note"></a>
 ## Dev Note

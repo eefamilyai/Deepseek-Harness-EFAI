@@ -34,7 +34,7 @@ the patch layer goes stale from fork-owned work too, and the seam check is what
 catches an upstream file taken on by accident.
 
 ```sh
-pnpm run verify-fork-overlay   # rebuild --check, verify, apply --check, seam-frozen, efai-presets
+pnpm run verify-fork-overlay   # rebuild --check, verify, apply --check, seam-frozen
 ```
 
 The pre-commit and pre-push hooks do not run it. A push without it can publish a
@@ -58,6 +58,14 @@ When the outgoing change adds or changes a resource-owning or asynchronous test,
 - **Real provider or agent behavior:** run the relevant `pnpm run test:e2e` target when credentials are available; never print secrets.
 
 Do not manually repeat a passing check merely because commit or push follows. In particular, do not run typecheck immediately before pushing solely to duplicate the pre-push hook.
+
+Pass Vitest file and name filters directly after the script name with `pnpm run`; do not insert a standalone `--`, which reaches Vitest and can disable `-t` filtering. For example, this command runs one headless snapshot scenario:
+
+```sh
+pnpm run test:snapshot snapshots/session/headless.snapshot.ts -t 'cordis-inspect-jsdoc'
+```
+
+This applies to these pnpm scripts; npm and other launchers retain their own argument-forwarding syntax. Check the reported selected test count before treating a filtered run as focused evidence.
 
 ### Focus unit coverage on the affected source
 

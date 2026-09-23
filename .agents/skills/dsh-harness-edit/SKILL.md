@@ -38,12 +38,12 @@ real behavior in this repository, so none of them is theoretical.
 | # | Ask | If yes | Precedent in this tree |
 |---|---|---|---|
 | 1 | Is this **composition** — a plugin to mount, a row's config to change, a row to switch off? | A row in `packages/bundle/efai-base/cordis.patch.yml`, or `efai-web/` for the browser profile. | Every fork row the harness runs. |
-| 2 | Is this **behavior** that a documented extension point can carry? | A new fork-owned package mounted by that bundle. | `efai-identity` rewrites the prompt opener on `system-prompt/assemble`; `compaction-efai` subclasses the engine on its `summarize` hook; `skill-injection` is a second `agent/pre-step` listener; `token-usage-lifetime` registers its own projection unit; `ui-settings-advanced` is a `settings.section` slot registration; `ui-flow-accents` is a theme override layer. |
-| 3 | Is this the **agent roster** a session composes from? | A preset in `packages/preset/efai-presets/presets/`. | The four rosters; upstream's shipped root is dropped, and `verify-efai-presets` reports when upstream's copy moves. |
-| 4 | Is this a **switch** someone should be able to flip? | A settings namespace read at runtime, never a Loader `!!js` gate. | `kernel.enabled`/`rlm.enabled` through `tool-roster`; `agent-memory.enabled` mounts and unmounts the engine. |
+| 2 | Is this **behavior** that a documented extension point can carry? | A new fork-owned package mounted by that bundle. | `efai-identity` rewrites the prompt opener on `system-prompt/assemble`; `skill-injection` is a second `agent/pre-step` listener; `token-usage-lifetime` registers its own projection unit; `ui-settings-tools` is a `settings.section` slot registration; `ui-flow-accents` is a theme override layer; `llm-kiln` shapes a request by its `purpose`. |
+| 3 | Is this something **every agent** should have? | A host row in `efai-base`. The tools registry is layered, so a host registration reaches every preset agent; a preset's own choices belong to upstream's preset editor. | `tool-kernel` is one host row serving every preset. Upstream's preset rows are not groups, so a bundle patch can only replace one wholesale — never do that. |
+| 4 | Is this a **switch** someone should be able to flip? | A `.volatile()` field on the row that enforces it, never a Loader `!!js` gate. Settings edits it by row id; react on `loader/volatile-update`. | `tool-roster`'s `kernel`/`rlm`/`enabled`; `agent-memory-mode` mounts and unmounts the engine; `kernel-python`'s `browserWindow`. |
 | 5 | Is this a **value that varies per deployment**? | A `Config` field. `AGENTS.md` forbids hardcoded tunables in plugins. | Every fork package's `Config`. |
 | 6 | Is this a **bug in upstream code**, or something upstream would plausibly accept? | An **upstream PR**. Keep a local copy in `.merge-port/upstream-prs/<name>.patch` with a register row, and delete the local delta when it lands. | Seam-register rows 9 and 10. |
-| 7 | None of the above, and you can say why in one sentence. | A recorded seam edit: smallest possible hunk, `DSH-FORK` marker, `EXIT:` clause, seam-register row, `patchGroups` entry, **and** `verify-seam-frozen --record`. | 92 paths, and every one of them is a cost. |
+| 7 | None of the above, and you can say why in one sentence. | A recorded seam edit: smallest possible hunk, `DSH-FORK` marker, `EXIT:` clause, seam-register row, `patchGroups` entry, **and** `verify-seam-frozen --record`. | 74 paths, and every one of them is a cost. |
 
 A Loader `disabled: !!js …` expression that reads a setting is never the answer to
 step 4. The expression is evaluated once at boot, so gating composition on a setting
@@ -172,17 +172,16 @@ All four run from the repository root, take no required arguments, and read only
 
 `patches/` and `INVENTORY.md` are generated. `rules.json` is the single source of truth for patch grouping; a patch file is never hand-edited, and `INVENTORY.md` is never hand-edited.
 
-Two more gates guard the boundary itself rather than the patches:
+One more gate guards the boundary itself rather than the patches:
 
 | Script | What it does |
 | --- | --- |
 | `node local-overlay/verify-seam-frozen.mjs` | Fails when the tree modifies an upstream file that is not in `SEAM.json`. Reports retired paths so the list can shrink. `--record` rewrites it. |
-| `node local-overlay/verify-efai-presets.mjs` | Fails when upstream's copy of a preset the fork forked has moved, so the fork's copy can be re-forked instead of silently going stale. `--record` re-records the baseline. |
 
 The whole sequence is wired as one script, which is what CI and a push hook should call:
 
 ```sh
-pnpm run verify-fork-overlay          # rebuild --check, verify, apply --check, seam-frozen, efai-presets
+pnpm run verify-fork-overlay          # rebuild --check, verify, apply --check, seam-frozen
 pnpm run verify-fork-overlay:rebuild  # the write side, when drift is intentional
 ```
 
@@ -231,15 +230,19 @@ and holds whether upstream's opener is present, absent, or replaced by a third
 party. Editing the string in `packages/core/system-prompt` instead would break
 upstream's own tests, which byte-compare it.
 
-**Give the model a different roster.** Add or edit a preset under
-`packages/preset/efai-presets/presets/`. The package mounts upstream's roster
-machinery against its own root and drops the shipped one, so the fork owns the four
-ids outright. Re-fork when `verify-efai-presets` says upstream's copy moved.
+**Give every agent a tool.** Mount it as a host row in `efai-base`. The tools
+registry is layered, so a host registration reaches every preset agent's catalog;
+resolve the calling agent per call (`exec.agent`) if the tool keeps per-agent state,
+as `tool-kernel` does. Never replace an upstream preset row to add one: preset rows
+are not groups, so a patch can only restate the whole preset, which is a fork that
+drifts.
 
-**Add a switch.** Own the setting in a small `*-mode` package, and enforce it at
-runtime in whatever already decides: `tool-roster` for tool visibility,
-`agent-memory-mode` for a subsystem that has to actually stop running. Never gate
-the row in YAML.
+**Add a switch.** Declare it as a `.volatile()` field on the row that enforces it,
+read it with `.get()`, and re-read it on `loader/volatile-update`: `tool-roster`
+for tool visibility, `agent-memory-mode` for a subsystem that has to actually stop
+running. Settings edits it by row id, and a custom page reaches it with
+`ctx.configForms.get('<row id>')`. Never gate the row in YAML, and never add a
+separate settings namespace.
 
 ## Recording a seam edit
 

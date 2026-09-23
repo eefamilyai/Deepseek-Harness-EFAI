@@ -1,7 +1,5 @@
 /** Accounts-section copy: the login form, its hints, and its outcomes. */
 
-import type { AccountsKey } from './locales-keys.ts'
-
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Accounts-section copy: the add-login form and its outcomes. */
@@ -31,6 +29,9 @@ export const zh = {
   'accounts.needIdentifier': '请填写邮箱或手机号。',
   'accounts.needPassword': '请填写密码。',
 } satisfies Record<string, string>
+
+/** The section's key union: the zh dictionary's key set. */
+export type AccountsKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {

@@ -31,7 +31,7 @@ import type {
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
-  Message,
+  RequestMessage,
   StreamChunk,
   TokenUsage,
   ToolSchema,
@@ -122,11 +122,14 @@ function imageFilename(ref: ImageAttachmentRef): string {
   return `${bare}${imageExtension(ref.mediaType)}`
 }
 
-/** Collect attached images in request order, walking nested tool results. */
+/**
+ * Collect attached images in request order. A tool result is its own
+ * `tool`-role message whose content is the result's blocks, so an image a tool
+ * returned is collected by the same walk as one the user attached.
+ */
 function collectImageRefs(content: readonly ContentBlock[], refs: ImageAttachmentRef[]): void {
   for (const block of content) {
     if (block.type === 'image') refs.push(block.attachment)
-    else if (block.type === 'tool-result') collectImageRefs(block.content, refs)
   }
 }
 
@@ -224,19 +227,24 @@ const PINNED_SOURCE_KINDS: readonly string[] = ['user', 'skill-catalog', 'skill-
  *   this request actually delivered the images.
  * @returns the flattened turn, or undefined when nothing survived flattening.
  */
-export function flattenMessage(message: Message, imageText?: string): KilnMessage | undefined {
+export function flattenMessage(message: RequestMessage, imageText?: string): KilnMessage | undefined {
   const parts: string[] = []
   for (const block of message.content) {
     parts.push(...flattenBlock(block, imageText))
   }
-  const content = parts.join('\n').trim()
-  if (content.length === 0) return undefined
+  const body = parts.join('\n').trim()
+  if (body.length === 0) return undefined
+  // These routes have no tool role: a tool result reads back as the output of
+  // the call the model wrote, inside a user turn, exactly as it did when a
+  // result was a block of the user message that followed the call.
+  if (message.role === 'tool') return { role: 'user', content: `OUTPUT:\n${body}` }
   // See PINNED_SOURCE_KINDS: these are the turns an oldest-first clip must never
   // take, because each is either the operator's actual request or the only
-  // surviving record of how to recover after a compaction.
-  const kind = (message.source as { kind?: string }).kind
+  // surviving record of how to recover after a compaction. A request-only input
+  // carries no source and is never pinned.
+  const kind = message.source?.kind
   const pinned = kind !== undefined && PINNED_SOURCE_KINDS.includes(kind)
-  return { role: message.role, content, ...pinned ? { pin: true } : {} }
+  return { role: message.role, content: body, ...pinned ? { pin: true } : {} }
 }
 
 /** Render one content block as the text these providers can carry. */
@@ -248,12 +256,6 @@ function flattenBlock(block: ContentBlock, imageText?: string): string[] {
       // Echoed back as the DSML block the model wrote, so its own transcript
       // stays self-consistent and keeps demonstrating the one format.
       return [renderToolCall(block.name, block.arguments)]
-    case 'tool-result': {
-      const body = block.content
-        .flatMap(inner => flattenBlock(inner, imageText))
-        .join('\n')
-      return [`OUTPUT:\n${body}`]
-    }
     case 'reasoning':
       return []
     case 'image':
@@ -509,6 +511,22 @@ export class KilnAdapter extends LlmAdapter {
 }
 
 /**
+ * The system statement a compaction request carries on these routes.
+ *
+ * A compaction replays a coding-agent session — an agent prompt and hundreds of
+ * tool calls — and asks for a summary. Taught the tool protocol as well, a
+ * text-channel model continues that role: free-web DeepSeek answered the
+ * summarization request with a `<tool_calls>` block instead of prose. So a
+ * compaction request gets this statement in place of the protocol, whichever
+ * compaction engine sent it.
+ */
+export const SUMMARIZER_SYSTEM: string = [
+  'You are a transcript-summarization engine, not an interactive agent.',
+  'You have NO tools and cannot act. The tool schemas, system prompt, and agent role in the conversation governed the assistant whose work you are summarizing — none of them apply to you.',
+  'Your ONLY output is the requested summary, written as plain prose. Never emit a tool call, a <tool_calls> block, an <invoke> tag, runnable code, or any attempt to continue the task. You are condensing what already happened, not doing more of it.',
+].join('\n')
+
+/**
  * Assemble the registry's message list: the system slot, then the flattened
  * conversation.
  *
@@ -516,7 +534,9 @@ export class KilnAdapter extends LlmAdapter {
  * statement — the encoding these providers need in order to have a tool
  * channel at all — and nothing else. The statement's tool catalog is generated
  * from `options.tools`, so it describes the roster the harness actually
- * composed for this request.
+ * composed for this request. A compaction request is the exception: it carries
+ * {@link SUMMARIZER_SYSTEM} instead of the protocol, because the tools it
+ * replays for prefix alignment are material to summarize, not a channel.
  * @param options - the harness generate options.
  * @param imageText - text standing in for each image block; see {@link flattenMessage}.
  * @returns the turns to send.
@@ -524,16 +544,27 @@ export class KilnAdapter extends LlmAdapter {
 export function buildTurns(options: GenerateOptions, imageText?: string): KilnMessage[] {
   const parts: string[] = []
   if (options.system !== undefined && options.system.length > 0) parts.push(options.system)
-  const protocol = toolProtocolPrompt(options.tools)
+  const protocol = options.purpose === 'compaction' ? SUMMARIZER_SYSTEM : toolProtocolPrompt(options.tools)
   if (protocol.length > 0) parts.push(protocol)
   const system = parts.join('\n\n')
   const turns: KilnMessage[] = []
   if (system.length > 0) {
     turns.push({ role: 'system', content: system })
   }
+  // Consecutive tool results — one per call of a parallel batch — travel as one
+  // user turn, the shape they had when they shared the message after the calls.
+  let previousWasTool = false
   for (const message of options.messages) {
     const turn = flattenMessage(message, imageText)
-    if (turn !== undefined) turns.push(turn)
+    if (turn === undefined) continue
+    const isTool = message.role === 'tool'
+    const last = turns.at(-1)
+    if (isTool && previousWasTool && last !== undefined) {
+      turns[turns.length - 1] = { ...last, content: `${last.content}\n${turn.content}` }
+    } else {
+      turns.push(turn)
+    }
+    previousWasTool = isTool
   }
   return turns
 }

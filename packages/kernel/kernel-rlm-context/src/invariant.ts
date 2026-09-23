@@ -1,17 +1,26 @@
-import type { Context } from '@deepseek-ai/cordis'
-import { Context as CordisContext } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-kernel'
-import type {} from '@deepseek-ai/dsh-system-prompt'
-
 /**
- * White-box sanity for the RLM read-back seam: the assembly waterfall must be
- * observable and the kernel execute path must parse one marker line. This file
- * mirrors the repo's `invariant.ts` convention of testing seams directly.
+ * Invariant companion for the RLM read-back seam.
+ *
+ * No runtime invariant: the package contributes one runtime-context read per
+ * assembly and holds no state that could drift between two live services.
  * @module @deepseek-ai/dsh-kernel-rlm-context/invariant
  */
+/* jscpd:ignore-start */
+import type { Context } from '@deepseek-ai/cordis'
+import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-export function register(ctx: Context): void {
-  ctx.on('system-prompt/assemble', async (_assembly, _context, next) => next())
-}
+const PACKAGE_NAME = '@deepseek-ai/dsh-kernel-rlm-context'
 
-export { CordisContext }
+export const name = 'kernel-rlm-context-invariant'
+export const inject = ['invariants']
+
+const install: InvariantInstaller = () => {}
+
+/**
+ * Register this package's invariant companion.
+ * @param ctx - Cordis context carrying the invariant service.
+ * @returns the registration disposer.
+ */
+export const apply = (ctx: Context): Promise<() => void> =>
+  Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install))
+/* jscpd:ignore-end */

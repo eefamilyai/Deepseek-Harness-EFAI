@@ -20,6 +20,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -36,10 +37,10 @@ const FORK_AFTER = {
  * upstream created, which is the signal to re-read it.
  */
 const TEMPLATES = {
-  web: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], patchReload: 'live' },
-  headless: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'], patchReload: 'startup' },
-  acp: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'], patchReload: 'startup' },
-  sdk: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-sdk-app'], patchReload: 'startup' },
+  web: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] },
+  headless: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'] },
+  acp: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'] },
+  sdk: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-sdk-app'] },
 }
 
 const PATCH_TEMPLATE = `# Your patch layer for this dsh profile, applied after every bundle layer:
@@ -106,7 +107,7 @@ function ensureProfile(name, check) {
       name: `dsh-profile-${name}`,
       private: true,
       dependencies: {},
-      dsh: { profile: { bundles: placeForkBundles(template.bundles), patchReload: template.patchReload } },
+      dsh: { profile: { bundles: placeForkBundles(template.bundles) } },
     }, undefined, 2)}\n`)
     const patchPath = join(dir, 'cordis.patch.yml')
     if (!existsSync(patchPath)) writeFileSync(patchPath, PATCH_TEMPLATE)
@@ -125,12 +126,70 @@ function ensureProfile(name, check) {
   return `${name}: added ${placed.filter(bundle => !bundles.includes(bundle)).join(', ')}`
 }
 
+/** The row the fork's switches live on, and the package it composes. */
+const ROSTER_ROW = 'tool-roster'
+const ROSTER_PACKAGE = '@deepseek-ai/dsh-roster'
+
+/**
+ * The YAML library, borrowed from the package that edits profile patches:
+ * it is not a root dependency, so a bare import from here cannot resolve it.
+ * @returns the `yaml` module.
+ */
+function loadYaml() {
+  return createRequire(join(resolve(import.meta.dirname, '..'), 'packages', 'boot', 'config-editor', 'package.json'))('yaml')
+}
+
+/**
+ * Carry the pre-0.1.7 switch positions onto the roster row, once.
+ *
+ * On first boot upstream imports the removed `settings.yaml` into the profile
+ * by row id. The fork's switches lived in sections named `kernel`, `rlm`, and
+ * `tools`, which name no fork row, so that import drops them — and with them
+ * every tool the operator had switched off. This writes them onto the
+ * `tool-roster` row first. It runs only while `settings.yaml` is still
+ * unimported, and only when the profile patch has no `tool-roster` row, so it
+ * never overrides an edit.
+ * @param name - the profile name.
+ * @param check - report only; write nothing.
+ * @returns a one-line report, or null when there is nothing to carry.
+ */
+function migrateLegacySwitches(name, check) {
+  const legacy = join(dshHome(), 'settings.yaml')
+  const patchPath = join(dshHome(), 'profiles', name, 'cordis.patch.yml')
+  if (!existsSync(legacy) || !existsSync(patchPath)) return null
+  const { parse, parseDocument } = loadYaml()
+  const sections = parse(readFileSync(legacy, 'utf8')) ?? {}
+  const config = {}
+  if (typeof sections.kernel?.enabled === 'boolean') config.kernel = sections.kernel.enabled
+  if (typeof sections.rlm?.enabled === 'boolean') config.rlm = sections.rlm.enabled
+  if (typeof sections.tools?.enabled === 'boolean') config.enabled = sections.tools.enabled
+  // Only the switched-off tools carry meaning: an absent name is on.
+  const off = Object.entries(sections.tools?.tools ?? {}).filter(([, on]) => on === false)
+  if (off.length > 0) config.tools = Object.fromEntries(off)
+  if (Object.keys(config).length === 0) return null
+
+  const doc = parseDocument(readFileSync(patchPath, 'utf8'))
+  const rows = doc.toJS() ?? []
+  if (!Array.isArray(rows)) return `${name}: the profile patch is not a list, so the switches were not carried over`
+  if (rows.some(row => row?.id === ROSTER_ROW)) return null
+  if (check) return `${name}: the kernel/rlm/tools switches are not yet on ${ROSTER_ROW}`
+  const row = doc.createNode({ id: ROSTER_ROW, name: ROSTER_PACKAGE, config })
+  // The initial template is an empty flow list; a block list keeps the file editable.
+  if (doc.contents !== null && 'flow' in doc.contents) doc.contents.flow = false
+  if (doc.contents === null) doc.contents = doc.createNode([row])
+  else doc.add(row)
+  writeFileSync(patchPath, doc.toString())
+  return `${name}: carried the kernel/rlm/tools switches onto ${ROSTER_ROW}`
+}
+
 const args = process.argv.slice(2)
 const check = args.includes('--check')
 const names = args.filter(argument => !argument.startsWith('--'))
 const targets = names.length > 0 ? names : Object.keys(TEMPLATES)
 
-const reports = targets.map(name => ensureProfile(name, check)).filter(report => report !== null)
+const reports = targets
+  .flatMap(name => [ensureProfile(name, check), migrateLegacySwitches(name, check)])
+  .filter(report => report !== null)
 if (reports.length === 0) {
   console.log(`efai profiles are current: ${targets.join(', ')}`)
   process.exit(0)

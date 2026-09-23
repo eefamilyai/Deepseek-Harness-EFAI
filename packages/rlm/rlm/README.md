@@ -24,7 +24,7 @@ It is a fork-owned package (`packages/rlm/rlm`), so it touches no upstream file.
 
 ## Composition
 
-The `rlm.enabled` toggle is mounted from the host base composition (`packages/bundle/base/cordis.patch.yml`) alongside the `rlm-mode` settings row. When enabled, it mounts this package, unmounts the standalone `tool-kernel` row, and the engine drives the persistent kernel directly. The shell, filesystem, search, and background-job tools remain gated by `kernel.enabled`, because the RLM REPL subsumes them while it is active — and the `kernel`/`kernel-python` *services* stay alive underneath, since the engine's REPL is that kernel.
+This package is mounted unconditionally by the fork's `dsh-efai-base` bundle. Which acting surface the model is offered is `tool-roster`'s decision, taken per turn from its `rlm` and `kernel` switches: the `rlm` tool when both are on, the standalone `kernel` tool when only `kernel` is, and neither when `kernel` is off. The `kernel`/`kernel-python` *services* stay alive underneath either way, since the engine's REPL is that kernel.
 
 ## Model Experience
 

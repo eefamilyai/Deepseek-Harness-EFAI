@@ -1,19 +1,22 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ConversationLocationDataStore, ConversationTurnDataMap } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
+import type { ChatNodeHookContext, ChatNodeOwnerProps, ChatViewSlotProps, UsePresentation } from '../contract/slots.ts'
 import type { ChatNode } from '../contract/chat-nodes.ts'
-import { TURN_PROCESS_INDEPENDENT_KINDS } from '../contract/turn-process.ts'
+import type { ChatNodeStore } from '../contract/snapshot.ts'
+import { TURN_PROCESS_INDEPENDENT_KINDS, turnProcessAlwaysOpen } from '../contract/turn-process.ts'
 import { storedTurnProcessEntry } from '../stores.ts'
 import { useSearchableHidden } from './searchable-hidden.ts'
 import css from './ChatView.module.css'
 
 interface ChatNodeSeatProps extends ChatNodeOwnerProps {
   readonly nodeKey: string
+  /** A replaced Builder must rebind keyed hooks even when references and keys survive. */
+  readonly nodeStore: ChatNodeStore
   readonly useChatNode: ChatViewSlotProps['useChatNode']
   readonly useChatNodeProcess: ChatViewSlotProps['useChatNodeProcess']
-  readonly historyIncomplete: boolean
-  readonly compactTranscript: boolean
+  readonly usePresentation: UsePresentation
   readonly useStore: ChatViewSlotProps['useStore']
   readonly actions: ChatViewSlotProps['actions']
   readonly renderSlot: ChatViewSlotProps['renderSlot']
@@ -34,9 +37,13 @@ function turnOf(node: ChatNode | undefined): number | undefined {
   return location?.kind === 'turn' || location?.kind === 'step' ? location.turn.turn : undefined
 }
 
-/** Subscribe, apply Turn-process visibility, and dispatch one stable Context key. */
+/**
+ * Subscribe, apply Turn-process visibility, and dispatch one stable Context key.
+ * Policy reads select this seat's own conclusion, so a mode change re-renders
+ * only seats whose visibility actually changes.
+ */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
-  nodeKey, useChatNode, useChatNodeProcess, historyIncomplete, compactTranscript,
+  nodeKey, groupPart, useChatNode, useChatNodeProcess, usePresentation,
   cwd, openFile, openSkill, inspectCall, forkAt,
   loadImage, renderMessageImages, fileMentions, useStore, actions, renderSlot, t,
 }: ChatNodeSeatProps) {
@@ -48,88 +55,51 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
   const storedEntry = useStore(state => processSpec === undefined
     ? undefined
     : storedTurnProcessEntry(state, processSpec.turn))
-  // DSH-FORK(brand): a stored entry applies to this Turn when it pins the
-  // Turn's current answer step, or when it was recorded while the Turn was
-  // still running (answer step null) and therefore describes no other
-  // generation. Comparing the two answer steps alone dropped every explicit
-  // choice the reader made mid-Turn the moment `turn/end` pinned a step.
-  // EXIT: upstream renders the process row only after the Turn closes, so it
-  // never has to carry a running choice across that boundary.
-  const processEntry = storedEntry !== undefined
-    && processSpec !== undefined
-    && (storedEntry.answerStep === null || storedEntry.answerStep === processSpec.answerStep)
+  const processEntry = processSpec !== undefined
+    && storedEntry?.answerStep === (processSpec.answerStep ?? 0)
     ? storedEntry
     : undefined
+  const liveProcess = processPresentation !== undefined && !processPresentation.turnClosed
+  const interleavedInput = processPresentation?.hasInterleavedInput === true
+  const alwaysOpen = liveProcess || interleavedInput || turnProcessAlwaysOpen(routedNode)
+  const processOpen = alwaysOpen || processEntry !== undefined
   const setOpen = useCallback((open: boolean) => {
-    // A running Turn has no answer step yet; it records null rather than
-    // dropping the choice, so the reader's collapse survives the Turn finishing.
-    if (processSpec !== undefined) {
-      actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep, open)
+    if (processSpec !== undefined && !alwaysOpen) {
+      actions.setTurnProcessOpen(processSpec.turn, processSpec.answerStep ?? 0, open)
     }
-  }, [actions, processSpec])
-  // DSH-FORK(brand): the row exists for a Turn that is still running, not only
-  // after it closes. The folded window ends at the finalized answer when there
-  // is one and is otherwise open-ended, so a running Turn's row summarizes the
-  // work it has done so far rather than waiting for the Turn to finish.
-  // EXIT: upstream gives the folded process row a content-derived label.
-  const sameTurn = routedNode !== undefined
-    && processSpec !== undefined
-    && (routedNode.location.kind === 'turn' || routedNode.location.kind === 'step')
-    && routedNode.location.turn.turn === processSpec.turn
-  const turnLocation = sameTurn ? routedNode.location.turn : undefined
-  const turnClosed = turnLocation?.status === 'closed'
-  // A running Turn starts expanded so the reader watches the work land; a
-  // finalized one starts folded. Either way the reader's own toggle wins.
-  const processOpen = processEntry === undefined ? turnClosed === false : processEntry.open
-  // DSH-FORK(brand): a partially paged history withholds only the one Turn whose
-  // own `turn/start` is missing, instead of every Turn's process row. EXIT:
-  // upstream gives the folded process row a content-derived label.
-  const historyTruncatesTurn = historyIncomplete && turnLocation?.start === undefined
-  const processEndSeq = processSpec === undefined
-    ? null
-    : processSpec.answerAnchorSeq ?? Number.POSITIVE_INFINITY
+  }, [actions, processSpec, alwaysOpen])
+  const foldCompleted = usePresentation(policy => policy.foldCompletedTurns)
+  // A loaded end makes a partial historical Turn eligible without its start.
   const processWindowReady = processSpec !== undefined
     && processPresentation !== undefined
-    && compactTranscript
+    && foldCompleted
     && processPresentation.turn === processSpec.turn
-    && !historyTruncatesTurn
-  // DSH-FORK(brand): the human message that opened the Turn is the Turn's input,
-  // not its work, so it stays visible even though a mid-turn steer now folds
-  // with the rest of the process. EXIT: upstream renders a mid-turn steer
-  // outside the collapsed process row.
-  const openingHumanAnchorSeq = processPresentation?.openingHumanAnchorSeq ?? null
-  // DSH-FORK(brand): a steer the reader sends after the finalized answer still
-  // belongs to the Turn it steered, so it folds with the rest of the process
-  // instead of floating below the summary. Every other member stops at the
-  // answer, which keeps the answer itself last. EXIT: upstream gives the folded
-  // process row a content-derived label.
-  const afterAnswerSteer = routedNode?.kind === 'steering'
+    && (processPresentation.turnStarted || processPresentation.turnClosed)
   const processMember = routedNode !== undefined
-    && sameTurn
     && processWindowReady
-    && processEndSeq !== null
     && !TURN_PROCESS_INDEPENDENT_KINDS.has(routedNode.kind)
     && routedNode.anchorSeq >= processSpec.processStartSeq
-    && (routedNode.anchorSeq < processEndSeq || afterAnswerSteer)
-    && routedNode.anchorSeq !== openingHumanAnchorSeq
+    && (liveProcess || processSpec.answerAnchorSeq === null || routedNode.anchorSeq < processSpec.answerAnchorSeq
+      || (groupPart === 'reasoning' && routedNode.kind === 'assistant-step' && routedNode.data.step === processSpec.answerStep))
   const processAnswer = routedNode !== undefined
-    && sameTurn
     && processWindowReady
+    && !liveProcess
+    && groupPart !== 'reasoning'
     && routedNode.kind === 'assistant-step'
     && routedNode.data.step === processSpec.answerStep
   const ownsDisclosure = routedNode?.kind === 'turn-process' || processAnswer
   const foldable = processWindowReady
-    && (processMember || (ownsDisclosure
-      && (processPresentation.hasExternalProcess || processSpec.inlineReasoning)))
+    && (liveProcess || processMember || ownsDisclosure)
   const turnProcess = useMemo(() => processSpec === undefined
     ? undefined
     : {
       spec: processSpec,
       foldable,
+      hasContent: !interleavedInput && (processPresentation?.hasExternalProcess === true || processSpec.inlineReasoning),
       open: processOpen,
       setOpen,
     }, [
-    foldable, processOpen, processSpec, setOpen,
+    foldable, interleavedInput, processOpen, processSpec, processPresentation?.hasExternalProcess, setOpen,
   ])
   const controllerInactive = routedNode?.kind === 'turn-process'
     && !foldable
@@ -137,17 +107,23 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     && foldable
     && processPresentation.compactAnswer
     && !processOpen
-  // `processOpen` already carries the default (open while running, folded once
-  // finalized), so hiding follows the resolved state and no extra Turn-status
-  // condition is needed: a reader who collapses a running Turn sees it close.
   const processHidden = controllerInactive || (foldable && processMember && !processOpen)
   const revealProcess = useCallback(() => {
     if (processMember) setOpen(true)
   }, [processMember, setOpen])
   const wrapperRef = useSearchableHidden(processHidden, revealProcess)
+  const [disclosureReset] = useState(() => createSnapshotStore(0))
+  const turnData = turnDataOf(routedNode)
+  const hookContext = useMemo<ChatNodeHookContext>(() => ({ turnData, disclosureReset }), [turnData, disclosureReset])
+  useEffect(() => {
+    if (processMember && processHidden && wrapperRef.current?.hasAttribute('hidden')) {
+      disclosureReset.set(disclosureReset.getSnapshot() + 1)
+    }
+  }, [processMember, processHidden, wrapperRef, disclosureReset])
   const owner = useMemo<ChatNodeOwnerProps | null>(() => node === undefined
     ? null
     : {
+      ...groupPart === undefined ? {} : { groupPart },
       cwd,
       openFile,
       openSkill,
@@ -158,21 +134,24 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       fileMentions,
       turnProcess,
     }, [
-    node, cwd, openFile, openSkill, inspectCall, forkAt,
+    node, groupPart, cwd, openFile, openSkill, inspectCall, forkAt,
     loadImage, renderMessageImages, fileMentions, turnProcess,
   ])
   if (routedNode === undefined || owner === null) return null
-  const turnData = turnDataOf(routedNode)
   // Runtime dispatch owns the correlation: every Node's discriminant is the
   // keyed-slot entry passed alongside that same Node. TypeScript does not
   // distribute an object containing a union into a union of objects itself.
   const routedOwner = { ...owner, node: routedNode } as RoutedChatNodeOwner
+  const flowKey = groupPart === undefined || groupPart === 'response' ? routedNode.key : JSON.stringify([routedNode.key, groupPart])
   return (
     <div
       ref={wrapperRef}
       className={css.flowItem}
-      data-chat-anchor-key={routedNode.key}
-      data-chat-flow-key={routedNode.key}
+      data-chat-anchor-key={flowKey}
+      data-chat-flow-key={flowKey}
+      data-chat-paging-anchor={routedNode.kind !== 'turn-process' || undefined}
+      data-chat-node-key={routedNode.key}
+      data-chat-group-part={groupPart}
       data-chat-flow-kind={routedNode.kind}
       data-chat-turn={turn}
       data-turn-process-member={processMember || undefined}
@@ -181,7 +160,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     >
       {renderSlot('conversation.chat.node', routedOwner, {
         entryKey: routedNode.kind,
-        hookContext: turnData,
+        hookContext,
         fallback: (
           <JsonBlock
             label={t('message.unknownSurface', { type: routedNode.kind })}

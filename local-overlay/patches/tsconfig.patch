@@ -1,33 +1,31 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 494e4f762f..1c3622de9d 100644
+index a5a8570a51..ac66a29ed0 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -116,6 +116,14 @@
+@@ -130,6 +130,12 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
 -    { "path": "./apps/web" }
 +    { "path": "./apps/web" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
-+    { "path": "./packages/client/ui-sidebar-terminal" },
 +    { "path": "./packages/client/ui-effects" },
 +    { "path": "./packages/client/ui-settings-tools" },
 +    { "path": "./packages/client/ui-settings-accounts" },
-+    { "path": "./packages/client/ui-settings-advanced" },
 +    { "path": "./packages/client/ui-flow-accents" },
 +    // DSH-FORK end
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c5a3f118b3..878e9b5154 100644
+index c551469419..3515359ae9 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -358,6 +358,33 @@
+@@ -451,6 +451,28 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
--    { "path": "./apps/desktop" }
-+    { "path": "./apps/desktop" },
+-    { "path": "./apps/desktop/tsconfig.host.json" }
++    { "path": "./apps/desktop/tsconfig.host.json" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/session/command-session-info" },
 +    { "path": "./packages/llm/llm-dsml" },
@@ -35,23 +33,18 @@ index c5a3f118b3..878e9b5154 100644
 +    { "path": "./packages/fs/tool-notebook-edit" },
 +    { "path": "./packages/web/web-browser" },
 +    { "path": "./packages/kernel/kernel" },
-+    { "path": "./packages/kernel/kernel-mode" },
 +    { "path": "./packages/kernel/kernel-python" },
 +    { "path": "./packages/kernel/tool-kernel" },
-+    { "path": "./packages/kernel/tool-roster" },
++    { "path": "./packages/kernel/roster" },
 +    { "path": "./packages/kernel/kernel-rlm-context" },
 +    { "path": "./packages/rlm/rlm" },
-+    { "path": "./packages/rlm/rlm-mode" },
 +    { "path": "./packages/agent-memory/agent-memory" },
 +    { "path": "./packages/agent-memory/agent-memory-mode" },
-+    { "path": "./packages/host/sidebar-bridge" },
 +    { "path": "./packages/session/session-recovery-context" },
 +    { "path": "./packages/host/version-route" },
 +    { "path": "./packages/core/efai-identity" },
-+    { "path": "./packages/compaction/compaction-efai" },
 +    { "path": "./packages/llm/token-usage-lifetime" },
 +    { "path": "./packages/skill/skill-injection" },
-+    { "path": "./packages/preset/efai-presets" },
 +    { "path": "./packages/bundle/efai-base" },
 +    { "path": "./packages/bundle/efai-web" }
 +    // DSH-FORK end

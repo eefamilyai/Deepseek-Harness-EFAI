@@ -1,9 +1,9 @@
 diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.module.css b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
-index b2cb715287..638c4aab34 100644
+index b3a60fb6ec..c289809a3b 100644
 --- a/packages/client/ui-model-selection/src/client/ModelSelect.module.css
 +++ b/packages/client/ui-model-selection/src/client/ModelSelect.module.css
-@@ -176,6 +176,27 @@
-   margin-top: 4px;
+@@ -167,6 +167,27 @@
+   margin-top: 3px;
  }
  
 +/* DSH-FORK(browser): per-provider collapse toggle. EXIT: upstream adopts
@@ -30,7 +30,7 @@ index b2cb715287..638c4aab34 100644
  .groupTitle {
    position: sticky;
    top: 0;
-@@ -188,6 +209,24 @@
+@@ -179,6 +200,24 @@
    font-weight: 500;
  }
  
@@ -55,8 +55,8 @@ index b2cb715287..638c4aab34 100644
  .option {
    box-sizing: border-box;
    display: flex;
-@@ -291,3 +330,58 @@
-   flex: 0 0 auto;
+@@ -287,3 +326,58 @@
+   height: 12px;
    color: var(--dsw-alias-label-tertiary);
  }
 +
@@ -115,18 +115,18 @@ index b2cb715287..638c4aab34 100644
 +  color: var(--dsw-alias-state-business-primary);
 +}
 diff --git a/packages/client/ui-model-selection/src/client/ModelSelect.tsx b/packages/client/ui-model-selection/src/client/ModelSelect.tsx
-index e9fc0195ef..1423dbd7d7 100644
+index b9c8993563..4e0357cd9a 100644
 --- a/packages/client/ui-model-selection/src/client/ModelSelect.tsx
 +++ b/packages/client/ui-model-selection/src/client/ModelSelect.tsx
-@@ -18,6 +18,7 @@ import {
+@@ -24,6 +24,7 @@ import {
  import { createPortal } from 'react-dom'
  import clsx from 'clsx'
  import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 +import type { ModelCatalogModel, ModelProviderGroup } from '@deepseek-ai/dsh-api-session-controller/types'
  import {
-   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-   IconDataOutline16, IconWarningOutline16, Toast,
-@@ -36,6 +37,68 @@ interface EffortChoice {
+   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
+   IconDataOutlineRegular, IconWarningOutlineRegular, Toast,
+@@ -42,6 +43,68 @@ interface EffortChoice {
    label: string
  }
  
@@ -195,7 +195,16 @@ index e9fc0195ef..1423dbd7d7 100644
  /** Unplaced portal card: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real (Menu primitive's measure pass). */
  const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  
-@@ -69,18 +132,38 @@ export function ModelSelect(
+@@ -72,21 +135,47 @@ export function ModelSelect(
+   const triggerRef = useRef<HTMLButtonElement | null>(null)
+   const menuRef = useRef<HTMLDivElement | null>(null)
+   const [menuPos, setMenuPos] = useState<CSSProperties | null>(null)
++  // DSH-FORK(browser): the last placement written, so an unchanged one is never
++  // written again. A state updater that returns its input still re-renders this
++  // component and then discards the render, and `itemRefs` is rebuilt during
++  // render — a discarded render leaves the keyboard walk with no rows.
++  // EXIT: upstream re-measures the popover on its own resize.
++  const placedRef = useRef<{ left: number; top: number } | null>(null)
    const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
    const id = useId()
  
@@ -237,7 +246,7 @@ index e9fc0195ef..1423dbd7d7 100644
    const selectedIndex = state.current === null
      ? -1
      : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
-@@ -105,6 +188,45 @@ export function ModelSelect(
+@@ -111,6 +200,48 @@ export function ModelSelect(
        })),
      ], [reasoning, t])
    const busy = state.status === 'selecting'
@@ -252,10 +261,13 @@ index e9fc0195ef..1423dbd7d7 100644
 +  const manualCollapseRef = useRef(false)
 +
 +  // Default collapse: every merged base group except the one owning the
-+  // current selection starts minimized.
++  // current selection starts minimized. When no group owns it, the first group
++  // stays open, so the pane never opens with no row for the keyboard to land on.
 +  const defaultCollapsed = useMemo(() => {
 +    const currentBase = state.current?.provider?.split('@')[0]
-+    return new Set(mergedGroups.map(group => group.baseId).filter(id => id !== currentBase))
++    const ids = mergedGroups.map(group => group.baseId)
++    const expandedId = ids.includes(currentBase ?? '') ? currentBase : ids[0]
++    return new Set(ids.filter(id => id !== expandedId))
 +  }, [mergedGroups, state.current?.provider])
 +
 +  const toggleGroup = (groupId: string): void => {
@@ -271,28 +283,37 @@ index e9fc0195ef..1423dbd7d7 100644
 +  // While the model pane is open and no manual preference exists, keep the
 +  // collapse set in step with the default (groups may load after the pane
 +  // opens, and the current selection may change from elsewhere).
++  // Compared here rather than in a state updater: an updater that returns its
++  // input still costs a discarded render, which empties `itemRefs`.
 +  useEffect(() => {
 +    if (!open || manualCollapseRef.current) return
-+    setCollapsedGroups((prev) => {
-+      const same = prev.size === defaultCollapsed.size
-+        && [...defaultCollapsed].every(id => prev.has(id))
-+      return same ? prev : defaultCollapsed
-+    })
-+  }, [open, defaultCollapsed])
++    const same = collapsedGroups.size === defaultCollapsed.size
++      && [...defaultCollapsed].every(id => collapsedGroups.has(id))
++    if (!same) setCollapsedGroups(defaultCollapsed)
++  }, [open, defaultCollapsed, collapsedGroups])
 +
  
    const reload = (): void => {
      lastActionRef.current = 'load'
-@@ -143,14 +265,33 @@ export function ModelSelect(
+@@ -161,7 +292,7 @@ export function ModelSelect(
+      that hook only places from the anchor's LEFT edge, while this card aligns
+      right edges (x = rect.right - width), so the measure-and-clamp plumbing repeats. */
+   useLayoutEffect(() => {
+-    if (!open) { setMenuPos(null); return }
++    if (!open) { placedRef.current = null; setMenuPos(null); return }
+     const place = (): void => {
+       /* v8 ignore next 2 -- the trigger ref is attached whenever the menu is open. */
+       const rect = triggerRef.current?.getBoundingClientRect()
+@@ -173,14 +304,34 @@ export function ModelSelect(
        let y = rect.top - 8 - lh
        if (lw > 0) x = Math.min(Math.max(x, MARGIN), window.innerWidth - lw - MARGIN)
        if (lh > 0) y = Math.min(Math.max(y, MARGIN), window.innerHeight - lh - MARGIN)
--      setMenuPos({ left: x, top: y })
 +      // Identical positions must not re-render: the observer below fires on
 +      // every resize, and a fresh object each time would loop.
-+      setMenuPos(prev => (prev !== null && prev.left === x && prev.top === y)
-+        ? prev
-+        : { left: x, top: y })
++      const placed = placedRef.current
++      if (placed !== null && placed.left === x && placed.top === y) return
++      placedRef.current = { left: x, top: y }
+       setMenuPos({ left: x, top: y })
      }
      // First run measures the hidden pre-render (same commit as `open`), so
      // the card lands placed before anything paints.
@@ -318,7 +339,7 @@ index e9fc0195ef..1423dbd7d7 100644
        window.removeEventListener('scroll', place, true)
        window.removeEventListener('resize', place)
      }
-@@ -161,6 +302,10 @@ export function ModelSelect(
+@@ -191,6 +342,10 @@ export function ModelSelect(
  
    const show = (): void => {
      setPane('root')
@@ -329,7 +350,7 @@ index e9fc0195ef..1423dbd7d7 100644
      setOpen(true)
      reload()
    }
-@@ -332,34 +477,74 @@ export function ModelSelect(
+@@ -409,34 +564,76 @@ export function ModelSelect(
                  </div>
                ))}
                <div className={clsx(css.groups, 'scrollable')}>
@@ -360,7 +381,7 @@ index e9fc0195ef..1423dbd7d7 100644
 -                              <span className={css.modelName}>{model.name}</span>
 -                            </span>
 -                            <span className={css.check}>
--                              {selected ? <IconCheckOutline16 /> : null}
+-                              {selected ? <IconCheckOutlineRegular /> : null}
 -                            </span>
 -                          </button>
 -                        )
@@ -374,13 +395,15 @@ index e9fc0195ef..1423dbd7d7 100644
 +                        aria-controls={`${id}-group-${group.baseId}`}
 +                        onClick={() => { toggleGroup(group.baseId) }}
 +                      >
-+                        <IconChevronDownOutline14
++                        <IconChevronDownOutlineRegular size={14}
 +                          className={clsx(css.groupChevron, !expanded && css.groupChevronCollapsed)}
 +                        />
 +                        <span className={css.groupName}>{group.name}</span>
 +                      </button>
++                      {/* A collapsed group renders no rows: the keyboard walk moves over
++                          `itemRefs`, and a hidden row there would take focus it cannot hold. */}
 +                      <div id={`${id}-group-${group.baseId}`} hidden={!expanded}>
-+                        {group.accounts.length > 1 && (
++                        {expanded && group.accounts.length > 1 && (
 +                          <div role="group" aria-label={`${group.name} accounts`} className={css.accountPicker}>
 +                            {group.accounts.map((account) => {
 +                              const selected = resolved === account.provider
@@ -397,14 +420,14 @@ index e9fc0195ef..1423dbd7d7 100644
 +                                >
 +                                  <span className={css.accountLabel}>{account.account === null ? group.name : account.account}</span>
 +                                  <span className={css.accountCheck}>
-+                                    {selected ? <IconCheckOutline16 /> : null}
++                                    {selected ? <IconCheckOutlineRegular /> : null}
 +                                  </span>
 +                                </button>
 +                              )
 +                            })}
 +                          </div>
 +                        )}
-+                        {group.models.map((model) => {
++                        {expanded && group.models.map((model) => {
 +                          const selected = state.current?.provider === resolved && state.current?.model === model.id
 +                          return (
 +                            <button
@@ -422,7 +445,7 @@ index e9fc0195ef..1423dbd7d7 100644
 +                                <span className={css.modelName}>{model.name}</span>
 +                              </span>
 +                              <span className={css.check}>
-+                                {selected ? <IconCheckOutline16 /> : null}
++                                {selected ? <IconCheckOutlineRegular /> : null}
 +                              </span>
 +                            </button>
 +                          )
@@ -432,7 +455,7 @@ index e9fc0195ef..1423dbd7d7 100644
                    )
                  })}
 diff --git a/packages/client/ui-model-selection/src/client/directory.ts b/packages/client/ui-model-selection/src/client/directory.ts
-index 6ceee704ed..2c426d9219 100644
+index b27811f501..082f32d107 100644
 --- a/packages/client/ui-model-selection/src/client/directory.ts
 +++ b/packages/client/ui-model-selection/src/client/directory.ts
 @@ -46,6 +46,9 @@ export class ModelDirectory {
@@ -445,9 +468,9 @@ index 6ceee704ed..2c426d9219 100644
    private readonly unsubscribeCatalog: () => void
    private readonly unsubscribeSelection: () => void
  
-@@ -105,6 +108,11 @@ export class ModelDirectory {
-       this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
-       throw new Error(`session.selectModel failed: ${result.error.code}: ${result.error.message}`)
+@@ -108,6 +111,11 @@ export class ModelDirectory {
+       })
+       return result
      }
 +    // Remember the HOST-NORMALIZED selection (the exact value the durable
 +    // projection will later report) so the directory never snaps back to the
@@ -456,8 +479,8 @@ index 6ceee704ed..2c426d9219 100644
 +    this.lastSelected = result.value.selected
      this.store.update((s) => { s.status = 'ready'; s.error = null })
      this.syncInputs()
-   }
-@@ -159,7 +167,17 @@ export class ModelDirectory {
+     return { ok: true, value: undefined }
+@@ -163,7 +171,17 @@ export class ModelDirectory {
        })
        return
      }
@@ -476,7 +499,7 @@ index 6ceee704ed..2c426d9219 100644
      this.resolved = true
      this.store.set({
        current,
-@@ -174,6 +192,13 @@ export class ModelDirectory {
+@@ -178,6 +196,13 @@ export class ModelDirectory {
    }
  }
  
@@ -491,10 +514,10 @@ index 6ceee704ed..2c426d9219 100644
    return value === undefined ? undefined : value as ModelSelectionProjection
  }
 diff --git a/packages/client/ui-model-selection/src/client/locales.ts b/packages/client/ui-model-selection/src/client/locales.ts
-index 570565ce60..9f33d2a39b 100644
+index 2e573796ea..c0e95fe26d 100644
 --- a/packages/client/ui-model-selection/src/client/locales.ts
 +++ b/packages/client/ui-model-selection/src/client/locales.ts
-@@ -31,6 +31,21 @@ export const zh = {
+@@ -32,6 +32,21 @@ export const zh = {
    'empty.models': '没有可用的模型。',
    'blocked.composer': '当前模型不可用，请先选择模型',
    'empty.efforts': '当前模型未提供推理等级。',
@@ -516,7 +539,7 @@ index 570565ce60..9f33d2a39b 100644
  } satisfies Record<string, string>
  
  /** The model namespace key union. */
-@@ -59,4 +74,18 @@ export const en = {
+@@ -61,4 +76,18 @@ export const en = {
    'empty.models': 'No models available.',
    'blocked.composer': 'This model is unavailable — select one to continue',
    'empty.efforts': 'This model provides no reasoning effort levels.',
@@ -536,7 +559,7 @@ index 570565ce60..9f33d2a39b 100644
 +  'account.cancel': 'Cancel',
  } satisfies Record<ModelKey, string>
 diff --git a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
-index 3b8c92d8bf..7ad2816964 100644
+index 4a5ee43b91..7fa7cf446d 100644
 --- a/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
 +++ b/packages/client/ui-model-selection/tests/model-select.client.spec.tsx
 @@ -1,5 +1,6 @@
@@ -545,9 +568,9 @@ index 3b8c92d8bf..7ad2816964 100644
 +// DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-model-selection/src/client/ModelSelect.tsx.
 +import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
  import { afterEach, describe, expect, it, vi } from 'vitest'
- import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
- import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-@@ -50,6 +51,19 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
+ import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+ import { SessionId } from '@deepseek-ai/dsh-session/types'
+@@ -52,6 +53,19 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
    }
  }
  
@@ -567,11 +590,10 @@ index 3b8c92d8bf..7ad2816964 100644
  afterEach(cleanup)
  
  describe('ModelSelect reasoning effort', () => {
-@@ -252,3 +266,173 @@ describe('ModelSelect reasoning effort', () => {
-     expect(load).not.toHaveBeenCalled()
+@@ -260,6 +274,177 @@ describe('ModelSelect reasoning effort', () => {
    })
  })
-+
+ 
 +describe('ModelSelect provider group collapse', () => {
 +  const twoGroups = [
 +    {
@@ -603,16 +625,17 @@ index 3b8c92d8bf..7ad2816964 100644
 +    expect(screen.queryByRole('menuitemradio', { name: /B Pro/ })).toBeNull()
 +  })
 +
-+  it('collapses every provider by default when none owns the current selection', () => {
++  it('keeps only the first provider open when none owns the current selection', () => {
++    // The pane never opens empty: the keyboard walk lands on the first row.
 +    const directory = createSnapshotStore<ModelDirectoryState>(state({
 +      groups: twoGroups,
 +      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
 +    }))
 +    mountModelSelect(directory)
 +
-+    expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('false')
++    expect(screen.getByRole('button', { name: 'Provider A' }).getAttribute('aria-expanded')).toBe('true')
 +    expect(screen.getByRole('button', { name: 'Provider B' }).getAttribute('aria-expanded')).toBe('false')
-+    expect(screen.queryByRole('menuitemradio')).toBeNull()
++    expect(screen.getAllByRole('menuitemradio').map(row => row.textContent)).toEqual(['A Flash'])
 +  })
 +
 +  it('collapses and re-expands one provider group without touching the others', () => {
@@ -741,3 +764,7 @@ index 3b8c92d8bf..7ad2816964 100644
 +    expect(screen.getByRole('menuitemradio', { name: /B Pro/ })).toBeTruthy()
 +  })
 +})
++
+ describe('ModelSelect keyboard walk', () => {
+   function mountOpen() {
+     const select = vi.fn().mockResolvedValue({ ok: true, value: undefined })

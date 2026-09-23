@@ -2,8 +2,7 @@ import { Fragment, useCallback, useMemo, useRef, useState, useSyncExternalStore 
 import type { CSSProperties, ReactNode, Ref } from 'react'
 import clsx from 'clsx'
 import { writeClipboard } from '../clipboard.ts'
-// DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: upstream adopts the fork's code-block chrome.
-import { IconCheckOutline14, IconCopyOutline16, IconDownloadOutline16, IconPlayOutline16 } from '../icons/index.tsx'
+import { CodeToolbar, type CodeToolbarLabels } from '../CodeToolbar.tsx'
 import {
   StreamingHighlightSession, grammarLoadCount, highlightToHtml, subscribeGrammarLoaded,
 } from './highlight.ts'
@@ -31,65 +30,16 @@ export interface CodeBlockProps {
   contentRef?: Ref<HTMLDivElement> | undefined
   /** Show a numbered gutter without adding numbers to copied source. Defaults to false. */
   lineNumbers?: boolean | undefined
+  /** Show the language and copy header; false when the caller supplies a toolbar. Defaults to true. */
+  showHeader?: boolean | undefined
   /** Copy-button idle label; the owner passes localized copy (this package is cordis-free, so copy arrives via props). */
   copyLabel: string
   /** Copy-button label during the post-copy confirmation window. */
   copiedLabel: string
-  /** Run-button label. Absent hides the Run button. */
-  runLabel?: string | undefined
-  /** Download-button label. Absent hides the Download button. */
-  downloadLabel?: string | undefined
-  /** Invoked with the trimmed code when the user presses Run. */
-  onRun?: ((code: string) => void) | undefined
-}
-
-
-/** Map a fence language hint to a downloadable filename, with a text fallback. */
-function filenameForLang(lang: string | undefined): string {
-  switch (lang?.toLowerCase()) {
-    case 'js': case 'mjs': case 'cjs': case 'jsx': return 'code.js'
-    case 'ts': case 'mts': case 'cts': case 'tsx': return 'code.ts'
-    case 'py': case 'python': return 'code.py'
-    case 'sh': case 'bash': case 'zsh': return 'code.sh'
-    case 'ps1': case 'pwsh': case 'powershell': return 'code.ps1'
-    case 'cmd': case 'bat': return 'code.cmd'
-    case 'json': return 'code.json'
-    case 'jsonc': return 'code.jsonc'
-    case 'yaml': case 'yml': return 'code.yml'
-    case 'toml': return 'code.toml'
-    case 'html': return 'code.html'
-    case 'css': return 'code.css'
-    case 'scss': return 'code.scss'
-    case 'less': return 'code.less'
-    case 'sql': return 'code.sql'
-    case 'go': return 'code.go'
-    case 'rs': return 'code.rs'
-    case 'java': return 'code.java'
-    case 'c': return 'code.c'
-    case 'h': return 'code.h'
-    case 'cpp': case 'cc': case 'cxx': return 'code.cpp'
-    case 'cs': return 'code.cs'
-    case 'rb': return 'code.rb'
-    case 'php': return 'code.php'
-    case 'swift': return 'code.swift'
-    case 'kt': case 'kotlin': return 'code.kt'
-    case 'lua': return 'code.lua'
-    case 'md': return 'code.md'
-    default: return 'code.txt'
-  }
-}
-
-/** Client-side Blob save; no-op on hosts without object URLs (jsdom). */
-function downloadCode(code: string, lang: string | undefined): void {
-  if (typeof URL.createObjectURL !== 'function') return
-  const url = URL.createObjectURL(new Blob([code], { type: 'text/plain;charset=utf-8' }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filenameForLang(lang)
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  window.setTimeout(() => { URL.revokeObjectURL(url) }, 0)
+  /** Enable the shared card toolbar and spacing; omit for custom toolbar layouts. */
+  toolbarLabels?: CodeToolbarLabels | undefined
+  /** With toolbarLabels, use the owner's wrapping preference and omit the toolbar's local wrap action. */
+  wrap?: boolean | undefined
 }
 
 /**
@@ -119,8 +69,7 @@ function renderLine(line: readonly HighlightSpan[], index: number): ReactNode {
 }
 
 export function CodeBlock({
-  code, lang, streaming, className, contentRef, lineNumbers = false,
-  copyLabel, copiedLabel, runLabel, downloadLabel, onRun,
+  code, lang, streaming, className, contentRef, lineNumbers = false, showHeader = true, copyLabel, copiedLabel, toolbarLabels, wrap,
 }: CodeBlockProps) {
   const trimmed = code.endsWith('\n') ? code.slice(0, -1) : code
   const sourceLines = lineNumbers ? trimmed.split('\n') : undefined
@@ -205,14 +154,8 @@ export function CodeBlock({
     [streaming, highlighting, streamedBody, trimmed, lang, loaded],
   )
   const [copied, setCopied] = useState(false)
-
-  const onDownload = useCallback(() => {
-    downloadCode(trimmed, lang)
-  }, [trimmed, lang])
-
-  const onRunClick = useCallback(() => {
-    onRun?.(trimmed)
-  }, [onRun, trimmed])
+  const [localWrapped, setWrapped] = useState(true)
+  const wrapped = wrap ?? localWrapped
 
   const onCopy = useCallback(() => {
     if (copied) return
@@ -242,35 +185,27 @@ export function CodeBlock({
       )
 
   return (
-    <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, className)}
+    <div ref={rootRef} className={clsx(css.block, 'md-code-block', lineNumbers && css.numbered, toolbarLabels !== undefined && css.card, className)}
       data-line-numbers={lineNumbers || undefined}
+      data-code-wrap={toolbarLabels === undefined ? undefined : wrapped}
       style={sourceLines === undefined ? undefined : {
         '--dsl-code-block-line-number-width': `${Math.max(2, String(sourceLines.length).length)}ch`,
       } as CSSProperties}>
       {/* These paired attributes are stable semantic hooks for owner styling and DOM tests. */}
-      <div className={css.bannerWrap}>
-        <div className={css.banner} data-code-block-banner>
-          <div className={css.infostring}>{lang ?? 'code'}</div>
+      {showHeader && <div className={css.bannerWrap}>
+        {toolbarLabels !== undefined ? <CodeToolbar
+          lang={lang} labels={toolbarLabels} copyLabel={copyLabel} copiedLabel={copiedLabel}
+          copied={copied} wrapped={wrapped} onCopy={onCopy}
+          onWrap={wrap === undefined ? () => { setWrapped(value => !value) } : undefined}
+        /> : <div className={css.banner} data-code-block-banner>
+          <div className={css.infostring}>{lang ?? ''}</div>
           <div className={css.action}>
-            {downloadLabel !== undefined && (
-              <button type="button" className={clsx(css.actionButton, css.downloadButton)} onClick={onDownload}>
-                <IconDownloadOutline16 size={14} />
-                {downloadLabel}
-              </button>
-            )}
-            {runLabel !== undefined && onRun !== undefined && (
-              <button type="button" className={clsx(css.actionButton, css.runButton)} onClick={onRunClick}>
-                <IconPlayOutline16 size={14} />
-                {runLabel}
-              </button>
-            )}
-            <button type="button" className={clsx(css.actionButton, css.copyButton)} onClick={onCopy}>
-              {copied ? <IconCheckOutline14 size={14} /> : <IconCopyOutline16 size={14} />}
+            <button type="button" className={css.copyButton} onClick={onCopy}>
               {copied ? copiedLabel : copyLabel}
             </button>
           </div>
-        </div>
-      </div>
+        </div>}
+      </div>}
       <div ref={contentRef} className={css.content} data-code-block-content>{body}</div>
     </div>
   )

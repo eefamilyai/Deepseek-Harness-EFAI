@@ -1,55 +1,42 @@
-/**
- * `sidebarTerminal` namespace dictionaries, and the namespace's declaration.
- *
- * One namespace covers the whole package: the tab type's copy and the
- * conversation-header menu the terminal re-homed from the retired dock.
- *
- * The namespace merge lives with its key set so that any module naming
- * `TranslateNS<'sidebarTerminal'>` or `PropsLocale<'sidebarTerminal'>` needs only
- * this file, whichever entry a program loads first.
- */
+/** Copy owned by the sidebar terminal feature. */
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Terminal tab type name, guide entry, and the pane's own status lines. */
-    sidebarTerminal: SidebarTerminalKey
+    sidebarTerminal: keyof typeof zh
   }
 }
 
-/** Simplified Chinese dictionary and key-set source of truth. */
+/** Simplified Chinese terminal copy. */
 export const zh = {
-  'type.label': '终端',
-  'guide.title': '终端',
-  'guide.description': '在本会话工作区的专用 shell 里运行命令',
-  reset: '结束这个 shell 并重新开一个',
-  cwdDefault: '~（默认目录）',
-  connecting: '正在连接…',
-  disconnected: '已断开',
-  reconnect: '重新连接',
-  input: '终端输入',
-  'menu.sessionLog': 'Session 日志',
-  'menu.copySessionId': '复制 Session ID',
-  'menu.openTerminal': '终端',
-  'menu.title': '更多操作',
+  recoveryFailed: '恢复终端失败：{message}', retryRecovery: '重试恢复终端',
+  shell: '选择 Shell', shellLoading: '正在读取 Shell…', shellEmpty: '没有可用的 Shell', description: '在会话工作区运行命令',
+  title: '终端', new: '新建终端', loading: '正在读取终端环境…', creating: '正在启动…',
+  connecting: '正在连接…', disconnected: '连接已断开。', reconnect: '重新连接',
+  readonly: '此页面当前只读。', control: '接管输入',
+  closed: '终端已关闭。', exited: '进程已退出（{code}）', failed: '终端错误：{message}',
+  rename: '终端名称', unavailable: '不可用', retry: '重试',
+  cleanupFailed: '终端「{title}」未能结束：{message}',
+  missingTerminal: '此终端已不存在，请新建终端。',
+  inputFull: '输入缓冲区已满，请重新连接后重试。',
+  attachmentEnded: '终端连接已结束，请重新连接。',
+  invalidOutput: '终端画面传输异常，请重新连接。',
+  terminalLimit: '终端数量已达上限，请关闭不用的终端后重试。已退出的终端也计入数量。',
 } satisfies Record<string, string>
 
-/** Terminal dictionary key union. */
-export type SidebarTerminalKey = keyof typeof zh
-
-/** English dictionary, checked against the Chinese key set. */
+/** English terminal copy. */
 export const en = {
-  'type.label': 'Terminal',
-  'guide.title': 'Terminal',
-  'guide.description': 'Run commands in a dedicated shell for this session\'s workspace',
-  reset: 'Kill this shell and start a fresh one',
-  cwdDefault: '~ (default)',
-  connecting: 'connecting…',
-  disconnected: 'disconnected',
-  reconnect: 'reconnect',
-  input: 'terminal input',
-  'menu.sessionLog': 'Session log',
-  'menu.copySessionId': 'Copy session ID',
-  'menu.openTerminal': 'Terminal',
-  'menu.title': 'More actions',
-} satisfies Record<SidebarTerminalKey, string>
+  recoveryFailed: 'Terminal recovery failed: {message}', retryRecovery: 'Retry terminal recovery',
+  shell: 'Choose shell', shellLoading: 'Loading shells…', shellEmpty: 'No shells available', description: 'Run commands in the Session workspace',
+  title: 'Terminal', new: 'New terminal', loading: 'Reading terminal environment…', creating: 'Starting…',
+  connecting: 'Connecting…', disconnected: 'Disconnected.', reconnect: 'Reconnect',
+  readonly: 'This view is read-only.', control: 'Take control',
+  closed: 'Terminal closed.', exited: 'Process exited ({code})', failed: 'Terminal error: {message}',
+  rename: 'Terminal name', unavailable: 'Unavailable', retry: 'Retry',
+  cleanupFailed: 'Terminal “{title}” could not be ended: {message}',
+  missingTerminal: 'This terminal no longer exists. Open a new terminal.',
+  inputFull: 'The input buffer is full. Reconnect and try again.',
+  attachmentEnded: 'The terminal connection ended. Reconnect to continue.',
+  invalidOutput: 'The terminal screen could not be received. Reconnect to recover it.',
+  terminalLimit: 'The terminal limit has been reached. Close unused terminals and try again. Exited terminals also count toward the limit.',
+} satisfies Record<keyof typeof zh, string>

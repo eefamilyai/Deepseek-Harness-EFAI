@@ -31,7 +31,7 @@ Both halves live in [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) and are
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The Cordis plugin: registers every route, reads the settings document, launches the sidecar |
+| [`src/index.ts`](src/index.ts) | The Cordis plugin: registers every route, applies the live DeepSeek-web credentials, launches the sidecar |
 | [`src/adapter.ts`](src/adapter.ts) | `KilnAdapter`: the registry as a harness adapter, and the message flattening |
 | [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) | The format statement and its streaming reader, shared with every other route |
 | [`src/bridge.ts`](src/bridge.ts) | The sidecar client over newline-delimited JSON |

@@ -2,28 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { createChatStore } from '../src/client/stores.ts'
 
 describe('createChatStore', () => {
-  it('records the reader choice for one Turn-process answer', () => {
+  it('stores only manually expanded Turn-process answers', () => {
     const store = createChatStore().create()
     store.actions.setTurnProcessOpen(2, 3, true)
-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 3, open: true }])
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 3 }])
 
     store.actions.setTurnProcessOpen(2, 4, true)
-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4, open: true }])
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4 }])
 
-    // A close is a choice too: a running Turn defaults open, so only an
-    // explicit false can distinguish "the reader folded this" from "no opinion".
     store.actions.setTurnProcessOpen(2, 4, false)
-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4, open: false }])
+    expect(store.store.getSnapshot().turnProcesses).toEqual([])
   })
 
-  it('keeps each Turn-process choice independent', () => {
+  it('closes only the requested Turn-process entry', () => {
     const store = createChatStore().create()
     store.actions.setTurnProcessOpen(2, 3, true)
-    store.actions.setTurnProcessOpen(3, 4, false)
+    store.actions.setTurnProcessOpen(3, 4, true)
 
-    expect(store.store.getSnapshot().turnProcesses).toEqual([
-      { turn: 2, answerStep: 3, open: true },
-      { turn: 3, answerStep: 4, open: false },
-    ])
+    store.actions.setTurnProcessOpen(2, 3, false)
+    store.actions.setTurnProcessOpen(9, 10, false)
+
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 3, answerStep: 4 }])
   })
 })

@@ -60,11 +60,15 @@ macOS 或 Linux：
 
 通过一条命令安装后，改运行 `dsh web`；加上 `--port 3100` 可更换端口。
 
+`pnpm run dev:web` 会在一个终端里完成构建、启动，并在源码修改时重建 client bundle；`make help` 列出 Web 与 Desktop 对应的 Make target。完整表格见开发指南的「应用命令」一节。
+
+面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
+
 ## 本分支新增内容
 
 - 通过内核工具执行代码单元的 Python 内核。
 - 带账户池化的多提供商 LLM 注册表。
-- 浏览器工具与侧边栏主机桥接。
+- 自托管的文本优先浏览器工具。
 - 笔记本编辑工具与 RLM 上下文回读。
 
 ## 上游

@@ -148,7 +148,7 @@ index 5b19f7cc66..ce65328a5e 100644
  
  function allowedModelsValue(value: SessionFormatJsonValue | undefined, label: string): void {
 diff --git a/packages/session/session-format-v0-to-v1/src/relationships.ts b/packages/session/session-format-v0-to-v1/src/relationships.ts
-index 2cd4a432ed..8a8aecbe0c 100644
+index ddd1a4b71d..71c1cc84c3 100644
 --- a/packages/session/session-format-v0-to-v1/src/relationships.ts
 +++ b/packages/session/session-format-v0-to-v1/src/relationships.ts
 @@ -174,9 +174,14 @@ export function assertReleasedArtifactRelationships(
@@ -188,7 +188,7 @@ index 2cd4a432ed..8a8aecbe0c 100644
              root,
              parent,
 diff --git a/packages/session/session-format-v0-to-v1/src/validation.ts b/packages/session/session-format-v0-to-v1/src/validation.ts
-index f61080c7bc..176c3afa24 100644
+index 762ed963f7..3426511fb6 100644
 --- a/packages/session/session-format-v0-to-v1/src/validation.ts
 +++ b/packages/session/session-format-v0-to-v1/src/validation.ts
 @@ -13,7 +13,7 @@ import type {
@@ -219,7 +219,7 @@ index f61080c7bc..176c3afa24 100644
        throw new SessionFormatUnsupportedMigrationError(
          `${event.type} ${event.seq} uses unsupported descriptor version ${descriptorVersion}`,
 diff --git a/packages/session/session-format-v0-to-v1/tests/relationships.spec.ts b/packages/session/session-format-v0-to-v1/tests/relationships.spec.ts
-index ef6223aa79..7a71a91491 100644
+index 148a42447f..a62bc3bf50 100644
 --- a/packages/session/session-format-v0-to-v1/tests/relationships.spec.ts
 +++ b/packages/session/session-format-v0-to-v1/tests/relationships.spec.ts
 @@ -474,6 +474,26 @@ describe('released v1 whole-artifact relationships', () => {

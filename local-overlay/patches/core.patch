@@ -1,10 +1,10 @@
 diff --git a/packages/core/agent/src/model-selection.ts b/packages/core/agent/src/model-selection.ts
-index 172423afc0..499ebddc16 100644
+index 8921bc12a4..ae1303a8b0 100644
 --- a/packages/core/agent/src/model-selection.ts
 +++ b/packages/core/agent/src/model-selection.ts
-@@ -12,6 +12,35 @@ import {
- } from '@deepseek-ai/dsh-llm'
- import type { PreStepDecision } from './runtime-types.ts'
+@@ -18,6 +18,35 @@ declare module '@deepseek-ai/dsh-llm' {
+   }
+ }
  
 +/**
 + * Selection belonging to each Agent scope, keyed by the exact scope context the
@@ -38,7 +38,7 @@ index 172423afc0..499ebddc16 100644
  /** Complete provider, model, and optional reasoning effort selected for one live Agent. */
  export interface ModelSelection {
    /** Registered provider route. */
-@@ -74,6 +103,25 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
+@@ -79,6 +108,25 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
   * @returns Disposer for all scoped waterfall listeners.
   */
  export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
@@ -64,7 +64,7 @@ index 172423afc0..499ebddc16 100644
    const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
      const selected = selection.current
      const assembled = await next()
-@@ -123,5 +171,21 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
+@@ -128,5 +176,21 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
      disposeAssembly()
      disposeRequest()
      disposeNotice()
@@ -87,7 +87,7 @@ index 172423afc0..499ebddc16 100644
    }
  }
 diff --git a/packages/core/agent/tests/model-selection.spec.ts b/packages/core/agent/tests/model-selection.spec.ts
-index 5bddd71019..cfb1d573df 100644
+index 27b2a7bffd..a43128e1fd 100644
 --- a/packages/core/agent/tests/model-selection.spec.ts
 +++ b/packages/core/agent/tests/model-selection.spec.ts
 @@ -188,4 +188,48 @@ describe('installModelSelection()', () => {
@@ -140,21 +140,20 @@ index 5bddd71019..cfb1d573df 100644
 +  })
  })
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-index c26ef3ff28..c593d831d8 100644
+index 0519f3b9cb..839c3439ca 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
 +++ b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-@@ -29,8 +29,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
-       'ask_user_question', 'bash', 'bash', 'cordis_define', 'cordis_inspect_list',
-       'cordis_inspect_query', 'cordis_inspect_self', 'cordis_run', 'cordis_stop',
-       'cordis_undefine', 'create_goal', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
--      'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
--      'list_agents', 'list_agents', 'list_subagent_models', 'lsp', 'present', 'pwsh', 'pwsh', 'ralph',
+@@ -30,8 +30,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
+       'cordis_inspect_query',
+       'create_goal', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
+       'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
-+      'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output', 'kernel',
-+      'list_agents', 'list_agents', 'list_subagent_models', 'lsp',
++      'kernel',
+       'list_agents', 'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
+-      'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'present', 'pwsh', 'pwsh', 'ralph',
++      'list_subagent_models', 'load_workspace_dependencies', 'lsp',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
-+      'notebook_edit',
-+      'present', 'pwsh', 'pwsh', 'ralph',
-       'read', 'read_image', 'run_code', 'schedule_create', 'schedule_delete',
++      'notebook_edit', 'plugin_manager', 'present', 'pwsh', 'pwsh', 'ralph',
+       'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
        'schedule_list', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
        'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',

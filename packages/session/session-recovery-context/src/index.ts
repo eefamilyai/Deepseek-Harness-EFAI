@@ -60,7 +60,7 @@ export type {
   CompactionLogPrompt,
 } from './compaction-log.ts'
 
-/** Cordis plugin name used by loader diagnostics, and this plugin's message source. */
+/** Cordis plugin name used by loader diagnostics. */
 export const name = 'session-recovery-context'
 
 /** Services required before the projection and the pre-step listener can register. */
@@ -82,6 +82,31 @@ export const DEFAULT_INSTRUCTION = 'Read the compaction record above and reply w
 
 /** Marker `form` this plugin stamps on the two messages it owns. */
 const RECOVERY_FORM = 'snapshot'
+
+/** The message-source kind this plugin's injections carry. */
+export const RECOVERY_SOURCE_KIND = 'session-recovery'
+
+/**
+ * The kind a recovery message logged before message sources were producer-owned
+ * reads as once the session is converted: the V3-to-V4 conversion names an
+ * unknown `plugin` producer `plugin:<name>`. Recognized so a session recovered
+ * before the conversion does not recover twice.
+ */
+const LEGACY_SOURCE_KIND = `plugin:${name}`
+
+/** The durable source of this plugin's recovery message. */
+export interface SessionRecoverySource {
+  kind: typeof RECOVERY_SOURCE_KIND
+  form: typeof RECOVERY_FORM
+  /** The record the message renders, named for the context row. */
+  sections: { name: string; text: string }[]
+}
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'session-recovery': SessionRecoverySource
+  }
+}
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
@@ -258,8 +283,9 @@ export function startsTurn(event: SessionEvent<'user/message'>): boolean {
 
 /** Whether one `user/message` event is this plugin's own injection. */
 function isOwnInjection(event: SessionEvent<'user/message'>): boolean {
-  const source = event.data.source as { kind?: unknown; plugin?: unknown; form?: unknown }
-  return source.kind === 'plugin' && source.plugin === name && source.form === RECOVERY_FORM
+  const source = event.data.source as { kind?: unknown; form?: unknown }
+  return (source.kind === RECOVERY_SOURCE_KIND || source.kind === LEGACY_SOURCE_KIND)
+    && source.form === RECOVERY_FORM
 }
 
 /**
@@ -424,7 +450,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       messages: [
         createUserMessage({
           content: [{ type: 'text', text: renderRecovery(record, instruction) }],
-          source: { kind: 'plugin', plugin: name, form: RECOVERY_FORM, sections: [{ name, text: record }] },
+          source: { kind: RECOVERY_SOURCE_KIND, form: RECOVERY_FORM, sections: [{ name, text: record }] },
         }),
       ],
     }

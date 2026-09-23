@@ -36,7 +36,6 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  /* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-primitives/src/markdown/CodeBlock.tsx. */
   gap: 12px;
   font: var(--dsl-code-block-banner-font);
   border-top-left-radius: var(--dsl-code-block-border-radius);
@@ -57,26 +56,9 @@
 .action {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-shrink: 0;
 }
 
-/* Shared button baseline for the banner actions (download / run / copy). */
-.actionButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background-color: rgb(255 255 255 / 0);
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-}
-
-/* The legacy copy button keeps its own class; the new siblings inherit the
-   same baseline through actionButton and only differ by what they trigger. */
 .copyButton {
   background-color: rgb(255 255 255 / 0);
   border: none;
@@ -91,11 +73,6 @@
    the default CodeBlock layout. */
 .content {
   display: contents;
-}
-
-.downloadButton,
-.runButton {
-  color: inherit;
 }
 
 .block :where(pre) {
@@ -125,6 +102,21 @@
 
 .plain {
   color: var(--dsw-alias-label-primary);
+}
+
+.card :where(pre) {
+  padding: 6px 22px 20px;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.card[data-code-wrap='false'] {
+  --dsl-code-block-line-white-space: pre;
+}
+
+.card[data-code-wrap='false'] :where(pre) {
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 .numbered :where(pre) code {

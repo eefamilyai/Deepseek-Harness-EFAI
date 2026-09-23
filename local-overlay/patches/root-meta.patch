@@ -7,10 +7,10 @@ index 2b7a412b8f..0000000000
 -../.agents/skills
 \ No newline at end of file
 diff --git a/.gitattributes b/.gitattributes
-index ac01e65042..3a52d077c6 100644
+index ed321c2b18..b69d6320f5 100644
 --- a/.gitattributes
 +++ b/.gitattributes
-@@ -6,8 +6,18 @@
+@@ -6,12 +6,21 @@
  * text=auto eol=lf
  *.cmd text eol=crlf
  
@@ -25,15 +25,18 @@ index ac01e65042..3a52d077c6 100644
  # Pairing records are generated from the three confirmed owner-blob pairs.
  # The worktree-local installer registers the fail-closed driver command.
  *.i18n.yaml merge=dsh-translation-pairing
-+
+ 
 +# Patch data files are unified diffs: a leading '+ ' is content, not a
 +# whitespace error. Exempt them from the whitespace check.
 +*.patch -whitespace
+ # The persistence catalog is the readable projection of these generated schemas.
+ docs/persistence-schema.json linguist-generated=true
+ docs/persistence-changes/*.schema.json linguist-generated=true
 diff --git a/.gitignore b/.gitignore
-index fb999f93fb..56afe75a9b 100644
+index 86e330fc0c..2d595ca926 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -34,6 +34,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
+@@ -36,6 +36,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/
  python/**/__pycache__/
  python/**/.pytest_cache/
  packages/**/__pycache__/
@@ -44,7 +47,7 @@ index fb999f93fb..56afe75a9b 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -44,3 +48,53 @@ worktrees/
+@@ -46,3 +50,53 @@ worktrees/
  .agents/worktrees/
  .typert-*/
  native/system/test/bin/
@@ -99,22 +102,22 @@ index fb999f93fb..56afe75a9b 100644
 +_t.png
 +e2e-shot.png
 diff --git a/README.i18n.yaml b/README.i18n.yaml
-index 904c7928d2..a3ef4b1d18 100644
+index ce6f75b18d..b5945997e4 100644
 --- a/README.i18n.yaml
 +++ b/README.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write README.md
--README.md: 36adfe913902e75ce0673adc2cb5cb692151a291
--README.zh.md: f6861b4c9490741b5e5f2d825a370766178dd9f6
-+README.md: b0b91153ba49078b6536c76ddbc0a1ea8faef48b
-+README.zh.md: 99cf2c68e1163aebb0eb7e178ad17a2c1f5a62f2
+-README.md: 423bccd7d9352dbc48f1705f37d35642e74f5b41
+-README.zh.md: c760f87e4ac3b7dbb7bb55d733e31db5ab379836
++README.md: 89138a8ebdeaddb7c0506fd22947d69c577a8ba4
++README.zh.md: dd0ab46b88bd8de43701b61bd1d226736848909d
 diff --git a/README.md b/README.md
-index 36adfe9139..f55527bdb4 100644
+index 423bccd7d9..89138a8ebd 100644
 --- a/README.md
 +++ b/README.md
-@@ -1,60 +1,75 @@
+@@ -1,63 +1,80 @@
 -# DeepSeek Harness
 +# DeepSeek Harness EFAI
  
@@ -177,48 +180,52 @@ index 36adfe9139..f55527bdb4 100644
  
 -`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 +`pnpm run build` prepares the repository artifacts; `pnpm dsh web` starts the Web UI.
++
++## Start the server
  
 -## Community and support
-+## Start the server
++Windows:
  
 -- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
 -- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
 -- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
-+Windows:
- 
--## Contributing
 +```powershell
 +.\start.cmd
 +```
  
--See [CONTRIBUTING.md](CONTRIBUTING.md).
+-## Contributing
 +macOS or Linux:
  
--## Development
+-See [CONTRIBUTING.md](CONTRIBUTING.md).
 +```sh
 +./start.sh
 +```
-+
+ 
+-## Development
 +The launchers provision the bundled Python runtime, install dependencies, build once when needed, and start the Web UI at `http://127.0.0.1:3080`. Pass `--port 3100` to use another port, or `--build` to force a rebuild.
-+
-+After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
  
 -Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
-+## What this fork adds
++After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
  
--For agents, follow [AGENTS.md](AGENTS.md).
+ `pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
+ 
+ For agents, follow [AGENTS.md](AGENTS.md).
+ 
++## What this fork adds
++
 +- A Python kernel that executes code cells through the kernel tools.
 +- A multi-provider LLM registry with account pooling.
-+- A browser tool and a sidebar host bridge.
++- A self-hosted, text-first browser tool.
 +- A notebook-edit tool and RLM context read-back.
 +
 +## Upstream
 +
 +This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Read [HARNESS-EDITS.md](HARNESS-EDITS.md) before merging a new upstream release, so the fork's local features are not clobbered.
- 
++
  ## Citation
  
-@@ -70,6 +85,4 @@ For agents, follow [AGENTS.md](AGENTS.md).
+ ```bibtex
+@@ -72,6 +89,4 @@ For agents, follow [AGENTS.md](AGENTS.md).
  
  ## License
  
@@ -227,10 +234,10 @@ index 36adfe9139..f55527bdb4 100644
 -Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 +See [LICENSE](LICENSE).
 diff --git a/README.zh.md b/README.zh.md
-index f6861b4c94..96e6e00083 100644
+index c760f87e4a..dd0ab46b88 100644
 --- a/README.zh.md
 +++ b/README.zh.md
-@@ -1,81 +1,75 @@
+@@ -1,84 +1,80 @@
 -# DeepSeek Harness
 +# DeepSeek Harness EFAI
  
@@ -239,10 +246,10 @@ index f6861b4c94..96e6e00083 100644
 -DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
 -
 -它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
--
--文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
 +<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
  
+-文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+-
 -## 开发者预览
 +[English](README.md) | 中文
  
@@ -275,10 +282,10 @@ index f6861b4c94..96e6e00083 100644
 +```powershell
 +irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.ps1 | iex
 +```
-+
-+安装程序会把分支克隆到 `~/.deepseek-harness`（Windows 为 `%USERPROFILE%\.deepseek-harness`），完成安装与构建，并把 `dsh` 和 `dsh-update` 加入 `PATH`。再次运行同一命令即可原地更新。
  
 -### 从源码运行
++安装程序会把分支克隆到 `~/.deepseek-harness`（Windows 为 `%USERPROFILE%\.deepseek-harness`），完成安装与构建，并把 `dsh` 和 `dsh-update` 加入 `PATH`。再次运行同一命令即可原地更新。
++
 +<a id="run-from-source"></a>
  
 -如需从仓库源码运行：
@@ -296,24 +303,14 @@ index f6861b4c94..96e6e00083 100644
  
 -`pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
 +`pnpm run build` 准备仓库产物；`pnpm dsh web` 启动 Web UI。
-+
-+## 启动服务器
-+
-+Windows：
-+
-+```powershell
-+.\start.cmd
-+```
  
 -## 社区与支持
-+macOS 或 Linux：
++## 启动服务器
  
 -- 通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
 -- 为你的插件仓库添加 [`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题，便于被发现。
 -- 欢迎加入 DeepSeek Harness 企微群：扫码添加企微小助手并填写入群问卷，完成后小助手会邀请你入群。
-+```sh
-+./start.sh
-+```
++Windows：
  
 -<table>
 -  <thead>
@@ -331,29 +328,43 @@ index f6861b4c94..96e6e00083 100644
 -    </tr>
 -  </tbody>
 -</table>
-+启动脚本会准备内置 Python 运行时、安装依赖、在需要时先构建，然后启动 Web UI，默认地址为 `http://127.0.0.1:3080`。传入 `--port 3100` 可更换端口，传入 `--build` 可强制重新构建。
++```powershell
++.\start.cmd
++```
  
 -## 参与贡献
-+通过一条命令安装后，改运行 `dsh web`；加上 `--port 3100` 可更换端口。
++macOS 或 Linux：
  
 -参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
-+## 本分支新增内容
++```sh
++./start.sh
++```
  
 -## 开发
-+- 通过内核工具执行代码单元的 Python 内核。
-+- 带账户池化的多提供商 LLM 注册表。
-+- 浏览器工具与侧边栏主机桥接。
-+- 笔记本编辑工具与 RLM 上下文回读。
++启动脚本会准备内置 Python 运行时、安装依赖、在需要时先构建，然后启动 Web UI，默认地址为 `http://127.0.0.1:3080`。传入 `--port 3100` 可更换端口，传入 `--build` 可强制重新构建。
  
 -请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
++通过一条命令安装后，改运行 `dsh web`；加上 `--port 3100` 可更换端口。
+ 
+ `pnpm run dev:web` 会在一个终端里完成构建、启动，并在源码修改时重建 client bundle；`make help` 列出 Web 与 Desktop 对应的 Make target。完整表格见开发指南的「应用命令」一节。
+ 
+ 面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
+ 
++## 本分支新增内容
++
++- 通过内核工具执行代码单元的 Python 内核。
++- 带账户池化的多提供商 LLM 注册表。
++- 自托管的文本优先浏览器工具。
++- 笔记本编辑工具与 RLM 上下文回读。
++
 +## 上游
- 
--面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
++
 +本分支跟踪 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。合并新的上游版本前，请先阅读 [HARNESS-EDITS.md](HARNESS-EDITS.md)，以免覆盖本分支的本地功能。
- 
++
  ## 引用
  
-@@ -91,6 +85,4 @@ pnpm dsh web
+ ```bibtex
+@@ -93,6 +89,4 @@ pnpm dsh web
  
  ## 许可证
  
@@ -362,17 +373,16 @@ index f6861b4c94..96e6e00083 100644
 -第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 +见 [LICENSE](LICENSE)。
 diff --git a/package.json b/package.json
-index cd8264c164..6c120d8baf 100644
+index 986af9f481..95084930ea 100644
 --- a/package.json
 +++ b/package.json
-@@ -96,6 +96,10 @@
+@@ -98,6 +98,9 @@
      "verify-md-links": "tsx scripts/verify-md-links.ts",
      "verify-doc-site-fragments": "tsx scripts/verify-doc-site-fragments.ts",
      "verify-public-repository-links": "tsx scripts/verify-public-repository-links.ts",
-+    "verify-fork-overlay": "node local-overlay/rebuild.mjs --check && node local-overlay/verify.mjs && node local-overlay/apply.mjs --check && node local-overlay/verify-seam-frozen.mjs && node local-overlay/verify-efai-presets.mjs",
++    "verify-fork-overlay": "node local-overlay/rebuild.mjs --check && node local-overlay/verify.mjs && node local-overlay/apply.mjs --check && node local-overlay/verify-seam-frozen.mjs",
 +    "verify-fork-overlay:rebuild": "node local-overlay/rebuild.mjs",
 +    "verify-seam-frozen": "node local-overlay/verify-seam-frozen.mjs",
-+    "verify-efai-presets": "node local-overlay/verify-efai-presets.mjs",
-     "verify-doc-refs": "tsx scripts/verify-doc-refs.ts",
-     "verify-subsystem-pages": "tsx scripts/verify-subsystem-pages.ts",
-     "verify-package-paths": "tsx scripts/verify-package-paths.ts",
+     "verify-repository-references": "tsx scripts/verify-repository-references.ts",
+     "verify-concrete-terms": "tsx scripts/verify-concrete-terms.ts",
+     "verify-no-unknown-casts": "tsx scripts/verify-no-unknown-casts.ts",
