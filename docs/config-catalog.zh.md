@@ -2075,6 +2075,32 @@ export interface Config {
 
 来源： [`packages/document/office-to-pdf/src/index.ts:31`](../packages/document/office-to-pdf/src/index.ts)
 
+<a id="deepseek-aidsh-output-masking"></a>
+
+## `@deepseek-ai/dsh-output-masking`
+
+需要：`sessionProjections`
+
+```ts config-catalog
+export interface Config {
+  /** Mask once this share of the context window is in use. Defaults to 0.5. */
+  usageRatio?: number
+  /** The newest this-many tool results are never masked. Defaults to 8. */
+  keepRecent?: number
+  /** Only results at least this many characters long are masked. Defaults to 2000. */
+  minChars?: number
+  /**
+   * A pass runs only when it can mask at least this many results, so the
+   * cached prompt prefix is invalidated rarely and for a real saving. Defaults to 4.
+   */
+  minBatch?: number
+  /** The context window to assume when the routed model's cannot be resolved. */
+  contextWindow?: number
+}
+```
+
+来源：[`packages/compaction/output-masking/src/index.ts:74`](../packages/compaction/output-masking/src/index.ts)
+
 <a id="deepseek-aidsh-permission-presets"></a>
 
 ## `@deepseek-ai/dsh-permission-presets`
@@ -2573,41 +2599,57 @@ Depends on: [`SessionQueryConfig`](../packages/session-query/session-query/src/i
 需要：`agents` · `sessionProjections`
 
 ```ts config-catalog
-/**
- * Plugin config. Every field bounds state or wording; none is required.
- *
- * Defaults live in {@link apply} rather than in the schema below, so an omitted
- * field is observably omitted — a schema default would make the code's fallback
- * unreachable and hide which layer chose the value.
- */
+/** Plugin config. Every field bounds state or size; none is required. */
 export interface Config {
-  /**
-   * Session root the JSONL backend writes under. Defaults to the same
-   * `dshHomePath('sessions')` the shipped `session-persistence-jsonl` row uses,
-   * so the two agree without being stated twice; a deployment that moves that
-   * root must set the same value here or the printed path will name a file that
-   * does not exist.
-   */
+  /** The session root directory; defaults to the harness home's `sessions`. */
   root?: string
-  /** The backend's artifact encoding, which decides the log's suffix. Defaults to `zstd`. */
-  compression?: LogCompression
-  /** How many trailing events the digest carries. `0` disables the tail. Defaults to 50. */
-  tailEvents?: number
-  /** Per-prompt character budget; a longer prompt is clipped with a marker. Defaults to 1200. */
-  promptChars?: number
-  /** How many prompts to keep. Omitted or `0` keeps every one of them. */
-  maxPrompts?: number
-  /** Per-event label budget inside the tail. Defaults to 120. */
-  labelChars?: number
-  /** First line of the injected message. Defaults to {@link DEFAULT_PREAMBLE}. */
-  preamble?: string
+  /** The artifact encoding the session writer uses. */
+  logCompression?: LogCompression
+  /** Bounds on what the ledger keeps. */
+  ledger?: Partial<LedgerLimits>
+  /** Bounds on the file contents a handoff re-attaches. */
+  rehydrate?: Partial<RehydrateLimits>
+  /** Share of the routed model's context window the handoff may use. */
+  handoffShare?: number
+  /** Smallest handoff budget, in characters. */
+  handoffMinChars?: number
+  /** Largest handoff budget, in characters. */
+  handoffMaxChars?: number
+  /** Whether to snapshot `git status` into the handoff. */
+  git?: boolean
 }
 
 /** Physical encoding selected for JSONL session artifacts, as the backend names it. */
 export type LogCompression = 'zstd' | 'none'
+
+/** Bounds on how much of each kind of fact the ledger keeps. */
+export interface LedgerLimits {
+  /** Operator messages kept verbatim: the first one plus the newest `n - 1`. */
+  prompts: number
+  /** Characters kept per operator message. */
+  promptChars: number
+  /** Distinct files remembered. */
+  files: number
+  /** Shell and kernel commands remembered. */
+  commands: number
+  /** Unresolved errors remembered. */
+  errors: number
+  /** Characters of output kept per error. */
+  errorChars: number
+}
+
+/** Limits on the file contents re-attached to one handoff. */
+export interface RehydrateLimits {
+  /** Files re-attached at most. */
+  files: number
+  /** Characters kept per file. */
+  perFileChars: number
+  /** Largest file read at all, in bytes; bigger files are skipped. */
+  maxBytes: number
+}
 ```
 
-来源：[`packages/session/session-recovery-context/src/index.ts:135`](../packages/session/session-recovery-context/src/index.ts)
+来源：[`packages/session/session-recovery-context/src/index.ts:119`](../packages/session/session-recovery-context/src/index.ts)
 
 <a id="deepseek-aidsh-session-reference"></a>
 

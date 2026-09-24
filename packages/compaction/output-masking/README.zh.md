@@ -50,7 +50,7 @@ kind: "package-reference"
 | `minBatch` | `4` | 只有能遮蔽至少这么多条结果时才执行一次 |
 | `contextWindow` | 无 | 无法解析路由模型窗口时假定的窗口；两者都没有则不执行 |
 
-生成的[配置目录](../../../docs/config-catalog.md#deepseek-aidsh-output-masking)是完整来源。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-output-masking)是完整来源。
 
 ### 何时执行遮蔽
 
@@ -90,11 +90,11 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-- [工具结果修剪器](../compaction-tool-result-pruner/README.md) —— 本包替换协议的来源：保留首尾的裁剪。
-- [compaction basic 后端](../compaction-basic/README.md) —— 遮蔽在其之前运行的摘要后端。
-- [`session-recovery-context/`](../../session/session-recovery-context/README.md) —— fork 的压缩后交接。
-- [Token meter](../../llm/token-meter/README.md) —— 遮蔽读取的测量，以及其价格所用的估算器。
-- [生成的配置目录](../../../docs/config-catalog.md#deepseek-aidsh-output-masking) —— 每个可接受的配置字段及其源码声明。
+- [工具结果修剪器](../compaction-tool-result-pruner/README.zh.md) —— 本包替换协议的来源：保留首尾的裁剪。
+- [compaction basic 后端](../compaction-basic/README.zh.md) —— 遮蔽在其之前运行的摘要后端。
+- [`session-recovery-context/`](../../session/session-recovery-context/README.zh.md) —— fork 的压缩后交接。
+- [Token meter](../../llm/token-meter/README.zh.md) —— 遮蔽读取的测量，以及其价格所用的估算器。
+- [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-output-masking) —— 每个可接受的配置字段及其源码声明。
 
 -----
 

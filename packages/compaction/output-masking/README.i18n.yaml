@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/compaction/output-masking/README.md
 README.md: ffa548a4fd3f25aa1f4a48e8671f8802e4454489
-README.zh.md: 24a141d100473fa5f6f52c002b97e3acb6a6bc93
+README.zh.md: b901cc627e98dd6bcdea4b2a726fa0d522c37c77

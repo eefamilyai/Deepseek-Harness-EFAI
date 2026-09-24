@@ -51,7 +51,7 @@ kind: "package-reference"
 | `handoffMinChars` / `handoffMaxChars` | `6000` / `24000` | 交接预算的下限与上限（字符） |
 | `git` | `true` | 是否把 `git status` 快照写进交接消息 |
 
-生成的[配置目录](../../../docs/config-catalog.md#deepseek-aidsh-session-recovery-context)是每个可接受字段及其 JSDoc 的完整来源。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-recovery-context)是每个可接受字段及其 JSDoc 的完整来源。
 
 ### 在你自己的文本中指名日志文件
 
@@ -71,7 +71,7 @@ kind: "package-reference"
 
 设计由两个想法支撑。其一，摘要丢掉的正是代码可以确切知道的内容，所以由代码来保留：账本是对已提交事件的纯折叠，从不要求模型记住日志已经记录的东西。其二，恢复不能打断它所恢复的工作。交接消息搭乘压缩发生的那一步，因为回复中不调用任何工具的一步会结束轮次——额外的"确认记录"一步曾让每个在运行中途被压缩的任务停下来。
 
-这里不扫描历史。一个 Session 投影对每个事件只折叠一次，这正是[同步读取弃用决定](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md)所规定的做法，因此账本能在恢复（resume）后保留。幂等性经由日志实现：交接消息自身的来源（`{ kind: 'session-recovery', form: 'handoff', compactionId }`）被折叠回来，表示"这次压缩已被应答"，所以之后的步骤或恢复的会话都不会重复它。
+这里不扫描历史。一个 Session 投影对每个事件只折叠一次，这正是[同步读取弃用决定](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.zh.md)所规定的做法，因此账本能在恢复（resume）后保留。幂等性经由日志实现：交接消息自身的来源（`{ kind: 'session-recovery', form: 'handoff', compactionId }`）被折叠回来，表示"这次压缩已被应答"，所以之后的步骤或恢复的会话都不会重复它。
 
 ### 源码地图
 
@@ -104,13 +104,13 @@ pre-step 监听器以 prepend 方式注册，并先调用链上其余部分，�
 
 当包级契约不够用时阅读这些页面。它们从本插件折叠的事件流出发，经过触发它的引擎，直到完整的配置。
 
-- [Session 投影子系统](../../../docs/subsystems/session-projection.md) —— 投影单元契约、驱动语义与状态版本。
-- [压缩子系统](../../../docs/subsystems/compaction.md) —— 压缩保留什么、丢弃什么，以及摘要事件何时提交。
-- [`output-masking/`](../../compaction/output-masking/README.md) —— fork 的遮蔽步骤，通过把旧工具输出换成存根来推迟压缩。
-- [`session-persistence-jsonl/`](../session-persistence-jsonl/README.md) —— 写出本包所指名文件的后端，以及它写入的根目录。
-- [`system-prompt/`](../../core/system-prompt/README.md) —— 提示词变量、运行时上下文贡献，以及严格的 `{{name}}` 规则。
-- [session 分组地图](../README.md) —— 同级的持久会话数据包。
-- [生成的配置目录](../../../docs/config-catalog.md#deepseek-aidsh-session-recovery-context) —— 每个可接受的配置字段及其源码声明。
+- [Session 投影子系统](../../../docs/subsystems/session-projection.zh.md) —— 投影单元契约、驱动语义与状态版本。
+- [压缩子系统](../../../docs/subsystems/compaction.zh.md) —— 压缩保留什么、丢弃什么，以及摘要事件何时提交。
+- [`output-masking/`](../../compaction/output-masking/README.zh.md) —— fork 的遮蔽步骤，通过把旧工具输出换成存根来推迟压缩。
+- [`session-persistence-jsonl/`](../session-persistence-jsonl/README.zh.md) —— 写出本包所指名文件的后端，以及它写入的根目录。
+- [`system-prompt/`](../../core/system-prompt/README.zh.md) —— 提示词变量、运行时上下文贡献，以及严格的 `{{name}}` 规则。
+- [session 分组地图](../README.zh.md) —— 同级的持久会话数据包。
+- [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-recovery-context) —— 每个可接受的配置字段及其源码声明。
 
 -----
 
