@@ -65,12 +65,13 @@
         routePrefix: kiln-
         onlyConfigured: false
 
-    # What a compacted turn gets back. Compaction keeps a summary and drops the
-    # transcript, including every word the operator wrote, so the turn after one
-    # is the turn most likely to resume the wrong task. This injects the record
-    # instead of instructing the model to fetch it: one message per compaction
-    # carrying the operator's prompts and the tail of the log, folded from the
-    # log as it commits rather than scanned back. It also registers
+    # What a compacted turn gets back. A summary drops exactly what code can
+    # know for certain — the operator's own words, the files touched, the
+    # commands run, the errors still open, the todo list — so this folds those
+    # into a ledger as the log commits and, in the same step a compaction
+    # happens, adds one handoff message restating them plus the current
+    # contents of the files most recently changed. The turn carries on; nothing
+    # is acknowledged and no step is spent. It also registers
     # `{{session_log}}`, `{{session_dir}}`, and `{{session_id}}`, so a
     # deployment persona can name this session's own log file.
     #
@@ -81,7 +82,21 @@
       name: '@deepseek-ai/dsh-session-recovery-context'
       config:
         root: !!js dshHomePath('sessions')
-        tailEvents: 50
+
+    # Old tool output gives way before the context fills. Once half the routed
+    # model's window is in use, every successful text result older than the
+    # newest eight and longer than 2,000 characters is replaced, in one batch,
+    # by a stub naming the call, its size, and its first and last lines; the
+    # original stays in the log. Most of a long session's context is output
+    # the model has already acted on, so this defers compaction and leaves it
+    # a smaller, denser history to summarize. Errors are never masked.
+    - id: output-masking
+      name: '@deepseek-ai/dsh-output-masking'
+      config:
+        usageRatio: 0.5
+        keepRecent: 8
+        minChars: 2000
+        minBatch: 4
 
     # ── the acting surface ──────────────────────────────────────────────────
     #

@@ -1770,7 +1770,7 @@ export interface DeepseekCredentials {
 
 Depends on: `Volatile` (`@deepseek-ai/cordis`)
 
-Source: [`packages/llm/llm-kiln/src/index.ts:99`](../packages/llm/llm-kiln/src/index.ts)
+Source: [`packages/llm/llm-kiln/src/index.ts:100`](../packages/llm/llm-kiln/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -2323,6 +2323,32 @@ export interface Config {
 ```
 
 Source: [`packages/document/office-to-pdf/src/index.ts:31`](../packages/document/office-to-pdf/src/index.ts)
+
+<a id="deepseek-aidsh-output-masking"></a>
+
+## `@deepseek-ai/dsh-output-masking`
+
+Requires: `sessionProjections`
+
+```ts config-catalog
+export interface Config {
+  /** Mask once this share of the context window is in use. Defaults to 0.5. */
+  usageRatio?: number
+  /** The newest this-many tool results are never masked. Defaults to 8. */
+  keepRecent?: number
+  /** Only results at least this many characters long are masked. Defaults to 2000. */
+  minChars?: number
+  /**
+   * A pass runs only when it can mask at least this many results, so the
+   * cached prompt prefix is invalidated rarely and for a real saving. Defaults to 4.
+   */
+  minBatch?: number
+  /** The context window to assume when the routed model's cannot be resolved. */
+  contextWindow?: number
+}
+```
+
+Source: [`packages/compaction/output-masking/src/index.ts:74`](../packages/compaction/output-masking/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 
@@ -2880,29 +2906,57 @@ Source: [`packages/session-query/session-query-sqlite/src/index.ts:92`](../packa
 Requires: `agents` · `sessionProjections`
 
 ```ts config-catalog
-/** Plugin config. Every field bounds state or wording; none is required. */
+/** Plugin config. Every field bounds state or size; none is required. */
 export interface Config {
   /** The session root directory; defaults to the harness home's `sessions`. */
   root?: string
-  /** Per-prompt character budget. */
-  promptChars?: number
-  /** Per-event label budget. */
-  eventChars?: number
-  /** Trailing events the fold keeps. */
-  tailEvents?: number
-  /** Events the written record carries. */
-  compactionEvents?: number
-  /** The instruction the initialization step carries. */
-  instruction?: string
   /** The artifact encoding the session writer uses. */
   logCompression?: LogCompression
+  /** Bounds on what the ledger keeps. */
+  ledger?: Partial<LedgerLimits>
+  /** Bounds on the file contents a handoff re-attaches. */
+  rehydrate?: Partial<RehydrateLimits>
+  /** Share of the routed model's context window the handoff may use. */
+  handoffShare?: number
+  /** Smallest handoff budget, in characters. */
+  handoffMinChars?: number
+  /** Largest handoff budget, in characters. */
+  handoffMaxChars?: number
+  /** Whether to snapshot `git status` into the handoff. */
+  git?: boolean
 }
 
 /** Physical encoding selected for JSONL session artifacts, as the backend names it. */
 export type LogCompression = 'zstd' | 'none'
+
+/** Bounds on how much of each kind of fact the ledger keeps. */
+export interface LedgerLimits {
+  /** Operator messages kept verbatim: the first one plus the newest `n - 1`. */
+  prompts: number
+  /** Characters kept per operator message. */
+  promptChars: number
+  /** Distinct files remembered. */
+  files: number
+  /** Shell and kernel commands remembered. */
+  commands: number
+  /** Unresolved errors remembered. */
+  errors: number
+  /** Characters of output kept per error. */
+  errorChars: number
+}
+
+/** Limits on the file contents re-attached to one handoff. */
+export interface RehydrateLimits {
+  /** Files re-attached at most. */
+  files: number
+  /** Characters kept per file. */
+  perFileChars: number
+  /** Largest file read at all, in bytes; bigger files are skipped. */
+  maxBytes: number
+}
 ```
 
-Source: [`packages/session/session-recovery-context/src/index.ts:170`](../packages/session/session-recovery-context/src/index.ts)
+Source: [`packages/session/session-recovery-context/src/index.ts:119`](../packages/session/session-recovery-context/src/index.ts)
 
 <a id="deepseek-aidsh-session-reference"></a>
 

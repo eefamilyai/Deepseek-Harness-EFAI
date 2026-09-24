@@ -27,7 +27,7 @@ This fork (`eefamilyai/Deepseek-Harness-EFAI`) keeps that architecture and adds 
 1. **A persistent Python kernel** the model acts through, backed by a Python sidecar process (`packages/kernel/*`, `python/kiln/*`).
 2. **A recursive-language-model engine** that drives that kernel as a REPL instead of exposing it as a one-shot tool (`packages/rlm/*`).
 3. **A multi-provider LLM layer** — sixteen provider presets plus DeepSeek's free web session, with pooled logins — and a text-channel tool-call protocol for routes that have no native `tools` field (`packages/llm/llm-kiln`, `llm-dsml`).
-4. **Durable memory and post-compaction recovery** (`packages/agent-memory/*`, `packages/session/session-recovery-context`).
+4. **Durable memory, context economy, and post-compaction recovery** (`packages/agent-memory/*`, `packages/compaction/output-masking`, `packages/session/session-recovery-context`).
 5. **Host and client surfaces**: a self-hosted text-first browser tool, the Tools and Accounts settings sections, the accent palette, and frame-wide visual effects (`packages/web/web-browser`, `packages/client/ui-*`).
 6. **A native Windows desktop shell** that shares one Chromium between the user and the agent over CDP (`desktop/harness-desktop`).
 7. **Its own composition layer** — two profile bundles and an identity plugin — so none of the six above is delivered by editing an upstream file (`packages/bundle/efai-*`, `packages/core/efai-identity`).
@@ -39,7 +39,7 @@ Four layers, applied in this order. The fork contributes to each one from its ow
 | Layer | Artifact | What it decides |
 |---|---|---|
 | Profile | `dsh --profile <name>` | which bundles stack, from the profile's own `dsh.profile.bundles` list under `$DSH_HOME/profiles/<name>` |
-| Bundle | `packages/bundle/*/cordis.patch.yml` | the shared roster — the fork's `efai-base` adds **16** host rows over upstream's `dsh-base` |
+| Bundle | `packages/bundle/*/cordis.patch.yml` | the shared roster — the fork's `efai-base` adds **17** host rows over upstream's `dsh-base` |
 | Preset | upstream's `packages/bundle/web-app/presets/*.patch.yml` | the acting roster per agent. The fork ships no preset: its kernel tool is a host row, and the tools registry is layered, so a host registration reaches every preset agent |
 | Settings | the profile's own `cordis.patch.yml` | the live config fields each plugin declares with `.volatile()`; Settings edits them by row id and the Loader commits them without a remount |
 
@@ -59,7 +59,7 @@ Each is a `.volatile()` field of the row that enforces it, so the switch and its
 
 ## The fork's plugins
 
-Twenty-four packages. Each is a real workspace package registering on a documented extension point, so none of them costs anything at merge time.
+Twenty-five packages. Each is a real workspace package registering on a documented extension point, so none of them costs anything at merge time.
 
 ### Composition
 
@@ -88,7 +88,7 @@ Twenty-four packages. Each is a real workspace package registering on a document
 
 | Package | What it does |
 |---|---|
-| `llm/llm-kiln` | registers every Kiln provider as a harness route named `<prefix><id>` (default `kiln-`): Anthropic, OpenAI, Gemini, OpenRouter, DeepSeek paid, Groq, xAI, Mistral, Together, Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio, and `ds_direct` (the free DeepSeek web session), one route per pooled login. Keys are never configuration — each preset names an environment variable. A compaction request gets a summarizer system statement instead of the tool protocol, whichever compaction engine sent it. |
+| `llm/llm-kiln` | registers every Kiln provider as a harness route named `<prefix><id>` (default `kiln-`): Anthropic, OpenAI, Gemini, OpenRouter, DeepSeek paid, Groq, xAI, Mistral, Together, Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio, and `ds_direct` (the free DeepSeek web session), one route per pooled login. Keys are never configuration — each preset names an environment variable. A compaction request gets a summarizer system statement instead of the tool protocol, whichever compaction engine sent it; on `ds_direct`, one too large for a single capped prompt is folded in parts so the summarizer sees all of it. The compaction checkpoint and the recovery handoff are pinned, so a re-primed web chat never clips them. |
 | `llm/llm-dsml` | the provider-neutral reader for **text-channel** tool calls (`<tool_calls>`, `<function_calls>`, DeepSeek's pipe-wrapped DSML tokens). Runs on **every** route, because which markup a model writes comes from the model, not the transport. `llm-kiln` is the only adapter that *teaches* the format. |
 
 ### Session, memory, and context
@@ -97,7 +97,8 @@ Twenty-four packages. Each is a real workspace package registering on a document
 |---|---|
 | `agent-memory/agent-memory` | durable evidence on the storage domain plus a bounded, token-stable index re-injected each turn through `system-prompt/assemble`; a host observer on `tools/result` captures automatically, and `memory_add` / `memory_recall` / `memory_map` are the model-facing path |
 | `agent-memory/agent-memory-mode` | owns the engine's live `enabled` switch and the mount it controls |
-| `session/session-recovery-context` | after a compaction, injects one message carrying the operator's own prompts and the tail of the session log, and registers `{{session_log}}`, `{{session_dir}}`, `{{session_id}}` as prompt facts |
+| `session/session-recovery-context` | folds a ledger of the session as the log commits — the operator's words, files touched, commands, unresolved errors, todos — and, in the same step a compaction happens, adds one handoff restating it with the current contents of the most recently changed files and the exact place to resume; the turn keeps running. A focus line keeps the in-progress todo and next step in view afterwards. Registers `{{session_log}}`, `{{session_dir}}`, `{{session_id}}` as prompt facts |
+| `compaction/output-masking` | once half the routed window is in use, replaces old, large, successful tool outputs with one-line stubs in one batch, ahead of compaction, using the tool-result pruner's own replacement protocol |
 | `session/command-session-info` | slash command reporting token usage, context pressure, and activity |
 | `fs/tool-notebook-edit` | view / read / replace / insert / delete over Jupyter `.ipynb` files through the filesystem service |
 

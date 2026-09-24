@@ -42,6 +42,7 @@
     "@deepseek-ai/dsh-kernel-rlm-context": "workspace:^",
     "@deepseek-ai/dsh-llm-dsml": "workspace:^",
     "@deepseek-ai/dsh-llm-kiln": "workspace:^",
+    "@deepseek-ai/dsh-output-masking": "workspace:^",
     "@deepseek-ai/dsh-rlm": "workspace:^",
     "@deepseek-ai/dsh-session-recovery-context": "workspace:^",
     "@deepseek-ai/dsh-skill-injection": "workspace:^",

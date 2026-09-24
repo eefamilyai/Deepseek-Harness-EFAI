@@ -17,10 +17,18 @@ index a5a8570a51..ac66a29ed0 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c551469419..3515359ae9 100644
+index c551469419..ce510f9dce 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -451,6 +451,28 @@
+@@ -369,6 +369,7 @@
+     { "path": "./packages/compaction/compaction-basic" },
+     { "path": "./packages/compaction/command-compact" },
+     { "path": "./packages/compaction/compaction-tool-result-pruner" },
++    { "path": "./packages/compaction/output-masking" },
+     { "path": "./packages/compaction/compaction-image-offload" },
+     { "path": "./packages/web/web" },
+     { "path": "./packages/web/web-search-exa" },
+@@ -451,6 +452,28 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },

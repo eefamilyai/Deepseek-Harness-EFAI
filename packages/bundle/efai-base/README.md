@@ -26,7 +26,7 @@ Every package a row names must be a `dependencies` entry of this manifest. The p
 <a id="what-it-mounts"></a>
 ## What it mounts
 
-Rows grouped by subject: the identity opener (`efai-identity`), the LLM layer (`llm-dsml`, `llm-kiln`), post-compaction grounding (`session-recovery-context`), the acting surface (`kernel`, `kernel-python`, `tool-kernel`, `kernel-rlm-context`, `rlm`), durable memory (`agent-memory-mode`), the session-info command, upstream's `tool-str-replace-editor`, the self-hosted browser (`web-browser`), and the runtime roster (`tool-roster`), whose live fields carry the kernel and RLM switches.
+Rows grouped by subject: the identity opener (`efai-identity`), the LLM layer (`llm-dsml`, `llm-kiln`), context economy and post-compaction grounding (`output-masking`, `session-recovery-context`), the acting surface (`kernel`, `kernel-python`, `tool-kernel`, `kernel-rlm-context`, `rlm`), durable memory (`agent-memory-mode`), the session-info command, upstream's `tool-str-replace-editor`, the self-hosted browser (`web-browser`), and the runtime roster (`tool-roster`), whose live fields carry the kernel and RLM switches.
 
 The file itself documents each row. Read it rather than this list, which cannot stay current on its own.
 

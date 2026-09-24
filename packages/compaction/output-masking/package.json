@@ -1,14 +1,14 @@
 {
-  "name": "@deepseek-ai/dsh-session-recovery-context",
-  "description": "Keeps a code-maintained ledger of the session and hands it to the model in the same step a compaction happens, plus the session log path as a prompt fact",
-  "version": "0.1.5-rc.2",
+  "name": "@deepseek-ai/dsh-output-masking",
+  "description": "Observation masking: replaces old, large tool outputs with one-line stubs once the context fills, ahead of compaction",
+  "version": "0.1.0-local.1",
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/session/session-recovery-context"
+    "directory": "packages/compaction/output-masking"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -27,7 +27,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "zod": "^4.4.3"
   },
@@ -37,24 +36,18 @@
     "@deepseek-ai/dsh-compaction": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
-    "@deepseek-ai/dsh-session-format": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-tool-todo": "workspace:^"
+    "@deepseek-ai/dsh-token-meter": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
-    "@deepseek-ai/dsh-agent-loop": "workspace:^",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
-    "@deepseek-ai/dsh-session-format": "workspace:^",
-    "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-tool-todo": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^"
+    "@deepseek-ai/dsh-token-meter": "workspace:^"
   }
 }

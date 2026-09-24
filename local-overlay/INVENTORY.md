@@ -168,7 +168,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 292 paths do not exist upstream, so no patch covers them and none can conflict.
+These 307 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -180,6 +180,9 @@ These 292 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/notes/implemented/feature/2026-09-09-web-flow-row-family-accents.i18n.yaml`
 - `.agents/notes/implemented/feature/2026-09-09-web-flow-row-family-accents.md`
 - `.agents/notes/implemented/feature/2026-09-09-web-flow-row-family-accents.zh.md`
+- `.agents/notes/implemented/feature/2026-09-24-compaction-handoff.i18n.yaml`
+- `.agents/notes/implemented/feature/2026-09-24-compaction-handoff.md`
+- `.agents/notes/implemented/feature/2026-09-24-compaction-handoff.zh.md`
 - `.agents/skills/dsh-edit-system-prompt/SKILL.md`
 - `.agents/skills/dsh-github/SKILL.md`
 - `.agents/skills/dsh-harness-edit/SKILL.md`
@@ -295,6 +298,14 @@ These 292 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-tools/tsconfig.json`
 - `packages/client/ui-settings-tools/tsdown.config.ts`
 - `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
+- `packages/compaction/output-masking/README.i18n.yaml`
+- `packages/compaction/output-masking/README.md`
+- `packages/compaction/output-masking/README.zh.md`
+- `packages/compaction/output-masking/package.json`
+- `packages/compaction/output-masking/src/index.ts`
+- `packages/compaction/output-masking/src/surface.ts`
+- `packages/compaction/output-masking/tests/output-masking.spec.ts`
+- `packages/compaction/output-masking/tsconfig.json`
 - `packages/core/efai-identity/README.md`
 - `packages/core/efai-identity/package.json`
 - `packages/core/efai-identity/src/index.ts`
@@ -364,6 +375,7 @@ These 292 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/src/bridge.ts`
 - `packages/llm/llm-kiln/src/index.ts`
 - `packages/llm/llm-kiln/src/invariant.ts`
+- `packages/llm/llm-kiln/tests/compaction.spec.ts`
 - `packages/llm/llm-kiln/tests/dsml.spec.ts`
 - `packages/llm/llm-kiln/tests/images.spec.ts`
 - `packages/llm/llm-kiln/tests/pinning.spec.ts`
@@ -389,9 +401,11 @@ These 292 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/session-recovery-context/README.md`
 - `packages/session/session-recovery-context/README.zh.md`
 - `packages/session/session-recovery-context/package.json`
-- `packages/session/session-recovery-context/src/compaction-log.ts`
+- `packages/session/session-recovery-context/src/handoff.ts`
 - `packages/session/session-recovery-context/src/index.ts`
+- `packages/session/session-recovery-context/src/ledger.ts`
 - `packages/session/session-recovery-context/src/log-path.ts`
+- `packages/session/session-recovery-context/src/workspace.ts`
 - `packages/session/session-recovery-context/tests/log-path-oracle.spec.ts`
 - `packages/session/session-recovery-context/tests/session-recovery-context.spec.ts`
 - `packages/session/session-recovery-context/tsconfig.json`
@@ -443,6 +457,7 @@ These 292 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/test_ds_direct_empty.py`
 - `python/kiln/runtime/test_ds_direct_modes.py`
 - `python/kiln/runtime/test_ds_direct_pow_waf.py`
+- `python/kiln/runtime/test_ds_direct_system.py`
 - `python/kiln/runtime/test_ds_identity.py`
 - `python/kiln/runtime/test_ds_login_serial.py`
 - `python/kiln/runtime/test_fast_search.py`

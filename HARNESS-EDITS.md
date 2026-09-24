@@ -35,13 +35,14 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | What | Path | Size |
 |---|---|---|
 | Python kernel seam | `packages/kernel/**` | 44 files |
-| Kiln LLM provider registry | `packages/llm/llm-kiln` | 10 files |
+| Kiln LLM provider registry | `packages/llm/llm-kiln` | 11 files |
 | Text-channel tool-call reader | `packages/llm/llm-dsml` | 8 files |
-| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 44 files |
+| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools) | `python/kiln/**` | 45 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
-| Post-compaction context | `packages/session/session-recovery-context` | 10 files |
-| The fork's own composition | `packages/bundle/{efai-base,efai-web}` | 8 files |
+| Post-compaction context | `packages/session/session-recovery-context` | 12 files |
+| Observation masking | `packages/compaction/output-masking` | 8 files |
+| The fork's own composition | `packages/bundle/{efai-base,efai-web}` | 10 files |
 | The identity opener | `packages/core/efai-identity` | 4 files |
 | The `/version` route | `packages/host/version-route` | 4 files |
 | Lifetime usage projection | `packages/llm/token-usage-lifetime` | 4 files |
@@ -54,15 +55,14 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Publish script | `upload_to_git.py` | 1 file |
 | This document | `HARNESS-EDITS.md` | 1 file |
 | Merge record | `.merge-port/**` | 2 files |
-| Agent Notes the fork added | `.agents/notes/implemented/**` | 10 files |
+| Agent Notes the fork added | `.agents/notes/implemented/**` | 13 files |
 | Windows desktop browser shell — Electron `BaseWindow` with `WebContentsView` panes, a native toolbar, and a CDP endpoint that `python/kiln/runtime/browser_tools.py` attaches to | `desktop/harness-desktop` | 8 files |
 
 Each **Size** is the count of files under that row's path. `local-overlay/INVENTORY.md` is the
 authority — it enumerates every fork-owned path from the tree, and this table is a curated selection
 rather than a partition. The Agent Notes row is the exception to the section's premise: upstream owns
 `.agents/notes/implemented/` and keeps 926 files there, and the notes counted here are fork-owned
-only because upstream holds no file by those names. Six packages in this table are untracked until
-the next commit, so the generated counts lag them by that much.
+only because upstream holds no file by those names.
 
 Five files are still *added inside* packages upstream owns — two in `ui-brand-official`, one each in
 `ui-chat`, `ui-primitives`, and `ui-tool`. They never conflict, which is exactly the risk: if
