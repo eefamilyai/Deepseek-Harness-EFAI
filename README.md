@@ -60,11 +60,15 @@ The launchers provision the bundled Python runtime, install dependencies, build 
 
 After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
 
+`pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
+
+For agents, follow [AGENTS.md](AGENTS.md).
+
 ## What this fork adds
 
 - A Python kernel that executes code cells through the kernel tools.
 - A multi-provider LLM registry with account pooling.
-- A browser tool and a sidebar host bridge.
+- A self-hosted, text-first browser tool.
 - A notebook-edit tool and RLM context read-back.
 
 ## Upstream

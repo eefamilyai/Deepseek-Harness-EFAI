@@ -21,7 +21,7 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-kernel'
 import { KernelError } from '@deepseek-ai/dsh-kernel'
@@ -41,15 +41,6 @@ export const inject = ['kernel']
 
 /** The id this backend registers under on `ctx.kernel`. */
 export const PROVIDER_ID = 'kiln-python'
-
-/**
- * The settings namespace carrying `browserWindow`, owned by `kernel-mode`.
- *
- * Named here rather than imported: this provider depends on the kernel seam,
- * not on the switch package, and a composition may mount it without either a
- * switch or a settings service.
- */
-export const KERNEL_SETTINGS_NAMESPACE = 'kernel'
 
 /**
  * Interpreters probed when config names none, in preference order. `py` leads
@@ -73,19 +64,23 @@ export interface Config {
   /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
   runtimeDir?: string
   /**
-   * Whether the agent's browser may open a real Chromium window. Omitted = no
-   * window: the browser runs windowless, which is what an agent working on your
-   * behalf should do unless you asked to watch. Takes effect on restart.
+   * Whether the agent's browser may open a real Chromium window. Default: no
+   * window, which is what an agent working on your behalf should do unless you
+   * asked to watch. Editable from Settings; takes effect on restart.
    */
-  browserWindow?: boolean
+  browserWindow: Volatile<boolean>
 }
 
-export const Config: z<Config> = z.object({
+export const Config = z.object({
   python: z.string(),
   cwd: z.string(),
   stateDir: z.string(),
   runtimeDir: z.string(),
-  browserWindow: z.boolean().default(false),
+  browserWindow: z.boolean().default(false)
+    .description('Let the agent open a real Chromium window on your desktop. Off, it browses'
+      + ' windowless and nothing appears while it works; screenshots still work.'
+      + ' Restart the harness to apply.')
+    .volatile(),
 })
 
 /** Probe timeout for one interpreter candidate. */
@@ -149,33 +144,6 @@ export async function resolvePython(configured?: string): Promise<string | undef
 }
 
 /**
- * Whether the kernel's browser may put a window on the desktop.
- *
- * The user's document outranks the composition, and an explicit
- * `KILN_BROWSER_HEADED` outranks both (handled at the call site). The settings
- * service is read through `ctx.get` rather than injected: this provider must
- * still mount in a composition that carries no settings service at all — the
- * headless and test profiles — where the composition's own value is the whole
- * answer.
- *
- * The value reaches the kernel as a child-process environment variable, and
- * the runtime reads it once per process, so a change lands on the next kernel
- * start rather than on the next cell.
- * @param ctx - the plugin context, which may or may not carry `settings`.
- * @param config - the composition-layer configuration.
- * @returns whether a real window is allowed.
- */
-export function resolveBrowserWindow(ctx: Context, config: Config): boolean {
-  const settings = ctx.get('settings') as { get(ns: string): unknown } | undefined
-  const section = settings?.get(KERNEL_SETTINGS_NAMESPACE)
-  if (typeof section === 'object' && section !== null) {
-    const value = (section as { browserWindow?: unknown }).browserWindow
-    if (typeof value === 'boolean') return value
-  }
-  return config.browserWindow === true
-}
-
-/**
  * Resolve the launch facts, start no process, and register the backend.
  *
  * The kernel process itself is lazy: it starts on the first cell, so a
@@ -223,17 +191,15 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       // in this process share one durable store without leaking entries across
       // conversations.
       KILN_MEMORY_DIR: process.env.KILN_MEMORY_DIR ?? join(stateDir, 'memory'),
-      // Where browser_tools writes its live state.json + screenshots. The
-      // sidebar browser pane reads this SAME directory over HTTP, so the model
-      // and the user share one view of one browser. A global default (not the
-      // per-cwd state dir) matches the browser being one process-wide singleton;
-      // an explicit KILN_BROWSER_DIR still wins.
+      // Where browser_tools writes its live state.json + screenshots. A global
+      // default (not the per-cwd state dir) matches the browser being one
+      // process-wide singleton; an explicit KILN_BROWSER_DIR still wins.
       KILN_BROWSER_DIR: process.env.KILN_BROWSER_DIR ?? join(homedir(), '.dsh', 'browser'),
       // Whether the browser may put a window on the desktop. The runtime reads
       // this once per process, so it is resolved here rather than per action,
       // and an explicit environment value still wins for a one-off run.
       KILN_BROWSER_HEADED: process.env.KILN_BROWSER_HEADED
-        ?? (resolveBrowserWindow(ctx, config) ? '1' : '0'),
+        ?? (config.browserWindow.get() ? '1' : '0'),
       // The runtime's own modules resolve relative to the script, but a cell
       // that imports one of them needs the directory on the path too.
       PYTHONPATH: [dirname(script), process.env.PYTHONPATH].filter(part => part !== undefined && part.length > 0).join(process.platform === 'win32' ? ';' : ':'),

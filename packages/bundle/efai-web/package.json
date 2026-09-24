@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-efai-web",
-  "description": "The fork's rows for the browser profile as a bundle: sidebar bridge, terminal and effects surfaces, settings sections, and the fork preset roster",
+  "description": "The fork's rows for the browser profile as a bundle: the /version route, the effects and accent layers, and the Tools and Accounts settings sections",
   "version": "0.1.0-local.1",
   "publishConfig": {
     "access": "restricted"
@@ -37,11 +37,7 @@
     "@deepseek-ai/dsh-client-ui-effects": "workspace:^",
     "@deepseek-ai/dsh-client-ui-flow-accents": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-accounts": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-settings-advanced": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-tools": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-sidebar-terminal": "workspace:^",
-    "@deepseek-ai/dsh-efai-presets": "workspace:^",
-    "@deepseek-ai/dsh-host-sidebar-bridge": "workspace:^",
     "@deepseek-ai/dsh-host-version-route": "workspace:^"
   },
   "peerDependencies": {

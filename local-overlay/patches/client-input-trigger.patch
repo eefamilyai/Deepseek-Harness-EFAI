@@ -1,8 +1,8 @@
 diff --git a/packages/client/ui-input-trigger/src/client/MenuView.module.css b/packages/client/ui-input-trigger/src/client/MenuView.module.css
-index cb6ff3ec3a..22560ffce8 100644
+index 7b0a2818e4..dd5a996133 100644
 --- a/packages/client/ui-input-trigger/src/client/MenuView.module.css
 +++ b/packages/client/ui-input-trigger/src/client/MenuView.module.css
-@@ -192,6 +192,46 @@
+@@ -202,6 +202,46 @@
    color: var(--dsw-alias-label-tertiary);
  }
  
@@ -50,7 +50,7 @@ index cb6ff3ec3a..22560ffce8 100644
     (deepsuite Skeleton text variant: 2s color pulse; here the single
     bg-skeleton token pulses through opacity instead of a second color). */
 diff --git a/packages/client/ui-input-trigger/src/client/MenuView.tsx b/packages/client/ui-input-trigger/src/client/MenuView.tsx
-index fc2bdc7cd1..4a7ecd79ed 100644
+index 92897cb66d..77738a7ac8 100644
 --- a/packages/client/ui-input-trigger/src/client/MenuView.tsx
 +++ b/packages/client/ui-input-trigger/src/client/MenuView.tsx
 @@ -12,11 +12,13 @@
@@ -60,8 +60,8 @@ index fc2bdc7cd1..4a7ecd79ed 100644
 -import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 +import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
  import clsx from 'clsx'
--import { IconChevronRightOutline14, ReferenceIcon, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
-+import { IconChevronDownOutline14, IconChevronRightOutline14, ReferenceIcon, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
+-import { IconChevronRightOutlineRegular, ReferenceIconRegular, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
++import { IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, ReferenceIconRegular, useAnchoredMaxHeight } from '@deepseek-ai/dsh-client-ui-primitives'
  import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
  import css from './MenuView.module.css'
 +import type { InputTriggerCandidate } from '../types.ts'
@@ -69,7 +69,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
  import type { MenuViewInjected } from './slots.ts'
  import type { MenuKey } from './locales.ts'
  
-@@ -31,6 +33,61 @@ function optionId(source: string, index: number): string {
+@@ -38,6 +40,61 @@ function optionId(source: string, index: number): string {
    return `dsh-slash-option-${source}-${index}`
  }
  
@@ -131,7 +131,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
  /**
   * Render the candidate menu overlay entry.
   * @param props - injected face (the menu store and the pick route); `t` rides the standard locale seat.
-@@ -61,6 +118,63 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
+@@ -68,6 +125,63 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
      updateOverflowHint()
    }, [state, maxHeight, updateOverflowHint])
    const highlight = state.open ? state.highlight : null
@@ -195,7 +195,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
    // Focus stays in the textarea (combobox pattern), so the browser never
    // scrolls the active option into view on keyboard moves — do it here.
    useEffect(() => {
-@@ -126,88 +240,105 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
+@@ -133,88 +247,105 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
          aria-activedescendant={highlight !== null ? optionId(highlight.source, highlight.index) : undefined}
          onScroll={updateOverflowHint}
        >
@@ -243,7 +243,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
 +                      data-trigger-heading=""
 +                      onClick={() => { toggleSection(segment.key) }}
 +                    >
-+                      <IconChevronDownOutline14 className={clsx(css.groupChevron, collapsed && css.groupChevronCollapsed)} />
++                      <IconChevronDownOutlineRegular size={14} className={clsx(css.groupChevron, collapsed && css.groupChevronCollapsed)} />
 +                      <span className={css.groupName}>{segment.headingLabel}</span>
 +                    </button>
 +                    <div hidden={collapsed}>
@@ -272,8 +272,8 @@ index fc2bdc7cd1..4a7ecd79ed 100644
 +                            {item.icon !== undefined && (
 +                              <span className={css.itemIcon} aria-hidden>
 +                                {typeof item.icon === 'string'
-+                                  ? <ReferenceIcon kind={item.icon} size={16} />
-+                                  : <item.icon size={16} />}
++                                  ? <ReferenceIconRegular kind={item.icon} size={14} />
++                                  : <item.icon size={14} />}
 +                              </span>
 +                            )}
 +                            <span className={css.itemName}>{item.label ?? item.name}</span>
@@ -299,7 +299,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
 +                                    onPick(group.source, index, 'drill')
 +                                  }}
 +                                >
-+                                  <IconChevronRightOutline14 />
++                                  <IconChevronRightOutlineRegular size={12} />
 +                                </span>
 +                              </span>
 +                            )}
@@ -337,8 +337,8 @@ index fc2bdc7cd1..4a7ecd79ed 100644
 -                        {item.icon !== undefined && (
 -                          <span className={css.itemIcon} aria-hidden>
 -                            {typeof item.icon === 'string'
--                              ? <ReferenceIcon kind={item.icon} size={16} />
--                              : <item.icon size={16} />}
+-                              ? <ReferenceIconRegular kind={item.icon} size={14} />
+-                              : <item.icon size={14} />}
 -                          </span>
 -                        )}
 -                        <span className={css.itemName}>{item.label ?? item.name}</span>
@@ -364,7 +364,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
 -                                onPick(group.source, index, 'drill')
 -                              }}
 -                            >
--                              <IconChevronRightOutline14 />
+-                              <IconChevronRightOutlineRegular size={12} />
 -                            </span>
 -                          </span>
 -                        )}
@@ -381,7 +381,7 @@ index fc2bdc7cd1..4a7ecd79ed 100644
      </div>
    )
 diff --git a/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx b/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
-index e2430f5670..a83a257ebc 100644
+index 07342988f9..5f95a080b1 100644
 --- a/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
 +++ b/packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx
 @@ -87,12 +87,20 @@ function menuShell(): HTMLElement {

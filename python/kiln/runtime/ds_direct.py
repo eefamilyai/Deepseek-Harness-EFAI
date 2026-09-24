@@ -1843,6 +1843,76 @@ def _full_conversation_prompt(messages):
 DS_PROMPT_MAX = 48000
 
 
+def _system_every():
+    """Threaded turns a DeepSeek chat goes between copies of the system prompt.
+
+    The chat keeps every prompt it is sent, so a system prompt re-sent each turn
+    is stored again each turn: a tool protocol of tens of thousands of characters
+    filled the server-side conversation with copies of itself long before the
+    work did, and every copy took room the conversation needed from the
+    per-prompt budget. It is sent when a chat opens, whenever its text changes,
+    and every this-many turns after that so it never drifts far behind the
+    newest turn. `KILN_DS_SYSTEM_EVERY=0` restores sending it on every turn.
+    """
+    raw = os.environ.get("KILN_DS_SYSTEM_EVERY", "")
+    try:
+        value = int(raw)
+    except ValueError:
+        return 8
+    return max(0, value)
+
+
+# Stands in for a system prompt this chat already holds. A statement of where
+# the instructions are, not an instruction: messages_to_prompt adds none.
+SYSTEM_HELD_NOTE = "[system instructions unchanged — already in this DeepSeek conversation]"
+
+
+def _system_hash(sys_msgs):
+    """A stable fingerprint of the system prompt's text."""
+    digest = hashlib.sha256()
+    for m in sys_msgs:
+        digest.update(_msg_text(m).encode("utf-8", "replace"))
+        digest.update(b"\0")
+    return digest.hexdigest()[:16]
+
+
+def _system_due(sys_msgs, st, primed):
+    """Whether this turn must carry the system prompt, and its fingerprint.
+
+    A chat that has not been primed has never seen it; a changed prompt must
+    replace the one the chat holds; and after `_system_every()` threaded turns
+    it is refreshed. Otherwise the chat already holds it.
+    """
+    if not sys_msgs:
+        return False, None
+    fingerprint = _system_hash(sys_msgs)
+    every = _system_every()
+    if not primed or every == 0:
+        return True, fingerprint
+    if st.get("sys_hash") != fingerprint:
+        return True, fingerprint
+    age = st.get("sys_age")
+    age = int(age) if isinstance(age, (int, float)) else 0
+    return age + 1 >= every, fingerprint
+
+
+def _note_system_sent(st):
+    """Record, after a turn went through, whether it carried the system prompt.
+
+    `_prompt_for` leaves its decision in `sys_pending`; recording it only once
+    the turn succeeded keeps a failed send from counting as delivered.
+    """
+    pending = st.pop("sys_pending", None)
+    if not isinstance(pending, dict):
+        return
+    if pending.get("sent"):
+        st["sys_hash"] = pending.get("hash")
+        st["sys_age"] = 0
+    else:
+        age = st.get("sys_age")
+        st["sys_age"] = (int(age) if isinstance(age, (int, float)) else 0) + 1
+
+
 def _is_tool_result(msg):
     """Whether one body message is a rendered tool result.
 
@@ -1937,8 +2007,15 @@ def _clip_body(body_msgs, budget, primed=True):
     threaded turn it does; on a brand-new chat it does not, and only the omission
     note differs, because only one of the two is true.
     """
+    # A re-primed chat after a compaction carries the checkpoint that replaced
+    # the dropped turns (pinned, so it is kept); the note then names it rather
+    # than telling the model its history is simply gone.
+    summarized = any("<compacted-summary>" in _msg_text(m) for m in body_msgs if m.get("pin"))
     note_text = ("[earlier turns omitted — they are already in this DeepSeek conversation]"
                  if primed else
+                 "[earlier turns omitted to fit the prompt limit — they are NOT in this chat;"
+                 " the compacted summary in this conversation covers them]"
+                 if summarized else
                  "[earlier turns omitted to fit the prompt limit — they are NOT available"
                  " to you; work from what follows and say so if you need something older]")
     note = {"role": "user", "content": note_text}
@@ -2097,9 +2174,10 @@ def _prompt_for(messages, st):
     """What to actually send DeepSeek this turn.
 
     DeepSeek keeps the conversation itself (we thread every turn onto the same
-    chat session), so re-sending the transcript is pure waste. We send the
-    system/tool instructions — those must ride along every turn — plus ONLY the
-    messages this DeepSeek session hasn't seen yet.
+    chat session), so re-sending the transcript is pure waste. We send ONLY the
+    messages this DeepSeek session hasn't seen yet, plus the system/tool
+    instructions when `_system_due` says the chat lacks a current copy — a short
+    note stands in for them otherwise.
 
     This used to key off `st["parent"]`, which is only set once DeepSeek reports a
     response_message_id. Any turn where that wasn't captured — and every time the
@@ -2119,6 +2197,7 @@ def _prompt_for(messages, st):
     body = [m for m in messages
             if m.get("role") != "system" and m.get("kind") != "env"]
     if not body:
+        st.pop("sys_pending", None)
         return messages_to_prompt(sys_msgs + env_msgs)
 
     sent = st.get("sent")
@@ -2135,6 +2214,13 @@ def _prompt_for(messages, st):
         # the model received the last result and never the one before it.
         fresh = body[_trailing_step_start(body):]
 
+    with_system, fingerprint = _system_due(sys_msgs, st, primed)
+    if fingerprint is not None:
+        st["sys_pending"] = {"sent": with_system, "hash": fingerprint}
+    else:
+        st.pop("sys_pending", None)
+    if sys_msgs and not with_system:
+        sys_msgs = [{"role": "system", "content": SYSTEM_HELD_NOTE}]
     budget = max(2000, DS_PROMPT_MAX - sum(len(_msg_text(m)) for m in sys_msgs))
     # The env tail — cwd, date, and any injected context — is ambient and
     # regenerated every turn, so it yields room to the conversation, and above
@@ -2697,6 +2783,7 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                                   and m.get("kind") != "env"])
                     st["sent"] = body_n + 1
                     st["last_prompt"] = full_prompt
+                    _note_system_sent(st)
                 _save_sessions()
             if yielded:
                 yield {"type": "meta", "usage": usage}

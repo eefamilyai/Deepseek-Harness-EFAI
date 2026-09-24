@@ -1,4 +1,4 @@
-c291e7961a515f6d7af9304e7fd1d257929aef26
+00102833dfaee1da9f48a3a8eae9d34005a75218
 # Upstream base the patches in patches/*.patch apply onto.
 #
 # `local-overlay/rebuild.mjs` regenerates them as `git diff <BASE> -- <paths>`;
@@ -6,8 +6,8 @@ c291e7961a515f6d7af9304e7fd1d257929aef26
 # Line 1 is the only line any script reads.
 #
 # Recorded when this file was written:
-#   base commit      c291e7961a515f6d7af9304e7fd1d257929aef26  (deepseek-harness 0.1.5-rc.2)
-#   previous base    dd6322d604e00eec1ba5e0c8541159906a21094a
+#   base commit      00102833dfaee1da9f48a3a8eae9d34005a75218  (deepseek-harness 0.1.7-alpha.2)
+#   previous base    c291e7961a515f6d7af9304e7fd1d257929aef26  (deepseek-harness 0.1.5-rc.2)
 #
 # An upstream update that keeps this base needs no patch regeneration. An
 # upstream update that moves the base does: see README.md "Updating upstream".

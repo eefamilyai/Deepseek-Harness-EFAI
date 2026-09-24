@@ -48,7 +48,7 @@ afterEach(async () => {
 
 /** Upload transport that counts calls and returns one deterministic file object. */
 function transport(): typeof fetch {
-  return (async () => {
+  return async () => {
     uploads += 1
     return new Response(JSON.stringify({
       id: `file-${uploads}`,
@@ -59,7 +59,7 @@ function transport(): typeof fetch {
       filename: 'system_prompt.md',
       purpose: 'user_data',
     }), { status: 200, headers: { 'content-type': 'application/json' } })
-  }) as unknown as typeof fetch
+  }
 }
 
 describe('capability', () => {
@@ -192,7 +192,7 @@ describe('adapter', () => {
     model: 'gpt-x',
     messages: [createUserMessage({
       content: [{ type: 'text', text: 'hi' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'user' },
     })],
     system: PROMPT,
   }

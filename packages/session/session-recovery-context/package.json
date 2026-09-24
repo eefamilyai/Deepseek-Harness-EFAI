@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-session-recovery-context",
-  "description": "Injects the operator's prompts and the session-log tail after a compaction, and registers the session's log path as a prompt fact",
+  "description": "Keeps a code-maintained ledger of the session and hands it to the model in the same step a compaction happens, plus the session log path as a prompt fact",
   "version": "0.1.5-rc.2",
   "publishConfig": {
     "access": "public"
@@ -39,17 +39,22 @@
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-format": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tool-todo": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-format": "workspace:^",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tool-todo": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^"
   }
 }

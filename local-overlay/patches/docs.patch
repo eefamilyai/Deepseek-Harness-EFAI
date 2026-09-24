@@ -1,20 +1,20 @@
 diff --git a/docs/subsystems/llm-streaming.i18n.yaml b/docs/subsystems/llm-streaming.i18n.yaml
-index 8ae88da75e..6cf06d3f16 100644
+index 757474dd41..909c728e6d 100644
 --- a/docs/subsystems/llm-streaming.i18n.yaml
 +++ b/docs/subsystems/llm-streaming.i18n.yaml
 @@ -2,5 +2,5 @@
  # side as of the last confirmed-consistent state. Both languages carry equal authority;
  # after editing either side, bring the other along and re-record with:
  #   pnpm run verify-translation-pairing --write docs/subsystems/llm-streaming.md
--llm-streaming.md: 77d3313b3c1a025f756e984453bd041abd7b0534
--llm-streaming.zh.md: cac7897ab412f45bd5b5ab20c6460644f18f4ff2
-+llm-streaming.md: 2f8a9d2e335b0bd3684a090a9b6ec5d438905161
-+llm-streaming.zh.md: 85fe10202cb680f0493560b26c3db0f14e4bf547
+-llm-streaming.md: 07fc6599bc5d4eb5a4af9b566032004932052585
+-llm-streaming.zh.md: 079a33599d1e5169af6402db2b2abdd7dc978369
++llm-streaming.md: 9a82f4645730f78d15abc7b13481a87d1c41bc3e
++llm-streaming.zh.md: 21e1d99c3dae46a30552a3bdf34345e5399a2856
 diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
-index 77d3313b3c..2f8a9d2e33 100644
+index 07fc6599bc..9a82f46457 100644
 --- a/docs/subsystems/llm-streaming.md
 +++ b/docs/subsystems/llm-streaming.md
-@@ -885,7 +885,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+@@ -917,7 +917,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
  
  ### `ctx.llm` — `LlmRuntime`
  
@@ -23,7 +23,7 @@ index 77d3313b3c..2f8a9d2e33 100644
  
  ```ts cordis-catalog
  /**
-@@ -944,6 +944,52 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+@@ -976,6 +976,52 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
   */
  async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
  
@@ -77,10 +77,10 @@ index 77d3313b3c..2f8a9d2e33 100644
   * Remote adapter for one draft provider interrogation.
   * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
-index cac7897ab4..85fe10202c 100644
+index 079a33599d..21e1d99c3d 100644
 --- a/docs/subsystems/llm-streaming.zh.md
 +++ b/docs/subsystems/llm-streaming.zh.md
-@@ -891,7 +891,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+@@ -923,7 +923,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
  
  ### `ctx.llm` — `LlmRuntime`
  
@@ -89,7 +89,7 @@ index cac7897ab4..85fe10202c 100644
  
  ```ts cordis-catalog
  /**
-@@ -950,6 +950,52 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+@@ -982,6 +982,52 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
   */
  async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
  
@@ -142,3 +142,183 @@ index cac7897ab4..85fe10202c 100644
  /**
   * Remote adapter for one draft provider interrogation.
   * @param settingsNs - namespace whose registered discovery serves this draft.
+diff --git a/docs/tool-catalog.zh.md b/docs/tool-catalog.zh.md
+index 0995196921..ac44a2d3a5 100644
+--- a/docs/tool-catalog.zh.md
++++ b/docs/tool-catalog.zh.md
+@@ -34,6 +34,7 @@
+ | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
+ | `@deepseek-ai/dsh-tool-fs` | `edit`、`read`、`read_image`、`write` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (image-tool registration)`、`ctx.llm + an image-capable route (image-tool execution)` | `tool/call`、`fs/write-intent or fs/edit-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。 |
+ | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
++| `@deepseek-ai/dsh-tool-notebook-edit` | `notebook_edit` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`fs/write-intent for mutations`、`tool/result` | - | notebook_edit 以独占方式注册：对同一文件的两次重叠编辑会丢失其中一次。路径必须是绝对路径，修改经过已挂载的文件系统策略。 |
+ | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 |
+ | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
+ | `@deepseek-ai/dsh-schedule` | `schedule_create`、`schedule_delete`、`schedule_list` | `ctx.tools`、`ctx.sessions`、Session 持久化、未来创建的 live 根 Agent | `tool/call`、`schedule/change create or delete`、`tool/result` | - | 仅在选择启用的 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。 |
+@@ -49,6 +50,7 @@
+ | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
+ | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
+ | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
++| `@deepseek-ai/dsh-tool-kernel` | `kernel` | `ctx.tools`、`ctx.kernel`、`ctx.systemPrompt`、`ctx.attachments` | `tool/call`、`tool/result` | - | kernel 以独占方式注册：两个重叠的单元格会交错赋值与输出。是否向模型提供它，由 `tool-roster` 行的 `kernel` 开关按轮决定。 |
+ 
+ <a id="deepseek-aidsh-plugin-manager"></a>
+ 
+@@ -1113,6 +1115,124 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
+ 
+ glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。
+ 
++<a id="deepseek-aidsh-tool-notebook-edit"></a>
++
++## `@deepseek-ai/dsh-tool-notebook-edit`
++
++### `notebook_edit`
++
++Jupyter（.ipynb）笔记本编辑工具。一个 schema，五个命令。
++
++- 'view' 渲染每个单元格：从零开始的索引、单元格类型、代码执行计数（或 'unexecuted'），以及缩进两个空格的单元格源码。它不修改笔记本。
++- 'create' 写入新笔记本，拒绝覆盖已存在的路径。省略 'cells' 得到空笔记本，或传入 nbformat 单元格的 JSON 数组（每个带 'cell_type' 与 'source'）。
++- 'str_replace' 替换 'cell_id' 单元格源码中的一个字面 'old_str'。匹配必须精确且在该单元格内唯一；省略 'new_str'（不要传 null）即删除匹配。
++- 'insert' 在从零开始的 'cell_id' 处添加新单元格（0 表示最前，单元格数表示追加），带 'cell_type' 与 'source'。
++- 'delete' 删除从零开始的 'cell_id' 处的单元格。
++
++单元格索引从零开始，在单个命令内保持稳定。路径必须是绝对路径。修改类命令会重新读取笔记本，并通过已挂载的文件系统策略写回整个文件。
++
++```json
++{
++  "type": "object",
++  "properties": {
++    "command": {
++      "type": "string",
++      "description": "The command to run. Allowed options are: 'view', 'create', 'str_replace', 'insert', 'delete'.",
++      "enum": [
++        "view",
++        "create",
++        "str_replace",
++        "insert",
++        "delete"
++      ]
++    },
++    "path": {
++      "type": "string",
++      "description": "Absolute path to the .ipynb notebook, e.g. /repo/analysis.ipynb."
++    },
++    "cell_id": {
++      "oneOf": [
++        {
++          "type": "integer"
++        },
++        {
++          "type": "null"
++        }
++      ],
++      "description": "Zero-based cell index. Required by 'str_replace', 'insert', and 'delete'; ignored by other commands."
++    },
++    "cell_type": {
++      "oneOf": [
++        {
++          "type": "string",
++          "enum": [
++            "code",
++            "markdown",
++            "raw"
++          ]
++        },
++        {
++          "type": "null"
++        }
++      ],
++      "description": "Cell type for 'insert' and 'create' cells: 'code', 'markdown', or 'raw'. Required by 'insert'; ignored otherwise."
++    },
++    "source": {
++      "oneOf": [
++        {
++          "type": "string"
++        },
++        {
++          "type": "null"
++        }
++      ],
++      "description": "Cell source for 'insert'. Required by 'insert'; ignored otherwise."
++    },
++    "old_str": {
++      "oneOf": [
++        {
++          "type": "string"
++        },
++        {
++          "type": "null"
++        }
++      ],
++      "description": "Required string of 'str_replace': the literal cell-source fragment to replace (must be unique within the target cell)."
++    },
++    "new_str": {
++      "oneOf": [
++        {
++          "type": "string"
++        },
++        {
++          "type": "null"
++        }
++      ],
++      "description": "Optional replacement string of 'str_replace'; omit (never null) to delete the match."
++    },
++    "cells": {
++      "oneOf": [
++        {
++          "type": "array"
++        },
++        {
++          "type": "null"
++        }
++      ],
++      "description": "Optional JSON array of cells for 'create'; each cell is an nbformat object with 'cell_type' and 'source'."
++    }
++  },
++  "required": [
++    "command",
++    "path"
++  ]
++}
++```
++
++来源：[`packages/fs/tool-notebook-edit/src/index.ts`](../packages/fs/tool-notebook-edit/src/index.ts)
++
++notebook_edit 是作用于 Jupyter `.ipynb` 文件的单个工具，含五个命令（`view`、`create`、`str_replace`、`insert`、`delete`），并以独占方式注册（没有 `isConcurrencySafe`）：修改类命令会重新读取整个笔记本再写回，因此对同一文件的两次重叠编辑会丢失其中一次。路径必须是绝对路径，修改经过已挂载的文件系统策略。
++
+ <a id="deepseek-aidsh-tool-terminal"></a>
+ 
+ ## `@deepseek-ai/dsh-tool-terminal`
+@@ -2522,3 +2642,34 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
+ 来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
+ 
+ web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
++
++<a id="deepseek-aidsh-tool-kernel"></a>
++
++## `@deepseek-ai/dsh-tool-kernel`
++
++### `kernel`
++
++在持久的内核命名空间中运行 Python。返回单元格捕获的输出：打印的文本，以及每个顶层裸表达式的值。变量与导入在调用之间保留。Shell 命令通过 sh("...") 运行；文件用预加载的辅助函数读写。每个单元格以一行 `#` 注释开头，说明脚本做什么；这一行会作为该调用在记录中的标题。
++
++```json
++{
++  "type": "object",
++  "properties": {
++    "code": {
++      "type": "string",
++      "description": "The Python source to execute in the persistent namespace. Its first line must be a `#` comment stating what the cell does."
++    },
++    "timeoutMs": {
++      "type": "integer",
++      "description": "Optional per-cell timeout in milliseconds. Defaults to the configured timeoutMs and is capped by maxTimeoutMs."
++    }
++  },
++  "required": [
++    "code"
++  ]
++}
++```
++
++来源：[`packages/kernel/tool-kernel/src/index.ts`](../packages/kernel/tool-kernel/src/index.ts)
++
++kernel 在跨调用保留的命名空间中运行一个单元格，因此以独占方式注册（没有 `isConcurrencySafe`）：两个重叠的单元格会交错各自的赋值与捕获的输出。是否向模型提供它，由 `tool-roster` 行的 `kernel` 开关决定，按轮生效。

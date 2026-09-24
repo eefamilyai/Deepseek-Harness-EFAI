@@ -12,13 +12,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock, GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { KilnAdapter, buildTurns, flattenMessage, requestOptions } from '@deepseek-ai/dsh-llm-kiln'
 import type { KilnBridge, KilnProvider, KilnStreamEvent, KilnStreamRequest, KilnUploadFile } from '@deepseek-ai/dsh-llm-kiln'
 
-const source = { kind: 'plugin', plugin: 'test' } as const
+const source = { kind: 'user' } as const
 
 /** A durable image reference shaped exactly as the attachment service emits one. */
 const REF = {
@@ -311,19 +311,29 @@ describe('image placeholder text', () => {
     expect(turn?.content).toBe('[image delivered]')
   })
 
-  it('applies the substitution inside a nested tool result', () => {
-    // The recursion is shared with every other content walk; a placeholder that
-    // stopped at the top level would leave raw markup in a nested result.
-    const nested = {
-      role: 'user',
-      content: [{ type: 'tool-result', toolCallId: 'c1', content: [block] }],
-      source,
-    }
+  it('applies the substitution inside a tool result', () => {
+    // A tool result is its own tool-role message; a placeholder that reached only
+    // user turns would leave raw markup in the output of a tool that returned one.
+    const result = createToolResultMessage({ callId: ToolCallId('c1'), content: [block], isError: false })
     const turns = buildTurns({
       provider: 'kiln-deepseek',
       model: 'm',
-      messages: [nested],
+      messages: [result],
     } as unknown as GenerateOptions, '[image delivered]')
-    expect(turns.map(turn => turn.content).join('\n')).toContain('[image delivered]')
+    expect(turns).toEqual([{ role: 'user', content: 'OUTPUT:\n[image delivered]' }])
+  })
+
+  it('sends a parallel batch of tool results as one user turn', () => {
+    const text = (value: string): ContentBlock => ({ type: 'text', text: value })
+    const turns = buildTurns({
+      provider: 'kiln-deepseek',
+      model: 'm',
+      messages: [
+        createToolResultMessage({ callId: ToolCallId('c1'), content: [text('one')], isError: false }),
+        createToolResultMessage({ callId: ToolCallId('c2'), content: [text('two')], isError: false }),
+        createUserMessage({ content: [text('next')], source }),
+      ],
+    } as unknown as GenerateOptions)
+    expect(turns.map(turn => turn.content)).toEqual(['OUTPUT:\none\nOUTPUT:\ntwo', 'next'])
   })
 })

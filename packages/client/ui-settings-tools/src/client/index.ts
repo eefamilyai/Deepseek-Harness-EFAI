@@ -1,29 +1,22 @@
 /**
  * Tools settings section, browser half.
  *
- * Registers one `settings.section` entry rendering the two category switches
- * and the per-tool list. The tool names come from the `tools` namespace's
- * composition layer, which `@deepseek-ai/dsh-tool-roster` seeds from the
- * registry, so this package never hardcodes a roster.
+ * Registers one `settings.section` entry rendering the kernel, RLM, and
+ * conventional-tool switches. All three are live fields of the `tool-roster`
+ * row, so the section reads and writes that row's config form and nothing else.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: pulls the ctx.remote merge and its fixed Host facts.
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls ctx.locale into this program.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-// Type-only: the settings slot declarations plus the ctx.settingsScope merge.
+// Type-only: the settings slot declarations plus the ctx.configForms merge.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ToolsSection } from './ToolsSection.tsx'
-import type { NamespaceSnapshot, ToolsSectionInjected } from './ToolsSection.tsx'
+import type { RosterFields, ToolsSectionInjected } from './ToolsSection.tsx'
 import { en, zh } from './locales.ts'
 
-export type { ToolsKey } from './locales-keys.ts'
-export type {
-  KernelNamespaceValue, NamespaceSnapshot, ToolsNamespaceValue,
-  ToolsSectionComponentProps, ToolsSectionInjected,
-} from './ToolsSection.tsx'
+export type { ToolsKey } from './locales.ts'
+export type { RosterFields, ToolsSectionComponentProps, ToolsSectionInjected } from './ToolsSection.tsx'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'tools'
@@ -32,11 +25,17 @@ const NS = 'tools'
 const SECTION_ID = 'tools'
 
 /**
+ * The profile entry id the roster is composed under. Named here rather than
+ * imported: the Host package is not part of the browser program.
+ */
+export const TOOL_ROSTER_ENTRY_ID = 'tool-roster'
+
+/**
  * Required services (cordis fiber inject). The target slot is declared by
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; the registration depends on it through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'remote', 'remote.settings']
+export const inject = ['slots', 'locale', 'configForms']
 
 /**
  * Register the Tools section once its slot declaration is on the ledger.
@@ -45,26 +44,8 @@ export const inject = ['slots', 'locale', 'remote', 'remote.settings']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-tools: dictionaries')
   const t = ctx.locale.bind(NS)
-  const settings = ctx.remote.settings
-
-  const read = async <T>(ns: string): Promise<NamespaceSnapshot<T> | undefined> => {
-    const result = await settings.describe()
-    if (!result.ok) return undefined
-    const view = result.value.namespaces.find(entry => entry.ns === ns)
-    if (view === undefined) return undefined
-    return { value: view.value as T, base: view.base, revision: view.revision }
-  }
-
-  const write = async (
-    ns: string,
-    section: Record<string, unknown>,
-    revision: number,
-  ): Promise<string | undefined> => {
-    const result = await settings.replace(ns, section as Record<string, JsonValue>, revision)
-    return result.ok ? undefined : result.error.message
-  }
-
-  const injected = (): ToolsSectionInjected => ({ read, write })
+  const form = ctx.configForms.get<RosterFields>(TOOL_ROSTER_ENTRY_ID)
+  const injected = (): ToolsSectionInjected => ({ form })
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',

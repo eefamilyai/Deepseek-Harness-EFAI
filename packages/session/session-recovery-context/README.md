@@ -1,5 +1,5 @@
 ---
-description: "Post-compaction recovery injection carrying the operator's prompts and the session log tail, plus the session log path as a prompt fact, for deployments tuning what survives a compaction."
+description: "Post-compaction recovery: a code-maintained session ledger restated as a handoff in the same step a compaction happens, plus a focus line and the session log path, for deployments tuning what survives a compaction."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-recovery-context` puts the record back after a compaction: one injected message carrying every operator prompt and the tail of the session log, delivered once per compaction, so the model spends no turn fetching what it just lost. It also keeps that record in the system prompt as a `Context file:` fact, re-read whenever a compaction replaces it, and registers the session's log path, directory, and id as prompt variables. A session with no compaction receives nothing. The cost is one durable user-role message per compaction, bounded by the configured prompt and tail budgets.
+`dsh-session-recovery-context` makes a compacted session carry on as if nothing was lost. As the log commits, it folds the facts a summary drops first — the operator's own words, the files touched, the commands run, the errors still open, the todo list — into a ledger. In the same step a compaction happens, it adds one handoff message that restates them, attaches the current contents of the most recently changed files, and ends with the exact place to resume. The turn keeps running: no step is spent and nothing is acknowledged. After the first compaction, a one-line focus note in the runtime context keeps the in-progress todo and the next step in view. The plugin also registers the session's log path, directory, and id as prompt variables. A session that never compacts gets only the log-path line.
 
 ## Table of Contents
 
@@ -25,31 +25,31 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin when sessions run long enough to compact and the model must resume the operator's actual task rather than a summary of it.
+Mount this plugin when sessions run long enough to compact and the model must resume the operator's actual task, not a summary of it.
 
 ### When to choose it
 
-Choose it for any composition that mounts a compaction engine and keeps working after the summary replaces the transcript. The turn after a compaction is the turn most likely to resume the wrong task confidently, because what compaction drops includes the operator's own words — the brief the work was commissioned with, and every correction since. Avoid it when a deployment never compacts, or when durable history cost matters more than post-compaction accuracy: the injected message is itself a permanent session event. There is no fallback package; the alternative is a skill or prompt line telling the model to go read its own log, which costs a turn and can be skipped.
+Choose it for any composition that mounts a compaction engine and keeps working after the summary replaces the transcript. The step after a compaction is the one most likely to resume the wrong task with confidence. A model-written summary paraphrases the operator's brief, drops corrections, forgets which files were edited, and loses the error that was still open — and nothing downstream can tell. Avoid it when a deployment never compacts. There is no fallback package; the alternative is a prompt line telling the model to read its own log, which costs turns and can be skipped.
 
 ### Minimal configuration
 
-The minimal mount needs no configuration beyond the session root, which must match the persistence backend's:
+The only field most deployments set is the session root, which must match the persistence backend's:
 
 ```yaml
 - name: '@deepseek-ai/dsh-session-recovery-context'
   config:
-    tailEvents: 50
+    root: !!js dshHomePath('sessions')
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
-| `root` | `dshHomePath('sessions')` | Session root the JSONL backend writes under, used to derive the printed log path |
-| `compression` | `zstd` | The backend's artifact encoding, which decides the log file's suffix |
-| `tailEvents` | `50` | Trailing events the digest carries; `0` drops the tail entirely |
-| `promptChars` | `1200` | Per-prompt character budget before a clip marker replaces the remainder |
-| `maxPrompts` | `0` (keep every prompt) | How many operator prompts to retain |
-| `labelChars` | `120` | Per-event label budget inside the tail |
-| `preamble` | shipped sentence | First line of the injected message |
+| `root` | `dshHomePath('sessions')` | Session root the JSONL backend writes under; used for the log path and the per-compaction record file |
+| `logCompression` | `zstd` | The backend's artifact encoding, which decides the log file's suffix |
+| `ledger` | `{ prompts: 24, promptChars: 4000, files: 60, commands: 12, errors: 6, errorChars: 400 }` | Bounds on what the ledger keeps |
+| `rehydrate` | `{ files: 4, perFileChars: 8000, maxBytes: 524288 }` | How many changed files the handoff re-attaches, and how much of each |
+| `handoffShare` | `0.08` | Share of the routed model's context window the handoff may use |
+| `handoffMinChars` / `handoffMaxChars` | `6000` / `24000` | Floor and ceiling of the handoff budget, in characters |
+| `git` | `true` | Snapshot `git status` into the handoff |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-recovery-context) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -69,24 +69,31 @@ This section explains the design of the plugin; the observable behavior is cover
 
 ### Design concept
 
-Nothing here scans history. One Session projection folds the operator prompts, a rolling event tail, and the newest compaction's sequence number as events commit, which is what the [synchronous-read deprecation](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md) prescribes in place of reading the log: the state survives resume and costs one pure fold per event. A prepended `agent/pre-step` listener delegates first, then appends one sourced `UserMessage` when the entered decision belongs to a session whose newest compaction has no answer yet.
+Two ideas carry the design. First, what a summary loses is what code can know for certain, so code keeps it: the ledger is a pure fold over committed events, and the model is never asked to remember what the log already records. Second, recovery must not interrupt the work it recovers. The handoff rides the step the compaction happened in, because a step whose reply calls no tool ends the turn — an extra "acknowledge the record" step stopped every task compacted mid-run.
 
-Idempotency runs through the log rather than through process memory. The injected message records `{ kind: 'plugin', plugin: 'session-recovery-context' }` as its source, and the same fold reads that back as "this compaction has been answered", so a second step in the same turn cannot repeat it and a resumed session does not re-inject.
+Nothing here scans history. One Session projection folds each event once, as the [synchronous-read deprecation](../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md) prescribes, so the ledger survives resume. Idempotency runs through the log: the handoff's own source (`{ kind: 'session-recovery', form: 'handoff', compactionId }`) folds back as "this compaction has been answered", so a later step or a resumed session never repeats it.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: projection fold, pre-step injector, prompt variables and the log context line |
+| [`src/index.ts`](src/index.ts) | Plugin entry: projection registration, the pre-step handoff, the record file, prompt variables, the log and focus context lines |
+| [`src/ledger.ts`](src/ledger.ts) | The ledger schema and its pure fold: operator messages, pending calls, files, commands, unresolved errors, todos, the latest checkpoint |
+| [`src/handoff.ts`](src/handoff.ts) | Rendering the handoff within its budget, and the focus line |
+| [`src/workspace.ts`](src/workspace.ts) | The `git status` snapshot and the re-attached file contents |
 | [`src/log-path.ts`](src/log-path.ts) | Session path derivation mirroring the JSONL backend's own sanitization |
 
 ### Main flow
 
-The fold clips each operator prompt to `promptChars` and keeps prompts in order; at a `maxPrompts` bound it drops from the middle, because the first prompt is the brief and the last ones are the current intent, and what a bound can afford to lose is the steering in between. The tail keeps one digest per event — sequence, type, and a short label read structurally out of whatever payload the event turns out to carry, so event types added after this file still render legibly. Rendering joins the preamble, the numbered prompts, the tail, and a closing line naming the log file that holds everything clipped above.
+The ledger keeps every operator message verbatim up to `promptChars`. At the `prompts` bound it drops from the middle, because the first message is the brief and the newest ones are the current intent. A message that arrives after a step of the open turn has ended is marked as a mid-turn correction. Tool calls are classified by name and arguments: `read`, `write`, `edit`, `str_replace_editor`, and `notebook_edit` touch a file; `bash`, `pwsh`, and `kernel` are commands. Each result is judged by its error flag, a non-zero exit status, or a Python traceback. A later success with the same tool and target resolves an earlier failure there.
 
-`src/log-path.ts` mirrors the backend's path sanitization rather than importing it, because that logic lives in a file the backend package does not publish; it imports the two format-policy pieces that are public. `tests/log-path-oracle.spec.ts` pins the mirror byte-for-byte against the backend's own derivation across roots, working directories, and session ids, so drift fails a test rather than printing a path to a file that does not exist.
+The pre-step listener is prepended and calls the rest of the chain first, so compaction — which runs inside that chain — has already happened when it reads the ledger. If the newest checkpoint has no handoff yet, it builds one. The budget comes from the routed model's context window; the `git status` snapshot and the re-attached files come from the session's working directory. The listener writes the handoff and the checkpoint to `compaction-<id>-<session>.md` in the session directory, then puts the handoff first among the step's messages, so the operator's own message and the runtime context stay nearest the next generation.
 
-**Runtime invariant:** No companion is published. The projection's state schema validates every folded value at the registry boundary, and the one relationship this package owns — an injection answers exactly one compaction — is carried in the log by the injected message's own source, where the fold re-reads it.
+The handoff never restates the checkpoint, which is already in the history one message above it. It ends with "Continue from here": the checkpoint's Current Work and Next Step sections, the todo in progress, and the most recent request. That is the last thing the model reads before it generates.
+
+`src/log-path.ts` mirrors the backend's path sanitization rather than importing it, because that logic lives in a file the backend package does not publish. `tests/log-path-oracle.spec.ts` pins the mirror byte-for-byte against the backend's own derivation.
+
+**Runtime invariant:** No companion is published. The projection's state schema validates every folded value at the registry boundary. The one relationship this package owns — a handoff answers exactly one compaction — is carried in the log by the handoff's own source, where the fold reads it back.
 
 </details>
 
@@ -99,6 +106,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Session projections subsystem](../../../docs/subsystems/session-projection.md) — the projection unit contract, drive semantics, and state versioning.
 - [Compaction subsystem](../../../docs/subsystems/compaction.md) — what a compaction keeps, what it drops, and when the summary event commits.
+- [`output-masking/`](../../compaction/output-masking/README.md) — the fork's masking pass, which defers compaction by stubbing old tool output.
 - [`session-persistence-jsonl/`](../session-persistence-jsonl/README.md) — the backend that writes the file this package names, and the root it writes under.
 - [`system-prompt/`](../../core/system-prompt/README.md) — prompt variables, runtime-context contributions, and the strict `{{name}}` rule.
 - [session group map](../README.md) — sibling durable session-data packages.
@@ -109,89 +117,111 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-### Post-compaction recovery message
+### Handoff after a compaction
 
 #### What the model sees
 
-One user-role message, injected on the first entered step after a compaction. `<preamble>` is the configured first line; prompts are numbered oldest first and clipped to `promptChars` with a `[+N chars, whole text in the session log]` marker; the tail section is omitted entirely when `tailEvents` is `0`.
+One user-role message, first among the messages of the step in which the compaction happened, directly after the checkpoint. Sections with nothing to say are omitted. File contents take only the budget the other sections leave.
 
-##### Injected message
+##### Handoff message
 
 ```markdown
-<preamble>
+# Handoff after context compaction
 
-## Operator prompts, oldest first
-1. [seq <n>] <operator-text-or-clip>
+The earlier part of this session was condensed into the checkpoint above to free up context.
+This message restates, from the session record itself, what you were asked and the exact state of the work.
+You are continuing work already in progress: do not acknowledge this message and do not recap it.
+Pick up at "Continue from here" at the end, and read the full record if you need an exact detail it does not carry.
 
-## Last <count> session events, oldest first
-[seq <n>] <event-type> — <label-when-the-payload-has-one>
+## Your requests (verbatim, oldest first)
 
-The whole record, including everything clipped above, is in this session's log: <absolute-log-path>
+### 1. first request (seq <n>)
+
+<operator-text>
+
+### <k>. correction mid-turn (seq <n>)
+
+<operator-text>
+
+## State when the context was compacted
+
+### Todo list
+- [x] <completed>
+- [~] <in progress>
+- [ ] <pending>
+
+### Files touched (newest first)
+- `<path>` — created, edited, read ×<n>
+
+### Unresolved errors (newest last)
+- **<tool>** `<target>` (seq <n>):
+  <error excerpt>
+
+### Recent commands (newest last)
+- ✓ <tool>: `<command>`
+- ✗ <tool>: `<command>`
+
+### Git
+<git status --porcelain --branch, clipped>
+
+## Recently changed files (current contents)
+
+### `<path>`
+<file contents, cut to fit>
+
+## Full record
+
+- This handoff and the checkpoint, as plain text: `<record-path>`
+- The complete session log (zstd-compressed JSONL, one event per line): `<log-path>`
+
+## Continue from here
+
+**In progress when the context was compacted:** <checkpoint Current Work>
+**Todo in progress:** <todo>
+**Next step:** <checkpoint Next Step>
+**Most recent request (seq <n>):** <operator text, clipped>
 ```
 
 #### Token effect
 
-One message per compaction, never per step, and it persists in durable history afterwards. Its size is bounded by `promptChars` times the retained prompt count plus `tailEvents` times `labelChars`; the defaults put a typical injection in the low thousands of tokens.
+One message per compaction, never per step, and it persists in durable history afterwards. Its size is `handoffShare` of the routed window, clamped to `handoffMinChars`–`handoffMaxChars` characters: 6,000–24,000 characters, roughly 1,500–6,000 tokens, with the defaults.
 
 #### KV Cache effect
 
-Append-only; the message follows the reusable request prefix and does not invalidate existing KV Cache entries. The compaction that triggers it has already rewritten the prefix.
+Append-only. The compaction that triggers it has already rewritten the prefix, and the handoff follows the checkpoint, so it invalidates nothing that the compaction had not already invalidated.
 
-### Session log path in the system prompt
+### Focus line and session log path in the runtime context
 
 #### What the model sees
 
-One runtime-context line naming the session's own log file, plus the `{{session_id}}`, `{{session_log}}`, and `{{session_dir}}` variables available to deployment-owned prompt text. Every one of them is empty when no session is attached to the assembly.
+One line naming the session's own log file, always. After the first compaction, a second line re-anchors the plan. Both are empty when no session is attached to the assembly.
 
-##### Runtime context line
+##### Runtime context lines
 
 ```markdown
 This session is logged to <absolute-log-path>
+Focus (this session was compacted; the handoff message has the full state): in progress: <todo> · <n> todo(s) open · next step at the last compaction: <next step> · full record: <record-path>
 ```
 
 #### Token effect
 
-A single line in the stable system prompt, re-rendered per assembly. It replaces the several tool calls a model would otherwise spend locating its own log.
+A line or two per assembly, re-rendered each time. The focus line costs a few dozen tokens, and only in sessions that have compacted.
 
 #### KV Cache effect
 
-The line is stable for the life of a session, so it contributes to the reusable prefix rather than invalidating it; it changes only when the session itself changes.
-
-### Compaction record in the system prompt
-
-#### What the model sees
-
-One runtime-context fact naming the current compaction record, then the record's own text: a `Context file:` line followed by the file's contents, re-read whenever a compaction replaces it. Before the first compaction the fact is empty; between a compaction and the write of its record it carries the path alone.
-
-##### Runtime context fact
-
-```markdown
-Context file: <absolute-record-path>
-
-# Compaction record
-...
-```
-
-#### Token effect
-
-The record's full text joins the system prompt, so the cost is the record's own size — the same document the recovery step carries, bounded by the configured event and prompt budgets.
-
-#### KV Cache effect
-
-The fact changes exactly when a compaction replaces the record, which is the same moment the prefix is rewritten anyway. Between compactions it stays stable.
+The runtime context is projected as a message appended to the step, and is re-sent only when its text changes. The log line is stable for the session's life. The focus line changes when the todo list or the checkpoint changes, which is when the model most needs the new text.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
+These limits define when the recovery handoff is a poor fit. They are current package constraints.
 
-These limits define when the recovery injection is a poor fit. They are current package constraints.
-
-- **The printed root is stated twice** — `root` and `compression` mirror the persistence backend's own configuration instead of being read from it, so a deployment that moves the session root must move both rows or the prompt will name a file that does not exist.
-- **Path derivation is a mirror, not a call** — the backend's sanitization is reimplemented here and held in place by an oracle test, because the backend does not publish it; an unpublished change upstream fails that test rather than being absorbed.
-- **One injection per compaction, whatever its size** — a compaction that drops an hour of work and one that drops a minute of it produce the same bounded message.
-- **Durable cost** — the injected message is a permanent session event, so a session that compacts repeatedly accumulates one recovery message per compaction.
-- **Labels are structural** — the tail reads `content`, `name`, `summary`, `reason`, `mode`, or `title` out of each event, and renders a bare type name for events carrying none of them.
+- **The printed root is stated twice** — `root` and `logCompression` mirror the persistence backend's own configuration instead of being read from it, so a deployment that moves the session root must move both rows or the handoff will name a file that does not exist.
+- **Path derivation is a mirror, not a call** — the backend's sanitization is reimplemented here and held in place by an oracle test, because the backend does not publish it.
+- **Tool knowledge is by name** — the ledger recognises the harness's own file and shell tools by name and argument key. A tool it does not know is still recorded as a call, but it does not add a file or a command.
+- **Re-attached files are read at handoff time** — the contents are the file as it is when the handoff is built, not as the model last saw it. That is the point, but an external edit shows up unannounced.
+- **Durable cost** — each handoff is a permanent session event, so a session that compacts repeatedly accumulates one handoff per compaction.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -199,6 +229,6 @@ These limits define when the recovery injection is a poor fit. They are current 
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-None.
+The design and the research behind it are recorded in the [compaction handoff Agent Note](../../../.agents/notes/implemented/feature/2026-09-24-compaction-handoff.md).
 
 </details>

@@ -1,4 +1,4 @@
-/** Pure host half; the whole tab type lives in the browser export. */
+/** Host companion for the interactive terminal Client plugin. */
 
-/** Host plugin body: the terminal tab contributes nothing to the host tree. */
+/** Mount the browser-only plugin through the Client loader. */
 export function apply(): void {}

@@ -4,7 +4,6 @@
  * (a vendored, inline-safe library) — the host registration lives in
  * the Host half only.
  */
-import z from '@deepseek-ai/schemastery'
 
 /** Settings namespace owned by the visual-effects plugin. */
 export const EFFECTS_SETTINGS_NAMESPACE = 'ui-effects'
@@ -39,12 +38,3 @@ export interface EffectsSettings {
   whaleSize: number
   whaleStatic: boolean
 }
-
-/** Host schema; also the wire envelope the browser scope validates against. */
-export const EffectsSettingsSchema: z<EffectsSettings> = z.object({
-  [WHALE_ENABLED_FIELD]: z.boolean().default(DEFAULT_WHALE_ENABLED),
-  [FOCUS_ENABLED_FIELD]: z.boolean().default(DEFAULT_FOCUS_ENABLED),
-  [WHALE_OPACITY_FIELD]: z.number().default(DEFAULT_WHALE_OPACITY),
-  [WHALE_SIZE_FIELD]: z.number().default(DEFAULT_WHALE_SIZE),
-  [WHALE_STATIC_FIELD]: z.boolean().default(DEFAULT_WHALE_STATIC),
-})

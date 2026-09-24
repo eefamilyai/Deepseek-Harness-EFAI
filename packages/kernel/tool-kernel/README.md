@@ -14,9 +14,9 @@ A cell that carries no budget of its own gets `defaultTimeoutMs` from the seam.
 
 ## Not to be confused with
 
-- `kernel-mode` — decides whether this tool is mounted at all.
+- `tool-roster` — decides, per turn, whether the model is offered this tool (its `kernel` and `rlm` switches).
 - `kernel-python` — the backend this tool ends up executing against.
-- `@deepseek-ai/dsh-rlm` — swaps the acting tool from this standalone tool to the recursive engine, which drives the same kernel directly. The two are alternatives, not layers: RLM mode unmounts this row.
+- `@deepseek-ai/dsh-rlm` — swaps the acting tool from this standalone tool to the recursive engine, which drives the same kernel directly. The two are alternatives, not layers: with RLM on, `tool-roster` withdraws this tool and offers the engine instead.
 
 ## Images a cell returns
 

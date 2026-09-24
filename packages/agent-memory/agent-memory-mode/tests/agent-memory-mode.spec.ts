@@ -16,8 +16,8 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import { MemorySettings } from '../../../settings/settings/tests/memory.ts'
-import { AGENT_MEMORY_SETTINGS_NAMESPACE, Config, apply, name } from '../src/index.ts'
+import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
+import { Config, apply, name } from '../src/index.ts'
 
 const MEMORY_TOOLS = ['memory_add', 'memory_recall', 'memory_map']
 
@@ -31,18 +31,20 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** Mount the switch over the services the engine needs. */
-async function mount(enabled: boolean): Promise<Context> {
+/**
+ * Mount the switch behind a Loader over the services the engine needs, so an
+ * edit travels the same path a Settings write does.
+ */
+async function mount(enabled: boolean) {
   const ctx = new Context()
-  await ctx.plugin(MemorySettings, { doc: { 'agent-memory': { enabled } } })
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root })
   await ctx.plugin(StorageDomain, { backend: 'json' })
-  await ctx.plugin({ name, apply, Config }, { enabled })
+  const live = await liveConfig(ctx, { name, apply, Config }, { enabled })
   await settle(ctx, enabled ? MEMORY_TOOLS.length : 0)
-  return ctx
+  return { ctx, live }
 }
 
 /** Which of the engine's tools the registry currently holds. */
@@ -72,50 +74,46 @@ async function settle(ctx: Context, expected?: number): Promise<void> {
 
 describe('the switch decides whether the engine runs', () => {
   it('mounts nothing in the off position', async () => {
-    const ctx = await mount(false)
+    const { ctx } = await mount(false)
     expect(memoryTools(ctx)).toEqual([])
     await ctx.fiber.dispose()
   })
 
   it('mounts the engine in the on position', async () => {
-    const ctx = await mount(true)
+    const { ctx } = await mount(true)
     expect(memoryTools(ctx)).toEqual(MEMORY_TOOLS.slice().sort())
     await ctx.fiber.dispose()
   })
 
-  it('publishes the switch as a live setting, not a restart', async () => {
-    const ctx = await mount(false)
-    const descriptor = ctx.settings.describe().find(entry => entry.ns === AGENT_MEMORY_SETTINGS_NAMESPACE)
-    expect(descriptor).toBeDefined()
-    expect(descriptor!.applies).toBe('live')
-    expect((descriptor!.base as { enabled: boolean }).enabled).toBe(false)
-    await ctx.fiber.dispose()
+  it('declares the switch as a live field, so Settings edits it without a remount', () => {
+    expect(Config({}).enabled.get()).toBe(false)
+    expect(Config.dict?.enabled?.meta.volatile).toBe(true)
   })
 })
 
 describe('the decision is taken again when the setting changes', () => {
   it('starts the engine when the switch is turned on', async () => {
-    const ctx = await mount(false)
-    await ctx.settings.update(AGENT_MEMORY_SETTINGS_NAMESPACE, { enabled: true })
+    const { ctx, live } = await mount(false)
+    await live.update({ enabled: true })
     await settle(ctx, MEMORY_TOOLS.length)
     expect(memoryTools(ctx)).toEqual(MEMORY_TOOLS.slice().sort())
     await ctx.fiber.dispose()
   })
 
   it('withdraws every engine registration when the switch is turned off', async () => {
-    const ctx = await mount(true)
+    const { ctx, live } = await mount(true)
     expect(memoryTools(ctx)).toHaveLength(MEMORY_TOOLS.length)
 
-    await ctx.settings.update(AGENT_MEMORY_SETTINGS_NAMESPACE, { enabled: false })
+    await live.update({ enabled: false })
     await settle(ctx, 0)
     expect(memoryTools(ctx)).toEqual([])
     await ctx.fiber.dispose()
   })
 
   it('is idempotent: writing the value it already holds does not remount', async () => {
-    const ctx = await mount(true)
+    const { ctx, live } = await mount(true)
     const before = memoryTools(ctx)
-    await ctx.settings.update(AGENT_MEMORY_SETTINGS_NAMESPACE, { enabled: true })
+    await live.update({ enabled: true })
     await settle(ctx, MEMORY_TOOLS.length)
     expect(memoryTools(ctx)).toEqual(before)
     await ctx.fiber.dispose()

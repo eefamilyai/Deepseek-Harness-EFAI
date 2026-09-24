@@ -22,7 +22,7 @@ import { AccountsSection } from './AccountsSection.tsx'
 import type { AccountsSectionInjected } from './AccountsSection.tsx'
 import { en, zh } from './locales.ts'
 
-export type { AccountsKey } from './locales-keys.ts'
+export type { AccountsKey } from './locales.ts'
 export type { AccountsSectionComponentProps, AccountsSectionInjected } from './AccountsSection.tsx'
 
 /** Dictionary namespace owned by this plugin. */

@@ -1,149 +1,19 @@
-/* The terminal tab's own styles, lifted from the retired dock drawer. The pane
-   fills whatever box the right Sidebar gives a tab body and keeps the
-   --ds-terminal-* tokens with solid fallbacks. */
+.root { display: flex; flex: 1; flex-direction: column; box-sizing: border-box; height: 100%; min-height: 0; padding-top: 8px; color: var(--dsw-alias-label-primary); font-size: 13px; }
+.screen { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); }
+.screen :global(.xterm) { height: 100%; }
+.screen :global(.xterm-viewport) { background: var(--dsw-alias-bg-base); }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 12px; background: var(--dsw-alias-bg-l2); }
+.error { margin: 0; padding: 10px 12px; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-l2); }
+.empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 0; padding: 24px; overflow: auto; text-align: center; }
+.emptyMessage { max-width: 28ch; margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.actionIcon { display: flex; }
 
-/* One host per chat, stacked; only the active chat's is shown while the rest
-   stay mounted (their sockets + shells alive) so switching chats is instant. */
-.termHost {
-  position: absolute;
-  inset: 0;
-  display: none;
-}
-
-.termHost[data-active] { display: block; }
-
-.termEmpty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  text-align: center;
-  color: var(--ds-color-text-secondary, #9aa0aa);
-  font-size: 12.5px;
-}
-
-.terminal {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--ds-terminal-bg, #0b0c0f);
-}
-
-.terminalBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--ds-color-border, #2a2d34);
-}
-
-.terminalCwd {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;               /* keep the tail (the leaf dir) visible */
-  text-align: left;
-  color: var(--ds-color-text-secondary, #9aa0aa);
-  font-family: var(--ds-font-mono, 'JetBrains Mono', 'SF Mono', Consolas, monospace);
-  font-size: 11.5px;
-}
-
-.terminalReset {
-  appearance: none;
-  flex: 0 0 auto;
-  border: 1px solid var(--ds-color-border, #2a2d34);
-  border-radius: 7px;
-  padding: 3px 10px;
-  font: inherit;
-  font-size: 11.5px;
-  color: var(--ds-color-text-secondary, #9aa0aa);
-  background: transparent;
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.terminalReset:hover { color: var(--ds-color-text, #e8eaed); background: var(--ds-color-fill-hover, #23262e); }
-
-.terminalScroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 10px 12px;
-  cursor: text;
-}
-
-.terminalPre {
-  margin: 0;
-  font-family: var(--ds-font-mono, 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace);
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--ds-terminal-fg, #d7d7cf);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* The current command line, rendered inline right after the output so the
-   prompt sits where a real terminal's cursor would be. Local echo. */
-.terminalInputRow {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 2px;
-  font-family: var(--ds-font-mono, 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-
-.terminalPrompt {
-  flex: 0 0 auto;
-  color: var(--ds-color-accent, #6fd08c);
-  font: inherit;
-  user-select: none;
-}
-
-.terminalLine {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--ds-terminal-fg, #d7d7cf);
-  font: inherit;
-  caret-color: var(--ds-color-accent, #6fd08c);
-}
-
-.terminalLine:disabled { opacity: 0.5; }
-
-.termReconnect {
-  appearance: none;
-  border: none;
-  border-radius: 6px;
-  padding: 1px 8px;
-  margin-left: 4px;
-  font: inherit;
-  color: var(--ds-color-accent, #78a9ff);
-  background: var(--ds-color-fill-hover, #23262e);
-  cursor: pointer;
-}
-
-.termReconnect:hover { color: var(--ds-color-text, #e8eaed); }
-
-.terminalStatus {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--ds-color-fill-subtle, #1b1e24);
-  color: var(--ds-color-text-secondary, #9aa0aa);
-  font-size: 11px;
-}
+/* Cursor colors depend on its cell, so they must not update xterm's shared ANSI theme. */
+.screen :global(.xterm-cursor) { opacity: 1; }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-block) { background-color: var(--terminal-cursor); color: var(--terminal-cursor-accent); }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-block:not(.xterm-cursor-blink)) { background-color: var(--terminal-cursor) !important; color: var(--terminal-cursor-accent) !important; }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-outline) { outline-color: var(--terminal-cursor); }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-bar) { box-shadow: 1px 0 0 var(--terminal-cursor) inset; }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-underline) { border-bottom-color: var(--terminal-cursor); }
+.screen :global(.xterm .xterm-rows.xterm-focus .xterm-cursor.xterm-cursor-block.xterm-cursor-blink) { animation: terminal-cursor-blink 1s step-end infinite; }
+@keyframes terminal-cursor-blink { 0% { background-color: var(--terminal-cursor); color: var(--terminal-cursor-accent); } 50% { background-color: var(--terminal-cursor-cell-background); color: var(--terminal-cursor-cell-foreground); } }

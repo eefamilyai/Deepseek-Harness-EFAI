@@ -15,6 +15,7 @@
         "README.zh.md",
         "README.i18n.yaml",
         ".claude/",
+        ".github/dependabot.yml",
         "package.json"
       ]
     },
@@ -48,12 +49,6 @@
       "name": "llm",
       "paths": [
         "packages/llm/"
-      ]
-    },
-    {
-      "name": "client-locale",
-      "paths": [
-        "packages/client/locale/"
       ]
     },
     {
@@ -161,15 +156,15 @@
       "regenerate": "pnpm run gen-module-graph"
     },
     {
-      "path": "docs/subsystems/code-runtime.md",
+      "path": "docs/subsystems/ptc-runtime.md",
       "regenerate": "pnpm run gen-cordis-catalog"
     },
     {
-      "path": "docs/subsystems/code-runtime.zh.md",
+      "path": "docs/subsystems/ptc-runtime.zh.md",
       "regenerate": "pnpm run gen-cordis-catalog"
     },
     {
-      "path": "docs/subsystems/code-runtime.i18n.yaml",
+      "path": "docs/subsystems/ptc-runtime.i18n.yaml",
       "regenerate": "pnpm run gen-cordis-catalog"
     },
     {
@@ -211,6 +206,18 @@
     {
       "path": "docs/config-catalog.i18n.yaml",
       "regenerate": "pnpm run gen-config-catalog"
+    },
+    {
+      "path": "packages/preset/agent-preset/skills/cordis-composition-reference/references/packages.md",
+      "regenerate": "pnpm run gen-plugin-packages"
+    },
+    {
+      "path": "docs/tool-catalog.i18n.yaml",
+      "regenerate": "pnpm run verify-translation-pairing --write docs/tool-catalog.md"
+    },
+    {
+      "path": "docs/capability-seams.i18n.yaml",
+      "regenerate": "pnpm run verify-translation-pairing --write docs/capability-seams.md"
     }
   ],
   "tier1Prefixes": [
@@ -228,16 +235,13 @@
     "packages/bundle/efai-base/",
     "packages/bundle/efai-web/",
     "packages/client/ui-effects/",
-    "packages/client/ui-sidebar-terminal/",
     "packages/core/efai-identity/",
     "packages/fs/tool-notebook-edit/",
-    "packages/host/sidebar-bridge/",
     "packages/host/version-route/",
     "packages/kernel/",
     "packages/llm/llm-dsml/",
     "packages/llm/llm-kiln/",
     "packages/llm/llm-system-file/",
-    "packages/preset/efai-presets/",
     "packages/rlm/",
     "packages/session/command-session-info/",
     "packages/web/web-browser/",

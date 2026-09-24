@@ -13,6 +13,7 @@ import type {
   GenerateOptions,
   LlmAccountAddResult,
   LlmAccountDraft,
+  RequestMessage,
   LlmConfigurableProvider,
   LlmDiscoveredModel,
   LlmFailure,
@@ -26,7 +27,7 @@ import type {
   StreamChunk,
   SystemPromptUpdate,
 } from './types.ts'
-import { freezeMessage, type Message } from './message.ts'
+import { freezeMessage } from './message.ts'
 import { resolveRetryPolicy } from './retry-policy.ts'
 import type { ResolvedRetryPolicy } from './retry-policy.ts'
 import type { ProviderRequestId } from './brand.ts'
@@ -67,8 +68,8 @@ declare module '@deepseek-ai/cordis' {
      *   process-local {@link markAgentLoopRequest} identity and arrives deep-frozen
      *   (mutation throws): its content is a pure function of the session log (the
      *   reconstructability Agent Note), so listeners read it, never rewrite it.
-     *   Hand-built calls do not carry that marker; their messages already obey
-     *   the immutable creation contract.
+     *   Hand-built calls do not carry that marker; callers own their request
+     *   inputs and must keep them unchanged until the stream settles.
      * @mode waterfall
      */
     'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
@@ -84,6 +85,8 @@ export interface LlmErrorOptions extends ErrorOptions {
   providerRetryAfterMs?: number
   /** Non-empty opaque provider request id. */
   requestId?: ProviderRequestId
+  /** Positive count of additional oldest retained image occurrences to offload; only with `IMAGE_OFFLOAD_REQUIRED`. */
+  offloadImages?: number
 }
 
 /**
@@ -122,6 +125,7 @@ export class LlmError extends HarnessError {
       ...options?.status === undefined ? {} : { status: options.status },
       ...options?.providerRetryAfterMs === undefined ? {} : { providerRetryAfterMs: options.providerRetryAfterMs },
       ...options?.requestId === undefined ? {} : { requestId: options.requestId },
+      ...options?.offloadImages === undefined ? {} : { offloadImages: options.offloadImages },
     })
   }
 }
@@ -625,6 +629,7 @@ export class LlmRuntime extends TypertRemoteService {
         ...model.name === undefined ? {} : { name: model.name },
         ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
         ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
+        ...model.inputModalities === undefined ? {} : { inputModalities: [...model.inputModalities] },
       })
     }
     return models
@@ -1078,9 +1083,10 @@ export class LlmRuntime extends TypertRemoteService {
 
   /** Remove replay state whose historical route is owned by another adapter. */
   private forAdapter(options: GenerateOptions, adapter: LlmAdapter): GenerateOptions {
-    const messages: Message[] = options.messages.map((message) => {
+    const messages: RequestMessage[] = options.messages.map((message) => {
+      if (message.role !== 'assistant') return message
       const source = message.source
-      if (message.role !== 'assistant' || source.kind !== 'model' || source.replayState === undefined) return message
+      if (source.replayState === undefined) return message
       if (this.adapters.get(source.provider)?.adapter === adapter) return message
       return freezeMessage({
         ...message,
@@ -1150,7 +1156,7 @@ export class LlmRuntime extends TypertRemoteService {
           ? deepFreeze({ ...options, ...resolvedConfig })
           : { ...options, ...resolvedConfig }
       // Files are never dispatched natively: every route receives handle text.
-      let projectedMessages: readonly Message[] = resolvedOptions.messages
+      let projectedMessages: readonly RequestMessage[] = resolvedOptions.messages
       if (projectedMessages.some(message => contentHasFile(message.content))) {
         projectedMessages = projectFilesToText(projectedMessages, ref => this.fileReadPath(ref))
       }
@@ -1162,8 +1168,8 @@ export class LlmRuntime extends TypertRemoteService {
       const projectedOptions = projectedMessages === resolvedOptions.messages
         ? resolvedOptions
         : Object.isFrozen(resolvedOptions)
-          ? deepFreeze({ ...resolvedOptions, messages: projectedMessages as Message[] })
-          : { ...resolvedOptions, messages: projectedMessages as Message[] }
+          ? deepFreeze({ ...resolvedOptions, messages: projectedMessages as RequestMessage[] })
+          : { ...resolvedOptions, messages: projectedMessages as RequestMessage[] }
       const stream = dispatch(this.forAdapter(projectedOptions, adapter))
       iterator = stream[Symbol.asyncIterator]()
     } catch (error: unknown) {

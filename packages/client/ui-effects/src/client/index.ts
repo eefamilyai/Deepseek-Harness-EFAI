@@ -6,7 +6,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: pulls the settings surface's Context merge (ctx.settingsScope) and slot types.
+// Type-only: pulls the settings surface's Context merge (ctx.configForms) and slot types.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the renderer's Context merge (ctx.slots).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -25,7 +25,7 @@ const NS = 'settings.effects'
 const ROOT_ID = 'dsh-ui-effects-root'
 
 /** Services required by the browser effects plugin. */
-export const inject = ['slots', 'locale', 'settingsScope']
+export const inject = ['slots', 'locale', 'configForms']
 
 /**
  * Bind the durable preferences, register the Settings row, and mount the
@@ -34,7 +34,7 @@ export const inject = ['slots', 'locale', 'settingsScope']
  */
 export function apply(ctx: ClientContext): void {
   const policy = new EffectsSettingsPolicy(
-    ctx.settingsScope.bind<EffectsSettings>({ namespace: EFFECTS_SETTINGS_NAMESPACE }),
+    ctx.configForms.get<EffectsSettings>(EFFECTS_SETTINGS_NAMESPACE),
   )
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-effects: settings dictionaries')

@@ -23,20 +23,16 @@
  * @module @deepseek-ai/dsh-agent-memory-mode
  */
 
-import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type { Context, Fiber, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import * as AgentMemory from '@deepseek-ai/dsh-agent-memory'
 import type { Config as AgentMemoryConfig } from '@deepseek-ai/dsh-agent-memory'
 import type {} from '@deepseek-ai/dsh-settings'
+// The Loader's `loader/volatile-update` event and `fiber.entry`.
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'agent-memory-mode'
-
-/** The settings namespace holding the switch. */
-export const AGENT_MEMORY_SETTINGS_NAMESPACE = 'agent-memory'
-
-/** The document path the switch is written at. */
-export const AGENT_MEMORY_ENABLED_PATH = 'agent-memory.enabled'
 
 /** Default when the user has never touched the switch. */
 export const AGENT_MEMORY_ENABLED_DEFAULT = false
@@ -49,53 +45,48 @@ export interface Config {
    * bounded index re-injected each turn. Off: none of it, and nothing is
    * written. Applies immediately.
    */
-  enabled?: boolean
+  enabled: Volatile<boolean>
   /** Engine settings, passed through verbatim when the engine mounts. */
-  engine?: AgentMemoryConfig
+  engine: AgentMemoryConfig
 }
 
-export const Config: z<Config> = z.object({
+export const Config = z.object({
   enabled: z.boolean().default(AGENT_MEMORY_ENABLED_DEFAULT)
     .description('Keep a durable, cache-friendly memory index of tool results and explicit notes.'
       + ' On, the engine adds memory_add/memory_recall/memory_map tools, auto-records tool output,'
-      + ' and re-injects a bounded index each turn.'),
+      + ' and re-injects a bounded index each turn.')
+    .volatile(),
   engine: z.any().default({})
     .description('Engine settings passed through to @deepseek-ai/dsh-agent-memory when it mounts.'),
-}) as z<Config>
+})
 
 /**
- * Publish the switch and hold the engine to it.
+ * Hold the engine to the switch.
  *
- * `ctx.inject(['settings'])` rather than a static `inject`: a composition with
- * no settings service (the headless and test profiles) still gets the
- * composition-layer answer, and simply has no switch to publish.
+ * The switch is a live field of this row, so Settings edits it by this row's id
+ * and the loader commits the new value without remounting the row; this plugin
+ * then mounts or disposes the engine to match. The row itself stays mounted in
+ * both positions, because a switch that disappeared when off could never be
+ * switched back on.
  * @param ctx - the plugin context.
- * @param config - the composition-layer value, resolved under the user layer.
+ * @param config - the live switch and the engine settings.
  */
 export function apply(ctx: Context, config: Config): void {
-  const composed = config.enabled ?? AGENT_MEMORY_ENABLED_DEFAULT
-
-  ctx.inject(['settings'], (settingsCtx) => {
-    const section = settingsCtx.settings.register(AGENT_MEMORY_SETTINGS_NAMESPACE, Config, {
-      base: { enabled: composed },
-      applies: 'live',
-    })
-
-    let engine: Fiber | undefined
-    const sync = (enabled: boolean): void => {
-      if (enabled === (engine !== undefined)) return
-      if (enabled) {
-        engine = settingsCtx.plugin(AgentMemory, config.engine ?? {})
-        return
-      }
-      // Disposal unwinds the engine's own effects — its tools, its prompt
-      // block, and its tool-result observer — so the off position leaves no
-      // half-registered surface behind.
-      void engine?.dispose()
-      engine = undefined
+  let engine: Fiber | undefined
+  const sync = (): void => {
+    const enabled = config.enabled.get()
+    if (enabled === (engine !== undefined)) return
+    if (enabled) {
+      engine = ctx.plugin(AgentMemory, config.engine)
+      return
     }
+    // Disposal unwinds the engine's own effects — its tools, its prompt
+    // block, and its tool-result observer — so the off position leaves no
+    // half-registered surface behind.
+    void engine?.dispose()
+    engine = undefined
+  }
 
-    sync(section.get().enabled ?? composed)
-    section.watch((next) => { sync(next.enabled ?? composed) })
-  })
+  sync()
+  ctx.on('loader/volatile-update', sync)
 }

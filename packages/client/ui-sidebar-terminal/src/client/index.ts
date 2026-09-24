@@ -1,111 +1,112 @@
-/**
- * Browser half: register `terminal` as a right-Sidebar tab type.
- *
- * The public two-stage path, unmodified: the type into `ctx.sidebarRightTabs`,
- * the body into the keyed `sidebar.right.pane.tab` seat and the chip label into
- * the keyed `sidebar.right.pane.tab.title` seat, both under the type's `id`.
- *
- * It also carries the conversation header's more-actions menu over from the
- * retired dock: the Session-log download and a Terminal entry that opens this
- * tab. The dock's drawer toggle is deliberately not re-homed — the right
- * Sidebar is the one panel.
- *
- * This module also owns the run-in-terminal bridge. `ui-primitives` is
- * cordis-free and must not import a tab package, so a chat code block's Run
- * button announces itself on a window CustomEvent; this plugin is the listener,
- * and it turns that announcement into a navigation — opening the terminal tab
- * with the code block as its `params`. The shell's own connection is keyed by
- * session inside `terminal-session.ts`, so it is deliberately not an effect here:
- * a tab switch must not tear down a working shell.
- * @module @deepseek-ai/dsh-client-ui-sidebar-terminal/client
- */
-
-import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: pulls the session plugin's Context merge and the SessionStandardProps
-// seat that gives the tab body its sessionId and session list.
-import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-// Type-only: makes ctx.slots legal for this registration.
-import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-// Type-only: makes ctx.locale legal for this dictionary.
-import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: declares ctx.sidebarRightTabs / ctx.sidebarRight and their seats.
+/** Register interactive terminal tabs and explicit process cleanup with the sidebar. */
+import type { Context } from '@deepseek-ai/cordis'
+import type { WebTerminalId } from '@deepseek-ai/dsh-api-terminal-controller/types'
+import type { SidebarRightTabParamsMap, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type {} from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-// Type-only: declares the conversation header utilities slot key + its SlotMap entry.
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { RUN_IN_TERMINAL_EVENT } from '@deepseek-ai/dsh-client-ui-primitives'
-import { TERMINAL_ID, TERMINAL_KIND, terminalDefinition } from './definition.tsx'
-import { TerminalBody } from './TerminalBody.tsx'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
+import { TerminalGuideIcon } from './TerminalIcon.tsx'
+import { TerminalGuide, type TerminalGuideInjected } from './TerminalGuide.tsx'
+import { LazyTerminalBody } from './LazyTerminalBody.tsx'
 import { TerminalTitle } from './TerminalTitle.tsx'
-import { TerminalMenuHeaderAction, type TerminalMenuInjected } from './header-actions.tsx'
+// import { TerminalRecovery, type TerminalRecoveryInjected } from './TerminalRecovery.tsx'
+// import { TerminalCleanup, type TerminalCleanupInjected } from './TerminalCleanup.tsx'
+import type { TerminalBodyInjected, TerminalInjected } from './face.ts'
 import { en, zh } from './locales.ts'
-import { disposeAllTerminals } from './terminal-session.ts'
-import './params.ts'
 
-export type { SidebarTerminalKey } from './locales.ts'
-export type { TerminalBodyProps } from './TerminalBody.tsx'
-export type { TerminalSession, TerminalSnapshot, TerminalStatus } from './terminal-session.ts'
-export { acquireTerminal, disposeAllTerminals } from './terminal-session.ts'
-
-/** This package's copy namespace. */
-const NS = 'sidebarTerminal'
+/** Services needed by the terminal's two sidebar seats. */
+export const inject = ['slots', 'locale', 'sidebarRight', 'sidebarRightTabs', 'webTerminals', 'theme']
 
 /**
- * Required browser services: the tab registry, the keyed seats, and copy.
- * `sessions` is not listed because the slot framework resolves the session
- * itself for a session-scoped seat; the body reads it from its own props.
+ * Register the terminal type, observable views and background process cleanup.
+ * @param ctx - Client root Context with sidebar and terminal services.
  */
-export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight']
-
-/**
- * Client plugin body: register the type, its dictionaries, its body and chip
- * label, and the run-in-terminal bridge.
- * @param ctx - client root context carrying the registry, the seats, and copy.
- */
-export function apply(ctx: ClientContext): void {
-  const t = ctx.locale.bind(NS)
-  ctx.effect(() => ctx.sidebarRightTabs.register(terminalDefinition(t)), 'ui-sidebar-terminal: terminal type')
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-sidebar-terminal: dictionaries')
-
-  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
-    { name: 'sidebar.right.pane.tab', key: TERMINAL_ID, locale: NS },
-    TerminalBody,
-  )), 'ui-sidebar-terminal: terminal tab body')
-  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
-    { name: 'sidebar.right.pane.tab.title', key: TERMINAL_ID },
-    TerminalTitle,
-  )), 'ui-sidebar-terminal: terminal tab title')
-
-  // The conversation header's more-actions menu, carried over from the dock.
-  // Same list cell id as upstream's session-log capsule at a LOWER priority
-  // (lower renders), so this menu wins that cell and hosts the download.
-  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-    name: 'conversation.session.header.utilities',
-    id: 'session-log-download',
-    priority: -10,
-    order: 10,
-    locale: NS,
-    inject: (): TerminalMenuInjected => ({
-      openTerminal: () => { ctx.sidebarRight.openTab(TERMINAL_KIND) },
-    }),
-  }, TerminalMenuHeaderAction))
-
-  // The chat code fence's Run button. It carries no session: the tab opens in
-  // whichever session is current, which is the chat the block was run from.
-  // `nonce` is what makes running the same block twice two navigations, so the
-  // body's submit effect fires on each one.
-  let nonce = 0
+export function apply(ctx: Context): void {
+  // let disposed = false
+  // const recovered = new Map<SessionId, Promise<void>>()
+  // ctx.effect(() => () => { disposed = true; recovered.clear() }, 'ui-sidebar-terminal.lifetime')
   ctx.effect(() => {
-    const onRun = (event: Event): void => {
-      const code = (event as CustomEvent<string>).detail
-      if (typeof code !== 'string' || code.trim() === '') return
-      nonce += 1
-      ctx.sidebarRight.openTab(TERMINAL_KIND, { params: { code, nonce } })
-    }
-    window.addEventListener(RUN_IN_TERMINAL_EVENT, onRun)
-    return () => { window.removeEventListener(RUN_IN_TERMINAL_EVENT, onRun) }
-  }, 'ui-sidebar-terminal: run-in-terminal bridge')
-
-  // The per-session shells are module state; close them with the plugin so the
-  // sockets do not outlive the package that opened them.
-  ctx.effect(() => () => { disposeAllTerminals() }, 'ui-sidebar-terminal: shells')
+    const sync = (): void => { ctx.webTerminals.retainTabs(ctx.sidebarRight.openTabs.getSnapshot().filter(tab => tab.kind === 'terminal')) }
+    const unsubscribe = ctx.sidebarRight.openTabs.subscribe(sync)
+    sync()
+    return () => { unsubscribe(); ctx.webTerminals.retainTabs([]) }
+  }, 'ui-sidebar-terminal.window-holds')
+  const target = (sessionId: SessionId, key: string): SidebarRightTabParamsMap['terminal'] | undefined =>
+    ctx.sidebarRight.tabDomain.occurrence(sessionId, { id: key as TabId }).navigation.getSnapshot().params
+  const terminalId = (sessionId: SessionId, key: string): WebTerminalId | undefined => {
+    const params = target(sessionId, key)
+    return params !== undefined && 'terminalId' in params ? params.terminalId : undefined
+  }
+  const view = (sessionId: SessionId, key: string) => {
+    const params = target(sessionId, key)
+    const contentId = ctx.sidebarRight.tabDomain.occurrence(sessionId, { id: key as TabId }).navigation.getSnapshot().address
+    return ctx.webTerminals.view(sessionId, key, contentId, terminalId(sessionId, key),
+      params !== undefined && 'shellPath' in params ? params.shellPath : undefined)
+  }
+  const namespace = 'sidebarTerminal'
+  const id = '@deepseek-ai/dsh-client-ui-sidebar-terminal'
+  const t = ctx.locale.bind(namespace)
+  ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'ui-sidebar-terminal.copy')
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id, kind: 'terminal', multiple: true, priority: 'builtin', title: () => t('title'),
+    guide: [{ id: 'new', order: 20, title: () => t('new'), description: () => t('description'), icon: TerminalGuideIcon }],
+  }), 'ui-sidebar-terminal.type')
+  ctx.effect(() => ctx.sidebarRight.registerCloseHandler('terminal', (sessionId, tab) => {
+    ctx.webTerminals.close(sessionId, tab.id, tab.contentId, terminalId(sessionId, tab.id))
+  }), 'ui-sidebar-terminal.close')
+  const inject = (sessionId: SessionId): TerminalInjected => ({
+    view: key => view(sessionId, key),
+    keyedHooks: { terminal: key => view(sessionId, key).state },
+  })
+  const theme: TerminalBodyInjected['hooks']['theme'] = {
+    getSnapshot: () => ctx.theme.getTheme(),
+    subscribe: listener => ctx.on('theme/change', listener),
+  }
+  ctx.effect(() => ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
+    name: 'sidebar.right.tab.guide.entry', key: id, locale: namespace,
+    inject: (sessionId): TerminalGuideInjected => ({
+      loadShells: signal => ctx.webTerminals.launchShells(sessionId, signal),
+      selectShell: (path) => { ctx.webTerminals.selectShell(path) },
+    }),
+  }, TerminalGuide)), 'ui-sidebar-terminal.guide')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab', key: id, locale: namespace,
+      inject: (sessionId): TerminalBodyInjected => ({ ...inject(sessionId), hooks: { theme } }),
+    }, LazyTerminalBody,
+  )), 'ui-sidebar-terminal.body')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(
+    { name: 'sidebar.right.pane.tab.title', key: id, locale: namespace, inject }, TerminalTitle,
+  )), 'ui-sidebar-terminal.title')
+  // ctx.effect(() => ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+  //   name: 'conversation.session.header.actions', id, locale: namespace,
+  //   inject: (sessionId): TerminalRecoveryInjected => ({
+  //     restore: () => {
+  //       let pending = recovered.get(sessionId)
+  //       if (pending === undefined) {
+  //         for (const tab of ctx.sidebarRight.tabsIn(sessionId)) {
+  //           if (tab.kind === 'terminal') view(sessionId, tab.id)
+  //         }
+  //         pending = ctx.webTerminals.recover(sessionId).then((terminals) => {
+  //           if (disposed) return
+  //           for (const info of terminals) ctx.sidebarRight.openTabIn(sessionId, 'terminal', {
+  //             params: { terminalId: info.id },
+  //           })
+  //         }).catch((error: unknown) => { recovered.delete(sessionId); throw error })
+  //         recovered.set(sessionId, pending)
+  //       }
+  //       return pending
+  //     },
+  //   }),
+  // }, TerminalRecovery)), 'ui-sidebar-terminal.recovery')
+  // ctx.effect(() => ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+  //   name: 'shell.overlay', id, locale: namespace,
+  //   inject: (): TerminalCleanupInjected => ({
+  //     hooks: { closeFailures: ctx.webTerminals.closeFailures },
+  //     retryClose: (terminalId) => { ctx.webTerminals.retryClose(terminalId) },
+  //   }),
+  // }, TerminalCleanup)), 'ui-sidebar-terminal.cleanup')
 }

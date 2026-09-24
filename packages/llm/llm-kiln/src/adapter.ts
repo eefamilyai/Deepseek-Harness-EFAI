@@ -31,7 +31,7 @@ import type {
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
-  Message,
+  RequestMessage,
   StreamChunk,
   TokenUsage,
   ToolSchema,
@@ -46,7 +46,7 @@ import {
   toolProtocolPrompt,
   trailingReasoningCalls,
 } from '@deepseek-ai/dsh-llm-dsml'
-import type { KilnBridge, KilnMessage, KilnProvider, KilnUploadFile } from './bridge.ts'
+import type { KilnBridge, KilnMessage, KilnProvider, KilnStreamEvent, KilnStreamRequest, KilnUploadFile } from './bridge.ts'
 
 /** Constructor options: the sidecar and the route mapping the plugin owns. */
 export interface KilnAdapterOptions {
@@ -68,7 +68,31 @@ export interface KilnAdapterOptions {
    * be read for upload, which degrades to the placeholder rather than failing.
    */
   readonly resolveAttachments?: () => AttachmentStore | undefined
+  /**
+   * Characters of conversation one summarization call may carry on a route that
+   * caps each message, before the conversation is folded in parts. Defaults to
+   * {@link DEFAULT_COMPACTION_FOLD_CHARS}.
+   */
+  readonly compactionFoldChars?: number
 }
+
+/**
+ * The provider whose route caps every message it sends: `ds_direct` hands the
+ * free DeepSeek web chat one prompt per request, clipped to a fixed budget, so
+ * a request larger than that budget reaches the model as its newest end only.
+ */
+const MESSAGE_CAPPED_KILN_PROVIDER = 'deepseek'
+
+/**
+ * Conversation characters one summarization call carries on that route. The
+ * sidecar's per-message budget is 48,000 characters; this leaves room for the
+ * summarizer statement, the running summary, and the instruction.
+ */
+export const DEFAULT_COMPACTION_FOLD_CHARS = 30000
+
+/** The tags upstream's summarizer reads a prior checkpoint between. */
+const CHECKPOINT_OPEN = '<compacted-summary>'
+const CHECKPOINT_CLOSE = '</compacted-summary>'
 
 /**
  * Provider whose routes can carry an image.
@@ -122,11 +146,14 @@ function imageFilename(ref: ImageAttachmentRef): string {
   return `${bare}${imageExtension(ref.mediaType)}`
 }
 
-/** Collect attached images in request order, walking nested tool results. */
+/**
+ * Collect attached images in request order. A tool result is its own
+ * `tool`-role message whose content is the result's blocks, so an image a tool
+ * returned is collected by the same walk as one the user attached.
+ */
 function collectImageRefs(content: readonly ContentBlock[], refs: ImageAttachmentRef[]): void {
   for (const block of content) {
     if (block.type === 'image') refs.push(block.attachment)
-    else if (block.type === 'tool-result') collectImageRefs(block.content, refs)
   }
 }
 
@@ -205,11 +232,25 @@ async function uploadRequestImages(
  * also small — a name list plus one body — so pinning them costs a fraction of
  * the context they share the budget with.
  *
+ * `compact-checkpoint` is the summary a compaction leaves in place of the turns
+ * it removed, and `session-recovery` is the handoff that restates the session's
+ * requests, files, errors, and todos right after one. On a route that re-primes
+ * a fresh chat after a compaction, these two are the ONLY surviving memory of
+ * everything before it, and they are the oldest messages in the re-prime, so an
+ * oldest-first clip dropped them first. The sidecar honours the pin
+ * unconditionally.
+ *
  * Read as widened strings: `MessageSourceMap` is merge-extensible, and these
- * two kinds are declared by the tool-skill plugin rather than by this package,
- * so they are not literals in this program's type of `message.source`.
+ * kinds are declared by other plugins rather than by this package, so they are
+ * not literals in this program's type of `message.source`.
  */
-const PINNED_SOURCE_KINDS: readonly string[] = ['user', 'skill-catalog', 'skill-invocation']
+const PINNED_SOURCE_KINDS: readonly string[] = [
+  'user',
+  'skill-catalog',
+  'skill-invocation',
+  'compact-checkpoint',
+  'session-recovery',
+]
 
 /**
  * Flatten one harness message into the registry's turn shape.
@@ -224,19 +265,24 @@ const PINNED_SOURCE_KINDS: readonly string[] = ['user', 'skill-catalog', 'skill-
  *   this request actually delivered the images.
  * @returns the flattened turn, or undefined when nothing survived flattening.
  */
-export function flattenMessage(message: Message, imageText?: string): KilnMessage | undefined {
+export function flattenMessage(message: RequestMessage, imageText?: string): KilnMessage | undefined {
   const parts: string[] = []
   for (const block of message.content) {
     parts.push(...flattenBlock(block, imageText))
   }
-  const content = parts.join('\n').trim()
-  if (content.length === 0) return undefined
+  const body = parts.join('\n').trim()
+  if (body.length === 0) return undefined
+  // These routes have no tool role: a tool result reads back as the output of
+  // the call the model wrote, inside a user turn, exactly as it did when a
+  // result was a block of the user message that followed the call.
+  if (message.role === 'tool') return { role: 'user', content: `OUTPUT:\n${body}` }
   // See PINNED_SOURCE_KINDS: these are the turns an oldest-first clip must never
   // take, because each is either the operator's actual request or the only
-  // surviving record of how to recover after a compaction.
-  const kind = (message.source as { kind?: string }).kind
+  // surviving record of how to recover after a compaction. A request-only input
+  // carries no source and is never pinned.
+  const kind = message.source?.kind
   const pinned = kind !== undefined && PINNED_SOURCE_KINDS.includes(kind)
-  return { role: message.role, content, ...pinned ? { pin: true } : {} }
+  return { role: message.role, content: body, ...pinned ? { pin: true } : {} }
 }
 
 /** Render one content block as the text these providers can carry. */
@@ -248,12 +294,6 @@ function flattenBlock(block: ContentBlock, imageText?: string): string[] {
       // Echoed back as the DSML block the model wrote, so its own transcript
       // stays self-consistent and keeps demonstrating the one format.
       return [renderToolCall(block.name, block.arguments)]
-    case 'tool-result': {
-      const body = block.content
-        .flatMap(inner => flattenBlock(inner, imageText))
-        .join('\n')
-      return [`OUTPUT:\n${body}`]
-    }
     case 'reasoning':
       return []
     case 'image':
@@ -459,6 +499,13 @@ export class KilnAdapter extends LlmAdapter {
   async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     const kilnProvider = this.options.kilnId(options.provider)
     const routeAccount = this.options.account?.(options.provider)
+    if (options.purpose === 'compaction' && kilnProvider === MESSAGE_CAPPED_KILN_PROVIDER) {
+      const folded = await this.foldCompaction(options, kilnProvider, routeAccount)
+      if (folded !== undefined) {
+        yield* this.emit(this.options.bridge.stream(folded, options.signal), options.tools)
+        return
+      }
+    }
     // Attached images are pushed into the provider's own file store before the
     // turn is assembled, because the ids are the only way they can ride it: this
     // route has no native attachment field, so an image that is not uploaded
@@ -480,7 +527,58 @@ export class KilnAdapter extends LlmAdapter {
       opts: requestOptions(options, upload.account ?? routeAccount, upload.fileIds),
     }, options.signal)
 
-    const emitter = new ChunkEmitter(toolIndex(options.tools))
+    yield* this.emit(events, options.tools)
+  }
+
+  /**
+   * Summarize a conversation too large for one capped message by folding it in
+   * parts, and return the request for the final part.
+   *
+   * Each part travels with the summary of every part before it, wrapped in the
+   * tags upstream's summarizer already treats as a prior checkpoint to merge, so
+   * every call — the intermediate ones included — answers the same instruction
+   * in the same structure. Without this the summarizer saw only the newest end
+   * of what it was asked to condense, and everything older vanished from the
+   * summary. Any intermediate failure falls back to the single capped call.
+   * @param options - the compaction request.
+   * @param kilnProvider - the Kiln provider id.
+   * @param account - the route's pinned login, if any.
+   * @returns the final part's request, or undefined when no fold is needed or it failed.
+   */
+  private async foldCompaction(
+    options: GenerateOptions,
+    kilnProvider: string,
+    account: string | undefined,
+  ): Promise<KilnStreamRequest | undefined> {
+    const plan = planCompactionFold(options, this.options.compactionFoldChars ?? DEFAULT_COMPACTION_FOLD_CHARS)
+    if (plan === undefined) return undefined
+    let running = ''
+    try {
+      for (let index = 0; index < plan.parts.length - 1; index += 1) {
+        const request = foldRequest(options, kilnProvider, account, plan, index, running)
+        let text = ''
+        for await (const event of this.options.bridge.stream(request, options.signal)) {
+          if (event.type === 'content') text += event.text ?? ''
+          if (event.type === 'meta' && event.error !== undefined && event.error.length > 0) throw new Error(event.error)
+        }
+        if (text.trim().length === 0) return undefined
+        running = text.trim()
+      }
+    } catch (error: unknown) {
+      if (options.signal?.aborted === true) throw error
+      return undefined
+    }
+    return foldRequest(options, kilnProvider, account, plan, plan.parts.length - 1, running)
+  }
+
+  /**
+   * Translate sidecar events into the harness chunk stream.
+   * @param events - the sidecar's event stream.
+   * @param tools - the request's tools, which the DSML reader resolves calls against.
+   * @returns the harness chunks.
+   */
+  private async *emit(events: AsyncIterable<KilnStreamEvent>, tools: GenerateOptions['tools']): AsyncIterable<StreamChunk> {
+    const emitter = new ChunkEmitter(toolIndex(tools))
     for await (const event of events) {
       switch (event.type) {
         case 'reasoning':
@@ -508,6 +606,113 @@ export class KilnAdapter extends LlmAdapter {
   }
 }
 
+/** A compaction request split into parts that each fit one capped message. */
+export interface CompactionFoldPlan {
+  /** Conversation turns per part, oldest part first. */
+  readonly parts: readonly (readonly KilnMessage[])[]
+  /** The summarizer's own instruction, which closes every part. */
+  readonly instruction: string
+}
+
+/**
+ * Plan a folded summarization, or report that one call suffices.
+ *
+ * The instruction is the request's last user turn — where every summarizer puts
+ * it — and system turns are left out: on this route the summarizer statement
+ * replaces them. A single turn longer than a part is cut to its head and tail,
+ * which keeps what a summary needs from a long tool result: what was run, and
+ * how it ended.
+ * @param options - the compaction request.
+ * @param partChars - characters of conversation one part may carry.
+ * @returns the plan, or undefined when the conversation fits one call.
+ */
+export function planCompactionFold(options: GenerateOptions, partChars: number): CompactionFoldPlan | undefined {
+  const messages = options.messages
+  const last = messages.at(-1)
+  if (last === undefined || last.role !== 'user') return undefined
+  const instruction = flattenMessage(last)?.content ?? ''
+  if (instruction.length === 0) return undefined
+  const turns = messages.slice(0, -1)
+    .filter(message => message.role !== 'system')
+    .flatMap((message) => {
+      const turn = flattenMessage(message)
+      return turn === undefined ? [] : [turn]
+    })
+  const total = turns.reduce((sum, turn) => sum + turn.content.length, 0)
+  if (total <= partChars) return undefined
+  const parts: KilnMessage[][] = []
+  let current: KilnMessage[] = []
+  let used = 0
+  for (const turn of turns) {
+    const fitted = turn.content.length > partChars
+      ? {
+        ...turn,
+        content: `${turn.content.slice(0, Math.floor(partChars * 0.6))}\n… [cut to fit the summarizer] …\n${turn.content.slice(-Math.floor(partChars * 0.3))}`,
+      }
+      : turn
+    if (used + fitted.content.length > partChars && current.length > 0) {
+      parts.push(current)
+      current = []
+      used = 0
+    }
+    current.push(fitted)
+    used += fitted.content.length
+  }
+  if (current.length > 0) parts.push(current)
+  return parts.length < 2 ? undefined : { parts, instruction }
+}
+
+/**
+ * The request for one part of a folded summarization.
+ * @param options - the compaction request.
+ * @param kilnProvider - the Kiln provider id.
+ * @param account - the route's pinned login, if any.
+ * @param plan - the fold plan.
+ * @param index - which part, zero-based.
+ * @param running - the summary of every earlier part, or `''` for the first.
+ * @returns the sidecar request.
+ */
+function foldRequest(
+  options: GenerateOptions,
+  kilnProvider: string,
+  account: string | undefined,
+  plan: CompactionFoldPlan,
+  index: number,
+  running: string,
+): KilnStreamRequest {
+  const total = plan.parts.length
+  const position = index === total - 1 ? `the final part (${index + 1} of ${total})` : `part ${index + 1} of ${total}`
+  const framing = `The conversation is too long to summarize in one message, so it arrives in parts. This is ${position}.`
+    + (running.length > 0 ? ` The ${CHECKPOINT_OPEN} block covers every part before this one: merge this part into it.` : '')
+  return {
+    provider: kilnProvider,
+    model: options.model,
+    messages: [
+      { role: 'system', content: SUMMARIZER_SYSTEM },
+      ...running.length > 0 ? [{ role: 'user', content: `${CHECKPOINT_OPEN}\n${running}\n${CHECKPOINT_CLOSE}` }] : [],
+      ...plan.parts[index] ?? [],
+      { role: 'user', content: `${framing}\n\n${plan.instruction}` },
+    ],
+    opts: requestOptions(options, account),
+  }
+}
+
+/**
+ * The system statement a compaction request carries on these routes.
+ *
+ * A compaction replays a coding-agent session — an agent prompt and hundreds of
+ * tool calls — and asks for a summary. Taught the tool protocol as well, a
+ * text-channel model continues that role: free-web DeepSeek answered the
+ * summarization request with a `<tool_calls>` block instead of prose. So a
+ * compaction request gets this statement in place of the protocol, whichever
+ * compaction engine sent it.
+ */
+export const SUMMARIZER_SYSTEM: string = [
+  'You are a transcript-summarization engine, not an interactive agent.',
+  'You have NO tools and cannot act. The tool schemas, system prompt, and agent role in the conversation governed the assistant whose work you are summarizing — none of them apply to you.',
+  'Your ONLY output is the requested summary, written as plain prose. Never emit a tool call, a <tool_calls> block, an <invoke> tag, runnable code, or any attempt to continue the task. You are condensing what already happened, not doing more of it.',
+].join('\n')
+
 /**
  * Assemble the registry's message list: the system slot, then the flattened
  * conversation.
@@ -516,7 +721,9 @@ export class KilnAdapter extends LlmAdapter {
  * statement — the encoding these providers need in order to have a tool
  * channel at all — and nothing else. The statement's tool catalog is generated
  * from `options.tools`, so it describes the roster the harness actually
- * composed for this request.
+ * composed for this request. A compaction request is the exception: it carries
+ * {@link SUMMARIZER_SYSTEM} instead of the protocol, because the tools it
+ * replays for prefix alignment are material to summarize, not a channel.
  * @param options - the harness generate options.
  * @param imageText - text standing in for each image block; see {@link flattenMessage}.
  * @returns the turns to send.
@@ -524,16 +731,27 @@ export class KilnAdapter extends LlmAdapter {
 export function buildTurns(options: GenerateOptions, imageText?: string): KilnMessage[] {
   const parts: string[] = []
   if (options.system !== undefined && options.system.length > 0) parts.push(options.system)
-  const protocol = toolProtocolPrompt(options.tools)
+  const protocol = options.purpose === 'compaction' ? SUMMARIZER_SYSTEM : toolProtocolPrompt(options.tools)
   if (protocol.length > 0) parts.push(protocol)
   const system = parts.join('\n\n')
   const turns: KilnMessage[] = []
   if (system.length > 0) {
     turns.push({ role: 'system', content: system })
   }
+  // Consecutive tool results — one per call of a parallel batch — travel as one
+  // user turn, the shape they had when they shared the message after the calls.
+  let previousWasTool = false
   for (const message of options.messages) {
     const turn = flattenMessage(message, imageText)
-    if (turn !== undefined) turns.push(turn)
+    if (turn === undefined) continue
+    const isTool = message.role === 'tool'
+    const last = turns.at(-1)
+    if (isTool && previousWasTool && last !== undefined) {
+      turns[turns.length - 1] = { ...last, content: `${last.content}\n${turn.content}` }
+    } else {
+      turns.push(turn)
+    }
+    previousWasTool = isTool
   }
   return turns
 }

@@ -31,7 +31,7 @@ Both halves live in [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) and are
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | The Cordis plugin: registers every route, reads the settings document, launches the sidecar |
+| [`src/index.ts`](src/index.ts) | The Cordis plugin: registers every route, applies the live DeepSeek-web credentials, launches the sidecar |
 | [`src/adapter.ts`](src/adapter.ts) | `KilnAdapter`: the registry as a harness adapter, and the message flattening |
 | [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) | The format statement and its streaming reader, shared with every other route |
 | [`src/bridge.ts`](src/bridge.ts) | The sidecar client over newline-delimited JSON |
@@ -78,8 +78,6 @@ The system slot is the first thing in the request, so a change there invalidates
 
 Reasoning blocks are dropped, because every one of these providers either regenerates its own thinking or rejects it on input. A prior tool call is re-rendered as the same block the model wrote, and its result as a labelled `OUTPUT:` block, so the transcript stays self-consistent.
 
-An image does not travel as text. On `deepseek`, the free web session, its bytes are uploaded to the provider's file store and the returned ids ride the turn as `ref_file_ids`; the image block itself renders as a short notice naming which of those happened — delivered, partially uploaded, or refused. On every other route there is no file store to push bytes into, so the image renders as `[an image was attached, which this provider cannot receive]` and the model never sees it. The delivered and refused cases are deliberately distinct: an earlier revision let both fall through to the same notice, which made a delivered image read as a rejected one.
-
 #### Token effect
 
 Flattened tool calls and results stay in the transcript for the rest of the session, so a large result is billed again on every later request.
@@ -87,6 +85,48 @@ Flattened tool calls and results stay in the transcript for the rest of the sess
 #### KV Cache effect
 
 Append-only while the route and the flattened prefix stay unchanged.
+
+### Images on these routes
+
+#### What the model sees
+
+An image does not travel as text. On `deepseek`, the free web session, its bytes are uploaded to the provider's file store and the returned ids ride the turn as `ref_file_ids`; the image block itself renders as a short notice naming which of those happened — delivered, partially uploaded, or refused. On every other route there is no file store to push bytes into, so the image renders as `[an image was attached, which this provider cannot receive]` and the model never sees it. The delivered and refused cases are deliberately distinct: an earlier revision let both fall through to the same notice, which made a delivered image read as a rejected one.
+
+#### Token effect
+
+A delivered image costs the provider's own image price on the turn that carries it; a notice costs a line.
+
+#### KV Cache effect
+
+The `ref_file_ids` ride the turn that carries them, so an image changes nothing before it.
+
+### Pinned turns after a compaction
+
+#### What the model sees
+
+Some turns are marked `pin`, which the sidecar's prompt clip never drops: the operator's own messages, the skill catalogue and invocations, the compaction checkpoint (`compact-checkpoint`), and the post-compaction handoff (`session-recovery`). After a compaction, `ds_direct` opens a fresh web chat and re-primes it within one capped prompt. The checkpoint and the handoff are then the oldest turns in that prompt and the only record of everything before it, so an unpinned clip dropped them first.
+
+#### Token effect
+
+None of its own: a pin decides what the clip keeps, not what is sent.
+
+#### KV Cache effect
+
+A re-primed chat is new, so it reuses nothing either way; the pin only decides what it is primed with.
+
+### Folded summary requests
+
+#### What the model sees
+
+The summarizer, not the working model, sees this. A summary request on `ds_direct` can be larger than the one capped prompt it travels in, and the clip used to hand the summarizer only the newest end of what it was asked to condense. When the conversation exceeds `compactionFoldChars` (default 30,000 characters), the adapter folds it instead. The conversation is split into parts in order. Each part is sent as its own one-shot summary request, carrying the summary of every part before it inside the `<compacted-summary>` tags upstream's summarizer already merges. The final part's summary is what streams back. A turn longer than a part is cut to its head and tail. Any failed intermediate part falls back to the single capped call. Other routes, and any conversation that fits, send one call as before.
+
+#### Token effect
+
+A folded summary costs one call per part instead of one, and each call after the first carries the running summary. That is the price of every part of the conversation reaching a summarizer.
+
+#### KV Cache effect
+
+Every fold call is a fresh one-shot chat, so none of it reuses a prefix; the conversation's own chat is untouched.
 
 ### Reader notes on a block that ran nothing, or needed repair
 

@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { DsmlTranslator, invokeArguments, isRateLimit, KilnAdapter, RATE_LIMIT_RETRY_MS, requestOptions, trailingReasoningCalls } from '@deepseek-ai/dsh-llm-kiln'
-import { accountRoute, buildTurns, mintCallId, rebuildRoutes, renderToolCall, toolIndex } from '@deepseek-ai/dsh-llm-kiln'
+import { SUMMARIZER_SYSTEM, accountRoute, buildTurns, mintCallId, rebuildRoutes, renderToolCall, toolIndex } from '@deepseek-ai/dsh-llm-kiln'
 import { coerceParameter, toolProtocolPrompt } from '@deepseek-ai/dsh-llm-kiln'
 import type { KilnBridge, KilnProvider, KilnStreamEvent } from '@deepseek-ai/dsh-llm-kiln'
 
@@ -34,7 +34,7 @@ const WEB_SEARCH: ToolSchema = {
 
 const TOOLS = [KERNEL, WEB_SEARCH]
 
-const source = { kind: 'plugin', plugin: 'test' } as const
+const source = { kind: 'user' } as const
 const USER_HI = createUserMessage({ content: [{ type: 'text', text: 'hi' }], source })
 const USER_GO = createUserMessage({ content: [{ type: 'text', text: 'go' }], source })
 
@@ -787,7 +787,21 @@ describe('buildTurns', () => {
       provider: 'kiln-deepseek',
       model: 'deepseek-expert',
       messages: [USER_HI],
-    })).toEqual([{ role: 'user', content: 'hi' }])
+    })).toEqual([{ role: 'user', content: 'hi', pin: true }])
+  })
+
+  it('gives a compaction request the summarizer statement instead of the tool protocol', () => {
+    // The tools a compaction replays are material to summarize: taught the
+    // protocol, a text-channel model answers the request with a tool call.
+    const [system] = buildTurns({
+      provider: 'kiln-deepseek',
+      model: 'deepseek-expert',
+      tools: TOOLS,
+      purpose: 'compaction',
+      messages: [],
+    })
+    expect(system).toEqual({ role: 'system', content: SUMMARIZER_SYSTEM })
+    expect(system?.content).not.toContain('# Calling tools')
   })
 })
 

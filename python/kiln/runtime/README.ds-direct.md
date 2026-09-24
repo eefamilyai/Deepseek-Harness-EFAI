@@ -84,6 +84,7 @@ login is solved automatically via [`ds_waf.py`](ds_waf.py).
 | --- | --- |
 | `KILN_DS_CONFIG` | Absolute path to a `ds_config.json` outside the source tree (checked before the local one). |
 | `KILN_STATE_DIR` | Where `ds_sessions.json` (conversation → DeepSeek-chat map) is written. Keeps mutable state out of a read-only vendored runtime. The harness sets this to `<cwd>/.kiln_kernel_state`. |
+| `KILN_DS_SYSTEM_EVERY` | Threaded turns between copies of the system prompt (default `8`). A DeepSeek chat keeps every prompt it is sent, so the system prompt goes out when the chat opens, whenever it changes, and every this-many turns; other turns carry a one-line note instead. `0` sends it on every turn. |
 | `KILN_IDENTITY_DIR` | Where `ds_identity.json` is written. Defaults to `~/.kiln_identity`; set it only to pin the identity somewhere specific. |
 | `DEEPSEEK_TOKEN` / `DEEPSEEK_COOKIE` / `DEEPSEEK_EMAIL` / `DEEPSEEK_MOBILE` / `DEEPSEEK_AREA_CODE` / `DEEPSEEK_PASSWORD` | Account `#0` straight from the environment (no file needed). |
 
@@ -159,6 +160,21 @@ to exactly one DeepSeek chat session (`ds_sessions.json`), so history lives
 server-side and survives restarts, a new day, or a token refresh — as long as
 it is the same account. After the first turn, only the **new** messages are sent
 (`_prompt_for`), never the whole transcript.
+
+**One copy of the system prompt.** The chat stores every prompt it is sent, so
+a system prompt re-sent each turn was stored again each turn — a tool protocol
+of tens of thousands of characters filled the server-side conversation with
+copies of itself and took the per-prompt budget from the conversation. It is
+sent when a chat opens (including every re-prime), whenever its text changes,
+and every `KILN_DS_SYSTEM_EVERY` turns; a turn without it carries a one-line
+note saying the chat already holds it, and the budget only pays for it when it
+is sent.
+
+**After a compaction.** A shrunken transcript opens a fresh chat primed from the
+compacted history. The compaction checkpoint and the handoff that follows it
+arrive pinned (the adapter pins `compact-checkpoint` and `session-recovery`
+messages), so the clip never drops them, and the omission note names the
+checkpoint as what covers the dropped turns.
 
 **Proof-of-Work.** DeepSeek gates `/chat/completion` and `/file/upload_file`
 behind a PoW challenge. `ds_direct` runs DeepSeek's own `sha3_wasm_bg.wasm`
