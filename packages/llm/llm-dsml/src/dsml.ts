@@ -758,6 +758,30 @@ export class DsmlTranslator {
     // separators; strip them so one comparison covers every spelling.
     const word = keyword.replace(/^[_▁]+/, '').toLowerCase()
 
+    // A parameter tag that lost its `name="` on the wire, which cost more live
+    // calls than every other native shape put together. The model writes
+    // `<｜｜DSML｜｜parameter name="timeoutMs" string="false">` and what arrives is
+    // `<｜｜DSML｜｜ timeoutMs" string="false">` — often with a `/` in the pipe run
+    // as well, though no closer carries attributes, so the slash is part of the
+    // same damage and is ignored rather than read.
+    //
+    // The tell is the ODD QUOTE, and it cannot be forged: an attribute run opens
+    // every value before it closes one, so a leading word followed straight by a
+    // CLOSING quote is a `name="` that went missing and nothing else. A
+    // well-formed token never reaches here with one — `parameter name="code"`
+    // leaves `rest` starting at `name=`. That is also why this is tested ahead of
+    // the keyword branches instead of after them: read as a keyword, a parameter
+    // called `parameters` would match the `param` branch and close a tag the
+    // model was opening.
+    //
+    // Unplaced, this token did double damage: it reached the user verbatim AND
+    // took the call with it, because the `</parameter>` after it then had no
+    // opener and `unbalanced()` read the whole invoke as cut off mid-write.
+    if (keyword.length > 0 && (rest.startsWith('"') || rest.startsWith("'"))) {
+      this.repaired = true
+      return `<parameter name="${keyword}"${rest.slice(1)}>`
+    }
+
     // The per-call separator frames nothing the reader needs and has no taught
     // equivalent, so it is simply removed.
     if (word.startsWith('sep')) return ''
@@ -805,6 +829,12 @@ export class DsmlTranslator {
       if (closing || selfClosed) return '</invoke>'
       const name = attributes(body).get('name')?.trim() ?? ''
       if (name.length > 0 && this.tools.has(name)) return `<invoke ${body}>`
+      // An envelope carrying NOTHING — no keyword, no attributes — names no tool
+      // and frames nothing, so it goes the way every other information-free
+      // frame token does. Returning it verbatim was not a conservative choice
+      // here: one live turn emitted 4074 of these back to back after a refused
+      // call, and every one reached the user as a literal `<｜｜DSML｜｜>`.
+      if (body.length === 0) return ''
     }
     return whole
   }

@@ -26,6 +26,7 @@ import time
 
 import config
 import ds_identity
+import tool_result_files
 from token_usage import estimate_tokens
 
 try:
@@ -1869,6 +1870,11 @@ def _trailing_step_start(body_msgs):
     return max(0, i - 1)                    # include the call that produced them
 
 
+# The budget marker, split so the clip can name where the full text went.
+MARKER_HEAD = "[... output truncated to fit the prompt budget"
+MARKER_TAIL = " ...]"
+
+
 def _truncate_tool_result(msg, room):
     """Copy `msg` with its text cut to roughly `room` chars, head and tail kept.
 
@@ -1876,19 +1882,41 @@ def _truncate_tool_result(msg, room):
     see that the call ran and what it roughly returned. Removing it entirely
     reads as "this tool never produced anything", which is how a same-turn
     multi-call step lost one of its results.
+
+    A result can fit on its own and still be cut here, when the TOTAL of the
+    step's results overflows the budget. `_deliver_tool_results` runs first and
+    catches the individually-oversized ones, so this is the last place a result
+    can be cut — the whole text is spilled before the cut, so the middle of a
+    result the model asked for is never simply gone.
     """
     text = _msg_text(msg)
     keep = max(0, room - 64)
     head = keep * 2 // 3
     tail = keep - head
-    marker = "\\n[... output truncated to fit the prompt budget ...]\\n"
     if head + tail >= len(text):
         return msg
+    note = _spill_for_clip(text)
+    marker = MARKER_HEAD + note + MARKER_TAIL
     cut = text[:head] + marker + (text[-tail:] if tail > 0 else "")
     out = dict(msg)
     out["content"] = cut
     out.pop("content_blocks", None)
     return out
+
+
+def _spill_for_clip(text):
+    """Write `text` to the spill directory, returning what the marker should add.
+
+    Empty when the write fails, which keeps the original marker: an unwritable
+    spill directory must not turn a clip into an error.
+    """
+    try:
+        name = tool_result_files.safe_filename("tool_result", text)
+        path = tool_result_files.spill_text(
+            text, directory=tool_result_files.default_spill_dir(), filename=name)
+        return "; full text: %s" % path
+    except Exception:
+        return ""
 
 
 def _clip_body(body_msgs, budget, primed=True):
@@ -1964,6 +1992,105 @@ def _clip_body(body_msgs, budget, primed=True):
     if gap:
         out.append(note)
     return out
+
+
+# ─── oversized tool results ride as FILES ───────────────────────────
+# A tool result is the biggest thing in most prompts, and when it does not fit
+# the budget _clip_body cuts its middle out: the model keeps the head and tail
+# of something it asked for and silently loses the rest. DeepSeek accepts real
+# file uploads and takes their ids on the completion as `ref_file_ids`, so an
+# oversized result can ride as an attachment and keep its stub in the prompt.
+#
+# _upload_cache exists because a DeepSeek chat is threaded: _prompt_for sends
+# only the per-turn DELTA, but the same result can be re-offered on later turns
+# (a retry, a re-prime after /compact). `safe_filename` is content-addressed, so
+# the filename alone identifies the bytes — one upload per distinct result.
+
+def _tool_label(msg):
+    """Name a spilled tool result after the header its output usually starts with.
+
+    The adapter flattens every tool result to `OUTPUT:\\n<body>`, so the first
+    non-empty body line is the closest thing to a tool name on the wire. The
+    generic fallback keeps a shapeless result nameable.
+    """
+    try:
+        body = _msg_text(msg).split("OUTPUT:", 1)[-1]
+        for line in body.splitlines():
+            line = line.strip()
+            if line:
+                return line[:60]
+    except Exception:
+        pass
+    return "tool_result"
+
+
+def _deliver_tool_results(client, messages):
+    """Replace oversized tool results with file-backed stubs for the model.
+
+    Returns `(messages, file_ids)`. The first is a NEW list — `messages` is also
+    the durable transcript and the UI renders it as produced. The second is the
+    uploaded ids, which the caller MUST pass as `ref_file_ids` on the
+    completion: uploading without referencing the id leaves the model holding a
+    stub that names a file it cannot open.
+
+    Returns the input unchanged when nothing was oversized — and on ANY failure,
+    because losing the turn is worse than clipping a result, which is the
+    behaviour that shipped before this existed.
+    """
+    try:
+        out, spilled = tool_result_files.process_messages(
+            messages,
+            uploader=lambda name, data: _upload_spilled(client, name, data),
+            directory=tool_result_files.default_spill_dir(),
+            label_of=_tool_label,
+        )
+    except Exception as exc:
+        config.dbg("ds_direct: tool-result delivery skipped (%s)", exc)
+        return messages, []
+    if not spilled:
+        return messages, []
+    ids = [r.file_id for r in spilled if r.file_id]
+    # The id rides this turn's `ref_file_ids`, so the private spill record has
+    # done its job. Drop it: it is a dataclass, and this list is the model-facing
+    # copy that gets serialized.
+    key = tool_result_files._SPILLED_KEY
+    out = [{k: v for k, v in m.items() if k != key} for m in out]
+    config.dbg("ds_direct: %d tool result(s) as files, %d uploaded",
+               len(spilled), len(ids))
+    return out, ids
+
+
+def _upload_spilled(client, filename, data):
+    """Upload one spilled result, memoised per client. -> file id, or None.
+
+    None is the documented fallback: `process_messages` keeps the inline text,
+    so an upload that fails — or a route with no file storage — degrades to
+    exactly the prompt that was sent before this existed.
+
+    The memo lives on the client rather than in a module global because a
+    global keyed by `id(client)` can hand a later client a recycled id's cached
+    file. `safe_filename` is content-addressed, so the filename identifies the
+    bytes and one upload per distinct result is enough even across retries.
+    """
+    cache = getattr(client, "_tool_result_uploads", None)
+    if not isinstance(cache, dict):
+        cache = {}
+        try:
+            client._tool_result_uploads = cache
+        except Exception:
+            pass
+    if filename in cache:
+        return cache[filename]
+    try:
+        file_id = client.upload_file(filename, data)
+    except Exception as exc:
+        config.dbg("ds_direct: upload of %s failed (%s)", filename, exc)
+        return None
+    if not file_id:
+        return None
+    file_id = str(file_id)
+    cache[filename] = file_id
+    return file_id
 
 
 def _prompt_for(messages, st):
@@ -2291,10 +2418,18 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
             try:
                 st = _get_state(client, conv_id, force_new=(force and attempt == 0),
                                 why=why, model_type=model_type, search=search)
-                prompt = _prompt_for(messages, st)
+                _msgs, _result_ids = _deliver_tool_results(client, messages)
+                prompt = _prompt_for(_msgs, st)
+                # The caller's ids first: they are what this turn explicitly
+                # attached. The spilled-result ids follow, so a retry cannot
+                # re-upload bytes the caller already referenced.
+                _refs = list(ref_file_ids or [])
+                for _fid in _result_ids:
+                    if _fid not in _refs:
+                        _refs.append(_fid)
                 r = client.open_completion(st["sid"], prompt, thinking, search,
                                            model_type, st.get("parent"), need_preempt,
-                                           ref_file_ids=ref_file_ids)
+                                           ref_file_ids=_refs)
                 if r.status_code in (401, 403):
                     raise _AuthExpired()
                 if r.status_code == 404:

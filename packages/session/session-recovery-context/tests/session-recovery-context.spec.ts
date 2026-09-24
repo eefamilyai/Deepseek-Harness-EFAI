@@ -12,6 +12,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -40,6 +41,21 @@ async function mount(config: Config = {}) {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(recovery, { root: await tempRoot(), ...config })
   return ctx
+}
+
+/**
+ * Mount the same stack with a system prompt, whose assembly carries the
+ * runtime-context facts this plugin contributes.
+ * @returns the context and the session root the plugin was given.
+ */
+async function mountWithPrompt(config: Config = {}) {
+  const root = await tempRoot()
+  const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
+  await ctx.plugin(SystemPrompt, {})
+  await ctx.plugin(recovery, { root, ...config })
+  return { ctx, root }
 }
 
 /** A minimal Agent carrying one session, which is all the pre-step listener reads. */
@@ -232,6 +248,57 @@ describe('compaction initialization', () => {
       fallback as never,
     )
     expect((after as unknown as typeof assembly).sections).toEqual(assembly.sections)
+  })
+
+  it('carries the record file path and contents as runtime context', async () => {
+    const { ctx, root } = await mountWithPrompt()
+    const session = sessionWithCwd('compacted', 'D:\\repo')
+    prompt(session, 'port the parser')
+    compact(session, 'c-1', 'the parser was ported halfway')
+    const agent = sessionAgent(session)
+
+    // The first step writes the record; the acknowledgement lets the next step
+    // warm the context that assembly reads.
+    await fire(ctx, agent)
+    acknowledge(session)
+    await fire(ctx, agent)
+
+    const assembled = await (ctx.get('systemPrompt')!).assemble({ agent, scope: agent } as never)
+    const context = assembled.contexts.find(entry => entry.name === 'session:context-file')
+
+    expect(context).toBeDefined()
+    expect(context!.text).toContain(compactionLogPath(root, session, 'c-1'))
+    expect(context!.text).toContain('# Compaction record')
+    expect(context!.text).toContain('the parser was ported halfway')
+    expect(context!.text).toContain('port the parser')
+  })
+
+  it('renders only the path before a record has been written', async () => {
+    const { ctx } = await mountWithPrompt()
+    const session = sessionWithCwd('compacted', 'D:\\repo')
+    prompt(session, 'port the parser')
+    compact(session, 'c-1')
+    // Acknowledged without a step, so the record is named but never written.
+    acknowledge(session)
+    const agent = sessionAgent(session)
+
+    const assembled = await (ctx.get('systemPrompt')!).assemble({ agent, scope: agent } as never)
+    const context = assembled.contexts.find(entry => entry.name === 'session:context-file')
+
+    expect(context!.text).toContain('Context file: ')
+    expect(context!.text).not.toContain('# Compaction record')
+  })
+
+  it('contributes no context file before any compaction', async () => {
+    const { ctx } = await mountWithPrompt()
+    const session = Session.create(SessionId('fresh'))
+    prompt(session, 'build the thing')
+    const agent = sessionAgent(session)
+
+    const assembled = await (ctx.get('systemPrompt')!).assemble({ agent, scope: agent } as never)
+    const context = assembled.contexts.find(entry => entry.name === 'session:context-file')
+
+    expect(context!.text).toBe('')
   })
 
   it('reports an awaiting compaction until the acknowledgement lands', async () => {

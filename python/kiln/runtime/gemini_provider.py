@@ -14,6 +14,7 @@
 # MODELS below is only a pre-fetch fallback.
 import os
 
+import provider_uploads
 import sse_client
 from provider_errors import friendly_error
 
@@ -119,6 +120,10 @@ def stream(model, messages, opts, cancelled, cfg):
                        "or in .env to use this provider." % env}
         yield {"type": "meta", "finish": "error"}
         return
+    # Oversized tool results are delivered as uploaded files rather than
+    # being clipped out of the prompt; a provider without file storage still
+    # gets the disk-backed stub.
+    messages = provider_uploads.deliver_tool_results(messages, SCHEMA, base, key)
     system_parts, contents = _to_gemini(messages)
     gen_cfg = {}
     if opts.get("temperature") is not None:

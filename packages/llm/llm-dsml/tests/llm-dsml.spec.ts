@@ -118,6 +118,45 @@ describe('native DSML dialects', () => {
     expect(calls(reply)).toEqual([{ name: 'read', arguments: { path: 'package.json' } }])
   })
 
+  it('recovers a parameter tag whose name=" was eaten on the wire', () => {
+    // Captured verbatim from a live session: the second parameter's opener
+    // arrives as a closer, with `parameter name="` gone and one quote left over.
+    // It used to reach the user as text and strand the `</parameter>` under it,
+    // which made the invoke look cut off mid-write and refused the whole call.
+    expect(calls([
+      '<｜｜DSML｜｜invoke name="search_files">',
+      '<｜｜DSML｜｜parameter name="query" string="true">pool</｜｜DSML｜｜parameter>',
+      '</｜｜DSML｜｜ limit" string="false">5</｜｜DSML｜｜parameter>',
+      '</invoke>',
+      '',
+    ].join('\n'))).toEqual([{ name: 'search_files', arguments: { query: 'pool', limit: 5 } }])
+  })
+
+  it('recovers the same damage written as an opener', () => {
+    expect(calls([
+      '<｜｜DSML｜｜invoke name="search_files">',
+      '<｜｜DSML｜｜parameter name="query" string="true">pool</｜｜DSML｜｜parameter>',
+      '<｜｜DSML｜｜ limit" string="false">5</｜｜DSML｜｜parameter>',
+      '</invoke>',
+      '',
+    ].join('\n'))).toEqual([{ name: 'search_files', arguments: { query: 'pool', limit: 5 } }])
+  })
+
+  it('leaves a well-formed token alone, whatever its parameter is called', () => {
+    // The odd quote is the whole signal. A parameter whose name merely STARTS
+    // with a reserved word still reads as the opener it is.
+    expect(visible([
+      '<｜｜DSML｜｜parameter name="parameters" string="true">x</｜｜DSML｜｜parameter>',
+      '',
+    ].join('\n'))).not.toContain('DSML')
+  })
+
+  it('drops an envelope token carrying nothing at all', () => {
+    // No keyword and no attributes: it names no tool and frames nothing. A live
+    // turn emitted thousands of these in a row and every one reached the user.
+    expect(visible('<｜｜DSML｜｜>\n<｜｜DSML｜｜>\nstill here\n')).toBe('\n\nstill here\n')
+  })
+
   it('carries a JSON body closed only by its wrapper', () => {
     expect(calls([
       '<tool_calls>',

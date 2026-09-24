@@ -236,6 +236,7 @@
     "packages/kernel/",
     "packages/llm/llm-dsml/",
     "packages/llm/llm-kiln/",
+    "packages/llm/llm-system-file/",
     "packages/preset/efai-presets/",
     "packages/rlm/",
     "packages/session/command-session-info/",

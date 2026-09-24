@@ -378,6 +378,47 @@ ids belong to:
  "errors": [{"name": "big.bin", "error": "…"}]}
 ```
 
+### Oversized tool results ride as files automatically
+
+The two entry points above are for files a *caller* wants to attach. A tool
+result is the other case: the model asked for something, the call returned far
+more text than the prompt budget holds, and the runtime used to cut the middle
+out of it. The model kept the head and tail of a result it had requested and
+silently lost the rest.
+
+Now the full text is written to a file and offered to the provider's upload
+endpoint, and the in-prompt copy shrinks to a short stub naming the file, its
+size, and the provider file id:
+
+```
+stream(model, messages, conv_id, …)
+  └─ _deliver_tool_results(messages)        # ds_direct.py
+       └─ tool_result_files.process_messages(...)
+            ├─ write the full body to <spill dir>/<name>-<hash>.txt
+            ├─ uploader(filename, data) -> file id | None
+            └─ replace the body with a stub naming both
+  └─ client.open_completion(…, ref_file_ids=[…, *uploaded_ids])
+```
+
+The id and the reference are one step, not two. An upload whose id never
+reaches the request would leave the model holding a stub naming a file it
+cannot open, so `ref_file_ids` carries the uploaded ids on the same turn.
+
+Three rules keep this from costing a turn:
+
+- **Uploading is best-effort.** An endpoint that is down, refuses the file, or
+  does not exist falls back to the local file. The stub then names the local
+  path and the model can still re-read it in slices.
+- **A failed write keeps the inline text.** Losing a turn to a full disk is
+  worse than clipping a result, which is what shipped before this existed.
+- **The durable transcript is never touched.** Only the model-facing copy
+  shrinks, so the UI and the session log still hold the whole result.
+
+The threshold is `tool_result_files.DEFAULT_MAX_INLINE_CHARS` (6000 characters).
+The spill directory is `tool_result_files.default_spill_dir()`, and a result is
+content-addressed, so identical text re-spills to one file and a retry does not
+re-upload it.
+
 **File ids are scoped to the login that uploaded them.** Pass the returned
 `account` back as `stream(..., account=<id>)` so the turn that references the
 files runs on the same login; an id attached on a different account is a file

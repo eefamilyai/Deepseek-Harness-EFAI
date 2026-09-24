@@ -30,7 +30,7 @@ index ac01e65042..3a52d077c6 100644
 +# whitespace error. Exempt them from the whitespace check.
 +*.patch -whitespace
 diff --git a/.gitignore b/.gitignore
-index fb999f93fb..56afe75a9b 100644
+index fb999f93fb..7db9453820 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -34,6 +34,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
@@ -44,7 +44,7 @@ index fb999f93fb..56afe75a9b 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -44,3 +48,53 @@ worktrees/
+@@ -44,3 +48,58 @@ worktrees/
  .agents/worktrees/
  .typert-*/
  native/system/test/bin/
@@ -76,6 +76,11 @@ index fb999f93fb..56afe75a9b 100644
 +python/kiln/runtime/subkernels.json
 +
 +python/kiln/runtime/.kiln_memory/
++
++# Oversized tool results spilled to disk instead of being clipped out of the
++# prompt (see tool_result_files.py). Content-addressed session artifacts, not
++# source; they exist only so the model can re-read a result in slices.
++python/kiln/runtime/tool-results/
 +
 +
 +# vision_tools captures: these are pictures of the real screen, so they must

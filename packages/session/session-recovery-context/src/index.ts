@@ -14,6 +14,10 @@
  * that acknowledgement is absorbed, the operator's own prompt and the normal
  * initialization injections proceed as they would have.
  *
+ * Later turns carry the record too, as the `Context file:` runtime context: the
+ * path it is stored at, then its contents, re-read whenever a compaction
+ * replaces it.
+ *
  * Nothing here scans history. A Session projection folds the prompts, the event
  * tail, and the latest compaction as they commit, exactly as the
  * [synchronous-read rule](../../../../.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md)
@@ -75,6 +79,15 @@ export const inject = ['agents', 'sessionProjections']
  * reads the map, so a fork-owned position costs no upstream edit.
  */
 const LOG_CONTEXT_ORDER = 125
+
+/**
+ * Runtime-context position for the compaction-record path fact.
+ *
+ * One past {@link LOG_CONTEXT_ORDER}, for the same reason: both sit outside the
+ * `CONTEXT_ORDERS` band that `dsh-system-prompt` allocates centrally, so a
+ * fork-owned position costs no upstream edit.
+ */
+const CONTEXT_FILE_ORDER = LOG_CONTEXT_ORDER + 1
 
 /** The single instruction the initialization step carries. */
 export const DEFAULT_INSTRUCTION = 'Read the compaction record above and reply with nothing but "OK".'
@@ -275,6 +288,15 @@ const deferred = new WeakMap<Session, UserMessage[]>()
 const written = new WeakSet<Session>()
 
 /**
+ * The record text an assembly renders, per session.
+ *
+ * The context provider that surfaces the record is synchronous, so it can only
+ * render what an earlier async step has already read. Keyed by path so a newer
+ * compaction's record replaces the one before it.
+ */
+const recordText = new WeakMap<Session, { path: string; text: string }>()
+
+/**
  * The absolute path of one compaction's record.
  * @param root - the session root directory.
  * @param session - the session the record belongs to.
@@ -287,6 +309,21 @@ export function compactionLogPath(
   compactionId: string,
 ): string {
   return join(sessionDir(root, session.header.cwd, session.id), compactionLogFilename(compactionId, session.id))
+}
+
+/**
+ * The record path a session's latest compaction named, or undefined before any.
+ *
+ * Read from the fold rather than captured, because the path changes as
+ * compactions happen.
+ * @param ctx - the plugin context, for the session projection.
+ * @param root - the session root directory.
+ * @param session - the session to resolve for.
+ * @returns the current record's path, or undefined when none exists yet.
+ */
+function recordPathOf(ctx: Context, root: string, session: Session): string | undefined {
+  const state = ctx.sessionProjections.stateOf(session, 'sessionRecovery') as SessionRecoveryProjection
+  return state.compactionId === null ? undefined : compactionLogPath(root, session, state.compactionId)
 }
 
 /**
@@ -318,6 +355,7 @@ async function writeCompactionLog(
   await mkdir(sessionDir(root, session.header.cwd, session.id), { recursive: true })
   await writeFile(path, text, 'utf8')
   written.add(session)
+  recordText.set(session, { path, text })
   return path
 }
 
@@ -400,6 +438,18 @@ export function apply(ctx: Context, config: Config = {}): void {
     const session = agent.session
     const state = ctx.sessionProjections.stateOf(session, 'sessionRecovery') as SessionRecoveryProjection
 
+    // The system prompt's context provider is synchronous, and assembly reads it
+    // before any prompt waterfall runs, so the record must be on hand by the time
+    // this step is decided. A compaction replaces the record, and the path it is
+    // stored under changes with it. The step that closes a compaction writes the
+    // file below, so an unreadable path here means "not written yet" and is left
+    // for that write to fill in.
+    const recordPath = recordPathOf(ctx, root, session)
+    if (recordPath !== undefined && recordText.get(session)?.path !== recordPath) {
+      const text = await readRecordIfPresent(recordPath)
+      if (text !== undefined) recordText.set(session, { path: recordPath, text })
+    }
+
     // Past the acknowledgement: admit the messages this plugin deferred for the
     // real turn, then let the ordinary injections run.
     const stashed = deferred.get(session)
@@ -460,7 +510,44 @@ export function apply(ctx: Context, config: Config = {}): void {
         return path === undefined ? '' : `This session is logged to ${path}`
       },
     })
+    // The record a compaction leaves behind is named for that compaction, so the
+    // fact is resolved from the fold on every assembly rather than captured: as
+    // compactions happen, the path this names changes with them. Before the
+    // first compaction there is no record, and the fact renders empty.
+    const recordOf = (session: Session | undefined): string | undefined =>
+      session === undefined ? undefined : recordPathOf(ctx, root, session)
+    scope.systemPrompt.context({
+      name: 'session:context-file',
+      order: CONTEXT_FILE_ORDER,
+      text: (context) => {
+        const session = context.agent?.session
+        const path = recordOf(session)
+        if (path === undefined) return ''
+        const record = session === undefined ? undefined : recordText.get(session)
+        return record === undefined || record.path !== path
+          ? `Context file: ${path}`
+          : `Context file: ${path}\n\n${record.text}`
+      },
+    })
   })
+}
+
+/**
+ * Read the record back, or nothing when it is not there yet.
+ *
+ * A record is named before it is written — the path is known from the fold as
+ * soon as the compaction commits — so callers that warm a cache must be able to
+ * tell "absent" from "empty".
+ * @param path - the record's path.
+ * @returns its text, or undefined when the file does not exist.
+ */
+async function readRecordIfPresent(path: string): Promise<string | undefined> {
+  const { readFile } = await import('node:fs/promises')
+  try {
+    return await readFile(path, 'utf8')
+  } catch {
+    return undefined
+  }
 }
 
 /** Read the record back, tolerating a missing file by rendering nothing. */

@@ -9,6 +9,7 @@
 import os
 import re
 
+import provider_uploads
 import sse_client
 from provider_errors import friendly_error
 
@@ -171,6 +172,11 @@ def stream(model, messages, opts, cancelled, cfg):
                        "or in .env to use this provider." % ((cfg or {}).get("id") or "openai", env)}
         yield {"type": "meta", "finish": "error"}
         return
+    # An oversized tool result is delivered as a file rather than being clipped
+    # out of the prompt. The upload is best-effort: when this endpoint has no
+    # file storage the full text is still spilled to disk and named in a stub,
+    # and when even that fails the inline text is left exactly as it was.
+    messages = provider_uploads.deliver_tool_results(messages, SCHEMA, base, key)
     # system/developer messages are real roles in the OpenAI schema — never
     # collapse them into ordinary user turns (matches the Anthropic adapter)
     msgs = []

@@ -9,6 +9,7 @@
 # itself is never stored, logged, or returned.
 import os
 
+import provider_uploads
 import sse_client
 from provider_errors import friendly_error
 
@@ -113,6 +114,10 @@ def stream(model, messages, opts, cancelled, cfg):
                "text": "\n[anthropic] %s is not set in .env — add the key to use this provider." % env}
         yield {"type": "meta", "finish": "error"}
         return
+    # Oversized tool results are delivered as uploaded files rather than
+    # being clipped out of the prompt; a provider without file storage still
+    # gets the disk-backed stub.
+    messages = provider_uploads.deliver_tool_results(messages, SCHEMA, base, key)
     sys_msgs = [m for m in messages if m.get("role") == "system"]
     system = "\n\n".join(m.get("content", "") for m in sys_msgs) or None
     # honour the loop's breakpoints, newest first, up to the API's limit

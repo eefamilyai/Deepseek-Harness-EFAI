@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-recovery-context` puts the record back after a compaction: one injected message carrying every operator prompt and the tail of the session log, delivered once per compaction, so the model spends no turn fetching what it just lost. It also registers the session's log path, directory, and id as prompt variables, so a deployment can name the exact file in its own persona text. A session with no compaction receives nothing. The cost is one durable user-role message per compaction, bounded by the configured prompt and tail budgets.
+`dsh-session-recovery-context` puts the record back after a compaction: one injected message carrying every operator prompt and the tail of the session log, delivered once per compaction, so the model spends no turn fetching what it just lost. It also keeps that record in the system prompt as a `Context file:` fact, re-read whenever a compaction replaces it, and registers the session's log path, directory, and id as prompt variables. A session with no compaction receives nothing. The cost is one durable user-role message per compaction, bounded by the configured prompt and tail budgets.
 
 ## Table of Contents
 
@@ -156,6 +156,29 @@ A single line in the stable system prompt, re-rendered per assembly. It replaces
 #### KV Cache effect
 
 The line is stable for the life of a session, so it contributes to the reusable prefix rather than invalidating it; it changes only when the session itself changes.
+
+### Compaction record in the system prompt
+
+#### What the model sees
+
+One runtime-context fact naming the current compaction record, then the record's own text: a `Context file:` line followed by the file's contents, re-read whenever a compaction replaces it. Before the first compaction the fact is empty; between a compaction and the write of its record it carries the path alone.
+
+##### Runtime context fact
+
+```markdown
+Context file: <absolute-record-path>
+
+# Compaction record
+...
+```
+
+#### Token effect
+
+The record's full text joins the system prompt, so the cost is the record's own size — the same document the recovery step carries, bounded by the configured event and prompt budgets.
+
+#### KV Cache effect
+
+The fact changes exactly when a compaction replaces the record, which is the same moment the prefix is rewritten anyway. Between compactions it stays stable.
 
 ## Known Limitations and Deferred Work
 

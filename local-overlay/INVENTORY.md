@@ -186,7 +186,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 351 paths do not exist upstream, so no patch covers them and none can conflict.
+These 280 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -207,7 +207,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `.merge-port/apiproxy-and-fixtures.patch`
 - `AI_BIG_PROJECT_DESIGN.md`
 - `HARNESS-EDITS.md`
-- `HARNESS.md`
 - `desktop/harness-desktop/README.md`
 - `desktop/harness-desktop/chrome/browser-start.html`
 - `desktop/harness-desktop/chrome/toolbar-preload.js`
@@ -216,13 +215,11 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `desktop/harness-desktop/main.js`
 - `desktop/harness-desktop/package-lock.json`
 - `desktop/harness-desktop/package.json`
-- `efai/ensure-profile-bundles.mjs`
 - `install.ps1`
 - `install.sh`
 - `local-overlay/BASE`
 - `local-overlay/INVENTORY.md`
 - `local-overlay/README.md`
-- `local-overlay/SEAM.json`
 - `local-overlay/apply.mjs`
 - `local-overlay/lib.mjs`
 - `local-overlay/patches/agent-skills.patch`
@@ -244,13 +241,10 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/tsconfig.patch`
 - `local-overlay/rebuild.mjs`
 - `local-overlay/rules.json`
-- `local-overlay/verify-efai-presets.mjs`
-- `local-overlay/verify-seam-frozen.mjs`
 - `local-overlay/verify.mjs`
 - `packages/agent-memory/agent-memory-mode/README.md`
 - `packages/agent-memory/agent-memory-mode/package.json`
 - `packages/agent-memory/agent-memory-mode/src/index.ts`
-- `packages/agent-memory/agent-memory-mode/tests/agent-memory-mode.spec.ts`
 - `packages/agent-memory/agent-memory-mode/tsconfig.json`
 - `packages/agent-memory/agent-memory/README.md`
 - `packages/agent-memory/agent-memory/package.json`
@@ -259,16 +253,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/agent-memory/agent-memory/src/spec.ts`
 - `packages/agent-memory/agent-memory/tests/memory.spec.ts`
 - `packages/agent-memory/agent-memory/tsconfig.json`
-- `packages/bundle/efai-base/README.md`
-- `packages/bundle/efai-base/cordis.patch.yml`
-- `packages/bundle/efai-base/package.json`
-- `packages/bundle/efai-base/src/index.ts`
-- `packages/bundle/efai-base/tsconfig.json`
-- `packages/bundle/efai-web/README.md`
-- `packages/bundle/efai-web/cordis.patch.yml`
-- `packages/bundle/efai-web/package.json`
-- `packages/bundle/efai-web/src/index.ts`
-- `packages/bundle/efai-web/tsconfig.json`
 - `packages/client/ui-brand-official/src/client/Brand.module.css`
 - `packages/client/ui-brand-official/src/css-modules.d.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
@@ -287,13 +271,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-effects/src/invariant.ts`
 - `packages/client/ui-effects/tsconfig.json`
 - `packages/client/ui-effects/tsdown.config.ts`
-- `packages/client/ui-flow-accents/package.json`
-- `packages/client/ui-flow-accents/src/client/index.ts`
-- `packages/client/ui-flow-accents/src/client/tokens.ts`
-- `packages/client/ui-flow-accents/src/index.ts`
-- `packages/client/ui-flow-accents/tests/flow-accent-tokens.client.spec.ts`
-- `packages/client/ui-flow-accents/tsconfig.json`
-- `packages/client/ui-flow-accents/tsdown.config.ts`
 - `packages/client/ui-primitives/src/terminal-bridge.ts`
 - `packages/client/ui-settings-accounts/README.md`
 - `packages/client/ui-settings-accounts/package.json`
@@ -306,15 +283,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-accounts/src/index.ts`
 - `packages/client/ui-settings-accounts/tsconfig.json`
 - `packages/client/ui-settings-accounts/tsdown.config.ts`
-- `packages/client/ui-settings-advanced/package.json`
-- `packages/client/ui-settings-advanced/src/client/AdvancedSection.module.css`
-- `packages/client/ui-settings-advanced/src/client/AdvancedSection.tsx`
-- `packages/client/ui-settings-advanced/src/client/index.ts`
-- `packages/client/ui-settings-advanced/src/client/locales.ts`
-- `packages/client/ui-settings-advanced/src/css-modules.d.ts`
-- `packages/client/ui-settings-advanced/src/index.ts`
-- `packages/client/ui-settings-advanced/tsconfig.json`
-- `packages/client/ui-settings-advanced/tsdown.config.ts`
 - `packages/client/ui-settings-tools/README.md`
 - `packages/client/ui-settings-tools/package.json`
 - `packages/client/ui-settings-tools/src/client/ToolsSection.module.css`
@@ -343,15 +311,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-sidebar-terminal/tsconfig.json`
 - `packages/client/ui-sidebar-terminal/tsdown.config.ts`
 - `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
-- `packages/compaction/compaction-efai/package.json`
-- `packages/compaction/compaction-efai/src/index.ts`
-- `packages/compaction/compaction-efai/tests/compaction-efai.spec.ts`
-- `packages/compaction/compaction-efai/tsconfig.json`
-- `packages/core/efai-identity/README.md`
-- `packages/core/efai-identity/package.json`
-- `packages/core/efai-identity/src/index.ts`
-- `packages/core/efai-identity/tests/efai-identity.spec.ts`
-- `packages/core/efai-identity/tsconfig.json`
 - `packages/fs/tool-notebook-edit/README.md`
 - `packages/fs/tool-notebook-edit/package.json`
 - `packages/fs/tool-notebook-edit/src/index.ts`
@@ -362,11 +321,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/host/sidebar-bridge/package.json`
 - `packages/host/sidebar-bridge/src/index.ts`
 - `packages/host/sidebar-bridge/tsconfig.json`
-- `packages/host/version-route/README.md`
-- `packages/host/version-route/package.json`
-- `packages/host/version-route/src/index.ts`
-- `packages/host/version-route/tests/version-route.spec.ts`
-- `packages/host/version-route/tsconfig.json`
 - `packages/kernel/kernel-mode/README.md`
 - `packages/kernel/kernel-mode/package.json`
 - `packages/kernel/kernel-mode/src/index.ts`
@@ -381,7 +335,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/src/invariant.ts`
 - `packages/kernel/kernel-python/src/provider.ts`
 - `packages/kernel/kernel-python/src/seam.ts`
-- `packages/kernel/kernel-python/tests/browser-window.spec.ts`
 - `packages/kernel/kernel-python/tests/fixtures/fake-kernel.py`
 - `packages/kernel/kernel-python/tests/images.e2e.spec.ts`
 - `packages/kernel/kernel-python/tests/seam-tools-call.e2e.spec.ts`
@@ -430,26 +383,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/tests/images.spec.ts`
 - `packages/llm/llm-kiln/tests/pinning.spec.ts`
 - `packages/llm/llm-kiln/tsconfig.json`
-- `packages/llm/token-usage-lifetime/package.json`
-- `packages/llm/token-usage-lifetime/src/index.ts`
-- `packages/llm/token-usage-lifetime/tests/token-usage-lifetime.spec.ts`
-- `packages/llm/token-usage-lifetime/tsconfig.json`
-- `packages/preset/efai-presets/README.md`
-- `packages/preset/efai-presets/UPSTREAM-BASELINE.json`
-- `packages/preset/efai-presets/package.json`
-- `packages/preset/efai-presets/presets/cordis/agent.cordis.yml`
-- `packages/preset/efai-presets/presets/cordis/preset.yml`
-- `packages/preset/efai-presets/presets/cordis/skills/cordis-plugin-development/SKILL.md`
-- `packages/preset/efai-presets/presets/cordis/skills/editing-cordis-compositions/SKILL.md`
-- `packages/preset/efai-presets/presets/minimal/agent.cordis.yml`
-- `packages/preset/efai-presets/presets/minimal/preset.yml`
-- `packages/preset/efai-presets/presets/ptc/agent.cordis.yml`
-- `packages/preset/efai-presets/presets/ptc/preset.yml`
-- `packages/preset/efai-presets/presets/standard/agent.cordis.yml`
-- `packages/preset/efai-presets/presets/standard/preset.yml`
-- `packages/preset/efai-presets/src/index.ts`
-- `packages/preset/efai-presets/tests/efai-presets.spec.ts`
-- `packages/preset/efai-presets/tsconfig.json`
 - `packages/rlm/rlm-mode/README.md`
 - `packages/rlm/rlm-mode/package.json`
 - `packages/rlm/rlm-mode/src/index.ts`
@@ -477,10 +410,6 @@ These 351 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/session-recovery-context/tests/log-path-oracle.spec.ts`
 - `packages/session/session-recovery-context/tests/session-recovery-context.spec.ts`
 - `packages/session/session-recovery-context/tsconfig.json`
-- `packages/skill/skill-injection/package.json`
-- `packages/skill/skill-injection/src/index.ts`
-- `packages/skill/skill-injection/tests/skill-injection.spec.ts`
-- `packages/skill/skill-injection/tsconfig.json`
 - `packages/web/web-browser/README.md`
 - `packages/web/web-browser/package.json`
 - `packages/web/web-browser/src/browser.ts`

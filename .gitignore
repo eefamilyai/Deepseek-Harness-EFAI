@@ -77,6 +77,11 @@ python/kiln/runtime/subkernels.json
 
 python/kiln/runtime/.kiln_memory/
 
+# Oversized tool results spilled to disk instead of being clipped out of the
+# prompt (see tool_result_files.py). Content-addressed session artifacts, not
+# source; they exist only so the model can re-read a result in slices.
+python/kiln/runtime/tool-results/
+
 
 # vision_tools captures: these are pictures of the real screen, so they must
 # never reach a commit. Written under KILN_STATE_DIR when set, else beside the
