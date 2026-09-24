@@ -36,7 +36,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 |---|---|---|
 | Python kernel seam | `packages/kernel/**` | 44 files |
 | Kiln LLM provider registry | `packages/llm/llm-kiln` | 11 files |
-| Text-channel tool-call reader | `packages/llm/llm-dsml` | 8 files |
+| Text-channel tool-call reader | `packages/llm/llm-dsml` | 10 files |
 | System prompt as a file upload (work in progress) | `packages/llm/llm-system-file` | 10 files |
 | Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 49 files |
 | Browser capability | `packages/web/web-browser` | 11 files |

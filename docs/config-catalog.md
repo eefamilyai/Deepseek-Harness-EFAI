@@ -1700,10 +1700,17 @@ export interface Config {
    * here only to rule out this reader while diagnosing one.
    */
   excludeProviders?: string[]
+  /**
+   * When a provider refuses a request because the model cannot take native
+   * tools (OpenRouter's "No endpoints found that support tool use"), send it
+   * again with the tools stated as text and read the calls back from the reply.
+   * Defaults to true; off, the refusal fails the turn as the provider sent it.
+   */
+  textToolFallback?: boolean
 }
 ```
 
-Source: [`packages/llm/llm-dsml/src/index.ts:64`](../packages/llm/llm-dsml/src/index.ts)
+Source: [`packages/llm/llm-dsml/src/index.ts:67`](../packages/llm/llm-dsml/src/index.ts)
 
 <a id="deepseek-aidsh-llm-kiln"></a>
 

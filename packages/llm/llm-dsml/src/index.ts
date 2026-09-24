@@ -13,12 +13,13 @@
  *
  * So the reading is unconditional and the TEACHING is not. Only an adapter with
  * no native tool channel states the format ({@link toolProtocolPrompt}, which
- * the Kiln adapter appends to its system slot); every route is read. That
- * asymmetry is the whole design, and it is why this pass is silent: a provider
- * that was handed real tool schemas was never told to write DSML, so a note
- * correcting how it spelled DSML would be the harness inventing a protocol
- * dispute. What it can parse, it converts; everything else passes through
- * exactly as the adapter emitted it.
+ * the Kiln adapter appends to its system slot) — and this pass itself, for a
+ * request whose model refused native tools outright (see `fallback.ts`);
+ * every route is read. That asymmetry is the whole design, and it is why this
+ * pass is silent: a provider that was handed real tool schemas was never told
+ * to write DSML, so a note correcting how it spelled DSML would be the harness
+ * inventing a protocol dispute. What it can parse, it converts; everything else
+ * passes through exactly as the adapter emitted it.
  *
  * Being silent is also what makes it safe above an adapter that already reads
  * this format for itself. The Kiln adapter parses its own stream; what reaches
@@ -37,7 +38,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { readDsmlStream, toolIndex } from './stream.ts'
+import { retryOnToolRefusal, textChannelRequest } from './fallback.ts'
 
+export { refusesNativeTools, renderInvoke, retryOnToolRefusal, textChannelRequest } from './fallback.ts'
 export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from './dsml.ts'
 export type { DsmlEvent, DsmlOptions } from './dsml.ts'
 export { mintDsmlCallId, readDsmlStream, toolIndex } from './stream.ts'
@@ -74,6 +77,13 @@ export interface Config {
    * here only to rule out this reader while diagnosing one.
    */
   excludeProviders?: string[]
+  /**
+   * When a provider refuses a request because the model cannot take native
+   * tools (OpenRouter's "No endpoints found that support tool use"), send it
+   * again with the tools stated as text and read the calls back from the reply.
+   * Defaults to true; off, the refusal fails the turn as the provider sent it.
+   */
+  textToolFallback?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -83,6 +93,9 @@ export const Config: z<Config> = z.object({
   excludeProviders: z.array(z.string()).default([])
     .description('Provider routes to exclude from text tool-call reading, by route name.'
       + ' Empty reads every route.'),
+  textToolFallback: z.boolean().default(true)
+    .description('When a model cannot take native tools, send the request again with the tools'
+      + ' described as text, and run the calls it writes. Off, the refusal fails the turn.'),
 })
 
 /**
@@ -98,12 +111,36 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config): void {
   const excluded = new Set(config.excludeProviders ?? [])
   const reasoningRecovery = config.reasoningRecovery ?? true
+  const textToolFallback = config.textToolFallback ?? true
+  /**
+   * Routes and models that refused native tools in this process. Their later
+   * requests go straight to the text channel instead of failing first; the
+   * set is not persisted, so a model that gains tool support is tried again
+   * after a restart.
+   */
+  const textOnly = new Set<string>()
+  const keyOf = (options: GenerateOptions): string => `${options.provider}\u0000${options.model}`
+  // A nested call through the whole stream chain, so retry, replay, and the
+  // invariants see the text-channel request like any other. It declares no
+  // tools, so this pass forwards its stream untouched and the outer reader —
+  // which knows the original tools — turns its text calls into real ones.
+  const viaText = (options: GenerateOptions): AsyncIterable<StreamChunk> => ctx.llm.stream(textChannelRequest(options))
+
   ctx.on('llm/stream', (options: GenerateOptions, next): AsyncIterable<StreamChunk> => {
     if (excluded.has(options.provider)) return next()
     // A request with no tools declared cannot produce a call, so its `<invoke>`
     // is prose about a tool that does not exist here — a title or compaction
     // call quoting a transcript, most often. `readDsmlStream` returns the stream
     // itself in that case, so an auxiliary call pays nothing for this pass.
-    return readDsmlStream(next(), toolIndex(options.tools), { reasoningRecovery })
+    const tools = toolIndex(options.tools)
+    if (!textToolFallback || tools.size === 0) return readDsmlStream(next(), tools, { reasoningRecovery })
+    const key = keyOf(options)
+    if (textOnly.has(key)) return readDsmlStream(viaText(options), tools, { reasoningRecovery })
+    const source = retryOnToolRefusal(next(), () => {
+      textOnly.add(key)
+      ctx.logger.info(`llm-dsml: ${options.provider}/${options.model} cannot take native tools; using the text channel`)
+      return viaText(options)
+    })
+    return readDsmlStream(source, tools, { reasoningRecovery })
   })
 }
