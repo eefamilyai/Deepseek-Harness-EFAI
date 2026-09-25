@@ -169,7 +169,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 323 paths do not exist upstream, so no patch covers them and none can conflict.
+These 324 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -419,6 +419,7 @@ These 323 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/session-recovery-context/src/ledger.ts`
 - `packages/session/session-recovery-context/src/log-path.ts`
 - `packages/session/session-recovery-context/src/workspace.ts`
+- `packages/session/session-recovery-context/tests/compaction-stack.spec.ts`
 - `packages/session/session-recovery-context/tests/log-path-oracle.spec.ts`
 - `packages/session/session-recovery-context/tests/session-recovery-context.spec.ts`
 - `packages/session/session-recovery-context/tsconfig.json`

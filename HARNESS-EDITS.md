@@ -41,7 +41,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 49 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
-| Post-compaction context | `packages/session/session-recovery-context` | 12 files |
+| Post-compaction context | `packages/session/session-recovery-context` | 13 files |
 | Observation masking | `packages/compaction/output-masking` | 8 files |
 | The fork's own composition | `packages/bundle/{efai-base,efai-web}` | 10 files |
 | The identity opener | `packages/core/efai-identity` | 4 files |
