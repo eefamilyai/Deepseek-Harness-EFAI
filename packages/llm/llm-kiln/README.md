@@ -118,11 +118,19 @@ A re-primed chat is new, so it reuses nothing either way; the pin only decides w
 
 #### What the model sees
 
-The summarizer, not the working model, sees this. A summary request on `ds_direct` can be larger than the one capped prompt it travels in, and the clip used to hand the summarizer only the newest end of what it was asked to condense. When the conversation exceeds `compactionFoldChars` (default 30,000 characters), the adapter folds it instead. The conversation is split into parts in order. Each part is sent as its own one-shot summary request, carrying the summary of every part before it inside the `<compacted-summary>` tags upstream's summarizer already merges. The final part's summary is what streams back. A turn longer than a part is cut to its head and tail. Any failed intermediate part falls back to the single capped call. Other routes, and any conversation that fits, send one call as before.
+The summarizer, not the working model, sees this: with `compactionFoldParts: N` (default **1**, meaning no folding) a conversation too large for one capped prompt is spread across at most N contiguous parts covering all of it, each part framed as below and carrying the summary of the parts before it, with the last part's summary streaming back to the caller.
+
+##### Framing added to each part
+
+```markdown
+The conversation is too long to summarize in one message, so it arrives in parts. This is part <i> of <N>. The <compacted-summary> block covers every part before this one: merge this part into it.
+
+<the summarizer's own instruction, unchanged>
+```
 
 #### Token effect
 
-A folded summary costs one call per part instead of one, and each call after the first carries the running summary. That is the price of every part of the conversation reaching a summarizer.
+A folded summary costs one call per part, and each call after the first carries the running summary. The bound is what makes that affordable: each call is a fresh web chat with its own proof-of-work, so an unbounded "one call per `compactionFoldChars`" on a long session is dozens of sequential chats — the compaction sits pending for many minutes, the free route rate-limits, and the turn never resumes. A part that still overflows one capped prompt has its turns cut head-and-tail in place rather than being split again, and any failed part falls back to the single capped call. Raise `compactionFoldParts` only when a compaction is demonstrably losing the older half of a session.
 
 #### KV Cache effect
 

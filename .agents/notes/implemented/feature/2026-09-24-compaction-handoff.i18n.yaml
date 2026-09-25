@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-24-compaction-handoff.md
-2026-09-24-compaction-handoff.md: 94a326e8802c58e4191e783ac4237dc049fccdd6
+2026-09-24-compaction-handoff.md: b192f5a54126b7e5bc5c205f2121660847985451
 2026-09-24-compaction-handoff.zh.md: 8c7a33999ed752d5fafd79f6f6e02c2ac9101c11

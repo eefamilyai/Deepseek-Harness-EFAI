@@ -74,6 +74,15 @@ export interface KilnAdapterOptions {
    * {@link DEFAULT_COMPACTION_FOLD_CHARS}.
    */
   readonly compactionFoldChars?: number
+  /**
+   * The most summarizer calls one compaction may cost on that route. Defaults
+   * to {@link DEFAULT_COMPACTION_FOLD_PARTS}, which is 1: no folding, one call,
+   * exactly as before folding existed. Raising it lets a conversation too large
+   * for one capped prompt be summarized in that many calls instead of reaching
+   * the summarizer as its newest end only — at the price of that many fresh
+   * chats, each with its own proof-of-work, before the turn can continue.
+   */
+  readonly compactionFoldParts?: number
 }
 
 /**
@@ -89,6 +98,17 @@ const MESSAGE_CAPPED_KILN_PROVIDER = 'deepseek'
  * summarizer statement, the running summary, and the instruction.
  */
 export const DEFAULT_COMPACTION_FOLD_CHARS = 30000
+
+/**
+ * Summarizer calls one compaction may cost by default: one.
+ *
+ * Folding is off unless a deployment asks for it. An unbounded fold is what a
+ * plain "one call per `compactionFoldChars`" rule produces, and on a long
+ * session that is dozens of sequential web chats: the compaction sits pending
+ * for many minutes, the free route rate-limits, and the turn never resumes.
+ * Bounded coverage is a choice a deployment makes, not a default it inherits.
+ */
+export const DEFAULT_COMPACTION_FOLD_PARTS = 1
 
 /** The tags upstream's summarizer reads a prior checkpoint between. */
 const CHECKPOINT_OPEN = '<compacted-summary>'
@@ -550,7 +570,8 @@ export class KilnAdapter extends LlmAdapter {
     kilnProvider: string,
     account: string | undefined,
   ): Promise<KilnStreamRequest | undefined> {
-    const plan = planCompactionFold(options, this.options.compactionFoldChars ?? DEFAULT_COMPACTION_FOLD_CHARS)
+    const plan = planCompactionFold(options, this.options.compactionFoldChars ?? DEFAULT_COMPACTION_FOLD_CHARS,
+      this.options.compactionFoldParts ?? DEFAULT_COMPACTION_FOLD_PARTS)
     if (plan === undefined) return undefined
     let running = ''
     try {
@@ -615,18 +636,69 @@ export interface CompactionFoldPlan {
 }
 
 /**
+ * Cut one turn to `room` characters, keeping its head and its tail.
+ *
+ * What a summary needs from a long tool result is what was run and how it
+ * ended; the middle is the part a summary would drop anyway.
+ * @param text - the turn's text.
+ * @param room - the most characters it may occupy.
+ * @returns the text, or a head-and-tail cut of exactly `room` characters.
+ */
+function clipTurn(text: string, room: number): string {
+  const marker = '\n… [cut to fit the summarizer] …\n'
+  if (text.length <= room) return text
+  // Below the marker's own length there is no room to say anything was cut.
+  if (room <= marker.length) return text.slice(0, Math.max(0, room))
+  const body = Math.max(0, room - marker.length)
+  const head = Math.floor((body * 2) / 3)
+  const tail = body - head
+  return text.slice(0, head) + marker + (tail > 0 ? text.slice(-tail) : '')
+}
+
+/**
+ * Fit one part inside a capped prompt by cutting its turns, never by splitting
+ * it into more parts: the number of parts is what the call budget bounds.
+ * @param turns - the part's turns, in order.
+ * @param partChars - the part's character budget.
+ * @returns the turns, cut where they must be.
+ */
+function fitPart(turns: readonly KilnMessage[], partChars: number): KilnMessage[] {
+  const total = turns.reduce((sum, turn) => sum + turn.content.length, 0)
+  if (total <= partChars || turns.length === 0) return [...turns]
+  // Every turn keeps a floor, so a long one cannot squeeze a short one out of
+  // the record entirely; the rest is shared in proportion to size.
+  // The floor has to fit: a part holding many turns can only give each of them
+  // an equal share, whatever the nominal floor would have been.
+  const floor = Math.max(1, Math.min(200, Math.floor(partChars / turns.length)))
+  const spare = Math.max(0, partChars - floor * turns.length)
+  return turns.map((turn) => {
+    const room = floor + Math.floor((spare * turn.content.length) / total)
+    return turn.content.length <= room ? turn : { ...turn, content: clipTurn(turn.content, room) }
+  })
+}
+
+/**
  * Plan a folded summarization, or report that one call suffices.
  *
  * The instruction is the request's last user turn — where every summarizer puts
  * it — and system turns are left out: on this route the summarizer statement
- * replaces them. A single turn longer than a part is cut to its head and tail,
- * which keeps what a summary needs from a long tool result: what was run, and
- * how it ended.
+ * replaces them.
+ *
+ * The conversation is spread across AT MOST `maxParts` parts, so a compaction
+ * costs a bounded number of calls however long the session ran. A part that
+ * still overflows one capped prompt is compressed in place rather than split
+ * again, because splitting again is what makes the cost unbounded.
  * @param options - the compaction request.
  * @param partChars - characters of conversation one part may carry.
- * @returns the plan, or undefined when the conversation fits one call.
+ * @param maxParts - the most summarizer calls this compaction may cost.
+ * @returns the plan, or undefined when one call suffices or folding is off.
  */
-export function planCompactionFold(options: GenerateOptions, partChars: number): CompactionFoldPlan | undefined {
+export function planCompactionFold(
+  options: GenerateOptions,
+  partChars: number,
+  maxParts: number = DEFAULT_COMPACTION_FOLD_PARTS,
+): CompactionFoldPlan | undefined {
+  if (maxParts < 2 || partChars < 1) return undefined
   const messages = options.messages
   const last = messages.at(-1)
   if (last === undefined || last.role !== 'user') return undefined
@@ -639,26 +711,20 @@ export function planCompactionFold(options: GenerateOptions, partChars: number):
       return turn === undefined ? [] : [turn]
     })
   const total = turns.reduce((sum, turn) => sum + turn.content.length, 0)
-  if (total <= partChars) return undefined
-  const parts: KilnMessage[][] = []
-  let current: KilnMessage[] = []
-  let used = 0
+  if (total <= partChars || turns.length < 2) return undefined
+  const count = Math.min(maxParts, Math.ceil(total / partChars))
+  if (count < 2) return undefined
+  // Assign each turn to a part by where it falls in the conversation, so the
+  // parts are contiguous and together cover all of it.
+  const share = total / count
+  const buckets: KilnMessage[][] = Array.from({ length: count }, () => [])
+  let consumed = 0
   for (const turn of turns) {
-    const fitted = turn.content.length > partChars
-      ? {
-        ...turn,
-        content: `${turn.content.slice(0, Math.floor(partChars * 0.6))}\n… [cut to fit the summarizer] …\n${turn.content.slice(-Math.floor(partChars * 0.3))}`,
-      }
-      : turn
-    if (used + fitted.content.length > partChars && current.length > 0) {
-      parts.push(current)
-      current = []
-      used = 0
-    }
-    current.push(fitted)
-    used += fitted.content.length
+    const index = Math.min(count - 1, Math.floor(consumed / share))
+    buckets[index]?.push(turn)
+    consumed += turn.content.length
   }
-  if (current.length > 0) parts.push(current)
+  const parts = buckets.filter(bucket => bucket.length > 0).map(bucket => fitPart(bucket, partChars))
   return parts.length < 2 ? undefined : { parts, instruction }
 }
 

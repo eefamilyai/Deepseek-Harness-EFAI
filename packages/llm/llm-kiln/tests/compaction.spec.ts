@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import { ToolCallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
-import { KilnAdapter, SUMMARIZER_SYSTEM, flattenMessage, planCompactionFold } from '@deepseek-ai/dsh-llm-kiln'
+import { DEFAULT_COMPACTION_FOLD_PARTS, KilnAdapter, SUMMARIZER_SYSTEM, flattenMessage, planCompactionFold } from '@deepseek-ai/dsh-llm-kiln'
 import type { KilnBridge, KilnStreamEvent, KilnStreamRequest } from '@deepseek-ai/dsh-llm-kiln'
 
 /** The instruction every summarizer appends last. */
@@ -70,12 +70,29 @@ describe('messages a re-primed chat must keep', () => {
 })
 
 describe('planCompactionFold', () => {
+  it('is off by default: a compaction costs one call unless a deployment asks otherwise', () => {
+    expect(DEFAULT_COMPACTION_FOLD_PARTS).toBe(1)
+    expect(planCompactionFold(compactionRequest(conversation(40, 4000)), 10000)).toBeUndefined()
+    expect(planCompactionFold(compactionRequest(conversation(40, 4000)), 10000, 1)).toBeUndefined()
+  })
+
   it('asks for one call when the conversation fits', () => {
-    expect(planCompactionFold(compactionRequest(conversation(2, 100)), 30000)).toBeUndefined()
+    expect(planCompactionFold(compactionRequest(conversation(2, 100)), 30000, 4)).toBeUndefined()
+  })
+
+  it('never costs more calls than it was allowed, however long the session ran', () => {
+    // The bug this pins: one part per `partChars` with no bound turned a long
+    // session's compaction into dozens of sequential web chats, so the turn sat
+    // pending for many minutes and never resumed.
+    for (const turns of [12, 120, 1200]) {
+      const plan = planCompactionFold(compactionRequest(conversation(turns, 4000)), 10000, 3)
+      expect(plan?.parts.length).toBeLessThanOrEqual(3)
+    }
+    expect(planCompactionFold(compactionRequest(conversation(1200, 4000)), 10000, 3)?.parts.length).toBe(3)
   })
 
   it('splits a long conversation into parts that each fit, in order, closed by the instruction', () => {
-    const plan = planCompactionFold(compactionRequest(conversation(12, 4000)), 10000)
+    const plan = planCompactionFold(compactionRequest(conversation(12, 4000)), 10000, 8)
     expect(plan).toBeDefined()
     expect(plan?.instruction).toBe(INSTRUCTION)
     expect(plan?.parts.length).toBeGreaterThan(2)
@@ -87,8 +104,22 @@ describe('planCompactionFold', () => {
     expect(flat.at(-1)?.startsWith('OUTPUT:\nresult 11')).toBe(true)
   })
 
+  it('keeps every turn in the record, cutting them to fit rather than dropping any', () => {
+    // 100 turns into 2 parts: far more than two prompts' worth, so every turn
+    // is cut — but each one is still represented, oldest first.
+    const plan = planCompactionFold(compactionRequest(conversation(100, 4000)), 10000, 2)
+    const turns = (plan?.parts ?? []).flat()
+    expect(turns).toHaveLength(200)
+    for (const part of plan?.parts ?? []) {
+      expect(part.reduce((sum, turn) => sum + turn.content.length, 0)).toBeLessThanOrEqual(10000)
+    }
+    expect(turns[0]?.content.startsWith('request 0')).toBe(true)
+    expect(turns.at(-1)?.content.startsWith('OUTPUT:\nresult 99')).toBe(true)
+    expect(turns.some(turn => turn.content.includes('[cut to fit the summarizer]'))).toBe(true)
+  })
+
   it('cuts one turn larger than a part to its head and tail', () => {
-    const plan = planCompactionFold(compactionRequest(conversation(3, 30000)), 10000)
+    const plan = planCompactionFold(compactionRequest(conversation(3, 30000)), 10000, 8)
     const turns = (plan?.parts ?? []).flat()
     expect(turns.every(turn => turn.content.length <= 10000)).toBe(true)
     expect(turns.some(turn => turn.content.includes('[cut to fit the summarizer]'))).toBe(true)
@@ -99,14 +130,14 @@ describe('planCompactionFold', () => {
       { role: 'system', content: [{ type: 'text', text: 'SYSTEM'.repeat(10000) }], source: { kind: 'system-prompt' } } as never,
       ...conversation(1, 100),
     ])
-    expect(planCompactionFold(request, 30000)).toBeUndefined()
+    expect(planCompactionFold(request, 30000, 4)).toBeUndefined()
   })
 })
 
 describe('summarizing on the message-capped route', () => {
   it('folds a conversation too large for one message, carrying the running summary forward', async () => {
     const { bridge, requests } = recordingBridge()
-    const adapter = new KilnAdapter({ bridge, routes: () => new Map(), kilnId: () => 'deepseek', compactionFoldChars: 10000 })
+    const adapter = new KilnAdapter({ bridge, routes: () => new Map(), kilnId: () => 'deepseek', compactionFoldChars: 10000, compactionFoldParts: 8 })
     const text = await textOf(adapter, compactionRequest(conversation(12, 4000)))
 
     expect(requests.length).toBeGreaterThan(2)
@@ -133,9 +164,16 @@ describe('summarizing on the message-capped route', () => {
     expect(small.requests).toHaveLength(1)
 
     const other = recordingBridge()
-    const adapter = new KilnAdapter({ bridge: other.bridge, routes: () => new Map(), kilnId: () => 'openrouter', compactionFoldChars: 10000 })
+    const adapter = new KilnAdapter({ bridge: other.bridge, routes: () => new Map(), kilnId: () => 'openrouter', compactionFoldChars: 10000, compactionFoldParts: 8 })
     await textOf(adapter, compactionRequest(conversation(12, 4000), 'kiln-openrouter'))
     expect(other.requests).toHaveLength(1)
+  })
+
+  it('sends one call for a long conversation when nothing raised the call budget', async () => {
+    const { bridge, requests } = recordingBridge()
+    const adapter = new KilnAdapter({ bridge, routes: () => new Map(), kilnId: () => 'deepseek', compactionFoldChars: 10000 })
+    await textOf(adapter, compactionRequest(conversation(400, 4000)))
+    expect(requests).toHaveLength(1)
   })
 
   it('falls back to one call when a part fails', async () => {
@@ -151,7 +189,7 @@ describe('summarizing on the message-capped route', () => {
         yield { type: 'meta', finish: 'stop' }
       },
     } as unknown as KilnBridge
-    const adapter = new KilnAdapter({ bridge, routes: () => new Map(), kilnId: () => 'deepseek', compactionFoldChars: 10000 })
+    const adapter = new KilnAdapter({ bridge, routes: () => new Map(), kilnId: () => 'deepseek', compactionFoldChars: 10000, compactionFoldParts: 8 })
     expect(await textOf(adapter, compactionRequest(conversation(12, 4000)))).toBe('single-call summary')
     expect(requests).toHaveLength(2)
   })
