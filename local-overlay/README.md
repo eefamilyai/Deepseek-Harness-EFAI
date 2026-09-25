@@ -109,6 +109,10 @@ always LF; the two forms are the same file.
 
 ## Updating upstream
 
+`py efai/merge_upstream.py start` runs everything below in a throwaway worktree,
+keeping this checkout on the old build until `finish`. What follows is what it
+does, for when you would rather drive it yourself.
+
 ```sh
 git fetch upstream
 git merge upstream/master

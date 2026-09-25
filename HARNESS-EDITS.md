@@ -49,7 +49,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Lifetime usage projection | `packages/llm/token-usage-lifetime` | 4 files |
 | Skill-body injection | `packages/skill/skill-injection` | 4 files |
 | Flow-accent theme layer | `packages/client/ui-flow-accents` | 7 files |
-| Profile-bundle registration for the launchers | `efai/ensure-profile-bundles.mjs` | 1 file |
+| Launcher and merge tooling — profile-bundle registration, and the upstream-merge script | `efai/` | 3 files |
 | Client effects layer | `packages/client/ui-effects` | 14 files |
 | Session-info command | `packages/session/command-session-info` | 5 files |
 | Launchers | `start.cmd`, `start.sh` | 2 files |
@@ -386,6 +386,28 @@ any runtime behavior. It is recorded here so a future release does not mistake a
 `doc-sync` for a broken fork.
 
 ## Updating to a new upstream release
+
+`efai/merge_upstream.py` does this. It is the procedure below, executed:
+
+```sh
+py efai/merge_upstream.py plan      # what the merge would do; writes nothing
+py efai/merge_upstream.py start     # merge, resolve, regenerate, verify, commit
+py efai/merge_upstream.py continue  # after you resolve what it handed back
+py efai/merge_upstream.py finish    # fast-forward master in this checkout
+```
+
+It works in a throwaway worktree under `.worktrees/`, so this checkout keeps
+running the old build — and keeps its uncommitted work — until `finish`. Every
+path the fork **added** is compared blob-for-blob after the merge and restored
+if anything moved it; the seam merges three-way with `zdiff3` markers and git
+`rerere`, so a conflict you resolve once resolves itself in the next release;
+generated files take upstream's side and are regenerated; the overlay is rebuilt
+against the new base and re-verified. It refuses to commit a tree whose seam
+grew without `--allow-seam-growth`, and it never pushes. `efai/test_merge_upstream.py`
+drives all of that over a repository built for the test.
+
+Read the rest of this section when the script hands something back, or when you
+would rather do it yourself:
 
 ```sh
 git fetch upstream

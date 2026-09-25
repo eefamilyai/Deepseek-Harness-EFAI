@@ -80,7 +80,7 @@ index dd91db8bf1..0000000000
 -      - "kind/dependency"
 -      - "area/infra"
 diff --git a/.gitignore b/.gitignore
-index 86e330fc0c..16b7f6daab 100644
+index 86e330fc0c..4bf56a9ac9 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -36,6 +36,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/
@@ -94,7 +94,7 @@ index 86e330fc0c..16b7f6daab 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -46,3 +50,58 @@ worktrees/
+@@ -46,3 +50,59 @@ worktrees/
  .agents/worktrees/
  .typert-*/
  native/system/test/bin/
@@ -153,6 +153,7 @@ index 86e330fc0c..16b7f6daab 100644
 +_show_block.txt
 +_t.png
 +e2e-shot.png
++efai/__pycache__/
 diff --git a/README.i18n.yaml b/README.i18n.yaml
 index ce6f75b18d..b5945997e4 100644
 --- a/README.i18n.yaml

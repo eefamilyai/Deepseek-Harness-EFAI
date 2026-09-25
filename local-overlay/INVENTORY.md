@@ -169,7 +169,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 325 paths do not exist upstream, so no patch covers them and none can conflict.
+These 327 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -203,6 +203,8 @@ These 325 paths do not exist upstream, so no patch covers them and none can conf
 - `desktop/harness-desktop/package-lock.json`
 - `desktop/harness-desktop/package.json`
 - `efai/ensure-profile-bundles.mjs`
+- `efai/merge_upstream.py`
+- `efai/test_merge_upstream.py`
 - `install.ps1`
 - `install.sh`
 - `local-overlay/BASE`
