@@ -169,7 +169,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 324 paths do not exist upstream, so no patch covers them and none can conflict.
+These 325 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -476,6 +476,7 @@ These 324 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/test_ds_direct_system.py`
 - `python/kiln/runtime/test_ds_identity.py`
 - `python/kiln/runtime/test_ds_login_serial.py`
+- `python/kiln/runtime/test_ds_waf_challenge_input.py`
 - `python/kiln/runtime/test_fast_search.py`
 - `python/kiln/runtime/test_harness_tools.py`
 - `python/kiln/runtime/test_kernel_images.py`

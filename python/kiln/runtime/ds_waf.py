@@ -60,6 +60,15 @@ _ENDPOINT = {
     "NetworkBandwidth": "mp_verify",
 }
 
+# The challenge type assumed when `challenge.input` arrives opaque. AWS WAF
+# serves this site's challenge metadata two ways -- as a JSON document naming
+# `challenge_type`, and as an encrypted blob that names nothing -- and the
+# envelope is no help, because its own `challenge_type` is an opaque hash that
+# is byte-identical in both cases. NetworkBandwidth is what chat.deepseek.com
+# serves (the "solution" is base64 of 1024 zero bytes, not a real proof of
+# work), so that is the only defensible assumption for an opaque payload.
+_OPAQUE_TYPE = "NetworkBandwidth"
+
 _BWDTH_SIZES = {1: 1024, 2: 10240, 3: 102400, 4: 1048576, 5: 10485760}
 
 # A couple of plausible WebGL GPU signatures. The challenge script evaluates
@@ -478,6 +487,42 @@ def _discover_challenge(session):
     return chal_url, same, goku
 
 
+def _safe_text(response):
+    """`response.text`, or a hex preview when the body is not decodable text.
+
+    A WAF response body is not guaranteed to be UTF-8, and the challenge payload
+    is exactly the kind of thing that arrives as encrypted bytes. Reading
+    `.text` inside an error path would replace the diagnostic with a codec
+    traceback, which is the failure this module already had once.
+    """
+    try:
+        return response.text
+    except Exception:
+        return "0x" + (getattr(response, "content", b"") or b"")[:64].hex()
+
+
+def _decode_challenge_input(encoded):
+    """The decoded `challenge.input` document, or None when it is opaque.
+
+    `challenge.input` is base64, and what it carries is not stable: AWS WAF
+    serves the challenge metadata sometimes as a JSON document and sometimes as
+    an encrypted blob. `json.loads` accepts bytes and decodes them as UTF-8
+    itself, so the blob used to reach the user as
+
+        'utf-8' codec can't decode byte 0xef in position 0
+
+    -- a codec traceback standing in for "the challenge had an unexpected
+    shape", on a login that a retry may well have completed. Returns None for
+    anything that is not a JSON object so the caller can fall back to the
+    envelope; see `_OPAQUE_TYPE`.
+    """
+    try:
+        doc = json.loads(base64.b64decode(encoded))
+    except (binascii.Error, ValueError, TypeError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
 def solve_waf(session, site=None, ua=None):
     """Solve the AWS WAF challenge for `session` and return the aws-waf-token.
 
@@ -509,15 +554,26 @@ def solve_waf(session, site=None, ua=None):
     try:
         inputs = r.json()
     except Exception:
-        raise WafError(f"/inputs returned non-JSON: {r.text[:150]}") from None
+        raise WafError(f"/inputs returned non-JSON: {_safe_text(r)[:150]}") from None
     challenge = inputs.get("challenge")
     if not challenge or "input" not in challenge:
         raise WafError(f"/inputs missing challenge: {inputs}")
 
-    decoded = json.loads(base64.b64decode(challenge["input"]))
-    ctype = decoded.get("challenge_type", "")
-    difficulty = decoded.get("difficulty", 1)
-    memory = decoded.get("memory", 128)
+    decoded = _decode_challenge_input(challenge["input"])
+    if decoded is None:
+        # Opaque payload: the metadata that names the challenge type is inside
+        # the blob, and the envelope cannot supply it either -- its
+        # `challenge_type` is an opaque hash, byte-identical whether the input
+        # arrived plain or encrypted -- so fall back to the type this site
+        # serves. A wrong guess is not silent: the verify call comes back
+        # without a token and `solve_waf` raises naming the endpoint.
+        ctype = _OPAQUE_TYPE
+        difficulty = inputs.get("difficulty", 1)
+        memory = 128
+    else:
+        ctype = decoded.get("challenge_type", "")
+        difficulty = decoded.get("difficulty", 1)
+        memory = decoded.get("memory", 128)
     endpoint = _ENDPOINT.get(ctype, "verify")
 
     if ctype == "NetworkBandwidth":
@@ -559,7 +615,7 @@ def solve_waf(session, site=None, ua=None):
     try:
         result = r.json()
     except Exception:
-        raise WafError(f"/{endpoint} returned non-JSON: {r.text[:150]}") from None
+        raise WafError(f"/{endpoint} returned non-JSON: {_safe_text(r)[:150]}") from None
     token = result.get("token")
     if not token:
         raise WafError(f"/{endpoint} returned no token: {result}")
