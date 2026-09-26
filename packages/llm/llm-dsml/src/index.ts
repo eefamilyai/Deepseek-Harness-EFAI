@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DSML for every route: the text-channel tool-call reader, and the one
  * `llm/stream` pass that applies it to whatever adapter answered.
  *
@@ -39,9 +39,10 @@ import z from '@deepseek-ai/schemastery'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { readDsmlStream, toolIndex } from './stream.ts'
 import { retryOnToolRefusal, textChannelRequest } from './fallback.ts'
+import { DEFAULT_CATALOG_PATH } from './catalog.ts'
 
 export { refusesNativeTools, renderInvoke, retryOnToolRefusal, textChannelRequest } from './fallback.ts'
-export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from './dsml.ts'
+export { DsmlTranslator, invokeArguments, restoreStrippedClosers, trailingReasoningCalls } from './dsml.ts'
 export type { DsmlEvent, DsmlOptions } from './dsml.ts'
 export { mintDsmlCallId, readDsmlStream, toolIndex } from './stream.ts'
 export type { DsmlStreamOptions } from './stream.ts'
@@ -56,6 +57,18 @@ export {
   toolProtocolPrompt,
   unescapeXml,
 } from './protocol.ts'
+export {
+  bumpShapes,
+  catalogPath,
+  DEFAULT_CATALOG_PATH,
+  KNOWN_SHAPES,
+  learnedLiterals,
+  literalKey,
+  loadCatalog,
+  recordLiteral,
+  recordShape,
+} from './catalog.ts'
+export type { CatalogFile, LearnedLiteral, RepairShape } from './catalog.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'llm-dsml'
@@ -109,6 +122,13 @@ export const Config: z<Config> = z.object({
  * @param config - the composition-layer config.
  */
 export function apply(ctx: Context, config: Config): void {
+  // Learning is automatic in the running harness and nowhere else. Unless a
+  // deployment names a catalogue, the reader records the fragments it repairs
+  // at the default path under the home directory, so a shape seen once is
+  // applied directly the next time it arrives. A bare translator — a test, a
+  // tool that only parses a transcript — writes nothing, because no plugin
+  // booted to establish this.
+  if (!process.env.DSML_CATALOG) process.env.DSML_CATALOG = DEFAULT_CATALOG_PATH
   const excluded = new Set(config.excludeProviders ?? [])
   const reasoningRecovery = config.reasoningRecovery ?? true
   const textToolFallback = config.textToolFallback ?? true

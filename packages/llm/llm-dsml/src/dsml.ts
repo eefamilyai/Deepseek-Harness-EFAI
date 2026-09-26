@@ -25,7 +25,15 @@
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
-import { coerceParameter, parameterNames, requiredNames, unescapeXml } from './protocol.ts'
+import {
+  coerceParameter,
+  coerceParameterDetailed,
+  parameterNames,
+  requiredNames,
+  resolveParameterName,
+  unescapeXml,
+} from './protocol.ts'
+import { learnedLiterals, literalKey } from './catalog.ts'
 
 /** What the translator emits for one complete provider turn. */
 export type DsmlEvent =
@@ -76,11 +84,133 @@ export interface DsmlOptions {
  */
 const ATTRIBUTE_RUN = '(?:"[^"]*"|\'[^\']*\'|[^>"\'])*["\']?'
 
-/** Matches one `<invoke …>…</invoke>`, capturing the attribute run and the body. */
-const INVOKE = new RegExp(`<invoke\\s+(${ATTRIBUTE_RUN})>([\\s\\S]*?)</invoke>`, 'gi')
+/**
+ * Every parameter element in one invoke body, with the value each one carries.
+ *
+ * A value is RAW TEXT and may itself quote the format, so neither end of an
+ * element can be read off the first tag that looks like structure. Two rules
+ * together settle it from structure alone, and both are needed:
+ *
+ *   * An opener only BOUNDS an element when it sits at depth zero. A value
+ *     quoting the markup contains an opener of its own, and cutting the value
+ *     there dropped everything after it — a command that merely showed the
+ *     format ran truncated, or failed for a required argument that was present
+ *     in the text the whole time.
+ *   * Within one element the terminator is the LAST closer before the next
+ *     depth-zero opener, not the first. The first closer inside a value is
+ *     content for the same reason, and stopping there is what silently cut a
+ *     value off mid-way.
+ *
+ * Depth is counted over the same two tags the element is made of, so a value
+ * carrying a balanced pair stays level and one carrying a lone opener simply
+ * reads as content. A closer the model wrote one time too many survives the
+ * capture as trailing text and is dropped by {@link stripTrailingClosers}.
+ * @param body - the text between one invoke's tags.
+ * @returns each element's attribute run and its value, closer excluded.
+ */
+function scanParameters(body: string): { readonly run: string; readonly at: number; readonly from: number }[] {
+  const token = new RegExp('<' + 'parameter\\s+(' + ATTRIBUTE_RUN + ')>|<' + '/parameter\\s*>', 'gi')
+  const spans: { run: string; at: number; from: number }[] = []
+  let depth = 0
+  for (const match of body.matchAll(token)) {
+    if (match[1] !== undefined) {
+      if (depth === 0) spans.push({ run: match[1], at: match.index, from: match.index + match[0].length })
+      depth += 1
+      continue
+    }
+    if (depth > 0) depth -= 1
+  }
+  return spans
+}
 
-/** Matches one `<parameter …>…</parameter>`, capturing the attribute run and the body. */
-const PARAMETER = new RegExp(`<parameter\\s+(${ATTRIBUTE_RUN})>([\\s\\S]*?)</parameter>`, 'gi')
+/**
+ * Every parameter element in one invoke body, with the value each one carries.
+ *
+ * Two rules, and both are needed. An opener only BOUNDS an element at depth zero,
+ * so a value quoting the markup keeps the opener it contains. The terminator is
+ * the LAST closer before the next depth-zero opener, not the first, so a value
+ * may quote a closer without being cut off at it.
+ * @param body - the text between one invoke's tags.
+ * @returns each element's attribute run and its value, closer excluded.
+ */
+function parameterElements(body: string): { readonly run: string; readonly value: string }[] {
+  const spans = scanParameters(body)
+  const close = new RegExp('<' + '/parameter\\s*>', 'gi')
+  return spans.map((span, index) => {
+    const end = index + 1 < spans.length ? (spans[index + 1]?.at ?? body.length) : body.length
+    const segment = body.slice(span.from, end)
+    const at = lastMatchIndex(segment, close)
+    const value = at < 0 ? segment : segment.slice(0, at)
+    return { run: span.run, value: stripSurplusClosers(value) }
+  })
+}
+
+function invokeElements(raw: string): { readonly run: string; readonly body: string; readonly start: number; readonly end: number }[] {
+  const token = new RegExp('<' + 'invoke\\s+(' + ATTRIBUTE_RUN + ')>|<' + '/invoke\\s*>', 'gi')
+  const close = new RegExp('<' + '/invoke\\s*>', 'gi')
+  const opens: { run: string; at: number; from: number; to: number }[] = []
+  let depth = 0
+  for (const match of raw.matchAll(token)) {
+    if (match[1] === undefined) {
+      if (depth === 0) continue
+      depth -= 1
+      if (depth === 0) {
+        const open = opens[opens.length - 1]
+        if (open !== undefined) open.to = match.index
+      }
+      continue
+    }
+    if (match[0].endsWith('/>')) continue
+    if (depth === 0) opens.push({ run: match[1], at: match.index, from: match.index + match[0].length, to: -1 })
+    depth += 1
+  }
+  const found: { run: string; body: string; start: number; end: number }[] = []
+  opens.forEach((open, index) => {
+    if (open.to >= 0) {
+      found.push({ run: open.run, body: raw.slice(open.from, open.to), start: open.at, end: open.to })
+      return
+    }
+    const end = index + 1 < opens.length ? (opens[index + 1]?.at ?? raw.length) : raw.length
+    const at = lastMatchIndex(raw.slice(open.from, end), close)
+    if (at < 0) return
+    found.push({ run: open.run, body: raw.slice(open.from, open.from + at), start: open.at, end: open.from + at })
+  })
+  return found
+}
+
+/**
+ * Drop the closers left dangling at the tail of a captured value — and only those.
+ *
+ * Running the value to the LAST closer before the next opener is what lets it
+ * quote the format without being cut short at its own first closer. That same
+ * rule sweeps up a closer the model wrote one time too many, because the capture
+ * had to run past the surplus tag to reach the element's own.
+ *
+ * How many are surplus is COUNTED, never guessed. A closer at the tail is
+ * structure only while the value holds more closers than openers, and each
+ * surplus tag comes off one at a time from the very end. A blanket strip of
+ * every trailing closer ate the second half of a balanced pair the value was
+ * legitimately quoting, so a value that documented the format lost the tag it
+ * was showing. A closer the value still balances against an opener of its own is
+ * content, and one that never reaches the tail — a quoted closer inside a string
+ * — is content too, because the count says surplus but the tail says no.
+ * @param value - the text captured between an element's opener and its closer.
+ * @returns the value with exactly its surplus trailing closers gone.
+ */
+function stripSurplusClosers(value: string): string {
+  const openers = (value.match(new RegExp('<' + 'parameter\\b', 'gi')) ?? []).length
+  const closers = [...value.matchAll(new RegExp('<' + '/parameter\\s*>', 'gi'))].length
+  const tail = new RegExp('<' + '/parameter\\s*>\\s*$')
+  let surplus = closers - openers
+  let out = value
+  while (surplus > 0) {
+    const found = tail.exec(out)
+    if (found === null) break
+    out = out.slice(0, found.index)
+    surplus -= 1
+  }
+  return out
+}
 
 /**
  * One `<invoke …>` opener on its own — self-closing (`<invoke …/>`) or an
@@ -89,7 +219,7 @@ const PARAMETER = new RegExp(`<parameter\\s+(${ATTRIBUTE_RUN})>([\\s\\S]*?)</par
  * {@link DsmlTranslator.parseCalls} uses this to recover the shape DeepSeek's
  * `｜｜DSML｜｜` tool_calls wrapper produces: the arguments ride the `<invoke>` tag
  * and the wrapper's close is the only close, so there is no `</invoke>` for the
- * bodied {@link INVOKE} to match.
+ * bodied {@link invokeElements} to match.
  */
 const INVOKE_OPEN = new RegExp(`<invoke\\s+(${ATTRIBUTE_RUN})/?>`, 'gi')
 
@@ -318,17 +448,67 @@ const FORMAT_REMINDER = '\n[format reminder — one argument per `<parameter nam
 const PARAMETER_OPEN = /<parameter\b/i
 
 /**
- * Whether a body's `<parameter>` openers and closers fail to pair up.
+ * How many parameter openers and closers a body holds.
  *
- * Counting rather than matching pairs is enough: `<parameter>` never nests, so
- * equal counts mean every opener found its closer. One unpaired opener is
- * exactly what "cut off mid-write" looks like, and it is what both dispatch
- * passes measure before they call anything.
+ * The two counts answer two different questions and must not be
+ * collapsed into one boolean. {@link unfinished} asks whether an
+ * opener is still waiting for its closer; the surplus-closer check
+ * asks whether a FINISHED body closed one time too many. Reading
+ * them against each other made a complete call carrying a stray
+ * closer look truncated, so it fell through to prose and drew a note
+ * telling the model its tool did not exist.
+ *
+ * A parameter element never nests, so counting is exact.
+ * @param body - the text between one invoke's tags, or up to the next invoke.
+ * @returns the opener count and the closer count, uncompared.
+ */
+function parameterCounts(body: string): { readonly open: number; readonly close: number; readonly surplus: number } {
+  const token = new RegExp('<' + 'parameter\\b|<' + '/parameter\\s*>', 'gi')
+  let open = 0
+  let close = 0
+  let depth = 0
+  let surplus = 0
+  for (const match of body.matchAll(token)) {
+    if (match[0].startsWith('<' + '/')) {
+      close += 1
+      if (depth > 0) depth -= 1
+      else surplus += 1
+      continue
+    }
+    open += 1
+    depth += 1
+  }
+  return { open, close, surplus }
+}
+
+/**
+ * Whether a body holds a `<parameter>` opener that never closed.
+ *
+ * Only ONE direction of imbalance means "still being written", and the two
+ * directions are not the same mistake. An opener with no closer is a command
+ * cut off mid-write. A model that writes one `</parameter>` too many produces
+ * an imbalance from the other side, and that body is FINISHED: every argument
+ * in it closed, and the surplus closer is the same stray structural tag
+ * {@link ORPHAN_CLOSE} drops in prose. Measuring the counts against each other
+ * read both as the same thing, so a complete, correct call was refused, fell
+ * through to prose, and drew a note telling the model its tool did not exist.
+ *
+ * `<parameter>` never nests, so counting is enough to see the one direction
+ * that matters.
  * @param body - the text between one invoke's tags, or up to the next invoke.
  * @returns true when the body is a call still being written.
  */
-function unbalanced(body: string): boolean {
-  return (body.match(/<parameter\b/gi) ?? []).length !== (body.match(/<\/parameter\s*>/gi) ?? []).length
+function unfinished(body: string): boolean {
+  const token = new RegExp('<' + 'parameter\\b|<' + '/parameter\\s*>', 'gi')
+  let depth = 0
+  for (const match of body.matchAll(token)) {
+    if (match[0].startsWith('<' + '/')) {
+      if (depth > 0) depth -= 1
+      continue
+    }
+    depth += 1
+  }
+  return depth > 0
 }
 
 /** Escape a tool name for embedding in a `RegExp`. Names are identifiers, but a stray metachar must never widen the match. */
@@ -491,14 +671,23 @@ export function invokeArguments(
   tool: ToolSchema | undefined,
   body: string,
   tagged: ReadonlyMap<string, string> = new Map(),
+  shapes?: Set<string>,
 ): string {
   const args: Record<string, unknown> = {}
   let labelled = false
-  for (const match of body.matchAll(PARAMETER)) {
-    const name = attributes(match[1] ?? '').get('name')?.trim() ?? ''
-    if (name.length === 0) continue
+  for (const element of parameterElements(body)) {
+    const written = attributes(element.run).get('name')?.trim() ?? ''
+    if (written.length === 0) continue
     labelled = true
-    args[name] = coerceParameter(tool, name, unescapeXml(match[2] ?? ''))
+    // A name the schema does not declare but one slot plainly means is placed in
+    // that slot; anything ambiguous keeps the model's own spelling and is left
+    // for the tool's own validation to report.
+    const resolved = resolveParameterName(tool, written, Object.keys(args))
+    const name = resolved ?? written
+    if (resolved !== undefined && resolved !== written) shapes?.add('near-miss-argument')
+    const coerced = coerceParameterDetailed(tool, name, unescapeXml(element.value))
+    if (coerced.repaired) shapes?.add('quoted-scalar')
+    args[name] = coerced.value
   }
   const declared = new Set(parameterNames(tool))
   for (const [key, value] of tagged) {
@@ -506,7 +695,9 @@ export function invokeArguments(
     // really takes a parameter called `name` still receives it the explicit
     // way, where there is nothing to disambiguate.
     if (key === 'name' || !declared.has(key) || key in args) continue
-    args[key] = coerceParameter(tool, key, unescapeXml(value))
+    const coerced = coerceParameterDetailed(tool, key, unescapeXml(value))
+    if (coerced.repaired) shapes?.add('quoted-scalar')
+    args[key] = coerced.value
   }
   if (!labelled) {
     const missing = requiredNames(tool).filter(name => !(name in args))
@@ -530,7 +721,9 @@ export function invokeArguments(
     // `kernel` ended up executing `<｜｜DSML｜｜parameter name="code">import os…`
     // as Python and failing on U+FF5C.
     if (only !== undefined && raw.length > 0 && !UNPLACEABLE.test(peeled)) {
-      args[only] = coerceParameter(tool, only, raw)
+      const coerced = coerceParameterDetailed(tool, only, raw)
+      if (coerced.repaired) shapes?.add('quoted-scalar')
+      args[only] = coerced.value
     }
   }
   return JSON.stringify(args)
@@ -562,10 +755,114 @@ function firstOpener(rest: string): { readonly index: number; readonly closer: s
   const candidates: { index: number; closer: string }[] = []
   if (wrapped !== -1) candidates.push({ index: wrapped, closer: TOOL_CALLS_CLOSE })
   if (functional !== -1) candidates.push({ index: functional, closer: FUNCTION_CALLS_CLOSE })
-  if (bare !== -1) candidates.push({ index: bare, closer: '</invoke>' })
+  // A bare invoke is the one ambiguous opener, and it is the one an
+  // explanation writes inside a sentence. Treating a mention as a delimiter
+  // swallowed the rest of the answer, so it opens a block only as the
+  // line's own content -- the same line-leading test this file already
+  // applies to the framing tag and to a lone parameter. The taught wrappers
+  // above are unambiguous and stay readable anywhere on the line.
+  if (bare !== -1 && rest.slice(0, bare).trim().length === 0) {
+    candidates.push({ index: bare, closer: '</invoke>' })
+  }
   if (candidates.length === 0) return undefined
   return candidates.reduce((best, candidate) => candidate.index < best.index ? candidate : best)
 }
+
+/**
+ * The fence marker a line opens a code block with, or undefined for a line that
+ * opens none.
+ *
+ * A fence is the model's own signal that what follows is DISPLAYED rather than
+ * done, and the statement this transport hands it says so in as many words:
+ * fenced code blocks never run. Reading the signal costs one line of state;
+ * ignoring it means a transcript, a diff, or a worked example inside a fence is
+ * dispatched as a real call — the same failure as a call that silently does not
+ * run, seen from the other side.
+ *
+ * Three or more backticks or tildes, at most three columns in, optionally
+ * followed by an info word. A line carrying a SECOND marker is not matched, so
+ * an opener and closer on one line stays prose rather than swallowing the turn.
+ */
+const FENCE_OPEN = /^\s{0,3}(`{3,}|~{3,})\s*[^\s`]*\s*$/
+
+/**
+ * Whether a line closes the fence a marker opened.
+ *
+ * The closer is nothing but the fence character, at least as long as the
+ * opener — markdown's own rule, so a fence the model left open runs to the end
+ * of its turn rather than being closed by the next unrelated run of backticks.
+ * @param line - one line of channel text.
+ * @param marker - the marker returned by {@link FENCE_OPEN}.
+ * @returns true when this line ends the block.
+ */
+function closesFence(line: string, marker: string): boolean {
+  const char = marker.charAt(0)
+  const trimmed = line.trim()
+  if (char.length === 0 || trimmed.length < marker.length) return false
+  for (let at = 0; at < trimmed.length; at++) {
+    if (trimmed.charAt(at) !== char) return false
+  }
+  return true
+}
+
+/**
+ * The character ranges of one line that sit inside a code span.
+ *
+ * A run of N backticks opens a span and the next run of exactly N closes it,
+ * which is the rule that keeps `` ``a`b`` `` one span rather than three. A run
+ * left unclosed spans to the end of the line: markdown does the same, and a
+ * quote that runs off the line is far likelier to be unfinished than to be an
+ * invitation to act.
+ * @param line - one line of channel text.
+ * @returns each span as a half-open `[from, to)` range, in order.
+ */
+function codeSpans(line: string): readonly (readonly [number, number])[] {
+  const spans: [number, number][] = []
+  const RUN = /`+/g
+  let open: RegExpExecArray | null = null
+  let match: RegExpExecArray | null
+  while ((match = RUN.exec(line)) !== null) {
+    if (open === null) {
+      open = match
+      continue
+    }
+    if (match[0].length !== open[0].length) continue
+    spans.push([open.index, RUN.lastIndex])
+    open = null
+  }
+  if (open !== null) spans.push([open.index, line.length])
+  return spans
+}
+
+/**
+ * The same line with every code span blanked out.
+ *
+ * Blanked rather than deleted so every character index stays where it was: the
+ * answer to "is there markup OUTSIDE a span" is then about the text the model
+ * wrote, not about a rewritten copy of it.
+ * @param line - one line of channel text.
+ * @returns the line with each span replaced by spaces of the same width.
+ */
+function outsideSpans(line: string): string {
+  const spans = codeSpans(line)
+  if (spans.length === 0) return line
+  let out = ''
+  let at = 0
+  for (const [from, to] of spans) {
+    out += line.slice(at, from) + ' '.repeat(to - from)
+    at = to
+  }
+  return out + line.slice(at)
+}
+
+/**
+ * Any taught tag or native token, whoever wrote it and whatever it became.
+ *
+ * Deliberately wider than {@link MARKUP}: this one asks whether anything on a
+ * line could be read as a call, and is only ever consulted about text with the
+ * code spans already blanked out.
+ */
+const ANY_MARKUP = new RegExp(`<${PIPES}|</?DSML\\b|<(?:invoke|tool_calls|function_calls|parameter)\\b`, 'i')
 
 /**
  * Line-oriented incremental reader. A tool-call block may be split across any
@@ -588,6 +885,15 @@ export class DsmlTranslator {
   private suppressing = false
   /** True once a repair happened whose {@link FORMAT_REMINDER} is still owed. */
   private repaired = false
+  /**
+   * Every catalogue shape this reader repaired this turn, by id.
+   *
+   * The reminder says only THAT a repair happened; this says which one, so the
+   * shapes actually occurring in the wild can be counted rather than guessed at.
+   * A Set, because a model that repeats one mistake five times in a turn made
+   * that mistake once for the purpose of knowing the shape is live.
+   */
+  private readonly shapes = new Set<string>()
   /** True once this turn wrote tool-call markup of its own — see {@link MARKUP}. */
   private sawMarkup = false
   private readonly tools: ReadonlyMap<string, ToolSchema>
@@ -599,6 +905,14 @@ export class DsmlTranslator {
   private readonly notes: boolean
   /** True once the line being accumulated has already had text released — see {@link releasePartial}. */
   private emitted = false
+  /**
+   * The fence marker of an open code block, or undefined when none is open.
+   *
+   * Set only while no block is open, so the two states are mutually exclusive:
+   * a fence marker inside a call body is that body's content, and a call cannot
+   * open inside a fence because no line there is ever scanned for one.
+   */
+  private fence: string | undefined
 
   /**
    * @param tools - the request's tool schemas, keyed by name; an empty map makes
@@ -621,6 +935,16 @@ export class DsmlTranslator {
       this.namedOpen = new RegExp(`<(${alt})(?=[\\s/>])(${ATTRIBUTE_RUN})>`, 'gi')
       this.namedClose = new RegExp(`</(${alt})\\s*>`, 'gi')
     }
+  }
+
+  /**
+   * The catalogue ids this reader repaired, in order of first occurrence.
+   *
+   * Reading does not clear them: a caller that owns a whole turn collects once
+   * at the end, and a caller that owns one block sees the turn so far.
+   */
+  repairedShapes(): readonly string[] {
+    return [...this.shapes]
   }
 
   /** Consume one chunk of provider text. */
@@ -746,7 +1070,10 @@ export class DsmlTranslator {
     // rest of this routine reads the one tag that remains.
     const fused = lastMatchIndex(payload, FUSED_OPENER)
     const one = fused < 0 ? payload : payload.slice(fused + 1)
-    if (fused >= 0) this.repaired = true
+    if (fused >= 0) {
+      this.repaired = true
+      this.shapes.add('fused-opener')
+    }
     // A trailing `/` self-closes, exactly as it does on an ordinary tag.
     const trimmed = one.trim()
     const selfClosed = trimmed.endsWith('/')
@@ -776,7 +1103,7 @@ export class DsmlTranslator {
     //
     // Unplaced, this token did double damage: it reached the user verbatim AND
     // took the call with it, because the `</parameter>` after it then had no
-    // opener and `unbalanced()` read the whole invoke as cut off mid-write.
+    // opener and `unfinished()` read the whole invoke as cut off mid-write.
     if (keyword.length > 0 && (rest.startsWith('"') || rest.startsWith("'"))) {
       this.repaired = true
       return `<parameter name="${keyword}"${rest.slice(1)}>`
@@ -852,6 +1179,7 @@ export class DsmlTranslator {
   private normalizeNative(line: string): string {
     let out = line
     // Every pipe-wrapped token, whatever it wraps, in one pass.
+    if (DSML_TOKEN.test(out)) this.shapes.add('pipe-wrapped-token')
     out = out.replace(DSML_TOKEN, (whole, slash: string, payload: string) => this.nativeToken(whole, slash === '/', payload))
     // A bare `<DSML>`/`</DSML>` wrapper carries nothing; the inner tool tag
     // below is the call. Dropping it keeps the wrapper from surfacing as prose
@@ -860,6 +1188,7 @@ export class DsmlTranslator {
     // The taught tags written with `=` instead of ` name=` — see EQUALS_TAG.
     out = out.replace(EQUALS_TAG, (_whole, tag: string, name: string, slash: string) => {
       this.repaired = true
+      this.shapes.add('equals-tag')
       const word = tag.toLowerCase()
       const open = `<${word} name="${name}">`
       return slash === '/' ? `${open}</${word}>` : open
@@ -868,10 +1197,14 @@ export class DsmlTranslator {
     // `invokeArguments` knows which slot is still open, and it peels the wrapper
     // there — but it is a repair either way, so the reminder is booked here with
     // the rest of them.
-    if (NAMELESS_PARAMETER.test(out)) this.repaired = true
+    if (NAMELESS_PARAMETER.test(out)) {
+      this.repaired = true
+      this.shapes.add('nameless-parameter')
+    }
     if (this.namedOpen !== undefined && this.namedClose !== undefined) {
       out = out.replace(this.namedOpen, (whole, name: string, run: string) => {
         if (!this.tools.has(name)) return whole
+        this.shapes.add('tool-named-tag')
         // `<read_file path="x" />` self-closes: the whole call is on this line,
         // so it gets its own `</invoke>` immediately.
         const selfClosed = /\/\s*$/.test(run)
@@ -882,6 +1215,7 @@ export class DsmlTranslator {
       out = out.replace(this.namedClose, '</invoke>')
     }
     // The model's own frame word arriving with no pipes on it — see BARE_FRAME.
+    if (BARE_FRAME.test(out)) this.shapes.add('bare-frame')
     out = out.replace(BARE_FRAME, '')
     // Read BEFORE the implied opener below, so the opener this reader writes
     // itself is never the markup that blocks the next one.
@@ -918,6 +1252,7 @@ export class DsmlTranslator {
     // failure this whole pass exists to end: markup reaching the user with not
     // one word about why nothing ran.
     this.repaired = true
+    this.shapes.add('orphan-parameter')
     const argument = attributes(bare[0]).get('name')?.trim() ?? ''
     const tool = argument.length === 0 ? undefined : this.toolForParameter(argument)
     if (tool === undefined) return line
@@ -971,22 +1306,26 @@ export class DsmlTranslator {
     let out = ''
     let idx = 0
     let match: RegExpExecArray | null
+    let suppressed = false
     while ((match = SYSTEM_REMINDER_TAG.exec(line)) !== null) {
       const isClose = match[0].includes('/')
       if (this.suppressing) {
         // Inside the span: drop text up to here; only a closer ends it, and a
         // nested opener is left suppressed.
+        suppressed = true
         if (isClose) {
           this.suppressing = false
           idx = SYSTEM_REMINDER_TAG.lastIndex
         }
       } else if (isClose) {
         // A closer with no open span is a leftover token: drop it, keep the text.
+        suppressed = true
         out += line.slice(idx, match.index)
         idx = SYSTEM_REMINDER_TAG.lastIndex
       } else if (!this.emitted && line.slice(0, match.index).trim().length === 0) {
         // A block opener: keep the text before it, then suppress until the
         // closer.
+        suppressed = true
         out += line.slice(idx, match.index)
         this.suppressing = true
         idx = SYSTEM_REMINDER_TAG.lastIndex
@@ -1001,23 +1340,112 @@ export class DsmlTranslator {
       }
     }
     if (!this.suppressing) out += line.slice(idx)
+    // The span was framing, not the model's answer, and dropping it is a repair
+    // like any other: reported so the catalogue counts how often a model recites
+    // its own prompt back. An inline mention keeps the tag and reports nothing —
+    // the same `suppressed` flag that decides the shape decides the count.
+    if (suppressed) this.shapes.add('system-reminder-echo')
     return out
   }
 
+  /**
+   * Replay every exact-text rewrite the catalogue has learned.
+   *
+   * This is what makes the reader adaptive: a fragment a previous turn
+   * repaired is rewritten BEFORE the rules run, so the second occurrence costs
+   * one string replacement rather than another full trip through the parser.
+   * Literals only — never a pattern — so the catalogue can never widen the
+   * reader's grammar beyond text it has already seen and fixed.
+   */
+  private applyLearned(line: string): string {
+    let out = line
+    for (const literal of learnedLiterals()) {
+      if (!out.includes(literal.broken)) continue
+      out = out.split(literal.broken).join(literal.fixed)
+      // Reported through the same channel as a named shape, so the catalogue's
+      // hit counter learns which learned fragments are still earning their
+      // keep and which were a one-off. `literalKey` keeps the two key spaces
+      // apart, so a fragment spelling a shape id cannot inflate that shape.
+      this.shapes.add(literalKey(literal.broken))
+    }
+    return out
+  }
+
+
   private consumeLine(rawLine: string, events: DsmlEvent[]): void {
-    const visible = this.stripSuppressed(rawLine)
+    const stripped = this.stripSuppressed(rawLine)
     // A line wholly inside a suppressed span yields no visible text; emit
-    // nothing rather than a blank line. A genuinely blank prose line (empty
-    // input) still falls through below, so paragraph breaks in real prose live.
-    if (visible.length === 0 && rawLine.length > 0) return
+    // nothing rather than a blank line. Checked before the illustration rules
+    // so a fenced example inside a recited prompt is suppressed with the rest
+    // of that prompt rather than surfacing on its own. A genuinely blank prose
+    // line (empty input) still falls through below, so paragraph breaks live.
+    if (stripped.length === 0 && rawLine.length > 0) return
+
+    // Illustration is not action. While a fence is open the model is DISPLAYING
+    // the format rather than writing a call — the statement it was handed says
+    // fenced code blocks never run — so the line is shown whole and never
+    // scanned. Kept ahead of every other rule because a fenced example is
+    // exactly the text that would otherwise parse as a real block.
+    const fence = this.fence
+    if (fence !== undefined) {
+      events.push({ kind: 'text', text: `${stripped}\n` })
+      if (closesFence(stripped, fence)) this.fence = undefined
+      return
+    }
+    // A block already open owns its lines: a fence marker inside a call body is
+    // that body's content, not the start of an illustration.
+    if (this.block === undefined) {
+      const opened = FENCE_OPEN.exec(stripped)
+      if (opened !== null) {
+        this.fence = opened[1] ?? '```'
+        events.push({ kind: 'text', text: `${stripped}\n` })
+        return
+      }
+    }
+
+    const learned = this.applyLearned(stripped)
+    // A line whose only markup sits inside a code span is the model NAMING the
+    // format — the same example, quoted rather than fenced. Shown verbatim, so
+    // the backticks stay backticks and the mention never opens a block that
+    // would swallow the prose after it. A line carrying markup OUTSIDE a span
+    // as well falls through to the ordinary rules, which read it whole; the
+    // test is skipped entirely for a line with no span, so span-free input is
+    // read exactly as it was before this rule existed.
+    // Only for a line that opens no block: while a block is open its lines are
+    // that call's BODY, where a fence marker is content and a quoted tag is an
+    // argument value. Applying the rule there dropped the closing fence of a
+    // fenced argument, which left the invoke without its closer and lost the
+    // whole call.
+    if (this.block === undefined) {
+      const bare = outsideSpans(learned)
+      if (bare !== learned && !ANY_MARKUP.test(bare)) {
+        events.push({ kind: 'text', text: `${learned}\n` })
+        return
+      }
+    }
+    const visible = restoreStrippedClosers(learned)
+    if (visible !== learned) this.shapes.add('closer-stripped')
     let rest = this.normalizeNative(visible)
+    // A stray taught closer reaching prose is structure, not content: drop it
+    // and remember the exact token, so the next occurrence is rewritten before
+    // the parse rather than stripped during it.
+    // A stray taught closer reaching prose is structure, not content, and is
+    // dropped from the output below. It is deliberately NOT learned as a
+    // literal rewrite: the fragment is a legitimate closer, so replaying
+    // "delete this exact text" on every later line deleted the closers of
+    // well-formed blocks, and every such block then read as a truncation.
     let split = false
     while (rest.length > 0) {
       const block = this.block
       if (block === undefined) {
         const opener = firstOpener(rest)
         if (opener === undefined) break
-        if (opener.index > 0) events.push({ kind: 'text', text: rest.slice(0, opener.index).replace(ORPHAN_CLOSE, '') })
+        if (opener.index > 0) {
+          const lead = rest.slice(0, opener.index)
+          const cleaned = lead.replace(ORPHAN_CLOSE, '')
+          if (cleaned !== lead) this.shapes.add('orphan-closer')
+          events.push({ kind: 'text', text: cleaned })
+        }
         this.block = { lines: [], closer: opener.closer }
         rest = rest.slice(opener.index)
         split = true
@@ -1043,7 +1471,11 @@ export class DsmlTranslator {
     // paragraph breaks in prose survive. A remainder AFTER a block on the same
     // line is only worth emitting when it carries something. A stray taught
     // closer here belongs to no open block, so it is structure to drop, not text.
-    if (!split || rest.length > 0) events.push({ kind: 'text', text: `${rest.replace(ORPHAN_CLOSE, '')}\n` })
+    if (!split || rest.length > 0) {
+      const cleaned = rest.replace(ORPHAN_CLOSE, '')
+      if (cleaned !== rest) this.shapes.add('orphan-closer')
+      events.push({ kind: 'text', text: `${cleaned}\n` })
+    }
   }
 
   /**
@@ -1064,16 +1496,24 @@ export class DsmlTranslator {
    * model it does not exist is how a correct spelling gets "fixed" into a loop.
    */
   private parseCalls(raw: string): { readonly produced: DsmlEvent[]; readonly named: boolean; readonly unknown: boolean } {
+    // A closer-stripped block only becomes repairable once the whole block
+    // is in hand: per line the guard sees one invoke and stays out of the
+    // way, so the restore has to run again here, on the joined text. This is
+    // the one point every close path funnels through — a block the model
+    // closed, and one it left open that end() flushes.
+    const beforeCloserRestore = raw
+    raw = restoreStrippedClosers(raw)
+    if (raw !== beforeCloserRestore) this.shapes.add('closer-stripped')
     const calls: { readonly index: number; readonly event: DsmlEvent }[] = []
     let named = false
     let unknown = false
     // Bodied `<invoke>…</invoke>` first, remembering each span so the
     // self-closing pass below never reads an opener that already dispatched.
     const consumed: (readonly [number, number])[] = []
-    for (const match of raw.matchAll(INVOKE)) {
-      const start = match.index
-      consumed.push([start, start + match[0].length])
-      const tagged = attributes(match[1] ?? '')
+    for (const element of invokeElements(raw)) {
+      const start = element.start
+      consumed.push([element.start, element.end])
+      const tagged = attributes(element.run)
       const name = (tagged.get('name') ?? '').trim()
       if (name.length === 0) continue
       named = true
@@ -1089,9 +1529,19 @@ export class DsmlTranslator {
       // existed, and refusing the argument alone only turned that into a call
       // with NO argument — a tool invoked for nothing either way. This is the
       // same measurement the wrapper-closed pass makes; see its note.
-      const body = match[2] ?? ''
-      if (unbalanced(body)) continue
-      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, body, tagged) } })
+      const body = element.body
+      if (unfinished(body)) continue
+      // Every argument closed and one closer is left over, so the body is
+      // FINISHED and the surplus tag is structure the reader drops. It is a
+      // repair all the same, and it is counted.
+      if (parameterCounts(body).surplus > 0) this.shapes.add('surplus-closer')
+      // The body is one JSON arguments object rather than a run of parameter
+      // elements, which is the whole of what this shape means; a body that
+      // merely begins with a brace is a value and is read as one.
+      if (jsonBodyArguments(tool, body.replace(NAMELESS_PARAMETER_PAIR, ''), new Set(parameterNames(tool))) !== undefined) {
+        this.shapes.add('json-body')
+      }
+      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, body, tagged, this.shapes) } })
     }
     // Invokes with no `</invoke>` of their own, closed by an outer wrapper
     // instead (the `｜｜DSML｜｜` tool_calls shape, and the very common slip of
@@ -1126,8 +1576,13 @@ export class DsmlTranslator {
       const nextInvoke = after.search(/<invoke\b/i)
       const region = nextInvoke === -1 ? after : after.slice(0, nextInvoke)
       if (PARAMETER_OPEN.test(region)) {
-        if (unbalanced(region)) continue
-        calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, region, tagged) } })
+        if (unfinished(region)) continue
+        // The same surplus-closer repair the bodied pass above counts: this
+        // invoke has no closer of its own, so an extra parameter closer in the
+        // region is dropped by the same rule and is the same shape.
+        if (parameterCounts(region).surplus > 0) this.shapes.add('surplus-closer')
+        this.shapes.add('missing-invoke-close')
+        calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, region, tagged, this.shapes) } })
         continue
       }
       const declared = new Set(parameterNames(tool))
@@ -1139,12 +1594,15 @@ export class DsmlTranslator {
       // since this invoke has no closer of its own), so it comes off first.
       const bodied = region.replace(ORPHAN_CLOSE, '')
       if (jsonBodyArguments(tool, bodied, declared) !== undefined) {
-        calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, bodied, tagged) } })
+        this.shapes.add('json-body')
+        this.shapes.add('missing-invoke-close')
+        calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, bodied, tagged, this.shapes) } })
         continue
       }
       const hasArg = [...tagged].some(([key]) => key !== 'name' && declared.has(key))
       if (!hasArg && requiredNames(tool).length > 0) continue
-      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, '', tagged) } })
+      this.shapes.add('missing-invoke-close')
+      calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, '', tagged, this.shapes) } })
     }
     calls.sort((left, right) => left.index - right.index)
     return { produced: calls.map(entry => entry.event), named, unknown }
@@ -1155,7 +1613,9 @@ export class DsmlTranslator {
     const block = this.block
     this.block = undefined
     if (block === undefined) return
-    const raw = block.lines.join('\n')
+    const joined = block.lines.join('\n')
+    const raw = restoreStrippedClosers(joined)
+    if (raw !== joined) this.shapes.add('closer-stripped')
     const { produced, named, unknown } = this.parseCalls(raw)
     // Nothing callable came out: show the block. A model that named a tool it
     // does not have needs to SEE that it did — the next turn's transcript is
@@ -1208,4 +1668,75 @@ export class DsmlTranslator {
     }
     return false
   }
+}
+
+/**
+ * Restore the closers a transport stripped from a tool-call block.
+ *
+ * A stripped block keeps every opener and loses every closer, so its arguments
+ * are intact but the markup that ended them is gone. Counting openers against
+ * closers reads that as a command cut off mid-write, and the turn falls through
+ * to prose with a note saying the tool does not exist.
+ *
+ * The grammar makes this decidable rather than guessed: an element never nests.
+ * A second invoke opener therefore PROVES the first invoke closed, and proves
+ * any parameter open inside it closed too. Only structure is read, never
+ * content, so a parameter whose value merely mentions a tag is untouched.
+ *
+ * Fires only when closers are entirely absent AND at least two invoke openers
+ * are present. One truncated invoke is indistinguishable from one stripped
+ * invoke, and completing it would invent arguments the model never wrote, so
+ * that case is left to the truncation path.
+ * @param text - one line, or one block, of raw channel text.
+ * @returns the same text with the provable closers restored.
+ */
+export function restoreStrippedClosers(text: string): string {
+  const PC = '<' + '/' + 'parameter' + '>'
+  const IC = '<' + '/' + 'invoke' + '>'
+  const invokes = (text.match(/<invoke\b/gi) ?? []).length
+  if (invokes < 2) return text
+  const closed = (text.split(PC).length - 1) + (text.split(IC).length - 1)
+  if (closed > 0) return text
+
+  const TAG = /<(\/?)(parameter|invoke)\b[^>]*>/gi
+  const SEPARATOR = /[ \t\r\n]+$/
+  const out: string[] = []
+  const stack: string[] = []
+  let last = 0
+  let match: RegExpExecArray | null
+  // The whitespace between a value and the tag that follows it separates them
+  // rather than belonging to the value, so a restored closer goes BEFORE it.
+  // Inserted after, it landed inside the argument and `a.txt` arrived as
+  // `a.txt `. Newlines are separator whitespace here too: a block written
+  // across lines has one between every value and the next opener.
+  const emit = (gap: string, closers: readonly string[]): void => {
+    if (closers.length === 0) { out.push(gap); return }
+    const trailing = SEPARATOR.exec(gap)
+    if (trailing === null) { out.push(gap, ...closers); return }
+    out.push(gap.slice(0, gap.length - trailing[0].length), ...closers, trailing[0])
+  }
+  while ((match = TAG.exec(text)) !== null) {
+    const gap = text.slice(last, match.index)
+    last = TAG.lastIndex
+    const closers: string[] = []
+    if (match[1] === '/') {
+      if (stack.length > 0) stack.pop()
+    } else {
+      const name = (match[2] ?? '').toLowerCase()
+      if (name === 'parameter') {
+        while (stack[stack.length - 1] === 'parameter') {
+          closers.push('<' + '/' + (stack.pop() ?? '') + '>')
+        }
+      } else {
+        while (stack.length > 0) closers.push('<' + '/' + (stack.pop() ?? '') + '>')
+      }
+      stack.push(name)
+    }
+    emit(gap, closers)
+    out.push(match[0])
+  }
+  const tail: string[] = []
+  while (stack.length > 0) tail.push('<' + '/' + (stack.pop() ?? '') + '>')
+  emit(text.slice(last), tail)
+  return out.join('')
 }

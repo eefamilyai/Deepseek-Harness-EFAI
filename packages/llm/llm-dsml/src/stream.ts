@@ -30,6 +30,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlockType, FinishReason, StreamChunk, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { DsmlTranslator, trailingReasoningCalls } from './dsml.ts'
 import type { DsmlEvent, DsmlOptions } from './dsml.ts'
+import { bumpShapes } from './catalog.ts'
 
 /** How this pass reads one provider stream. */
 export interface DsmlStreamOptions extends DsmlOptions {
@@ -81,6 +82,13 @@ class DsmlStreamReader {
   private calls = 0
   /** Calls this pass made, which is what can change the finish reason. */
   private recovered = 0
+  /**
+   * Every catalogue shape this turn's readers repaired, across all its text
+   * blocks. A turn is the unit the catalogue is written in: the cost of the
+   * file is the read and the write, so one pass per turn keeps a chatty model
+   * from turning repairs into a per-token disk workload.
+   */
+  private readonly repaired = new Set<string>()
   /** The text of the last reasoning block to close, and whether it closed last. */
   private reasoning: string | undefined
   private readonly tools: ReadonlyMap<string, ToolSchema>
@@ -115,6 +123,19 @@ class DsmlStreamReader {
   *close(): Generator<StreamChunk> {
     yield* this.flush(true)
     yield* this.closeText()
+    this.record()
+  }
+
+  /**
+   * Write this turn's repairs to the catalogue, once, at the turn's end.
+   *
+   * Best-effort and silent: `bumpShapes` returns false for every failure and
+   * for a reader no one asked to count, and a turn that cannot write a
+   * diagnostics file still runs the calls it repaired.
+   */
+  private record(): void {
+    if (this.repaired.size === 0) return
+    bumpShapes([...this.repaired])
   }
 
   private *start(index: number, blockType: ContentBlockType): Generator<StreamChunk> {
@@ -158,6 +179,7 @@ class DsmlStreamReader {
     const broken = !settled(chunk.reason)
     yield* this.flush(broken)
     yield* this.closeText()
+    this.record()
     if (!broken) yield* this.fromReasoning()
     // A turn that produced a call is a tool-calls turn: the loop has to run the
     // call, and the provider's own `stop` was reported about a text reply it did
@@ -178,6 +200,10 @@ class DsmlStreamReader {
     const source = this.source
     if (source === undefined) return
     this.source = undefined
+    // Collect before the reader is dropped: this is the only point a text
+    // block's repairs are still readable, and the set spans every block of the
+    // turn because the catalogue is written once, per turn.
+    for (const id of source.translator.repairedShapes()) this.repaired.add(id)
     for (const event of source.translator.end()) {
       if (textOnly && event.kind === 'tool-call') continue
       yield* this.emit(event)

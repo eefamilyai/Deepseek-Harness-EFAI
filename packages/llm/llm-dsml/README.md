@@ -16,9 +16,26 @@ This package reads it. One `llm/stream` pass sits above whatever adapter answere
 | A tool named as its own tag | `<read path="a.txt"/>` — only for tools this request declared |
 | A JSON arguments body | `<invoke name="search_files">{ "query": "pool" }</invoke>` |
 | Near-miss punctuation | `<invoke=read>`, `<parameter=path>`, a `<parameter>` with no name |
+| An argument closed twice | a parameter closer written twice before the invoke closer — the surplus closer is structure and is dropped |
 | An argument with its invoke lost | a line-leading `<parameter name="…">` whose name only one declared tool owns |
+| A block whose closers were stripped | every opener kept and every closer and newline lost — a second `<invoke>` opener proves the first closed, and the provable closers are restored before the parse |
+| An invoke the wrapper closed | the arguments all closed but the `</invoke>` is missing, leaving `</tool_calls>` as the only closer — the wrapper closes the call |
+| Two openers fused into one tag | `<parameter name="invoke name="kernel">` — everything ahead of the inner opener is dropped, and the inner tag is read |
+| The frame word with no pipes | `<_calls>` — the frame carries nothing the reader needs and is removed |
+| The system prompt recited back | a `<system_reminder>` span in the output is framing, never the model's answer, so the whole span is suppressed |
+| A closer with nothing to close | a `</parameter>` in prose after the call already ran — structure, not content, so it is dropped rather than shown |
+| An argument spelled the human way | `name="filePath"` where the schema declares `file_path` — placed in the single declared slot it folds onto; two candidates refuse the repair |
+| A quoted scalar | `name="timeoutMs">"30"` for a parameter typed `number` — the quotes are peeled and the text coerced by the declared type |
 
 Everything else is prose. A block naming a tool this request never declared stays visible as written, and so does a call still being written — inventing the end of a half-written command is how that command wrongly runs.
+
+Markup the model is **showing** rather than writing is prose by the same rule. A fenced code block is an illustration — the statement this transport teaches says fenced code blocks never run — and so is markup inside a code span, so a transcript, a worked example, or a sentence naming an `<invoke>` reaches the user as written and runs nothing. That is what keeps an explanation *of* the format from being mistaken for a call *to* it.
+
+## The repair catalogue
+
+Every shape in the table above is a repair, and each one has an id in [`src/catalog.ts`](src/catalog.ts) — `surplus-closer`, `fused-opener`, `orphan-parameter`, and the rest. `DsmlTranslator.repairedShapes()` reports which ids one turn repaired, and `readDsmlStream` collects them across the turn's text blocks and writes the counts once, at the end, through `bumpShapes`.
+
+Counting is off unless asked for: with no explicit path and no `DSML_CATALOG`, a reader repairs, counts in memory, and writes nothing, so a test run and an ordinary turn never touch a file they did not name. Point `DSML_CATALOG` at a path to keep the counts there, or call `bumpShapes(ids, path)` directly. `loadCatalog(path)` merges that file over the shipped seed: the seed owns the rule for a shared id, the file owns the count.
 
 ## Read everywhere, taught in one place
 
@@ -54,6 +71,7 @@ A request that declares no tools is returned untouched, so an auxiliary call —
 | [`src/index.ts`](src/index.ts) | The Cordis plugin: one `llm/stream` listener, and the package's exports |
 | [`src/stream.ts`](src/stream.ts) | The reader as a filter over an assembled chunk stream, including block-index bookkeeping |
 | [`src/dsml.ts`](src/dsml.ts) | `DsmlTranslator`: the line-oriented reader, every dialect above, and the repair rules |
+| [`src/catalog.ts`](src/catalog.ts) | The repair catalogue: the shape of every malformation read above, and the hit counter written once per turn |
 | [`src/protocol.ts`](src/protocol.ts) | The format statement a channel-less transport teaches, and the schema-typed parameter coercion |
 | [`src/fallback.ts`](src/fallback.ts) | Recognising a native-tools refusal, and rewriting the refused request for the text channel |
 
@@ -107,3 +125,5 @@ Append-only. The recovered call and its result extend the transcript; no earlier
 - **A refusal is recognised by its wording** — the fallback matches the messages OpenRouter, Ollama, and common OpenAI-compatible servers send. A provider that words the same refusal differently still fails the turn as before.
 - **The memory of a refusal lasts one process** — a restart tries native tools again, which costs one refused round trip per model.
 - **Interleaved text blocks are read independently** — a call split across two provider text blocks is not joined, because a block boundary is the adapter saying that text finished.
+- **An unclosed fence runs to the end of the turn** — markdown's own rule. A model that opens a code block and never closes it has the rest of its answer read as illustration, so a real call written after the unclosed fence is shown rather than run.
+- **A line mixing quoted and unquoted markup reads whole** — the illustration rule needs every marker on a line to be inside a code span. A line carrying both a mention and a real call is read by the ordinary rules, so the mention on that one line is not protected.

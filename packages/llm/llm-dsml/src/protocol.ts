@@ -138,7 +138,7 @@ export function unescapeXml(value: string): string {
 }
 
 /** The JSON Schema `type` declared for one parameter, when the tool declares one. */
-function parameterType(tool: ToolSchema | undefined, name: string): string | undefined {
+export function parameterType(tool: ToolSchema | undefined, name: string): string | undefined {
   const properties = (tool?.parameters as { properties?: unknown } | undefined)?.properties
   if (typeof properties !== 'object' || properties === null) return undefined
   const property: unknown = (properties as Record<string, unknown>)[name]
@@ -223,4 +223,97 @@ export function renderParameter(value: unknown): string {
   // `JSON.stringify` cannot return undefined here.
   if (typeof value === 'string') return value
   return JSON.stringify(value)
+}
+
+
+/**
+ * The declared parameter a written name most likely meant, when exactly one does.
+ *
+ * A model that spells an argument `filePath` for a schema's `file_path`, or
+ * `Path` for `path`, wrote the argument it meant and missed the spelling. The
+ * match is deliberately narrow and refuses anything ambiguous: the written name
+ * must fold to a declared one after lowercasing and dropping separators, or
+ * prefix-match exactly one free declared name at three characters or more. Two
+ * plausible slots is a name the reader cannot resolve, and picking one is how a
+ * parser becomes unpredictable - the failure this reader exists to prevent.
+ * @param tool - the schema of the tool being called, when it is known.
+ * @param written - the name exactly as the model wrote it.
+ * @param taken - declared names already filled by an earlier argument.
+ * @returns the single declared name this spelling meant, or undefined.
+ */
+export function resolveParameterName(
+  tool: ToolSchema | undefined,
+  written: string,
+  taken: readonly string[] = [],
+): string | undefined {
+  if (tool === undefined) return undefined
+  const declared = parameterNames(tool).filter(name => !taken.includes(name))
+  if (declared.length === 0) return undefined
+  const fold = (value: string): string => value.toLowerCase().replace(/[\s_-]+/g, '')
+  const folded = fold(written)
+  if (folded.length === 0) return undefined
+  const exact = declared.filter(name => fold(name) === folded)
+  if (exact.length === 1) return exact[0]
+  // Two declared names differing only in case or separators is a schema the
+  // reader must not guess between.
+  if (exact.length > 1) return undefined
+  if (folded.length < 3) return undefined
+  const near = declared.filter((name) => {
+    const candidate = fold(name)
+    return candidate.startsWith(folded) || folded.startsWith(candidate)
+  })
+  return near.length === 1 ? near[0] : undefined
+}
+
+/**
+ * The raw text of a QUOTED scalar, or undefined when the text is not one.
+ *
+ * A model told an argument is a number writes a quoted digit, and told it is a
+ * boolean writes a quoted word: the value is right and the quotes are markup
+ * the schema never asked for. Only a non-string declared type is unquoted, and
+ * a quoted JSON object or array is left alone because there the quotes are
+ * content.
+ * @param raw - the unescaped text between the argument tags.
+ * @returns the text inside the quotes, or undefined.
+ */
+function unquoteScalar(raw: string): string | undefined {
+  const trimmed = raw.trim()
+  const match = /^(['"])(.*)\1$/s.exec(trimmed)
+  if (match === null) return undefined
+  const inner = match[2] ?? ''
+  if (/^[[{]/.test(inner.trim())) return undefined
+  return inner
+}
+
+/** One coercion's value, and whether reading it took a repair. */
+export interface CoercedParameter {
+  /** The value to place in the arguments object. */
+  readonly value: unknown
+  /** Whether the text needed repairing before it coerced. */
+  readonly repaired: boolean
+}
+
+/**
+ * Coerce one argument and report whether the text was repaired on the way.
+ *
+ * The reader runs this instead of {@link coerceParameter} so a repair it makes
+ * is visible to the turn's shape report: a quoted scalar handed to a typed
+ * argument is a malformation this reader fixed, and a silent fix is a fix the
+ * next investigation cannot see.
+ * @param tool - the schema of the tool being called, when it is known.
+ * @param name - the declared name the value belongs to.
+ * @param raw - the unescaped text between the argument tags.
+ * @returns the coerced value and whether the text was repaired.
+ */
+export function coerceParameterDetailed(
+  tool: ToolSchema | undefined,
+  name: string,
+  raw: string,
+): CoercedParameter {
+  const type = parameterType(tool, name)
+  if (type !== undefined && type !== 'string') {
+    const unquoted = unquoteScalar(raw)
+    if (unquoted !== undefined) return { value: coerceParameter(tool, name, unquoted), repaired: true }
+  }
+  return { value: coerceParameter(tool, name, raw), repaired: false }
 }
