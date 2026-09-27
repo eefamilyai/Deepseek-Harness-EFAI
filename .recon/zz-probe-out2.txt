@@ -1,0 +1,58 @@
+﻿npx.cmd : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths:
+true in your Vite config instead.
+At line:1 char:164
++ ... 'Continue'; npx.cmd vitest run packages/llm/llm-dsml/tests/zz-probe.s ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your
+Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your
+Vite config instead.
+
+ RUN  v4.1.8 D:/deepseek-kernel-harness
+
+stdout | packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > orphan-group
+ORPHAN-GROUP {"calls":[{"name":"kernel","args":{"code":"1"}},{"name":"kernel","args":{"code":"2"}}],"text":"","shapes":["orphan-group"]}
+groups [{"name":"kernel","region":"<parameter name=\"code\">1</parameter>"},{"name":"kernel","region":"<parameter name=\"code\">2</parameter>"}]
+
+stdout | packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > invoke-closer-as-parameter
+ICP {"calls":[{"name":"kernel","args":{"timeoutMs":60000}}],"text":"","shapes":["invoke-closer-as-parameter","missing-invoke-close"]}
+closeP "\n<parameter name=\"timeoutMs\">60000</parameter>\n</tool_calls>\n"
+
+stdout | packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > closerRun numbers
+run 0 0
+run 1 1
+run 3 3
+run 11 11
+run 12 12
+run 13 13
+blank-skipped 12
+reset 3
+default 12
+
+stdout | packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > stream halt
+HALT-TEXT [{"type":"block-end","index":0,"block":{"type":"text","text":"\n\n\n\n\n\n\n\n\n\n\n\n\n\n[stopped: you repeated structural closers with no call between them. Nothing in that run was a call. Write the call you meant, once.]\n"}}]
+HALT-FINISH {"type":"finish","reason":{"kind":"stop"}}
+
+stdout | packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > call then spam
+CALL-FINISH {"type":"finish","reason":{"kind":"tool-calls"}}
+CALLS [{"type":"block-end","index":0,"block":{"type":"tool-call","id":"dsml-kernel-cc6159d4-24ed-42af-a691-8510e6f1c687","name":"kernel","arguments":"{\"code\":\"1\"}"}}]
+TEXTS [{"type":"block-end","index":1,"block":{"type":"text","text":"\n\n\n\n\n\n\n\n\n\n\n\n[stopped: you repeated structural closers with no call between them. Nothing in that run was a call. Write the call you meant, once.]\n"}}]
+
+stdout | packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > no over-fire on a normal call
+NORMAL-FINISH {"type":"finish","reason":{"kind":"tool-calls"}}
+NORMAL-TEXTS []
+
+ ✓ |thread-safe| packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > orphan-group 11ms
+ ✓ |thread-safe| packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > invoke-closer-as-parameter 2ms
+ ✓ |thread-safe| packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > closerRun numbers 1ms
+ ✓ |thread-safe| packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > stream halt 7ms
+ ✓ |thread-safe| packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > call then spam 8ms
+ ✓ |thread-safe| packages/llm/llm-dsml/tests/zz-probe.spec.ts > PROBE > no over-fire on a normal call 3ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  17:32:01
+   Duration  1.44s (transform 883ms, setup 455ms, import 596ms, tests 35ms, environment 0ms)

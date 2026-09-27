@@ -83,6 +83,89 @@ def client_hints():
     }
 
 
+# --- the high-entropy half of the client hints ---------------------------------
+# The triple above is what Chrome sends everywhere. Six MORE hints ride the
+# same-origin requests to chat.deepseek.com, and a capture of that site shows all
+# nine on every one of its 47 requests -- completion, pow-challenge, settings --
+# while `hif-*.deepseek.com`, `gator.volces.com` and the CDN get the triple only.
+# The split is the browser's, not a choice: the extra hints are granted per
+# origin (by `Accept-CH` or its meta equivalent, and the grant persists), so a
+# client that sends the triple to DeepSeek's API is advertising a browser that
+# declined a grant the real one accepted.
+#
+# Nothing here is invented. Chrome derives every one of these from the same two
+# facts this module already owns -- the browser version and the OS -- so they are
+# READ OUT of `UA` and `PLATFORM` rather than written down beside them. A
+# hand-written second copy is how the fingerprint drifted before: the version in
+# these headers and the version in the UA must come from one source or they
+# disagree the moment either is bumped.
+def _ua_version():
+    """The full ``Chrome/x.y.z.w`` version out of `UA`, or the major brand."""
+    m = re.search(r"Chrome/(\d+(?:\.\d+)*)", UA)
+    if m:
+        return m.group(1)
+    m = re.search(r'v="(\d+)"', SEC_CH_UA)
+    return m.group(1) if m else "0"
+
+
+def _ua_arch():
+    """``x86`` or ``arm``, from the CPU the User-Agent names.
+
+    An Intel Mac and a Windows PC are both ``x86``; an Apple-silicon Mac is
+    ``arm``. Reporting the wrong one beside a platform string is exactly the
+    contradiction these hints exist to expose, so this is read from the UA
+    rather than assumed from the platform name.
+    """
+    if "Macintosh" in UA or "Mac OS X" in UA:
+        return "arm" if "ARM" in UA or "aarch64" in UA else "x86"
+    return "arm" if "aarch64" in UA or "arm" in UA.lower() else "x86"
+
+
+def _ua_platform_version():
+    """The OS version, in the dotted form the hint uses.
+
+    macOS arrives in the UA as ``10_15_7`` and is reported as ``10.15.7``;
+    Windows has no version in its UA at all, so it keeps the value a current
+    Windows 11 build reports.
+    """
+    if PLATFORM == "macOS":
+        m = re.search(r"Mac OS X (\d+(?:_\d+)*)", UA)
+        if m:
+            return m.group(1).replace("_", ".")
+    if PLATFORM == "Windows":
+        return "19.0.0"
+    return "0.0.0"
+
+
+def client_hint_extras():
+    """The six hints Chrome adds once an origin is granted the high-entropy set."""
+    full = _ua_version()
+    return {
+        "sec-ch-ua-arch": '"%s"' % _ua_arch(),
+        "sec-ch-ua-bitness": '"64"',
+        "sec-ch-ua-full-version": '"%s"' % full,
+        # Same brands as `sec-ch-ua`, each major version padded to the full
+        # four-part form -- Chrome builds this list FROM the low-entropy one, so
+        # deriving it here keeps the two from ever disagreeing.
+        "sec-ch-ua-full-version-list": re.sub(
+            r'v="(\d+)"', lambda m: 'v="%s"' % (m.group(1) + ".0.0.0"), SEC_CH_UA),
+        # Always empty on desktop: the hint exists for phones and tablets.
+        "sec-ch-ua-model": '""',
+        "sec-ch-ua-platform-version": '"%s"' % _ua_platform_version(),
+    }
+
+
+def client_hints_full():
+    """All nine client hints -- the set a granted origin receives.
+
+    Use this for ``chat.deepseek.com``, whose grant a real browser holds. Use
+    ``client_hints()`` for every other origin: the grant is per-origin, and a
+    third-party host that receives hints the browser would not have sent it is
+    as wrong as one that receives too few.
+    """
+    return {**client_hints(), **client_hint_extras()}
+
+
 # --- the DeepSeek web client riding that browser ------------------------------
 # Not browser facts, so curl_cffi knows nothing about them and no fingerprint
 # contains them: these identify the chat APPLICATION. A capture of a real
@@ -110,7 +193,11 @@ def timezone_offset():
 
 
 def client_headers():
-    """The ``x-client-*`` headers the web client sends on every request."""
+    """The ``x-client-*`` headers the web client sends on every request.
+
+    These ride ``chat.deepseek.com`` AND the two ``hif-*.deepseek.com`` hosts,
+    which is why they live apart from the chat-origin-only group below.
+    """
     return {
         "x-client-platform": CLIENT_PLATFORM,
         "x-client-version": CLIENT_VERSION,
@@ -118,6 +205,49 @@ def client_headers():
         "x-client-bundle-id": CLIENT_BUNDLE_ID,
         "x-client-timezone-offset": str(timezone_offset()),
     }
+
+
+# --- headers only chat.deepseek.com receives ----------------------------------
+# A capture of the site splits its headers THREE ways, and the split is the
+# browser's, not a choice:
+#
+#   chat.deepseek.com       all nine client hints, the x-client-* group, AND
+#                           x-device-id + x-device-model (47/47 requests)
+#   hif-*.deepseek.com      the client-hint triple and the x-client-* group only
+#   gator.volces.com, CDN   neither group; the triple and a User-Agent at most
+#
+# So the device headers are scoped to ONE origin. A client that sends them to
+# ``hif-*.deepseek.com`` presents a header the real browser never sends there,
+# which is as wrong as omitting one it does send.
+def device_model():
+    """The ``x-device-model`` value: always empty on desktop.
+
+    The browser sends this header -- present, empty -- on every chat.deepseek.com
+    request. It names a phone or tablet model, so on a desktop build the value is
+    the empty string, exactly like ``sec-ch-ua-model``.
+    """
+    return ""
+
+
+def derived_x_device_id():
+    """A stable UUID for ``x-device-id`` when no browser minted one.
+
+    ``x-device-id`` is a per-profile UUID the real client keeps for the life of
+    its browser profile. A real one can only be read out of a browser (see
+    ``ds_profile``), and that is what should be presented.
+
+    This is the fallback for when none has been captured, and it exists because
+    OMITTING the header is the worse option: the browser sends it on all 47
+    requests in the capture, so a request without it is visibly not the website's
+    client, while a stable locally-derived UUID at least keeps the same shape and
+    does not change between launches. It is honest about being a fallback --
+    ``ds_profile.identity_status`` reports which accounts are still on it.
+
+    UUID-shaped and derived from the machine seed, so it is stable across
+    restarts and distinct per machine.
+    """
+    raw = _digest("x-device-id", 32)
+    return "%s-%s-%s-%s-%s" % (raw[0:8], raw[8:12], raw[12:16], raw[16:20], raw[20:32])
 
 
 def fetch_metadata(dest, mode, site):
@@ -395,116 +525,41 @@ def device_id_status():
     }
 
 
-def capture_device_id(headless=True, timeout_ms=45000, on_status=None):
+def capture_device_id(headless=True, timeout_ms=45000, on_status=None,
+                      account_id=None):
     """Read a real Shumei ``device_id`` out of a browser and persist it.
 
-    The id is minted by the SDK's obfuscated JS, so the only way to obtain the
-    genuine article is to let a real browser produce it and read it back. Three
-    sources are probed, in order of authority:
+    Thin wrapper over `ds_profile.capture_identity`, which owns the profile and
+    does the probing. The import is deferred because `ds_profile` imports this
+    module for `identity_dir`; at module scope that would be a cycle.
 
-      * the ``device_id`` field of the ``/users/login`` request payload, which is
-        exactly the value the web client sends and therefore exactly what this
-        connector must replay;
-      * the SDK's own cookie slot, populated on page load; and
-      * its localStorage slot, for the same reason.
-
-    ``headless=False`` additionally lets the operator complete a login by hand
-    when the storage probes come up empty, which is the case on a fresh profile
-    until the SDK has had a reason to persist.
+    `account_id` selects WHICH Chrome profile is driven. It matters: a profile is
+    the identity, so capturing for a second account against the first account's
+    profile would hand both the same device. ``None`` uses one machine-level
+    profile, which is right only for a single-account install.
 
     Returns the stored value. Raises ``RuntimeError`` with a concrete reason when
     nothing could be read -- never a placeholder, because a fabricated value here
     is precisely the defect this function exists to remove.
     """
-    try:
-        from playwright.sync_api import sync_playwright
-    except Exception as e:  # noqa: BLE001 -- report the real cause to the caller
-        raise RuntimeError(
-            "Playwright is not installed in this interpreter, so a browser cannot "
-            "be driven to capture a device_id (%s: %s)" % (type(e).__name__, e))
+    import ds_profile                       # deferred: see docstring
 
-    def note(message):
-        if on_status:
-            with contextlib.suppress(Exception):
-                on_status(message)
+    doc = ds_profile.capture_identity(account_id or "machine",
+                                      headless=headless, timeout_ms=timeout_ms,
+                                      on_status=on_status)
+    return doc["device_id"]
 
-    captured = {}
 
-    def remember(value, origin):
-        text = str(value or "").strip()
-        # A login payload wins outright; the storage slots only fill a gap.
-        if text and valid_device_id(text) and (
-                "value" not in captured or origin == "login-payload"):
-            captured["value"] = text
-            captured["origin"] = origin
+def device_id_for_account(account_id):
+    """The browser-minted ``device_id`` recorded for `account_id`, or ``None``.
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=bool(headless))
-        try:
-            context = browser.new_context()
-            page = context.new_page()
-
-            def on_request(request):
-                if "/users/login" not in request.url:
-                    return
-                try:
-                    body = request.post_data
-                except Exception:
-                    return
-                if not body:
-                    return
-                with contextlib.suppress(Exception):
-                    payload = json.loads(body)
-                    if isinstance(payload, dict):
-                        remember(payload.get("device_id"), "login-payload")
-
-            page.on("request", on_request)
-            note("opening https://chat.deepseek.com/sign_in")
-            with contextlib.suppress(Exception):
-                page.goto("https://chat.deepseek.com/sign_in",
-                          wait_until="domcontentloaded", timeout=timeout_ms)
-
-            # Give the SDK a moment to initialise and persist its slot.
-            with contextlib.suppress(Exception):
-                page.wait_for_timeout(4000)
-
-            if not headless:
-                note("log in in the browser window to capture the device_id")
-                with contextlib.suppress(Exception):
-                    page.wait_for_timeout(timeout_ms)
-
-            with contextlib.suppress(Exception):
-                for cookie in context.cookies():
-                    name = str(cookie.get("name") or "").lower()
-                    if name in ("smidv2", "smidv1", "smid", "deviceid", "device_id"):
-                        remember(cookie.get("value"), "cookie:%s" % name)
-            with contextlib.suppress(Exception):
-                found = page.evaluate("""() => {
-                    const out = {};
-                    try {
-                        for (let i = 0; i < localStorage.length; i++) {
-                            const k = localStorage.key(i);
-                            if (/smid|device/i.test(k)) out[k] = localStorage.getItem(k);
-                        }
-                    } catch (e) {}
-                    return out;
-                }""")
-                if isinstance(found, dict):
-                    for key, val in found.items():
-                        remember(val, "localStorage:%s" % key)
-
-            if "value" not in captured:
-                raise RuntimeError(
-                    "no device_id could be read: the SDK had stored none and no "
-                    "/users/login request was observed. Re-run with a visible browser "
-                    "(headless=False) and complete a login by hand.")
-            context.close()
-        finally:
-            with contextlib.suppress(Exception):
-                browser.close()
-
-    note("captured device_id via %s" % captured.get("origin"))
-    return set_device_id(captured["value"], source="captured")
+    A thin, cycle-free view of `ds_profile.device_id_for_account` for callers
+    that already import this module. ``None`` means the account has no identity
+    of its own yet -- the caller must not silently substitute the machine-level
+    value, because one device serving every account is the signal being avoided.
+    """
+    import ds_profile                       # deferred: see capture_device_id
+    return ds_profile.device_id_for_account(account_id)
 
 
 def fingerprint_rng():

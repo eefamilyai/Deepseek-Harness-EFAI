@@ -1,0 +1,15 @@
+identity_dir : C:\Users\eejar\AppData\Local\Temp\ds-idprobe-8lc7a12m
+profile_dir  : C:\Users\eejar\AppData\Local\Temp\ds-idprobe-8lc7a12m\profiles\probe-fresh_example.com-7e2b619bc79c
+profile_new  : True
+
+  [status] opening https://chat.deepseek.com/sign_in in C:\Users\eejar\AppData\Local\Temp\ds-idprobe-8lc7a12m\profiles\probe-fresh_example.com-7e2b619bc79c
+  [status] captured device_id via request-header
+
+RESULT: headless capture of a FRESH profile SUCCEEDED
+{
+  "x_device_id": "980c4ded-d66a-422f-a0fd-2d82c29e0120",
+  "origin": "request-header",
+  "device_id": "<63 chars>",
+  "account_id": "probe-fresh@example.com",
+  "updated_at": 1790499625.0147011
+}

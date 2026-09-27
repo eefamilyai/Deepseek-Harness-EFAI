@@ -24,6 +24,7 @@ import re
 import shutil
 import sys
 import tempfile
+import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -350,6 +351,129 @@ try:
     check("a login never carries a Bearer token",
           "authorization" not in {k.lower() for k in login_headers},
           "an expired token on a fresh login is itself the failure being fixed")
+
+    # ── the full nine-hint set, on both chat request paths ──────────
+    # A capture of chat.deepseek.com carries all nine sec-ch-ua-* headers on
+    # every one of its 47 requests, with no Accept-CH negotiation anywhere in
+    # the log -- the grant is simply held. A client that sends the triple
+    # advertises a browser that declined a grant the real one accepted, so
+    # `client_hints_full` is what both paths must use.
+    full = di.client_hints_full()
+    check("the full hint set is all nine headers", len(full) == 9, repr(sorted(full)))
+    check("the full hint set is the triple plus the extras",
+          set(full) == set(di.client_hints()) | set(di.client_hint_extras()),
+          repr(sorted(set(full) ^ (set(di.client_hints())
+                                  | set(di.client_hint_extras())))))
+    for name, hdrs in (("the request", headers), ("the login request", login_headers)):
+        missing = sorted(k for k in full if k not in hdrs)
+        check("%s carries all nine client hints" % name, not missing,
+              "missing %s" % missing)
+        check("%s carries the hint VALUES the full set names" % name,
+              all(hdrs.get(k) == val for k, val in full.items()),
+              repr({k: hdrs.get(k) for k in full if hdrs.get(k) != full[k]}))
+
+    # The high-entropy half is DERIVED from the User-Agent, so the version in
+    # the hint and the version in the UA cannot drift apart.
+    check("the full-version hint is the User-Agent's version",
+          full["sec-ch-ua-full-version"] == '"%s"' % di._ua_version(),
+          "%s vs UA %s" % (full["sec-ch-ua-full-version"], di._ua_version()))
+    check("the full-version LIST repeats the same brands as sec-ch-ua",
+          all(b in full["sec-ch-ua-full-version-list"] for b in ("Google Chrome",
+                                                                "Chromium")),
+          repr(full["sec-ch-ua-full-version-list"]))
+    check("the model hint is empty on desktop, like a real desktop Chrome",
+          full["sec-ch-ua-model"] == '""', repr(full["sec-ch-ua-model"]))
+    check("the arch hint agrees with the macOS User-Agent",
+          full["sec-ch-ua-arch"] == '"x86"', repr(full["sec-ch-ua-arch"]))
+    check("the platform-version hint is a dotted OS version",
+          re.fullmatch(r'"\d+(?:\.\d+)+"', full["sec-ch-ua-platform-version"]),
+          repr(full["sec-ch-ua-platform-version"]))
+
+    # ── the device headers: present on chat, on every request ───────
+    # Both ride 47/47 chat.deepseek.com requests in the capture. Omitting one is
+    # the loudest version of the mismatch, so neither may be absent.
+    for name, hdrs in (("the request", headers), ("the login request", login_headers)):
+        check("%s carries x-device-model" % name,
+              "x-device-model" in hdrs, repr(sorted(hdrs)))
+        check("%s sends x-device-model empty" % name,
+              hdrs.get("x-device-model") == "",
+              "the browser sends this header with an empty value on desktop")
+        check("%s carries x-device-id" % name,
+              bool(hdrs.get("x-device-id")), repr(sorted(hdrs)))
+
+    # It is a UUID and it is STABLE, so an account without a captured profile
+    # keeps one device identity instead of a new one per launch.
+    derived = di.derived_x_device_id()
+    check("the derived x-device-id is a UUID",
+          bool(uuid.UUID(derived)), repr(derived))
+    check("the derived x-device-id is stable across calls",
+          di.derived_x_device_id() == derived)
+    check("the fallback keeps the UUID shape on the wire",
+          bool(uuid.UUID(headers["x-device-id"])), repr(headers["x-device-id"]))
+    # It must NOT be the Shumei device_id: those are two different identifiers
+    # and a real browser never sends one as the other.
+    check("x-device-id is not the Shumei device_id",
+          headers["x-device-id"] != di.device_id(),
+          "the login body id and the header id are separate values")
+    check("device_model() is the empty string",
+          di.device_model() == "", repr(di.device_model()))
+
+    # A captured per-account value must WIN over the derived fallback, or the
+    # whole per-profile identity machinery is bypassed.
+    probe = dd._Account(id="xdev-probe@example.com", email="xdev-probe@example.com",
+                        password="x", source=("probe",))
+    captured = "11111111-2222-3333-4444-555555555555"
+    import ds_profile as dp
+    dp.write_account_identity(dd._account_key(probe), {"x_device_id": captured})
+    check("a captured per-account x-device-id wins over the fallback",
+          dd._extra_identity_headers(probe).get("x-device-id") == captured,
+          repr(dd._extra_identity_headers(probe)))
+    check("a captured identity still carries x-device-model",
+          "x-device-model" in dd._extra_identity_headers(probe))
+
+    # ── no navigation-only headers on an XHR ────────────────────────
+    # curl_cffi shapes a request like a browser NAVIGATION and adds these. No
+    # fetch the chat page makes carries either: sec-fetch-user is absent from
+    # all 47 chat requests, upgrade-insecure-requests from all 374 entries.
+    check("the navigation-only header set is declared",
+          set(dd._NOT_A_NAVIGATION) == {"sec-fetch-user",
+                                        "upgrade-insecure-requests"},
+          repr(dd._NOT_A_NAVIGATION))
+    check("a None value is what removes a curl_cffi default",
+          all(v is None for v in dd._NOT_A_NAVIGATION.values()),
+          "an empty string would SEND the header blank instead of dropping it")
+    for name, hdrs in (("the request", headers), ("the login request", login_headers)):
+        # curl_cffi DROPS a default by being handed ``None``, so the key is
+        # present in the dict and its value is None. Asserting absence would
+        # fail a correct implementation; assert the None.
+        check("%s drops sec-fetch-user" % name,
+              "sec-fetch-user" in hdrs and hdrs["sec-fetch-user"] is None,
+              repr(hdrs.get("sec-fetch-user", "<absent>")))
+        check("%s drops upgrade-insecure-requests" % name,
+              "upgrade-insecure-requests" in hdrs
+              and hdrs["upgrade-insecure-requests"] is None,
+              repr(hdrs.get("upgrade-insecure-requests", "<absent>")))
+        # The sec-fetch triple Chrome DOES send must survive.
+        check("%s keeps the sec-fetch triple" % name,
+              hdrs.get("sec-fetch-dest") == "empty"
+              and hdrs.get("sec-fetch-mode") == "cors",
+              repr({k: v for k, v in hdrs.items() if k.startswith("sec-fetch")}))
+
+    # ── an empty token is not a token ──────────────────────────────
+    # `Bearer ` with nothing after it is a shape the browser never emits, and
+    # it is what an expired-token retry looked like -- one more "not the
+    # website" marker, sent exactly when the request is already suspect.
+    bare_client = dd._Client.__new__(dd._Client)
+    bare_client.token = ""
+    bare_client.account = None
+    bare_client.sess = None
+    check("an empty token sends no authorization header",
+          "authorization" not in bare_client._headers(),
+          repr(bare_client._headers().get("authorization")))
+    bare_client.token = "REALTOKENvalue"
+    check("a real token is sent as a Bearer",
+          bare_client._headers().get("authorization") == "Bearer REALTOKENvalue",
+          repr(bare_client._headers().get("authorization")))
 
     # ── the WAF fingerprint repeats ─────────────────────────────────
     a = dw._build_signal({"capabilities": 3})

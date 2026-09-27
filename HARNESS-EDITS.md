@@ -38,7 +38,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Kiln LLM provider registry | `packages/llm/llm-kiln` | 11 files |
 | Text-channel tool-call reader | `packages/llm/llm-dsml` | 22 files |
 | System prompt as a file upload (work in progress) | `packages/llm/llm-system-file` | 10 files |
-| Python runtime (providers, `ds_direct`, WAF, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 49 files |
+| Python runtime (providers, `ds_direct`, WAF, browser identity, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 56 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
 | Post-compaction context | `packages/session/session-recovery-context` | 13 files |
@@ -99,12 +99,13 @@ This group was six files — upstream's four shipped presets and both bundle pat
 
 It is gone. The fork's rows live in `packages/bundle/efai-base/cordis.patch.yml` and `efai-web/`, stacked after upstream's bundles by the profile's own layer list. The fork ships no presets at all: upstream's are declared as `agent-preset` rows now, and the kernel tool is a host row that every preset agent sees through the layered tools registry. `efai/ensure-profile-bundles.mjs` keeps the profile naming both bundles, and upstream's files are pristine.
 
-**T2-C · Behavior injected into upstream source — 9 files**
+**T2-C · Behavior injected into upstream source — 11 files**
 
 | File | Δ | What it adds |
 |---|---|---|
 | `packages/llm/llm/src/index.ts` | +91 | `LlmAccountDraft`/`LlmAccountAdder`/`registerAccountProvider` — account pooling on the upstream `LlmRuntime` service |
-| `packages/compaction/compaction-basic/src/summarizer.ts` | +113 −14 | compaction prompt and summary parsing |
+| `packages/compaction/compaction-basic/src/summarizer.ts` | +186 −20 | the compaction directive, the quoted-transcript request shape, and summary parsing |
+| `packages/compaction/compaction-basic/tests/compaction-basic.spec.ts` | +48 −10 | pins the summarizer REQUEST: the role in the system slot, the whole transcript one quoted user turn, no tool channel |
 | `packages/llm/token-meter/src/usage-projection.ts` | +85 −29 | usage projection |
 | `packages/extensions/tool-cordis/src/api-catalog.ts` | +80 | catalog entries |
 | `packages/client/ui-settings-general/src/client/index.ts` | +14 | settings surface |
@@ -363,7 +364,7 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 29 | `scripts/verify-package-readme-model-experience.ts` | `all` | the fork ships package READMEs for fork-owned packages, so the audited `NO_MODEL_EXPERIENCE_SECTION` / `SENTENCE_MODEL_EXPERIENCE` allowlists must name them; without entries the gate rejects a correct README. | Upstream accepts a model-experience declaration inside each package manifest, so the allowlists stop being a central file. |
 | 30 | `client/ui-brand-official/**` (3 `README*`, `src/client/Brand.tsx`, `src/client/index.ts`, `tests/browser-plugin.client.spec.tsx`), `apps/web/tests/built-boot.expected.e2e.ts` | `brand` | the sidebar brand is the fork's in **every** build profile — upstream gates the registration behind `DSH_CLIENT_BUILD_PROFILE=official`, so an unprofiled build falls through to the shell's `DSH Local Build` label and its version badge; the name is live text carrying a specular sweep rather than the upstream name artwork, and the built-boot smoke pins that wordmark instead of the profile-dependent shell brand | A fork-owned client package owns the sidebar chrome, so the registration stops being a gate on an upstream package |
 | 31 | `client/ui-settings/src/client/config-form.ts` | `settings-freeze` | memoizes a decoded settings section per raw value and rehydrates the namespace schema once, so a settings write does not re-validate every section on the main thread; carried across upstream's `settings-scope.ts` → `config-form.ts` rename | **Upstream PR** |
-| 32 | `packages/compaction/{compaction,compaction-basic,command-compact}/**` (5 source files) | `kiln` | the summarizer's directive states its own role and accepts an operator instruction, because a replayed agent transcript plus a bare trailing request made the summarizer answer in the agent's voice — a tool call or a fenced code block instead of a checkpoint; the same files carry `/compact <text>` through to the summarizer | **Upstream PR** — upstream states the summarizer role on every route and accepts a compaction instruction argument |
+| 32 | `packages/compaction/{compaction,compaction-basic,command-compact}/**` (5 source files) | `kiln` | the summarizer's request holds the role in the system slot, quotes the replayed transcript as ONE user turn, and offers no tool channel, because a replayed transcript with its own roles intact read as a turn in progress and the summarizer continued the agent's voice — a tool call or a fenced code block instead of a checkpoint; the same files carry `/compact <text>` through to the summarizer. The request's own turns are also pinned (`packages/llm/llm-kiln/src/adapter.ts`, fork-owned): they carry no `source`, so `PINNED_SOURCE_KINDS` never matched them and the sidecar's oldest-first clip dropped the whole quoted transcript, leaving the summarizer the instruction alone | **Upstream PR** — upstream states the summarizer role on every route, pins a compaction request's own turns, and accepts a compaction instruction argument |
 
 If row 4 moves to a fork-owned package and rows 9, 10, and 31 go upstream, what remains is the client chrome (rows 12, 20, 23, 24, 30) and the lists and infrastructure, which conflict predictably in one place each, plus the compaction directive (row 32).
 

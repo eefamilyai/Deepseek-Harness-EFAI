@@ -25,7 +25,9 @@ import threading
 import time
 
 import config
+import ds_hif
 import ds_identity
+import ds_profile
 import tool_result_files
 from token_usage import estimate_tokens
 
@@ -391,15 +393,135 @@ def _usable(acct):
 def _device_id_for(acct):
     """The ``device_id`` to present when logging in as `acct`.
 
-    A per-account value in ds_config.json wins; otherwise the machine-level
-    identity resolves it. Either way this is a REAL Shumei fingerprint whenever
-    one has been configured or captured, and the derived fallback only when
-    none has -- see `ds_identity.device_id`.
+    Resolution order, first hit wins:
+
+      1. an explicit ``device_id`` in ds_config.json for this account;
+      2. the identity THIS account's own Chrome profile minted, recorded by
+         ``ds_profile.capture_identity``;
+      3. the machine-level value, as a last resort for an account that has never
+         been captured.
+
+    Step 2 is what stops several accounts presenting one device. A machine-level
+    fallback is still returned rather than nothing -- a login must not fail for
+    want of an identity -- but it is the value that makes accounts look related,
+    so ``identity_status`` reports when an account is still on it.
     """
     configured = str(getattr(acct, "device_id", "") or "").strip()
     if configured:
         return configured
+    # Only look up a recorded identity when there is a real account key.
+    # ``None`` would slug to a literal "default" profile and could pick up
+    # an unrelated record; the machine value is the honest answer there.
+    key = _account_key(acct)
+    if key:
+        own = ds_profile.device_id_for_account(key)
+        if own:
+            return own
     return ds_identity.device_id()
+
+
+def _did_for(acct):
+    """The ``did`` to put in the ``client/settings`` query string, or ``None``.
+
+    ``did`` is the one anti-abuse identifier that does not ride a header: the real
+    client sends it as a query parameter, ``/api/v0/client/settings?did=<uuid>
+    &scope=provider``, on all 35 such requests in a capture of the site, with one
+    value for the life of the profile.
+
+    Resolution order, first hit wins:
+
+      1. an explicit ``did`` in ds_config.json for this account;
+      2. the ``did`` THIS account's own Chrome profile minted, recorded by
+         ``ds_profile.capture_identity``.
+
+    There is deliberately no machine-level fallback, unlike ``_device_id_for``.
+    A fabricated ``did`` is worse than none: it is a second identity the browser
+    never had, where the machine-level ``device_id`` at least has the excuse of
+    being a real value. ``None`` means the caller omits the request entirely --
+    which is what a client with no stored settings does.
+    """
+    configured = str(getattr(acct, "did", "") or "").strip()
+    if configured:
+        return configured
+    key = _account_key(acct)
+    if key:
+        return ds_profile.did_for_account(key)
+    return None
+
+
+def _account_key(acct):
+    """The account id a profile is named by, or ``None`` when there is none.
+
+    Every identity lookup is keyed on this, and callers reach it with whatever
+    account object they hold: a real ``_Account``, a client built with
+    ``object.__new__`` in a test, or a duck-typed stand-in carrying only what one
+    request needs. ``getattr`` rather than attribute access, because a stand-in
+    with no ``.id`` simply has no identity to look up -- it is not an error, and
+    raising on it would let a header addition break a request path that has
+    nothing to do with identity.
+    """
+    key = getattr(acct, "id", None)
+    if key:
+        return key
+    # An account that never got an explicit id is still one account, and the
+    # email or mobile it logs in with names it just as stably.
+    return getattr(acct, "email", None) or getattr(acct, "mobile", None) or None
+
+
+def _extra_identity_headers(acct):
+    """The per-profile headers ``chat.deepseek.com`` receives, never omitted.
+
+    Two headers, both sent on EVERY one of the 47 chat.deepseek.com requests in
+    a capture of the real site, and neither of them anywhere else -- not on
+    ``hif-*.deepseek.com``, not on ``gator.volces.com``:
+
+      ``x-device-id``    a per-profile UUID, distinct from the Shumei
+                         ``device_id`` in the login body;
+      ``x-device-model`` a device model string, empty on desktop.
+
+    Omitting one is the loudest version of the mismatch, because the real client
+    sends it on every request it makes to this origin. So ``x-device-id`` falls
+    back to a stable seed-derived UUID when no browser has minted one for this
+    account yet (``ds_identity.derived_x_device_id``), and ``identity_status``
+    reports which accounts are still on that fallback.
+    """
+    key = _account_key(acct)
+    dev = ""
+    if key:
+        rec = ds_profile.read_account_identity(key)
+        dev = str(rec.get("x_device_id") or "").strip()
+    return {
+        "x-device-id": dev or ds_identity.derived_x_device_id(),
+        "x-device-model": ds_identity.device_model(),
+    }
+
+
+# Headers curl_cffi adds because it shapes a request like a browser NAVIGATION,
+# and which no XHR the chat page makes carries. They are dropped by value, not
+# by name: curl_cffi merges its impersonation set with the caller's, and a
+# ``None`` is what removes one, where an empty string would send it blank.
+#
+# Measured against the capture: ``sec-fetch-user`` is absent from all 47
+# chat.deepseek.com requests and ``upgrade-insecure-requests`` from all 374
+# entries. Leaving them in advertised a top-level page load for what the site
+# makes as a fetch.
+_NOT_A_NAVIGATION = {"sec-fetch-user": None, "upgrade-insecure-requests": None}
+
+
+def _mint_identity_for(acct, on_status=None):
+    """Open this account's Chrome profile and record the identity it mints.
+
+    Called when a login is refused for DEVICE risk: the account's identity is
+    what is being refused, so the answer is a real one from a real profile, not
+    another attempt with the same value. Returns the captured device_id, or
+    raises -- the caller decides what a failure means.
+    """
+    key = _account_key(acct)
+    if not key:
+        raise RuntimeError("no account to mint an identity for")
+    doc = ds_profile.capture_identity(key, headless=True,
+                                     on_status=on_status)
+    return doc["device_id"]
 
 
 def _read_accounts_from_disk():
@@ -913,32 +1035,60 @@ class _Client:
         except Exception:
             return ""
 
-    def _headers(self, pow_response=None):
+    def _headers(self, pow_response=None, hif=False):
         h = {
-            "accept": "*/*", "authorization": f"Bearer {self.token}",
+            "accept": "*/*",
             "content-type": "application/json", "origin": "https://chat.deepseek.com",
             "referer": "https://chat.deepseek.com/",
             "user-agent": UA,
-            "sec-ch-ua": ds_identity.SEC_CH_UA,
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": ds_identity.SEC_CH_UA_PLATFORM,
+            # All nine hints: chat.deepseek.com is an origin a real browser holds
+            # the high-entropy grant for, and it receives the full set on every
+            # request the capture contains. Sending the triple here advertises a
+            # browser that declined a grant the real one accepted.
+            **ds_identity.client_hints_full(),
             # The completion call is a same-origin XHR the chat page makes.
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
+            **_NOT_A_NAVIGATION,
         }
+        # Only with a real token. `Bearer ` with nothing after it is a request
+        # shape the browser never emits, and it is what an expired-token retry
+        # looked like -- one more "this is not the website" marker, sent exactly
+        # when the request is already suspect.
+        if self.token:
+            h["authorization"] = "Bearer %s" % self.token
         if pow_response:
             h["x-ds-pow-response"] = pow_response
-        h.update(self._extra_headers())
+        h.update(_extra_identity_headers(self.account))
+        h.update(self._extra_headers(hif=hif))
         return h
 
-    def _extra_headers(self):
+    def _extra_headers(self, hif=False):
         """Captured headers from ds_config.json, applied last so they win.
 
         Empty unless a `headers` object is configured, which keeps the proven
         default request shape exactly as it is.
+
+        The ``x-hif-*`` pair is handled apart from the rest, for two measured
+        reasons. It is minted per request batch and re-fetched on its own TTL, so
+        the copy in a capture is stale the moment it is written down -- see
+        ``ds_hif``, which renews it and falls back to the configured value only
+        when the mint fails. And it is scoped to ONE endpoint: a capture of the
+        site carries the pair on ``/chat/completion`` and on none of the other
+        ``/api/v0/*`` calls (settings, session-create, pow-challenge), so
+        replaying it everywhere makes this client send a header the browser it
+        imitates never sends there.
         """
         acct = self.account
-        return dict(acct.headers) if acct is not None and acct.headers else {}
+        # `getattr`, like every other account read in this module: a client can
+        # be built with `object.__new__` and a stand-in account carries only what
+        # one request needs, so a missing `headers` is "nothing configured"
+        # rather than an error on a request path that has nothing to do with it.
+        configured = dict(getattr(acct, "headers", None) or {})
+        if hif:
+            return ds_hif.headers(configured=configured, dbg=config.dbg)
+        hif_keys = {name for name, _host in ds_hif.ENDPOINTS}
+        return {k: v for k, v in configured.items() if k not in hif_keys}
 
     def _login_headers(self):
         # A fresh login must NOT carry the old/expired Bearer token.
@@ -949,12 +1099,15 @@ class _Client:
             # referer is /sign_in and not /.
             "referer": "https://chat.deepseek.com/sign_in",
             "user-agent": UA,
-            "sec-ch-ua": ds_identity.SEC_CH_UA,
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": ds_identity.SEC_CH_UA_PLATFORM,
+            # Same granted origin as `_headers`, so the same nine hints. The
+            # login POST is the request the anti-abuse stack reads hardest, and
+            # a short hint set there is the loudest version of the mismatch.
+            **ds_identity.client_hints_full(),
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
+            **_NOT_A_NAVIGATION,
         }
+        h.update(_extra_identity_headers(self.account))
         h.update(self._extra_headers())
         return h
 
@@ -999,15 +1152,52 @@ class _Client:
             return self._login_once(email, mobile, area, password)
 
     def _login_once(self, email, mobile, area, password):
+        """Log in, minting a real browser identity ONCE if the DEVICE is refused.
+
+        A DEVICE-risk refusal is about the identity, not the password, so it is
+        answered by capturing a real one from this account's own Chrome profile
+        and posting the login again. Repeating the refused value instead only
+        earns the same verdict and one more /users/login for an identity already
+        refused -- which is the pattern that escalates "too many requests".
+        """
+        # An account that has never been captured presents the machine-level
+        # value, which is exactly what makes several accounts look like ONE
+        # device. So the first login for an account mints its own identity, the
+        # way a person logging in from a fresh browser profile does. A capture
+        # that fails must not fail the login -- the machine value still works --
+        # so the failure is reported and the attempt proceeds.
+        acct = self.account
+        key = _account_key(acct)
+        if (key and not str(getattr(acct, "device_id", "") or "").strip()
+                and not ds_profile.device_id_for_account(key)):
+            try:
+                _mint_identity_for(acct, on_status=config.dbg)
+            except Exception as e:  # noqa: BLE001 -- a capture is best effort
+                if config.dbg:
+                    config.dbg("no browser identity could be captured for this "
+                               "account (%s); presenting the machine-level value"
+                               % e)
+        for _identity_attempt in range(2):
+            if _identity_attempt:
+                try:
+                    _mint_identity_for(self.account, on_status=config.dbg)
+                except Exception as e:  # noqa: BLE001 -- report the real cause
+                    self.last_login_error = (
+                        "login refused for DEVICE risk and no browser identity could "
+                        "be minted from this account's profile: %s" % e)
+                    return None
+            tok = self._login_attempt(email, mobile, area, password)
+            if tok or not self.last_login_device_risk:
+                return tok
+        return None
+
+    def _login_attempt(self, email, mobile, area, password):
         acct = self.account
         payload = {
-            # A REAL Shumei device fingerprint, the same one on every login. It
-            # used to be minted fresh per attempt, so a routine token refresh
-            # presented as a new device joining the account -- and several
-            # machines doing that from one address is what earns "too many
-            # requests" on /users/login. `_device_id_for` prefers a per-account
-            # value from ds_config.json and otherwise resolves the machine-level
-            # one, which is captured from a real browser rather than derived.
+            # This account's own browser-minted Shumei fingerprint.
+            # `_device_id_for` resolves it from the account's persistent Chrome
+            # profile, so two accounts on one machine present two devices -- and
+            # a re-login recovers the same one instead of minting a new device.
             "password": password, "device_id": _device_id_for(acct), "os": "web",
             "email": email or "", "mobile": mobile or "",
             "area_code": area if (mobile and not email) else "",
@@ -1089,6 +1279,10 @@ class _Client:
         return tok
 
     def new_session(self):
+        # The browser fetches its provider settings around session setup; that is
+        # the one request carrying `did`. Best-effort, and silent when the
+        # account has no browser-minted `did` to present.
+        self._settings_once()
         r = self.sess.post(f"{BASE}/chat_session/create", headers=self._headers(),
                            json={"character_id": None}, impersonate=IMPERSONATE, timeout=60)
         try:
@@ -1099,6 +1293,62 @@ class _Client:
         if not sid:                       # 401, or 200 with data:null → token dead
             raise _AuthExpired("the completion endpoint returned no chat session id")
         return sid
+
+    def _settings_once(self):
+        """Fetch ``client/settings`` at most once for this client's lifetime.
+
+        The real client reads its provider settings alongside establishing a
+        session, and this is the call that carries ``did``. Once is enough: the
+        value it returns is not consumed here, and the point of making the call
+        is that the browser makes it. Guarded with ``getattr`` because a client
+        can be built with ``object.__new__`` in a test.
+        """
+        if getattr(self, "_settings_done", False):
+            return None
+        self._settings_done = True
+        return self.client_settings()
+
+    def client_settings(self, scope="provider"):
+        """Fetch this account's provider settings, the way the web client does.
+
+        This is the ONE request that carries ``did`` -- the identifier
+        ``_did_for`` resolves -- and it is a request the real client makes 35
+        times in a capture of the site and this connector made none. It is also
+        the request that carries ``x-settings-token``, which the browser holds as
+        a separate credential: when ds_config.json supplies one it is sent, and
+        when it does not the call still goes out with the identity headers the
+        capture shows on every one of these requests.
+
+        Returns the parsed body, or ``None``. Best-effort by construction: a
+        settings fetch is not worth failing a completion over, and an account
+        that has no browser-minted ``did`` yet makes NO request at all rather
+        than presenting one the browser never had.
+        """
+        did = _did_for(self.account)
+        if not did:
+            return None
+        h = {
+            "accept": "*/*",
+            # A GET, so no content-type and no origin -- both absent from every
+            # client/settings request in the capture.
+            "referer": "https://chat.deepseek.com/",
+            "user-agent": UA,
+            **ds_identity.client_hints_full(),
+            **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
+            **ds_identity.client_headers(),
+            **_NOT_A_NAVIGATION,
+        }
+        h.update(_extra_identity_headers(self.account))
+        # Configured headers last so an operator-supplied x-settings-token wins.
+        h.update(self._extra_headers())
+        try:
+            r = self.sess.get(f"{BASE}/client/settings",
+                              params={"did": did, "scope": scope},
+                              headers=h, impersonate=IMPERSONATE, timeout=30)
+            return r.json()
+        except Exception as e:  # noqa: BLE001 -- best-effort, never fatal
+            config.dbg("ds_direct client/settings failed: %s", e)
+            return None
 
     def _pow(self, target_path="/api/v0/chat/completion"):
         """A proof-of-work challenge for ONE endpoint.
@@ -1256,7 +1506,12 @@ class _Client:
                 "search_enabled": search, "model_type": model_type}
         if preempt:
             body["preempt"] = True
-        return self.sess.post(f"{BASE}/chat/completion", headers=self._headers(pow_response),
+        # `hif=True` ONLY here. The browser carries the ``x-hif-*`` pair on this
+        # call and on no other ``/api/v0/*`` route; every other caller of
+        # `_headers` leaves them off, which is what the capture shows. The pair
+        # is also renewed rather than replayed -- see `ds_hif`.
+        return self.sess.post(f"{BASE}/chat/completion",
+                              headers=self._headers(pow_response, hif=True),
                               json=body, impersonate=IMPERSONATE, stream=True, timeout=600)
 
 

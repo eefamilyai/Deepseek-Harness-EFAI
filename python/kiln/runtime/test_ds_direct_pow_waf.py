@@ -102,7 +102,7 @@ def client_with(responses, account=None):
     client.last_login_error = None
     client.creds_mtime = 0.0
     # Shadow the method so the fake session needs no account plumbing.
-    client._extra_headers = lambda: {}
+    client._extra_headers = lambda hif=False: {}
     return client
 
 

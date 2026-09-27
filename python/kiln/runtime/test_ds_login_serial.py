@@ -11,10 +11,15 @@ Everything here is OFFLINE. What these pin:
     requests". One login must serve them all.
   * The first client to log in publishes its token; the rest adopt it, along
     with the WAF cookies that login refreshed.
-  * Every login carries the SAME device_id, because a per-attempt random one
-    presented each refresh as a new device joining the account.
+  * Every login for one account carries the SAME device_id, because a
+    per-attempt random one presented each refresh as a new device joining the
+    account. The value is now the account's OWN browser-minted identity, so the
+    second half of that pin is that it is well-formed and it does not change
+    between attempts.
 
-No network and no credentials: the HTTP session is faked.
+No network and no credentials: the HTTP session is faked, and identity minting
+is stubbed out. A real mint would launch Chrome against the operator's live
+identity directory, which an offline suite must never do.
 """
 import os
 import sys
@@ -24,9 +29,42 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-os.environ["KILN_STATE_DIR"] = tempfile.mkdtemp(prefix="ds-login-test-")
+# Point identity at a scratch dir BEFORE importing. Without this the per-account
+# login path mints into the operator's REAL profile directory, which makes an
+# "offline" suite open a browser and mutate live state.
+_SCRATCH = tempfile.mkdtemp(prefix="ds-login-test-")
+os.environ["KILN_STATE_DIR"] = _SCRATCH
+os.environ["KILN_IDENTITY_DIR"] = os.path.join(_SCRATCH, "identity")
 
 import ds_direct as dd  # noqa: E402
+
+# Minting is not what this suite measures, and it launches a browser. Stub it to
+# a stable value so the login path runs to completion without a subprocess and
+# without ever touching a real profile. WHICH account was asked to mint is part
+# of the contract, so the stub records the key it was called with.
+#
+# The stub also has to WRITE what it "minted", through the same API the real
+# mint uses. Returning a value alone leaves the account record empty, so
+# _device_id_for finds nothing and falls back to the machine-level Shumei
+# value -- which is precisely the "several accounts present one device" defect
+# this suite exists to catch, so a return-only stub would hide it.
+_MINTED_ID = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
+_MINTED_X_DEVICE_ID = "3c2d1e0f-a5b4-6978-8796-4b5a3c2d1e0f"
+MINTED = []
+
+
+def _fake_mint(acct, on_status=None):
+    key = dd._account_key(acct)
+    MINTED.append(key)
+    dd.ds_profile.write_account_identity(key, {
+        "device_id": _MINTED_ID,
+        "x_device_id": _MINTED_X_DEVICE_ID,
+        "origin": "test-stub",
+    })
+    return _MINTED_ID
+
+
+dd._mint_identity_for = _fake_mint
 
 FAILS = []
 
@@ -131,9 +169,23 @@ try:
           len(set(results)) == 1, repr(set(results)))
 
     # The device identity. One login means one device_id here; the point is
-    # that it is the SHARED one, not a fresh secret.
-    check("the login used the machine's stable device_id",
-          POSTS and POSTS[0] == dd.ds_identity.device_id(),
+    # that it is the ACCOUNT's own identity, and it is not re-minted per
+    # attempt. An account with no captured identity of its own gets one minted
+    # before the first attempt, and the value that mints is what the login body
+    # carries -- NOT the machine-level Shumei value, which is what several
+    # accounts sharing one machine used to present.
+    check("the first login minted an identity for the account",
+          MINTED == [acct.id], repr(MINTED))
+    check("the login body carries the account's own minted device_id",
+          POSTS and POSTS[0] == _MINTED_ID, repr(POSTS[:1]))
+    check("the login body does not carry the machine-level device_id",
+          POSTS and POSTS[0] != dd.ds_identity.device_id(),
+          "the two identifiers are different values")
+    check("the minted value round-trips through the account's own record",
+          dd.ds_profile.device_id_for_account(acct.id) == _MINTED_ID,
+          repr(dd.ds_profile.device_id_for_account(acct.id)))
+    check("the login body's device_id is a well-formed identity",
+          dd.ds_identity.valid_device_id(POSTS[0]) if POSTS else False,
           repr(POSTS[:1]))
 
     # Within the reuse window a client with a stale token adopts the published
@@ -157,7 +209,9 @@ try:
     check("a login past the reuse window does hit the network",
           len(POSTS) == 1, "made %d posts" % len(POSTS))
     check("that login still sends the same device_id",
-          POSTS and POSTS[0] == dd.ds_identity.device_id(), repr(POSTS))
+          POSTS and POSTS[0] == _MINTED_ID, repr(POSTS))
+    check("a re-login does not re-mint an identity it already has",
+          MINTED == [acct.id], repr(MINTED))
 
     # Across a simulated restart the device_id must not change.
     dd.ds_identity._seed_cache.clear()

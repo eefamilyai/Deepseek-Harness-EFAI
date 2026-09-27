@@ -1,0 +1,153 @@
+﻿npx.cmd : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths:
+true in your Vite config instead.
+At line:1 char:164
++ ... 'Continue'; npx.cmd vitest run packages/llm/llm-dsml --reporter=dot 2 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your
+Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your
+Vite config instead.
+
+ RUN  v4.1.8 D:/deepseek-kernel-harness
+
+················································································································································x··························x·····························································xx·································x···················
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/catalog.spec.ts > surplus closer > refuses a call whose last argument never closed
+AssertionError: expected [ { kind: 'tool-call', …(2) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ packages/llm/llm-dsml/tests/catalog.spec.ts:127:64
+    125|     const truncated = [I_OPEN + 'read">', P_OPEN + 'name="path">a.txt'…
+    126|     const { events, reader } = run(envelope(truncated))
+    127|     expect(events.filter(event => event.kind === 'tool-call')).toHaveL…
+       |                                                                ^
+    128|     expect(reader.repairedShapes()).toEqual([])
+    129|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/structural.spec.ts > an explanation still passes through as text > does not read a truncated taught block structurally
+AssertionError: expected [ { name: 'kernel', …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "arguments": {
++       "code": "x = 1
++ ",
++     },
++     "name": "kernel",
++   },
++ ]
+
+ ❯ packages/llm/llm-dsml/tests/structural.spec.ts:112:19
+    110|     // structural reader must stay out of taught markup's way.
+    111|     const { calls } = translate(CO + NL + OI + ' name="kernel"' + GT +…
+    112|     expect(calls).toEqual([])
+       |                   ^
+    113|   })
+    114|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/structural.spec.ts > an explanation still passes through as text > does not read a taught call whose value carries a lone opener
+AssertionError: expected [ { name: 'kernel', …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "arguments": {
++       "code": "show = <parameter name=\"x\">
++ </parameter>
++ ",
++     },
++     "name": "kernel",
++   },
++ ]
+
+ ❯ packages/llm/llm-dsml/tests/structural.spec.ts:118:19
+    116|     const code = 'show = ' + OP + ' name="x"' + GT
+    117|     const { calls } = translate(CO + NL + OI + ' name="kernel"' + GT +…
+    118|     expect(calls).toEqual([])
+       |                   ^
+    119|   })
+    120| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/unbreakable.spec.ts > an ambiguous truncation is refused rather than invented > the parameter closer lost
+AssertionError: expected [ { name: 'read', …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "arguments": {
++       "path": "a.txt
++ ",
++     },
++     "name": "read",
++   },
++ ]
+
+ ❯ packages/llm/llm-dsml/tests/unbreakable.spec.ts:110:43
+    108|   for (const [label, damage] of AMBIGUOUS) {
+    109|     it(label, () => {
+    110|       expect(callsOf(run(damage(BLOCK)))).toEqual([])
+       |                                           ^
+    111|     })
+    112|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/value-markup.spec.ts > a value that contains markup keeps every character of it > a lone unmatched opener inside the value is refused, not guessed at
+AssertionError: expected [ { name: 'kernel', …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "arguments": {
++       "code": "show = <parameter name=\"x\">
++ </parameter>
++ ",
++     },
++     "name": "kernel",
++   },
++ ]
+
+ ❯ packages/llm/llm-dsml/tests/value-markup.spec.ts:78:45
+     76|     // cut off mid-write. Refusing is the only reading that cannot inv…
+     77|     const code = 'show = ' + OP + ' name="x"' + GT
+     78|     expect(callsOf(kernelCall(code)).calls).toEqual([])
+       |                                             ^
+     79|   })
+     80|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  4 failed | 10 passed (14)
+      Tests  5 failed | 283 passed (288)
+   Start at  17:32:34
+   Duration  3.32s (transform 11.08s, setup 7.19s, import 10.41s, tests 1.39s, environment 6ms)

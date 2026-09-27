@@ -1,0 +1,124 @@
+﻿npx.cmd : The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths:
+true in your Vite config instead.
+At line:1 char:164
++ ... 'Continue'; npx.cmd vitest run packages/llm/llm-dsml --reporter=dot 2 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (The plugin "vit...config instead.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your
+Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your
+Vite config instead.
+
+ RUN  v4.1.8 D:/deepseek-kernel-harness
+
+···················································································x··················································x·············································x························x··················································································
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/catalog.spec.ts > surplus closer > refuses a call whose last argument never closed
+AssertionError: expected [ { kind: 'tool-call', …(2) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ packages/llm/llm-dsml/tests/catalog.spec.ts:127:64
+    125|     const truncated = [I_OPEN + 'read">', P_OPEN + 'name="path">a.txt'…
+    126|     const { events, reader } = run(envelope(truncated))
+    127|     expect(events.filter(event => event.kind === 'tool-call')).toHaveL…
+       |                                                                ^
+    128|     expect(reader.repairedShapes()).toEqual([])
+    129|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/closer-repairs.spec.ts > an argument closed by the invoke closer > reads the argument the model closed this way and keeps the ones that closed
+AssertionError: expected [] to deeply equal [ { name: 'kernel', …(1) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "arguments": {
+-       "code": "print(1)",
+-       "timeoutMs": 5000,
+-     },
+-     "name": "kernel",
+-   },
+- ]
++ []
+
+ ❯ packages/llm/llm-dsml/tests/closer-repairs.spec.ts:155:26
+    153|       '',
+    154|     ].join('\n')
+    155|     expect(calls(mixed)).toEqual([{ name: 'kernel', arguments: { code:…
+       |                          ^
+    156|   })
+    157|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/structural.spec.ts > an explanation still passes through as text > does not read a truncated taught block structurally
+AssertionError: expected [ { name: 'kernel', …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "arguments": {
++       "code": "x = 1
++ ",
++     },
++     "name": "kernel",
++   },
++ ]
+
+ ❯ packages/llm/llm-dsml/tests/structural.spec.ts:112:19
+    110|     // structural reader must stay out of taught markup's way.
+    111|     const { calls } = translate(CO + NL + OI + ' name="kernel"' + GT +…
+    112|     expect(calls).toEqual([])
+       |                   ^
+    113|   })
+    114|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |thread-safe| packages/llm/llm-dsml/tests/unbreakable.spec.ts > an ambiguous truncation is refused rather than invented > the parameter closer lost
+AssertionError: expected [ { name: 'read', …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "arguments": {
++       "path": "a.txt
++ ",
++     },
++     "name": "read",
++   },
++ ]
+
+ ❯ packages/llm/llm-dsml/tests/unbreakable.spec.ts:110:43
+
+    108|   for (const [label, damage] of AMBIGUOUS) {
+    109|     it(label, () => {
+    110|       expect(callsOf(run(damage(BLOCK)))).toEqual([])
+       |                                           ^
+    111|     })
+    112|   }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+ Test Files  4 failed | 10 passed (14)
+      Tests  4 failed | 284 passed (288)
+   Start at  17:34:11
+   Duration  3.04s (transform 9.58s, setup 5.85s, import 9.83s, tests 1.22s, environment 3ms)
