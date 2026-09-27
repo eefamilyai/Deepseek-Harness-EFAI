@@ -1,0 +1,108 @@
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90mD:/deepseek-kernel-harness[39m
+
+[90mstderr[2m | packages/client/ui-commands/tests/popup.client.spec.ts[2m > [22m[2mopen and options load[2m > [22m[2ma retry re-parks the highlight inside the search text it retained
+[22m[39m[ui-commands] popupSelect options failed for /theme: Error: directory down
+    at Object.options (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:91:48)
+    at PopupSelectController.load (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:164:18)
+    at PopupSelectController.open (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:159:10)
+    at readyPopup (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:45:9)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:88:29
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1903:26
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2323:10[90m)[39m
+
+[90mstderr[2m | packages/client/ui-commands/tests/popup.client.spec.ts[2m > [22m[2mopen and options load[2m > [22m[2man options failure keeps the shell open with search retained, surfaces the error, and retry reloads
+[22m[39m[ui-commands] popupSelect options failed for /theme: Error: directory down
+    at Object.options (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:155:48)
+    at PopupSelectController.load (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:164:18)
+    at PopupSelectController.open (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:159:10)
+    at readyPopup (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:45:9)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:152:29
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1903:26
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2323:10[90m)[39m
+
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/client/ui-commands/tests/directory.client.spec.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+[90mstderr[2m | packages/client/ui-commands/tests/popup.client.spec.ts[2m > [22m[2mselect[2m > [22m[2man onSelect failure keeps the shell open with search/highlight/token intact, no consumption, and select re-arms
+[22m[39m[ui-commands] popupSelect onSelect failed for /theme: Error: host rejected
+    at Object.onSelect (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:318:35)
+    at PopupSelectController.settle (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:279:26)
+    at PopupSelectController.select (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:245:16)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:324:17
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1903:20
+
+[90mstderr[2m | packages/client/ui-commands/tests/popup.client.spec.ts[2m > [22m[2mselect[2m > [22m[2mignores selects while closed, pending, failed, or out of filtered range
+[22m[39m[ui-commands] popupSelect options failed for /theme: Error: x
+    at Object.options (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:339:80)
+    at PopupSelectController.load (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:164:18)
+    at PopupSelectController.open (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:159:10)
+    at readyPopup (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:45:9)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:339:37
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+
+[90mstderr[2m | packages/client/ui-commands/tests/popup.client.spec.ts[2m > [22m[2mselect[2m > [22m[2ma dispose racing a failing onSelect revokes its error write
+[22m[39m[ui-commands] popupSelect onSelect failed for /theme: Error: late
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup.client.spec.ts:373:12
+[90m    at processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1903:20
+
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/client/ui-commands/tests/popup.client.spec.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/api/gateway/tests/echo-stream.host.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 175[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/command-compact/tests/command-compact.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/command-compact/tests/loader-composition.spec.ts [2m([22m[2m1 test[22m[2m)[22m[32m 166[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/client/ui-commands/tests/browser-plugin.client.spec.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/client/ui-commands/tests/service.client.spec.ts [2m([22m[2m69 tests[22m[2m)[22m[33m 1182[2mms[22m[39m
+[90mstderr[2m | packages/client/ui-commands/tests/popup-view.client.spec.tsx[2m > [22m[2mPopupSelectView[2m > [22m[2mTab stays the browser's on a failed load, so the retry stays reachable
+[22m[39m[ui-commands] popupSelect options failed for /theme: Error: directory down
+    at Object.options (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:164:64)
+    at PopupSelectController.load (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:164:18)
+    at PopupSelectController.open (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:159:10)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:164:13
+    at [90mD:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\@testing-library+react@16.3_daff88022cc58198e4af56e91a2a62c5\node_modules\[4m@testing-library\react[24m\dist\act-compat.js:47:24
+    at act [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\react@18.3.1\node_modules\[4mreact[24m\cjs\react.development.js:2512:16[90m)[39m
+    at [90mD:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\@testing-library+react@16.3_daff88022cc58198e4af56e91a2a62c5\node_modules\[4m@testing-library\react[24m\dist\act-compat.js:46:25
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:163:11
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1903:26
+
+[90mstderr[2m | packages/client/ui-commands/tests/popup-view.client.spec.tsx[2m > [22m[2mPopupSelectView[2m > [22m[2ma failed options load shows the error with a retry button that reloads
+[22m[39m[ui-commands] popupSelect options failed for /theme: Error: directory down
+    at Object.options (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:271:48)
+    at PopupSelectController.load (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:164:18)
+    at PopupSelectController.open (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:159:10)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:70:11
+    at [90mD:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\@testing-library+react@16.3_daff88022cc58198e4af56e91a2a62c5\node_modules\[4m@testing-library\react[24m\dist\act-compat.js:47:24
+    at act [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\react@18.3.1\node_modules\[4mreact[24m\cjs\react.development.js:2512:16[90m)[39m
+    at [90mD:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\@testing-library+react@16.3_daff88022cc58198e4af56e91a2a62c5\node_modules\[4m@testing-library\react[24m\dist\act-compat.js:46:25
+    at mountOpen (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:69:9)
+    at D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:268:11
+    at [90mfile:///D:/deepseek-kernel-harness/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@4.1.8/node_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+
+[90mstderr[2m | packages/client/ui-commands/tests/popup-view.client.spec.tsx[2m > [22m[2mPopupSelectView[2m > [22m[2man onSelect failure keeps the shell open with the error strip and no retry button (re-select is the retry)
+[22m[39m[ui-commands] popupSelect onSelect failed for /theme: Error: host rejected
+    at Object.onSelect (D:/deepseek-kernel-harness/packages/client/ui-commands/tests/popup-view.client.spec.tsx:284:82)
+    at PopupSelectController.settle (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:279:26)
+    at PopupSelectController.select (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/popup.ts:245:16)
+    at onKeyDown (D:/deepseek-kernel-harness/packages/client/ui-commands/src/client/PopupSelectView.tsx:97:20)
+    at HTMLUnknownElement.callCallback [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\react-dom@18.3.1_react@18.3.1\node_modules\[4mreact-dom[24m\cjs\react-dom.development.js:4164:14[90m)[39m
+    at HTMLUnknownElement.callTheUserObjectsOperation [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\[4mjsdom[24m\lib\generated\idl\EventListener.js:26:30[90m)[39m
+    at innerInvokeEventListeners [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\[4mjsdom[24m\lib\jsdom\living\events\EventTarget-impl.js:360:16[90m)[39m
+    at invokeEventListeners [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\[4mjsdom[24m\lib\jsdom\living\events\EventTarget-impl.js:296:3[90m)[39m
+    at HTMLUnknownElementImpl._dispatch [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\[4mjsdom[24m\lib\jsdom\living\events\EventTarget-impl.js:243:9[90m)[39m
+    at HTMLUnknownElementImpl.dispatchEvent [90m(D:\deepseek-kernel-harness\[39mnode_modules\[4m.pnpm[24m\jsdom@29.1.1_@noble+hashes@2.3.0\node_modules\[4mjsdom[24m\lib\jsdom\living\events\EventTarget-impl.js:114:17[90m)[39m
+
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/client/ui-commands/tests/popup-view.client.spec.tsx [2m([22m[2m19 tests[22m[2m)[22m[33m 654[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+[2m      Tests [22m [1m[32m153 passed[39m[22m[90m (153)[39m
+[2m   Start at [22m 11:35:01
+[2m   Duration [22m 12.11s[2m (transform 20.12s, setup 4.65s, import 30.04s, tests 2.45s, environment 2.73s)[22m

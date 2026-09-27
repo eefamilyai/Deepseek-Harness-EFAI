@@ -1,0 +1,30 @@
+..............[ds_direct] provider_uploads: deepseek-web upload found no usable endpoint
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai upload found no usable endpoint
+[ds_direct] provider_uploads: skipped (0 bytes) for openai
+..............D:\deepseek-kernel-harness\python\kiln\runtime\test_ds_direct_delivery.py:122: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\eejar\\AppData\\Local\\Temp\\tmpn0tus4e8\\tool_result-e98ec17a0aff.txt' mode='r' encoding='utf-8'>
+  self.assertEqual(open(files[0], encoding="utf-8").read(), body)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+..F[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+..[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: upload of a_line_of_tool_output-140c6066cdaf.txt failed (upload endpoint is down)
+[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+.
+======================================================================
+FAIL: test_an_unwritable_spill_directory_still_clips (test_ds_direct_delivery.ClipSpillTests.test_an_unwritable_spill_directory_still_clips)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\deepseek-kernel-harness\python\kiln\runtime\test_ds_direct_delivery.py", line 134, in test_an_unwritable_spill_directory_still_clips
+    self.assertNotIn("full text:", out["content"])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'full text:' unexpectedly found in 'OUTPUT:\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\n[... output truncated to fit the prompt budget; full text: /nonexistent/definitely/not/here\\tool_result-0e2be289dbcf.txt ...]x\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\nx\n'
+
+----------------------------------------------------------------------
+Ran 38 tests in 4.853s
+
+FAILED (failures=1)

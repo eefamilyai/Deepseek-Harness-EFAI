@@ -57,7 +57,7 @@ type ToolCall = Extract<DsmlEvent, { readonly kind: 'tool-call' }>
 export interface DsmlOptions {
   /**
    * Whether the reader may append its own correction notes — the bracketed
-   * `[no such tool …]` lines and the {@link FORMAT_REMINDER} — to visible text.
+   * `[no such tool …]` lines — to visible text.
    *
    * On (the default) for a transport that TAUGHT this format: there, a block
    * that named nothing real is a mistake in the one channel the model was given,
@@ -154,6 +154,88 @@ function parameterElements(body: string): { readonly run: string; readonly value
     const value = at < 0 ? segment : segment.slice(0, at)
     return { run: span.run, value: stripSurplusClosers(value) }
   })
+}
+
+/**
+ * Read a wrapped block that carries whole `<parameter>` elements and no
+ * `<invoke>` opener at all.
+ *
+ * The orphan argument {@link DsmlTranslator.impliedInvoke} already reads on ONE
+ * line arrives here when the model ALSO wrote the wrapper: from the moment
+ * `<tool_calls>` opened, the block owns its lines and the per-line pass stands
+ * down, so the arguments reach the user as markup and read back to the model as
+ * a call that ran and returned nothing. Same reading, block scope — the tool
+ * comes from the arguments' own names, and only when exactly one declared tool
+ * owns every one of them. Two candidates is a coin flip that RUNS something,
+ * and that is not a reading.
+ *
+ * Nothing but the arguments and the structure around them may sit in the block.
+ * An argument's value is raw text that may quote the format, so the residue is
+ * taken by walking the elements rather than by stripping tags: prose between
+ * two arguments is a mention of the format, not a call.
+ * @param raw - one block's raw text, closers already restored.
+ * @param tools - the tools this request declared.
+ * @returns the inferred tool and the argument region to read, or undefined.
+ */
+function orphanParameterCall(
+  raw: string,
+  tools: ReadonlyMap<string, ToolSchema>,
+): { readonly name: string; readonly region: string } | undefined {
+  // The invoke and envelope closers are structure here: the block-level reader
+  // drops them wherever it meets them, and a stray one between two arguments
+  // would otherwise be read into a value. `</parameter>` stays — it bounds each
+  // argument, and the surplus-closer rule already owns the model that writes
+  // one too many.
+  // The wrapper is framing whichever end of it survived into the block, so
+  // both spellings of both envelope tags come off here: left in, the opener
+  // sits in the residue ahead of the first argument and the block is refused
+  // for carrying text it never carried.
+  const region = raw.replace(INVOKE_ENVELOPE_CLOSE, '').replace(ENVELOPE_TAG, '')
+  // A call dispatches only when it is WHOLE, and that rule does not relax
+  // because the opener went missing: an argument whose own closer never arrived
+  // is a command cut off mid-write, and its end must never be invented.
+  if (unfinished(region)) return undefined
+  const spans = scanParameters(region)
+  if (spans.length === 0) return undefined
+  const names: string[] = []
+  const close = new RegExp('<' + '/parameter\\s*>', 'gi')
+  let residue = ''
+  let cursor = 0
+  for (let index = 0; index < spans.length; index += 1) {
+    const span = spans[index]
+    if (span === undefined) return undefined
+    // Everything the walk has not claimed by the time this opener arrives sits
+    // between the wrapper and the arguments, or between two of them.
+    residue += region.slice(cursor, span.at)
+    const next = index + 1 < spans.length ? (spans[index + 1]?.at ?? region.length) : region.length
+    const segment = region.slice(span.from, next)
+    // The element's own closer is the LAST one before the next opener, for the
+    // same reason {@link parameterElements} reads it that way: the first closer
+    // inside a value is content.
+    let last: RegExpExecArray | null = null
+    let match: RegExpExecArray | null
+    close.lastIndex = 0
+    while ((match = close.exec(segment)) !== null) last = match
+    cursor = last === null ? next : span.from + last.index + last[0].length
+    const name = (attributes(span.run).get('name') ?? '').trim()
+    if (name.length === 0) return undefined
+    names.push(name)
+  }
+  residue += region.slice(cursor)
+  if (residue.trim().length > 0) return undefined
+  // Two arguments with one name cannot be one call — no tool declares a slot
+  // twice — so a block that writes one is a run of calls the model never
+  // separated, and splitting it would be inventing the boundary.
+  if (new Set(names).size !== names.length) return undefined
+  let found: string | undefined
+  for (const tool of tools.values()) {
+    const declared = new Set(parameterNames(tool))
+    if (!names.every(name => declared.has(name))) continue
+    if (found !== undefined) return undefined
+    found = tool.name
+  }
+  if (found === undefined) return undefined
+  return { name: found, region }
 }
 
 /**
@@ -314,6 +396,21 @@ const CALLS_WORD = /^(?:tool|function)[_▁]?calls?/
  */
 const ORPHAN_CLOSE = /<\/(?:tool_calls|function_calls|invoke|parameter)\s*>/gi
 
+/**
+ * The closers that are structure wherever they appear: the two envelope words
+ * and the invoke wrapper. `</parameter>` is deliberately absent — it is what
+ * bounds an argument, so the reader that walks the arguments keeps it.
+ *
+ * A wrapped block whose invoke opener went missing leaves these scattered
+ * between its arguments. Dropped before those arguments are read, they never
+ * land inside a value; left in place, the last one in the block is read as the
+ * end of the last argument and the tail becomes that argument's text.
+ */
+const INVOKE_ENVELOPE_CLOSE = /<\/(?:tool_calls|function_calls|invoke)\s*>/gi
+
+/** Whether a block opened an `<invoke>` anywhere — the question that separates the wrapper-closed spelling from the wrapped-orphan one. */
+const INVOKE_OPENER = /<invoke\b/i
+
 /** Either taught envelope tag, opener or closer, in either spelling. */
 const ENVELOPE_TAG = /<\/?(?:tool|function)[_▁]?calls?\s*>/gi
 
@@ -429,7 +526,7 @@ const FUSED_OPENER = /["'](?:(?:tool|function)[_▁]?calls?|invoke|parameter)\s+
  * Only the two taught tag words are read this way. An unrelated `<foo=bar>` is
  * prose and stays prose, and a dialect that names tools some third way is still
  * the prose the format statement says it is. Every repaired tag also books a
- * {@link FORMAT_REMINDER}, so accepting the spelling does not teach it.
+ * The shape is booked so the spelling actually occurring in the wild can be counted.
  */
 const EQUALS_TAG = /<(invoke|parameter)\s*=\s*["']?([\w.:-]+)["']?\s*(\/?)>/gi
 
@@ -500,18 +597,6 @@ const NAMELESS_PARAMETER_PAIR = /<parameter\s*=?\s*>|<\/parameter\s*>/gi
  * operator in every language these tools run.
  */
 const UNPLACEABLE = /｜|<parameter\b|<invoke\b/i
-
-/**
- * What the reader says once per block it had to REPAIR.
- *
- * A repaired call runs, so this is not an error report; it is the one thing the
- * model can act on, sent through the only correction channel this transport has
- * — the next turn's transcript. It states the shape that works and never the
- * spelling that was accepted, for the same reason the format statement names no
- * wrong format: a note that named it would teach the model the reader takes it.
- */
-const FORMAT_REMINDER = '\n[format reminder — one argument per `<parameter name="NAME">value</parameter>` inside'
-  + ' `<invoke name="TOOL">`, as your instructions show. The block above was repaired to run; write it that way.]\n'
 
 /** One `<parameter …` opener, however it is spelled from there on. */
 const PARAMETER_OPEN = /<parameter\b/i
@@ -629,11 +714,7 @@ export function trailingReasoningCalls(
   let trailing = ''
   for (const event of events) {
     if (event.kind === 'tool-call') calls.push({ name: event.name, arguments: event.arguments })
-    // A reminder is the READER's text, not the model's, so it cannot be the
-    // prose that disqualifies this tail. Counting it would make a repaired call
-    // in the reasoning channel unrecoverable — the one case where the repair
-    // and the recovery are both needed to get the turn to act at all.
-    else if (event.text !== FORMAT_REMINDER) trailing += event.text
+    else trailing += event.text
   }
   // The tail must be JUST the call: real prose after it means this was a mention
   // mid-thought, not the model's closing action.
@@ -1010,15 +1091,13 @@ export class DsmlTranslator {
   private block: OpenBlock | undefined
   /** True while inside an echoed `<system_reminder>` span whose text is dropped. */
   private suppressing = false
-  /** True once a repair happened whose {@link FORMAT_REMINDER} is still owed. */
-  private repaired = false
   /**
    * Every catalogue shape this reader repaired this turn, by id.
    *
-   * The reminder says only THAT a repair happened; this says which one, so the
-   * shapes actually occurring in the wild can be counted rather than guessed at.
-   * A Set, because a model that repeats one mistake five times in a turn made
-   * that mistake once for the purpose of knowing the shape is live.
+   * This is what tells the shapes actually occurring in the wild apart, so they
+   * can be counted rather than guessed at. A Set, because a model that repeats
+   * one mistake five times in a turn made that mistake once for the purpose of
+   * knowing the shape is live.
    */
   private readonly shapes = new Set<string>()
   /** True once this turn wrote tool-call markup of its own — see {@link MARKUP}. */
@@ -1194,25 +1273,7 @@ export class DsmlTranslator {
         else events.push({ kind: 'text', text: `${raw}\n` })
       }
     }
-    // A repair nothing closed a block over — a tag mended in prose, or a block
-    // the model never terminated — still owes its reminder.
-    events.push(...this.reminder())
     return events
-  }
-
-  /**
-   * The {@link FORMAT_REMINDER} this turn owes, and clear the debt.
-   *
-   * At most one reminder per block, and none at all for a turn that wrote the
-   * taught shape: a note repeated after every call is read as decoration, and
-   * this transport has no channel to spend on decoration.
-   */
-  private reminder(): DsmlEvent[] {
-    if (!this.repaired) return []
-    this.repaired = false
-    // The debt is cleared either way: a silent reader still repaired the block,
-    // it just has no standing to correct a format it never stated.
-    return this.notes ? [{ kind: 'text', text: FORMAT_REMINDER }] : []
   }
 
   /**
@@ -1245,10 +1306,7 @@ export class DsmlTranslator {
     // rest of this routine reads the one tag that remains.
     const fused = lastMatchIndex(payload, FUSED_OPENER)
     const one = fused < 0 ? payload : payload.slice(fused + 1)
-    if (fused >= 0) {
-      this.repaired = true
-      this.shapes.add('fused-opener')
-    }
+    if (fused >= 0) this.shapes.add('fused-opener')
     // A trailing `/` self-closes, exactly as it does on an ordinary tag.
     const trimmed = one.trim()
     const selfClosed = trimmed.endsWith('/')
@@ -1280,7 +1338,6 @@ export class DsmlTranslator {
     // took the call with it, because the `</parameter>` after it then had no
     // opener and `unfinished()` read the whole invoke as cut off mid-write.
     if (keyword.length > 0 && (rest.startsWith('"') || rest.startsWith("'"))) {
-      this.repaired = true
       return `<parameter name="${keyword}"${rest.slice(1)}>`
     }
 
@@ -1365,7 +1422,6 @@ export class DsmlTranslator {
     out = out.replace(DSML_WRAP, '')
     // The taught tags written with `=` instead of ` name=` — see EQUALS_TAG.
     out = out.replace(EQUALS_TAG, (_whole, tag: string, name: string, slash: string) => {
-      this.repaired = true
       this.shapes.add('equals-tag')
       const word = tag.toLowerCase()
       const open = `<${word} name="${name}">`
@@ -1376,7 +1432,6 @@ export class DsmlTranslator {
     // there — but it is a repair either way, so the reminder is booked here with
     // the rest of them.
     if (NAMELESS_PARAMETER.test(out)) {
-      this.repaired = true
       this.shapes.add('nameless-parameter')
     }
     if (this.namedOpen !== undefined && this.namedClose !== undefined) {
@@ -1429,7 +1484,6 @@ export class DsmlTranslator {
     // be inferred, so the reminder is owed either way. The alternative is the
     // failure this whole pass exists to end: markup reaching the user with not
     // one word about why nothing ran.
-    this.repaired = true
     this.shapes.add('orphan-parameter')
     const argument = attributes(bare[0]).get('name')?.trim() ?? ''
     const tool = argument.length === 0 ? undefined : this.toolForParameter(argument)
@@ -1799,7 +1853,6 @@ export class DsmlTranslator {
       args[key] = coerced.value
     }
     this.shapes.add('structural-notation')
-    this.repaired = true
     return { kind: 'tool-call', name: found.name, arguments: JSON.stringify(args) }
   }
 
@@ -1948,7 +2001,6 @@ export class DsmlTranslator {
     const consumed: (readonly [number, number])[] = []
     for (const element of invokeElements(raw)) {
       const start = element.start
-      consumed.push([element.start, element.end])
       const tagged = attributes(element.run)
       const name = (tagged.get('name') ?? '').trim()
       if (name.length === 0) continue
@@ -1978,6 +2030,10 @@ export class DsmlTranslator {
         this.shapes.add('json-body')
       }
       calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, body, tagged, this.shapes) } })
+      // Only a DISPATCHED invoke blocks the self-closing pass below. An invoke
+      // whose own closer arrived but whose last argument never closed is
+      // exactly the shape that pass repairs, so it must stay readable there.
+      consumed.push([element.start, element.end])
     }
     // Invokes with no `</invoke>` of their own, closed by an outer wrapper
     // instead (the `｜｜DSML｜｜` tool_calls shape, and the very common slip of
@@ -2012,9 +2068,12 @@ export class DsmlTranslator {
       const nextInvoke = after.search(/<invoke\b/i)
       const region = nextInvoke === -1 ? after : after.slice(0, nextInvoke)
       if (PARAMETER_OPEN.test(region)) {
+        // A region that still holds an unclosed argument is a call being
+        // written, not a call to read: an invoke closer read as an argument
+        // end is byte-identical to a truncation, so it is refused here.
         if (unfinished(region)) continue
         // The same surplus-closer repair the bodied pass above counts: this
-        // invoke has no closer of its own, so an extra parameter closer in the
+        // invoke has no closer of its own, so an extra argument closer in the
         // region is dropped by the same rule and is the same shape.
         if (parameterCounts(region).surplus > 0) this.shapes.add('surplus-closer')
         this.shapes.add('missing-invoke-close')
@@ -2039,6 +2098,42 @@ export class DsmlTranslator {
       if (!hasArg && requiredNames(tool).length > 0) continue
       this.shapes.add('missing-invoke-close')
       calls.push({ index: start, event: { kind: 'tool-call', name, arguments: invokeArguments(tool, '', tagged, this.shapes) } })
+    }
+    // A block that opened no invoke element anywhere but still carries whole
+    // parameter elements is the wrapped-orphan shape: the model wrote the
+    // taught envelope and then the arguments, and never named a tool at all.
+    // Neither pass above can read it -- both are keyed on an invoke opener --
+    // so without this the block is dumped as raw markup, runs nothing, and
+    // draws no note either, because the note rules match TOOL names and only
+    // an argument name is present. The tool comes from the arguments
+    // themselves, and only when exactly one declared tool owns every one of
+    // them; two candidates is a coin flip that RUNS something, and that is
+    // not a reading.
+    if (calls.length === 0 && !INVOKE_OPENER.test(raw)) {
+      // DSH-FORK(fix): a wrapped block whose invoke openers are all missing
+      // but whose invoke closers are present -- one closer per call.
+      // EXIT: upstream reads closer-bounded orphan groups.
+      const groups = orphanGroupCalls(raw, this.tools)
+      const orphans = groups !== undefined
+        ? groups
+        : (() => {
+          const one = orphanParameterCall(raw, this.tools)
+          return one === undefined ? [] : [one]
+        })()
+      for (const orphan of orphans) {
+        const orphanTool = this.tools.get(orphan.name)
+        if (orphanTool === undefined) continue
+        this.shapes.add(groups !== undefined ? 'orphan-group' : 'orphan-parameter')
+        named = true
+        calls.push({
+          index: 0,
+          event: {
+            kind: 'tool-call',
+            name: orphan.name,
+            arguments: invokeArguments(orphanTool, orphan.region, new Map(), this.shapes),
+          },
+        })
+      }
     }
     calls.sort((left, right) => left.index - right.index)
     return { produced: calls.map(entry => entry.event), named, unknown }
@@ -2071,13 +2166,13 @@ export class DsmlTranslator {
       // prose on its own terms - so an example still cannot run from here.
       const structural = this.structuralCall(raw)
       if (structural !== undefined) {
-        events.push(structural, ...this.reminder())
+        events.push(structural)
         return
       }
-      events.push({ kind: 'text', text: `${raw}\n${this.blockNote(raw, named, unknown)}` }, ...this.reminder())
+      events.push({ kind: 'text', text: `${raw}\n${this.blockNote(raw, named, unknown)}` })
       return
     }
-    events.push(...produced, ...this.reminder())
+    events.push(...produced)
   }
 
   /**
@@ -2215,4 +2310,66 @@ export function restoreStrippedClosers(text: string): string {
   while (stack.length > 0) tail.push('<' + '/' + (stack.pop() ?? '') + '>')
   emit(text.slice(last), tail)
   return out.join('')
+}
+
+
+/**
+ * How many closer-only lines in a row mean the model stopped writing a call and
+ * started repeating structure. Twelve is above any real call.
+ */
+export const GLITCH_RUN_DEFAULT = 12
+
+/** One line that is nothing but taught structural closers. */
+const CLOSER_ONLY_LINE = new RegExp(
+  '^[ \\t]*(?:'
+    + '<' + '/parameter\\s*>'
+    + '|' + '<' + '/invoke\\s*>'
+    + '|' + '<' + '/tool_calls\\s*>'
+    + '|' + '<' + '/function_calls\\s*>'
+    + ')[ \\t]*$',
+  'i',
+)
+
+/**
+ * The length of the run of closer-only lines at the tail of the text. Pure, so
+ * a stream pass can call it on a rolling window.
+ * @param text - the tail of the channel text, complete lines only.
+ * @returns how many closer-only lines end `text`.
+ */
+export function closerRun(text: string): number {
+  let run = 0
+  for (const line of text.split('\n')) {
+    if (line.trim().length === 0) continue
+    if (CLOSER_ONLY_LINE.test(line)) run += 1
+    else run = 0
+  }
+  return run
+}
+
+/**
+ * Read a wrapped block whose invoke openers are all missing but whose invoke
+ * closers are present, so each closer bounds one call.
+ *
+ * The single-call reading refuses this because an argument name repeats, and it
+ * is right to. The closer between them is a boundary the model actually wrote,
+ * so the run is read one call per group rather than refused.
+ * @param raw - one block's raw text, closers already restored.
+ * @param tools - the tools this request declared, keyed by name.
+ * @returns one entry per closer-bounded group, or undefined when any group
+ * is not itself a whole call for exactly one declared tool.
+ */
+export function orphanGroupCalls(
+  raw: string,
+  tools: ReadonlyMap<string, ToolSchema>,
+): readonly { readonly name: string; readonly region: string }[] | undefined {
+  const parts = raw.replace(ENVELOPE_TAG, '').split(new RegExp('<' + '/invoke\\s*>', 'gi'))
+  const groups: { readonly name: string; readonly region: string }[] = []
+  for (const part of parts) {
+    if (part.trim().length === 0) continue
+    const one = orphanParameterCall(part, tools)
+    if (one === undefined) return undefined
+    groups.push(one)
+  }
+  if (groups.length < 2) return undefined
+  return groups
 }

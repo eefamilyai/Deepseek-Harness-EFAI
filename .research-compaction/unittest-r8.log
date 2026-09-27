@@ -1,0 +1,18 @@
+..............[ds_direct] provider_uploads: deepseek-web upload found no usable endpoint
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai upload found no usable endpoint
+[ds_direct] provider_uploads: skipped (0 bytes) for openai
+..............[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+..[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: upload of a_line_of_tool_output-140c6066cdaf.txt failed (upload endpoint is down)
+[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+.
+----------------------------------------------------------------------
+Ran 35 tests in 4.778s
+
+OK

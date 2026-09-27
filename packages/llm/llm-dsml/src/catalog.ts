@@ -96,8 +96,10 @@ export const KNOWN_SHAPES: readonly RepairShape[] = [
   },
   {
     id: 'orphan-parameter',
-    saw: 'a line-leading parameter with no invoke and no wrapper around it',
-    fix: 'the tool is inferred when one tool can own that argument, and an invoke is synthesized',
+    saw: 'a parameter with no invoke naming a tool — either alone on its line, or under the '
+      + 'taught wrapper with the opener never written',
+    fix: 'the tool is inferred when exactly one declared tool owns every argument written, '
+      + 'and an invoke is synthesized around them',
     example: '<parameter name="pattern">two-stars-slash-star.ts</parameter>',
   },
   {
@@ -125,10 +127,22 @@ export const KNOWN_SHAPES: readonly RepairShape[] = [
     example: '<parameter name="filePath">a.txt</parameter>',
   },
   {
-    id: 'quoted-scalar',
-    saw: 'a quoted string handed to a parameter the schema types as a number, boolean, object, or array',
-    fix: 'the quotes are peeled and the text coerced by the declared type',
-    example: '<parameter name="timeoutMs">"30"</parameter>',
+    id: 'orphan-group',
+    saw: 'the taught wrapper, whole arguments, an invoke closer between them, and no invoke opener',
+    fix: 'each closer bounds one call; the tool is inferred per group when exactly one declared tool owns that group own arguments',
+    example: '<tool_calls><parameter name="code">1</parameter></invoke><parameter name="code">2</parameter></invoke></tool_calls>',
+  },
+  {
+    id: 'invoke-closer-as-parameter',
+    saw: 'an argument closed by the invoke closer instead of its own, so the argument never closed',
+    fix: 'the invoke closer at depth one is read as that argument end, and only when exactly one such closer exists and every argument closes',
+    example: '<invoke name="kernel"><parameter name="timeoutMs">60000</invoke>',
+  },
+  {
+    id: 'closer-spam',
+    saw: 'a run of closer-only lines with nothing between them, the model repeating structure',
+    fix: 'the turn is stopped and the model is told to write the call again; nothing in the run is a call',
+    example: '</invoke>\n</invoke>\n</invoke>\n</invoke>\n',
   },
 ]
 

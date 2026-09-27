@@ -1,0 +1,30 @@
+native/system/packages/darwin-arm64      | [WARN] Unsupported platform: wanted: {"cpu":["arm64"],"os":["darwin"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/darwin-x64        | [WARN] Unsupported platform: wanted: {"cpu":["x64"],"os":["darwin"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/linux-arm64       | [WARN] Unsupported platform: wanted: {"cpu":["arm64"],"os":["linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+native/system/packages/linux-x64         | [WARN] Unsupported platform: wanted: {"cpu":["x64"],"os":["linux"],"libc":["any"]} (current: {"os":"win32","cpu":"x64","libc":"unknown"})
+
+ RUN  v4.1.8 D:/deepseek-kernel-harness/packages/session/session-recovery-context
+
+undefined
+D:\deepseek-kernel-harness\packages\session\session-recovery-context:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: vitest run
+
+---STDERR---
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+[tsconfig-paths] An error occurred while parsing "D:/deepseek-kernel-harness/packages/session/session-recovery-context/tsconfig.base.json". See below for details. To disable this message, set the `ignoreConfigErrors` option to true.
+[tsconfig-paths] An error occurred while parsing "D:/deepseek-kernel-harness/packages/session/session-recovery-context/tsconfig.base.json". See below for details. To disable this message, set the `ignoreConfigErrors` option to true.
+[tsconfig-paths] An error occurred while parsing "D:/deepseek-kernel-harness/packages/session/session-recovery-context/tsconfig.base.json". See below for details. To disable this message, set the `ignoreConfigErrors` option to true.
+No test files found, exiting with code 1
+
+
+ thread-safe
+
+include: packages/*/*/tests/**/*.spec.{ts,tsx}, apps/*/tests/**/*.spec.ts, scripts/**/*.spec.ts
+exclude:  packages/shell/bash-local/tests/**/*.spec.ts, packages/shell/bash-sandbox/tests/**/*.spec.ts, packages/shell/tool-bash/tests/**/*.spec.ts, packages/hooks/*/tests/**/*.spec.ts, packages/terminal/terminal-bash/tests/**/*.spec.ts, packages/experimental/code-runtime-python/tests/**/*.spec.ts, packages/sandbox/sandbox-local/tests/**/*.spec.ts, packages/subprocess/subprocess/tests/**/*.spec.ts, packages/subprocess/subprocess-local/tests/local.spec.ts, packages/subprocess/subprocess-local/tests/process-inspector.spec.ts, packages/subprocess/subprocess-local/tests/spawn.spec.ts, packages/subprocess/subprocess-local/tests/terminal.spec.ts, packages/experimental/webworker-runtime/tests/node/path-diff.spec.ts, packages/experimental/webworker-runtime/tests/node/shim-diff.spec.ts, packages/experimental/webworker-runtime/tests/node/child-process.spec.ts, packages/experimental/webworker-runtime/tests/node/fs-watch-stream.spec.ts, packages/experimental/webworker-runtime/tests/node/sandbox-stack.spec.ts, packages/session/session-persistence-jsonl/tests/jsonl.spec.ts, packages/subagent/subagent-acp/tests/subagent-acp.spec.ts, packages/subprocess/subprocess-local/tests/process-exit.spec.ts, packages/subprocess/subprocess-local/tests/spawn.spec.ts, packages/context/time-context/tests/time-context.spec.ts, packages/llm/llm-pi-ai/tests/adapter.spec.ts, packages/boot/app-boot/tests/app-boot.spec.ts, packages/workflow/workflow-worker-thread/tests/session.spec.ts
+
+ process-bound
+
+include: packages/session/session-persistence-jsonl/tests/jsonl.spec.ts, packages/subagent/subagent-acp/tests/subagent-acp.spec.ts, packages/subprocess/subprocess-local/tests/process-exit.spec.ts, packages/subprocess/subprocess-local/tests/spawn.spec.ts, packages/context/time-context/tests/time-context.spec.ts, packages/llm/llm-pi-ai/tests/adapter.spec.ts, packages/boot/app-boot/tests/app-boot.spec.ts, packages/workflow/workflow-worker-thread/tests/session.spec.ts
+exclude:  packages/shell/bash-local/tests/**/*.spec.ts, packages/shell/bash-sandbox/tests/**/*.spec.ts, packages/shell/tool-bash/tests/**/*.spec.ts, packages/hooks/*/tests/**/*.spec.ts, packages/terminal/terminal-bash/tests/**/*.spec.ts, packages/experimental/code-runtime-python/tests/**/*.spec.ts, packages/sandbox/sandbox-local/tests/**/*.spec.ts, packages/subprocess/subprocess/tests/**/*.spec.ts, packages/subprocess/subprocess-local/tests/local.spec.ts, packages/subprocess/subprocess-local/tests/process-inspector.spec.ts, packages/subprocess/subprocess-local/tests/spawn.spec.ts, packages/subprocess/subprocess-local/tests/terminal.spec.ts, packages/experimental/webworker-runtime/tests/node/path-diff.spec.ts, packages/experimental/webworker-runtime/tests/node/shim-diff.spec.ts, packages/experimental/webworker-runtime/tests/node/child-process.spec.ts, packages/experimental/webworker-runtime/tests/node/fs-watch-stream.spec.ts, packages/experimental/webworker-runtime/tests/node/sandbox-stack.spec.ts

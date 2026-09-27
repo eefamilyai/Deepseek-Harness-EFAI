@@ -144,3 +144,39 @@ When a new malformed shape appears, the reader's job is to decide whether it is 
 - If it does not — an ambiguous prefix matching two parameters, a lone truncated invoke — refuse it. Guessing is what makes a parser unpredictable, and an unpredictable parser is worse than a strict one.
 
 Add the shape to `KNOWN_SHAPES`, add a test that fails without the rule, and add a negative test that the rule does not fire where it should not. A rule with no negative test is a rule that will widen.
+
+## 11. The wrapped-orphan shape, and why block scope matters
+
+The malformed shape that reaches the user as raw markup most often is the
+**wrapped orphan**: the taught envelope, whole parameter elements inside it, and
+**no invoke opener anywhere**.
+
+    <tool_calls>
+    <parameter name="code">...</parameter>
+    </tool_calls>
+
+Both of the reader's invoke-keyed passes stand down on a block with no opener, so
+the whole block fell through to prose: nothing ran, and no note fired either — the
+note rules match **tool** names, and only an argument name was present. That
+silence is what makes the shape expensive; the model sees its own markup echoed
+back with no explanation.
+
+The reading is **decidable** exactly when one declared tool owns every argument
+name written. Two candidates is a coin flip that runs something, so the reader
+refuses it.
+
+- The inference lives in `orphanParameterCall(raw, tools)`, called from
+  `parseCalls` under `calls.length === 0 && !INVOKE_OPENER.test(raw)`.
+- Both spellings of both envelope tags come off before the walk
+  (`INVOKE_ENVELOPE_CLOSE` **and** `ENVELOPE_TAG`): a surviving opener sits in the
+  residue ahead of the first argument and the block is refused for text it never
+  carried.
+- The shape id is `orphan-parameter`, shared with the single-line form.
+- `tests/orphan-block.spec.ts` pins the dispatch, the intact payload, the empty
+  visible text, and five refusals (two candidates, a truncated argument, prose
+  between arguments, an unowned name, a duplicated name).
+
+**The general lesson:** when a repair is keyed on a tag the model may simply not
+have written, the per-line reader and both invoke passes all miss it for the same
+reason, and the block reaches the user as markup with no note. Check `parseCalls`
+for a guard that requires a tag before concluding a block is unreadable.

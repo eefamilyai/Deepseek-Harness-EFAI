@@ -1383,6 +1383,12 @@ async function summarizerHarness(
   return { ctx, adapter, compact }
 }
 
+// DSH-FORK(kiln): these cases pin what the summarizer REQUEST looks like, and
+// upstream's shape (the replayed agent prompt in the system slot, the agent's
+// own tools offered) is the shape that let the summarizer continue the agent's
+// role. They now pin the fork's: the summarizer role in the system slot, the
+// replayed prompt as quoted material, and no tool channel.
+// EXIT: upstream states the summarizer role in the system slot on every route.
 describe('default one-shot summarizer', () => {
   it.each([undefined, '', 'SYSTEM HEAD\n精确前缀\n'])('preserves the routed prefix through region summarization with system %j', async (system) => {
     const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
@@ -1394,13 +1400,29 @@ describe('default one-shot summarizer', () => {
     })
     const nodes = [...session.surface.nodes]
     const start = system === undefined ? 0 : 1
-    const prefix = session.deriveMessages().slice(0, system ? 3 : 2)
     const result = await compact.compactRegion(nodes[start]!, nodes[start + 1]!, agent(session, MODEL), SIGNAL)
 
-    expect(adapter.lastOptions).not.toHaveProperty('system')
-    expect(adapter.lastOptions?.tools).toEqual(tools)
-    expect(adapter.lastOptions?.messages.slice(0, -1)).toEqual(prefix)
-    const instruction = adapter.lastOptions?.messages.at(-1)
+    // The request reads as a summary OF the conversation: the role statement
+    // holds the system slot, the WHOLE transcript is one quoted user turn, and
+    // no tool channel is offered. The transcript must arrive with no live
+    // assistant or tool turn: replayed under their own roles, those turns read
+    // as the model's own turn in progress and the summarizer continues the
+    // agent instead of condensing it.
+    expect(adapter.lastOptions?.system).toContain('transcript-summarization engine')
+    expect(adapter.lastOptions?.tools).toBeUndefined()
+    const messages = adapter.lastOptions?.messages ?? []
+    expect(messages).toHaveLength(2)
+    expect(messages.every(message => message.role === 'user')).toBe(true)
+    const quoted = messages[0]?.content[0]
+    const quotedText = quoted?.type === 'text' ? quoted.text : ''
+    expect(quotedText).toContain('do_thing')
+    expect(quotedText).toContain('<summarized-conversation>')
+    expect(quotedText).toContain('--- assistant ---')
+    if (system !== undefined && system.trim().length > 0) {
+      expect(quotedText).toContain('--- system ---')
+      expect(quotedText).toContain(system.trim())
+    }
+    const instruction = messages.at(-1)
     expect(instruction).toMatchObject({ role: 'user' })
     expect(instruction).not.toHaveProperty('id')
     expect(instruction).not.toHaveProperty('source')
@@ -1484,10 +1506,20 @@ describe('default one-shot summarizer', () => {
       messages: [system, prefix],
     }, agent(conversation(1), MODEL))
 
-    expect(adapter.lastOptions).not.toHaveProperty('system')
-    expect(adapter.lastOptions?.tools).toEqual(tools)
+    expect(adapter.lastOptions?.system).toContain('transcript-summarization engine')
+    expect(adapter.lastOptions?.tools).toBeUndefined()
     const messages = adapter.lastOptions?.messages ?? []
-    expect(messages.slice(0, -1)).toEqual([system, prefix])
+    // The whole replayed conversation — system head AND turns — travels inside
+    // ONE quoted user turn, so the request carries no live assistant or tool
+    // role the summarizer could continue.
+    expect(messages).toHaveLength(2)
+    expect(messages.every(message => message.role === 'user')).toBe(true)
+    const quoted = messages[0]?.content[0]
+    const quotedText = quoted?.type === 'text' ? quoted.text : ''
+    expect(quotedText).toContain('REPLAYED SYSTEM')
+    expect(quotedText).toContain('<summarized-conversation>')
+    expect(quotedText).toContain('--- user ---')
+    expect(quotedText).toContain('earlier turn')
     const last = messages.at(-1)?.content[0]
     const lastText = last?.type === 'text' ? last.text : ''
     expect(lastText).toContain('Write concise English engineering prose.')
@@ -1534,8 +1566,14 @@ describe('default one-shot summarizer', () => {
       model: 'policy-summary',
       maxTokens: 222,
     })
-    expect(policyAdapter.lastOptions).not.toHaveProperty('system')
-    expect(policyAdapter.lastOptions?.messages.slice(0, -1)).toEqual([system, prefix])
+    expect(policyAdapter.lastOptions?.system).toContain('transcript-summarization engine')
+    const policyMessages = policyAdapter.lastOptions?.messages ?? []
+    expect(policyMessages).toHaveLength(2)
+    expect(policyMessages.every(message => message.role === 'user')).toBe(true)
+    const policyQuoted = policyMessages[0]?.content[0]
+    const policyQuotedText = policyQuoted?.type === 'text' ? policyQuoted.text : ''
+    expect(policyQuotedText).toContain('WARM SYSTEM')
+    expect(policyQuotedText).toContain('warm prefix')
   })
 
   it('resolves the latest routed provider/model before the AgentOptions pair', async () => {

@@ -1,0 +1,16 @@
+
+ RUN  v4.1.8 D:/deepseek-kernel-harness
+
+ ✓  thread-safe  packages/session/session-recovery-context/tests/log-path-oracle.spec.ts (3 tests) 48ms
+ ✓  thread-safe  packages/session/session-recovery-context/tests/session-recovery-context.spec.ts (14 tests) 123ms
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  12:23:04
+   Duration  2.52s (transform 2.85s, setup 932ms, import 3.03s, tests 171ms, environment 0ms)
+
+
+---STDERR---
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.

@@ -1,0 +1,27 @@
+...F......[ds_direct] provider_uploads: deepseek-web upload found no usable endpoint
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai upload found no usable endpoint
+[ds_direct] provider_uploads: skipped (0 bytes) for openai
+..........[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+..[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+.[ds_direct] ds_direct: upload of a_line_of_tool_output-140c6066cdaf.txt failed (upload endpoint is down)
+[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+.
+======================================================================
+FAIL: test_uploaded_result_names_the_provider_id (test_tool_result_files.DeliverGlueTests.test_uploaded_result_names_the_provider_id)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\deepseek-kernel-harness\python\kiln\runtime\test_tool_result_files.py", line 179, in test_uploaded_result_names_the_provider_id
+    self.assertIn("file-42", out[0]["content"])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'file-42' not found in [{'type': 'text', 'text': 'OUTPUT:\n[tool result truncated: 9008 characters, uploaded to the provider as file id file-42]\nFull text: C:\\Users\\eejar\\AppData\\Local\\Temp\\tmppiyjly16\\tool_result-57f7cdbf70fc.txt\nRe-read it (in slices) to see the rest. First 600 characters follow:\n\nOUTPUT:\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}, {'type': 'file', 'file': {'file_id': 'file-42'}}]
+
+----------------------------------------------------------------------
+Ran 27 tests in 4.751s
+
+FAILED (failures=1)

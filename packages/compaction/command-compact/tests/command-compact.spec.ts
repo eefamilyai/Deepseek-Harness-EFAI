@@ -169,6 +169,9 @@ describe('@deepseek-ai/dsh-command-compact registration', () => {
       definitionId: '@deepseek-ai/dsh-command-compact',
       name: 'compact',
       description: 'Compact older conversation history',
+      // The argued line must be advertised as args-tolerant, or the client
+      // treats `/compact <text>` as unclaimed prose.
+      input: { hint: '[<instruction>]' },
     })
 
     await test.plugin.dispose()

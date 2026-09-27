@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **82** in **17** patch(es).
+Tier-2 files: **84** in **17** patch(es).
 
 ## Patches
 
@@ -52,13 +52,15 @@ Tier-2 files: **82** in **17** patch(es).
 - `packages/llm/llm/src/index.ts`
 - `packages/llm/llm/src/types.ts`
 
-### `patches/compaction.patch` — 7 file(s)
+### `patches/compaction.patch` — 9 file(s)
 
 - `packages/compaction/command-compact/src/index.ts`
 - `packages/compaction/command-compact/tests/command-compact.spec.ts`
+- `packages/compaction/command-compact/tests/loader-composition.spec.ts`
 - `packages/compaction/compaction-basic/src/index.ts`
 - `packages/compaction/compaction-basic/src/region.ts`
 - `packages/compaction/compaction-basic/src/summarizer.ts`
+- `packages/compaction/compaction-basic/tests/compaction-basic.spec.ts`
 - `packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts`
 - `packages/compaction/compaction/src/index.ts`
 
@@ -179,7 +181,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 340 paths do not exist upstream, so no patch covers them and none can conflict.
+These 339 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -205,6 +207,8 @@ These 340 paths do not exist upstream, so no patch covers them and none can conf
 - `AI_BIG_PROJECT_DESIGN.md`
 - `HARNESS-EDITS.md`
 - `HARNESS.md`
+- `SESSION-system-prompt-as-file-upload.md`
+- `SESSION-tool-output-file-delivery.md`
 - `desktop/harness-desktop/README.md`
 - `desktop/harness-desktop/chrome/browser-start.html`
 - `desktop/harness-desktop/chrome/toolbar-preload.js`
@@ -234,6 +238,7 @@ These 340 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/client-primitives.patch`
 - `local-overlay/patches/client-settings.patch`
 - `local-overlay/patches/client-shell.patch`
+- `local-overlay/patches/compaction.patch`
 - `local-overlay/patches/core.patch`
 - `local-overlay/patches/docs.patch`
 - `local-overlay/patches/llm.patch`
@@ -312,6 +317,7 @@ These 340 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-tools/tsconfig.json`
 - `packages/client/ui-settings-tools/tsdown.config.ts`
 - `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
+- `packages/compaction/compaction-basic/tests/summarizer-instruction.spec.ts`
 - `packages/compaction/output-masking/README.i18n.yaml`
 - `packages/compaction/output-masking/README.md`
 - `packages/compaction/output-masking/README.zh.md`
@@ -515,9 +521,4 @@ These 340 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/test_provider_bridge_wire.py`
 - `start.cmd`
 - `start.sh`
-- `undefined/temp/tsx-eejar/17901-5eda16065817ce44887588c3c5726719f1d29c79`
-- `undefined/temp/tsx-eejar/17901-68aeb08c313344b6db08bdf3de73e15b8de908cf`
-- `undefined/temp/tsx-eejar/17901-8ffc68cbf3b438a655f07d8be512b326638cd2b9`
-- `undefined/temp/tsx-eejar/17901-ef5350cf643d5ba0c338b37e384ff3578b86f52d`
-- `undefined/temp/tsx-eejar/17901-f2b88efa85d68f86943235eec394f5dd7f5c5148`
 - `upload_to_git.py`

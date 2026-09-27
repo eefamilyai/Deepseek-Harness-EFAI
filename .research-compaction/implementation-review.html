@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Context Initialization After Compaction — Implementation Review</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2128; --line:#30363d;
+    --fg:#e6edf3; --dim:#8b949e; --accent:#58a6ff; --green:#3fb950;
+    --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+  #deck{height:100%;display:flex;flex-direction:column}
+  #stage{flex:1;position:relative;overflow:hidden}
+  .slide{
+    position:absolute;inset:0;padding:48px 64px 84px;overflow-y:auto;
+    opacity:0;visibility:hidden;transition:opacity .18s ease;
+  }
+  .slide.active{opacity:1;visibility:visible}
+  .slide::-webkit-scrollbar{width:10px}
+  .slide::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+
+  h1{font-size:38px;line-height:1.2;margin:0 0 8px;letter-spacing:-.5px}
+  h2{font-size:27px;margin:0 0 20px;letter-spacing:-.3px;color:var(--fg)}
+  h3{font-size:18px;margin:26px 0 10px;color:var(--accent)}
+  p{margin:0 0 14px;max-width:108ch}
+  .lede{font-size:19px;color:var(--dim);max-width:88ch}
+  .eyebrow{font:600 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  ul{margin:0 0 14px;padding-left:22px;max-width:104ch}
+  li{margin:7px 0}
+  code{font:13.5px/1.5 var(--mono);background:var(--panel2);padding:1.5px 6px;border-radius:5px;color:var(--purple)}
+  a{color:var(--accent)}
+
+  pre{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;overflow-x:auto;margin:0 0 16px;
+    font:13px/1.6 var(--mono);
+  }
+  pre code{background:none;padding:0;color:var(--fg);font-size:13px}
+  .cmt{color:var(--dim)}
+  .kw{color:#ff7b72}
+  .str{color:#a5d6ff}
+  .fn{color:var(--purple)}
+
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:1100px){.g2,.g3{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+  .card h3{margin-top:0}
+  .card p:last-child{margin-bottom:0}
+
+  .pill{display:inline-block;font:600 11.5px/1 var(--mono);padding:5px 10px;border-radius:999px;letter-spacing:.03em}
+  .pill.ok{background:rgba(63,185,80,.14);color:var(--green);border:1px solid rgba(63,185,80,.35)}
+  .pill.warn{background:rgba(210,153,34,.14);color:var(--amber);border:1px solid rgba(210,153,34,.35)}
+  .pill.info{background:rgba(88,166,255,.14);color:var(--accent);border:1px solid rgba(88,166,255,.35)}
+  .pill.bad{background:rgba(248,81,73,.14);color:var(--red);border:1px solid rgba(248,81,73,.35)}
+
+  table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:14.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
+  td code{font-size:12.5px}
+
+  /* phase diagram */
+  .flow{display:flex;align-items:stretch;gap:0;margin:8px 0 22px;flex-wrap:wrap}
+  .phase{
+    flex:1;min-width:230px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:16px 18px;position:relative;
+  }
+  .phase .tag{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .phase .who{font:600 13px/1 var(--mono);color:var(--green);margin:9px 0 10px}
+  .phase .what{font-size:14px;color:var(--fg)}
+  .phase .what small{display:block;color:var(--dim);font-size:12.5px;margin-top:6px;font-family:var(--mono)}
+  .arrow{display:flex;align-items:center;justify-content:center;padding:0 12px;color:var(--dim);font-size:22px;min-width:44px}
+  @media(max-width:900px){.arrow{transform:rotate(90deg);padding:8px 0}}
+
+  .verify{font:13.5px/1.7 var(--mono)}
+  .verify .ok{color:var(--green)}
+  .verify .lbl{color:var(--dim)}
+
+  .note{
+    border-left:3px solid var(--amber);background:rgba(210,153,34,.07);
+    padding:13px 17px;border-radius:0 8px 8px 0;margin:0 0 16px;
+  }
+  .note.stop{border-left-color:var(--red);background:rgba(248,81,73,.07)}
+  .note.go{border-left-color:var(--green);background:rgba(63,185,80,.07)}
+  .note strong{color:var(--fg)}
+  .note p:last-child{margin-bottom:0}
+
+  footer{
+    height:64px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 24px;border-top:1px solid var(--line);background:var(--panel);
+    font-size:13px;color:var(--dim);gap:16px;flex:none;
+  }
+  .nav{display:flex;align-items:center;gap:8px}
+  button{
+    background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+    border-radius:7px;padding:7px 13px;cursor:pointer;font:13px/1 inherit;
+  }
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button:disabled{opacity:.35;cursor:default}
+  button:disabled:hover{border-color:var(--line);color:var(--fg)}
+  #bar{position:absolute;top:0;left:0;height:2px;background:var(--accent);transition:width .18s ease;z-index:5}
+  .kbd{font:11.5px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:2px 6px;color:var(--dim)}
+  @media print{
+    body{overflow:visible;background:#fff;color:#000}
+    .slide{position:static;opacity:1;visibility:visible;page-break-after:always;height:auto}
+    footer,#bar{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="deck">
+  <div id="bar" style="width:0"></div>
+  <div id="stage">
+
+  <!-- 1 ─────────────────────────────────────────── -->
+  <section class="slide active">
+    <div class="eyebrow">Implementation review · fork-owned · Tier 1</div>
+    <h1>Context initialization after compaction</h1>
+    <p class="lede">
+      Compaction now writes its record to disk by code, and the step that follows carries that
+      record as its only content — no system prompt, no other injections — plus one instruction
+      to reply with nothing but <code>OK</code>.
+    </p>
+    <div class="grid g3" style="margin-top:30px">
+      <div class="card">
+        <div class="pill ok">Shipped</div>
+        <h3 style="margin-top:14px">Two commits on <code>master</code></h3>
+        <p style="font:13px/1.8 var(--mono);color:var(--dim)">
+          b1808c04f6 &nbsp;feat(session)<br>
+          212677cfc7 &nbsp;chore(overlay)
+        </p>
+      </div>
+      <div class="card">
+        <div class="pill ok">Verified</div>
+        <h3 style="margin-top:14px">All local gates green</h3>
+        <p>17/17 tests · typecheck 0 · overlay rebuild + verify + apply 0</p>
+      </div>
+      <div class="card">
+        <div class="pill info">Zero merge cost</div>
+        <h3 style="margin-top:14px">No seam edit</h3>
+        <p>Tier-2 unchanged at 138 files / 23 patches — so no <code>DSH-FORK</code> marker and no patch regeneration.</p>
+      </div>
+    </div>
+    <p style="margin-top:30px;color:var(--dim);font-size:14px">
+      Use <span class="kbd">←</span> <span class="kbd">→</span> or the buttons below. Press <span class="kbd">?</span> for help.
+    </p>
+  </section>
+
+  <!-- 2 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>The problem</h2>
+    <p class="lede">
+      Compaction keeps a summary and drops the transcript. What it drops includes the operator's own
+      words — the prompt the work was commissioned with, and every correction since.
+    </p>
+    <div class="grid g2" style="margin-top:26px">
+      <div class="card" style="border-color:rgba(248,81,73,.3)">
+        <h3 style="color:var(--red);margin-top:0">Before</h3>
+        <p>The record rode <em>inside a normal turn</em> — one injected user-role message competing with the
+        compaction summary and the full system prompt.</p>
+        <p style="color:var(--dim);margin-bottom:0">The turn most likely to resume the wrong task, confidently.</p>
+      </div>
+      <div class="card" style="border-color:rgba(63,185,80,.3)">
+        <h3 style="color:var(--green);margin-top:0">After</h3>
+        <p>The record gets its <em>own dedicated initialization step</em>. That step carries the record and one
+        instruction, and nothing else.</p>
+        <p style="color:var(--dim);margin-bottom:0">The operator's prompt waits until the acknowledgement lands.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>The three phases</h2>
+    <div class="flow">
+      <div class="phase">
+        <div class="tag">Phase A</div>
+        <div class="who">CODE — never a model</div>
+        <div class="what">
+          Render the record and write it to the session's own state directory.
+          <small>compaction-[id]-[session-id].md</small>
+        </div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="phase">
+        <div class="tag">Phase B</div>
+        <div class="who">THE INITIALIZATION STEP</div>
+        <div class="what">
+          The step carries the record plus one instruction. No system prompt. No other injections.
+          <small>reply with nothing but OK</small>
+        </div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="phase">
+        <div class="tag">Phase C</div>
+        <div class="who">ACKNOWLEDGEMENT, THEN THE REAL TURN</div>
+        <div class="what">
+          <code>OK</code> is absorbed and folded as a log event, so it survives a resume. The deferred
+          prompt and normal injections then proceed.
+          <small>a non-OK reply is logged, never fatal</small>
+        </div>
+      </div>
+    </div>
+    <div class="note">
+      <p><strong>Why Phase A is code.</strong> Selection and rendering are pure and total, so the record is
+      reproducible and costs no model call. Selecting the event window is the only decision it makes, and that
+      decision is stated once, in <code>selectCompactionEvents</code>.</p>
+    </div>
+  </section>
+
+  <!-- 4 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>Phase A — the record</h2>
+    <p>New file: <code>packages/session/session-recovery-context/src/compaction-log.ts</code></p>
+    <pre><code><span class="cmt">/** Filename prefix for every compaction log this plugin writes. */</span>
+<span class="kw">export const</span> COMPACTION_LOG_PREFIX = <span class="str">'compaction-'</span>
+
+<span class="cmt">/** Events the record carries when the window since the last prompt is longer. */</span>
+<span class="kw">export const</span> DEFAULT_COMPACTION_EVENTS = <span class="str">100</span>
+
+<span class="kw">export function</span> <span class="fn">compactionLogFilename</span>(compactionId: <span class="kw">string</span>, sessionId: SessionId): <span class="kw">string</span> {
+  <span class="kw">return</span> <span class="str">`${COMPACTION_LOG_PREFIX}${compactionId}-${sessionId}.md`</span>
+}
+
+<span class="kw">export function</span> <span class="fn">selectCompactionEvents</span>( <span class="cmt">/* window + prompts + limit */</span> )
+<span class="kw">export function</span> <span class="fn">renderCompactionLog</span>(input: CompactionLogInput): <span class="kw">string</span></code></pre>
+    <h3>The selection rule</h3>
+    <p>
+      The window starts at the <strong>newest turn-starting prompt</strong> — that prompt restates the task,
+      and what came before it is the previous turn's work, which the summary already covers. The cap then
+      trims the window's <em>oldest</em> end, so a long run keeps the newest events.
+    </p>
+    <p style="color:var(--dim)">
+      Turn-starting prompts are included in full from the whole session. Steering input is not.
+    </p>
+  </section>
+
+  <!-- 5 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>Phase B — the initialization step</h2>
+    <p>Two hooks, both registered on the agent, both in the fork-owned package.</p>
+
+    <h3>1 · <code>agent/pre-step</code> — own the exchange</h3>
+    <pre><code>ctx.on(<span class="str">'agent/pre-step'</span>, <span class="kw">async</span> ({ agent, messages, signal }, next) => {
+  <span class="kw">const</span> base = <span class="kw">await</span> <span class="fn">next</span>()
+  <span class="kw">if</span> (base.kind === <span class="str">'reject'</span>) <span class="kw">return</span> base
+  <span class="kw">const</span> session = agent.session
+  <span class="kw">const</span> state = ctx.sessionProjections.<span class="fn">stateOf</span>(session, <span class="str">'sessionRecovery'</span>)
+
+  <span class="cmt">// Past the acknowledgement: admit the messages this plugin deferred for the</span>
+  <span class="cmt">// real turn, then let the ordinary injections run.</span>
+  <span class="kw">const</span> stashed = deferred.<span class="fn">get</span>(session)
+  <span class="kw">if</span> (stashed !== <span class="kw">undefined</span> && !<span class="fn">awaitingAcknowledgement</span>(state)) {
+    deferred.<span class="fn">delete</span>(session)
+    <span class="kw">return</span> { ...base, messages: [...stashed, ...base.messages] }
+  }
+  <span class="cmt">// Nothing to answer: no compaction yet, or this compaction already answered.</span>
+  <span class="kw">if</span> (state.compactionSeq === <span class="kw">null</span> || state.recoverySentSeq === state.compactionSeq) <span class="kw">return</span> base
+
+  <span class="kw">await</span> <span class="fn">writeCompactionLog</span>(root, session, state, compactionEvents)
+  <span class="kw">const</span> path = <span class="fn">compactionLogPath</span>(root, session, state.compactionId ?? String(state.compactionSeq))
+  <span class="kw">const</span> record = <span class="kw">await</span> <span class="fn">readRecord</span>(path)
+  <span class="cmt">// … builds the context message and defers the operator prompt …</span>
+})</code></pre>
+    <div class="note">
+      <p><strong>Abridged.</strong> The lines between <code>readRecord</code> and the return are elided above —
+      I read them only in fragments during this session, so I am not quoting them as if I had them verbatim.
+      The behaviour they implement is the deferral shown by the <code>deferred</code> map.</p>
+    </div>
+
+    <h3>2 · <code>system-prompt/assemble</code> — empty the prompt for that step</h3>
+    <pre><code><span class="cmt">// The initialization step carries no system prompt and no other injections.</span>
+ctx.on(<span class="str">'system-prompt/assemble'</span>, <span class="kw">async</span> (assembly, context, next) => {
+  <span class="kw">const</span> agent = context.agent
+  <span class="kw">if</span> (agent === <span class="kw">undefined</span>) <span class="kw">return</span> <span class="fn">next</span>()
+  <span class="kw">const</span> state = ctx.sessionProjections.<span class="fn">stateOf</span>(agent.session, <span class="str">'sessionRecovery'</span>)
+  <span class="kw">if</span> (!<span class="fn">awaitingAcknowledgement</span>(state)) <span class="kw">return</span> <span class="fn">next</span>()
+  <span class="kw">return</span> { sections: [], contexts: [], tools: assembly.tools, variables: assembly.variables }
+}, { prepend: <span class="kw">true</span> })</code></pre>
+    <h3>The gate both hooks share</h3>
+    <pre><code><span class="kw">export function</span> <span class="fn">awaitingAcknowledgement</span>(state: SessionRecoveryProjection): <span class="kw">boolean</span> {
+  <span class="kw">return</span> state.compactionSeq !== <span class="kw">null</span> && state.compactionSeq !== state.absorbedSeq
+}</code></pre>
+  </section>
+
+  <!-- 6 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>Why the system prompt can be emptied</h2>
+    <p class="lede">
+      This was the design's riskiest assumption, and it is checkable in upstream source rather than by
+      experiment.
+    </p>
+    <div class="grid g2" style="margin-top:22px">
+      <div class="card">
+        <h3 style="margin-top:0"><code>system-prompt/assemble</code></h3>
+        <p>Returns the waterfall value verbatim <em>unless</em> a section declaring <code>complete: true</code>
+        was registered.</p>
+        <p style="margin-bottom:0"><code>harness:identity</code> is registered as a <strong>plain section</strong> —
+        no <code>complete</code>.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">So an emptied assembly is genuinely empty</h3>
+        <p>The only <code>complete: true</code> registrations in the repo are in tests plus
+        <code>packages/skill/tool-skill/src/index.ts</code>.</p>
+        <p style="margin-bottom:0">None of them is the harness identity or the persona.</p>
+      </div>
+    </div>
+    <div class="note go" style="margin-top:22px">
+      <p><strong>And it avoids a Tier-2 edit entirely.</strong> Because the waterfall is public API and the
+      listener is registered on the agent scope, the whole mechanism lives in the fork-owned plugin. That is
+      why Tier-2 stays at 138 files.</p>
+    </div>
+    <p style="color:var(--dim);font-size:14px">
+      An earlier round proposed blanking the prompt via <code>agent/request</code>. That is impossible:
+      <code>LlmCallConfig</code> carries only provider, model, reasoning effort, and sampling scalars — the
+      system prompt is not in it.
+    </p>
+  </section>
+
+  <!-- 7 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>Ownership — why this cost nothing to merge</h2>
+    <table>
+      <thead><tr><th>Path</th><th>Tier</th><th>Obligation</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>packages/session/session-recovery-context/**</code></td>
+          <td><span class="pill ok">Tier 1 — fork-owned</span></td>
+          <td>None. No marker, no patch, no register row.</td>
+        </tr>
+        <tr>
+          <td>Everything else touched</td>
+          <td><span class="pill info">—</span></td>
+          <td>Nothing. No upstream-owned file was edited.</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3>The evidence, not the claim</h3>
+    <div class="verify card">
+      <div><span class="lbl">$</span> node local-overlay/rebuild.mjs</div>
+      <div class="ok">Rebuilt 23 patch(es) covering 138 Tier-2 file(s) against base c291e7961a.</div>
+      <div>Tier 1 (fork-owned, no patch needed): <strong>289</strong> path(s).</div>
+      <div style="margin-top:10px"><span class="lbl">$</span> node local-overlay/verify.mjs</div>
+      <div class="ok">Round-trip verified: base c291e7961a + 23 patch(es) reproduces 138 Tier-2 path(s) exactly.</div>
+      <div style="margin-top:10px"><span class="lbl">$</span> node local-overlay/apply.mjs --check</div>
+      <div class="ok">All 23 patch(es) against base c291e7961a. &nbsp;<span class="lbl">exit 0</span></div>
+    </div>
+    <p style="margin-top:16px">
+      Tier 2 is <strong>identical before and after</strong> this feature — 138 files in 23 patches. Tier 1 moved
+      288 → 289, which is exactly the one new file. That invariance is the proof the edit stayed in the fork-owned tier.
+    </p>
+  </section>
+
+  <!-- 8 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>Tests — 17 passing</h2>
+    <p>Extended <code>tests/session-recovery-context.spec.ts</code>. The names are the specification:</p>
+    <div class="grid g2">
+      <div class="card">
+        <h3 style="margin-top:0">Compaction initialization</h3>
+        <ul style="font:13.5px/1.9 var(--mono);padding-left:18px;margin:0">
+          <li>contributes nothing to a session that was never compacted</li>
+          <li>carries the record and one instruction, and nothing else</li>
+          <li>writes the record to compaction-[id]-[session-id].md</li>
+          <li>admits the operator prompt only after the acknowledgement</li>
+          <li>carries the recovered prompt once the acknowledgement is folded</li>
+          <li>leaves a rejected step rejected</li>
+          <li>suppresses the system prompt for exactly the recovery step</li>
+          <li>reports an awaiting compaction until the acknowledgement lands</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Selection & rendering</h3>
+        <ul style="font:13.5px/1.9 var(--mono);padding-left:18px;margin:0 0 18px">
+          <li>keeps everything after the newest prompt</li>
+          <li>keeps the newest events when the window is longer than the cap</li>
+          <li>keeps the whole window when it fits the cap</li>
+        </ul>
+        <h3>renderCompactionLog</h3>
+        <ul style="font:13.5px/1.9 var(--mono);padding-left:18px;margin:0 0 18px">
+          <li>names the session, the summary, the prompts, and the events</li>
+          <li>says so plainly when there is nothing to show</li>
+        </ul>
+        <h3>Filename</h3>
+        <ul style="font:13.5px/1.9 var(--mono);padding-left:18px;margin:0">
+          <li>is compaction-[id]-[session-id].md</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">
+      <p>The three that matter most: <strong>“and nothing else”</strong>, <strong>“only after the
+      acknowledgement”</strong>, and <strong>“for exactly the recovery step”</strong>. Those are the design's
+      claims, stated as assertions.</p>
+    </div>
+  </section>
+
+  <!-- 9 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>Full evidence log</h2>
+    <div class="verify card">
+      <div><span class="lbl">$</span> pnpm vitest run packages/session/session-recovery-context</div>
+      <div class="ok">Test Files&nbsp; 2 passed (2) &nbsp;·&nbsp; Tests&nbsp; 17 passed (17) &nbsp;·&nbsp; Duration 2.27s</div>
+      <div style="margin-top:12px"><span class="lbl">$</span> npx tsc -p packages/session/session-recovery-context/tsconfig.json --noEmit</div>
+      <div class="ok">exit 0</div>
+      <div style="margin-top:12px"><span class="lbl">$</span> node local-overlay/rebuild.mjs --check</div>
+      <div class="ok">local-overlay is current: 23 patch(es), 138 Tier-2 file(s), base c291e7961a &nbsp;(exit 0)</div>
+      <div style="margin-top:12px"><span class="lbl">$</span> git push origin master</div>
+      <div class="ok">pre-push typecheck ✓ &nbsp;·&nbsp; 1cbfe44154..212677cfc7 &nbsp;master -> master</div>
+      <div style="margin-top:12px"><span class="lbl">$</span> git rev-parse HEAD origin/master</div>
+      <div class="ok">both 212677cfc7f0aad2a05054c636ae3d34e28549af</div>
+    </div>
+    <h3>Pre-commit hooks</h3>
+    <p style="margin-bottom:0">lint (staged) ✓ · whitespace (staged) ✓ · vendor manifest guard ✓ · translation
+    pairing skipped (no bilingual files staged)</p>
+  </section>
+
+  <!-- 10 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>What I did <em>not</em> establish</h2>
+    <div class="note stop">
+      <p><strong>1 · I never watched a real compaction run.</strong> The evidence is unit tests plus typecheck.
+      I did not drive a live session through a compaction and observe the initialization turn fire end to end.
+      This is the one gap worth closing by hand.</p>
+    </div>
+    <div class="note">
+      <p><strong>2 · The package README is now stale.</strong> It still documents the old single-injection
+      mechanism. I wrote a correct replacement but reverted it on your “fuck bilingual” instruction, because the
+      pairing gate requires <code>README.zh.md</code> to move in lockstep. Fixing it means updating both sides and
+      running <code>pnpm run verify-translation-pairing --write</code>.</p>
+    </div>
+    <div class="note">
+      <p><strong>3 · No Agent Note was added.</strong> If this fork expects one under
+      <code>.agents/notes/implemented/</code>, that is still outstanding.</p>
+    </div>
+    <div class="note" style="border-left-color:var(--accent);background:rgba(88,166,255,.07)">
+      <p><strong>Pre-existing failures, not mine.</strong> <code>verify-translation-pairing</code> reports
+      violations in <code>docs/config-catalog</code>, <code>docs/event-producer-consumer</code>,
+      <code>docs/tool-catalog</code>, and several unrelated fork packages. None names
+      <code>session-recovery-context</code>. They were failing before this change and remain failing after it.</p>
+    </div>
+  </section>
+
+  <!-- 11 ─────────────────────────────────────────── -->
+  <section class="slide">
+    <h2>How to verify it yourself</h2>
+    <h3>Read the change</h3>
+    <pre><code><span class="cmt"># the two commits</span>
+git show b1808c04f6
+git show 212677cfc7
+
+<span class="cmt"># just the new renderer</span>
+git show b1808c04f6:packages/session/session-recovery-context/src/compaction-log.ts
+
+<span class="cmt"># the hook wiring (pre-step + system-prompt/assemble)</span>
+git show b1808c04f6:packages/session/session-recovery-context/src/index.ts | \
+  grep -n -A22 <span class="str">'agent/pre-step'</span></code></pre>
+    <h3>Re-run the gates</h3>
+    <pre><code>pnpm vitest run packages/session/session-recovery-context
+npx tsc -p packages/session/session-recovery-context/tsconfig.json --noEmit
+node local-overlay/verify.mjs
+node local-overlay/apply.mjs --check</code></pre>
+    <h3>Then close the gap I left open</h3>
+    <div class="note go">
+      <p>Run a session long enough to compact, and confirm the next turn carries the record and nothing else,
+      and that the operator prompt follows the <code>OK</code>. That is the check no unit test substitutes for.</p>
+    </div>
+    <p style="color:var(--dim);font-size:14px;margin-top:22px">
+      Design context for this work lived in <code>.research-compaction/CONTEXT-INIT-DESIGN.md</code>, which is
+      untracked scratch and not part of either commit.
+    </p>
+  </section>
+
+  </div>
+
+  <footer>
+    <div class="nav">
+      <button id="prev">← Prev</button>
+      <button id="next">Next →</button>
+      <span id="count" style="margin-left:10px;font:12.5px var(--mono)"></span>
+    </div>
+    <div id="title" style="flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <div class="nav"><span class="kbd">←</span> <span class="kbd">→</span> <span class="kbd">Home</span> <span class="kbd">End</span></div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const bar = document.getElementById('bar');
+  const count = document.getElementById('count');
+  const titleEl = document.getElementById('title');
+  const prev = document.getElementById('prev');
+  const next = document.getElementById('next');
+  let i = 0;
+
+  function titleOf(s){
+    const h = s.querySelector('h1, h2');
+    return h ? h.textContent.trim() : '';
+  }
+
+  function show(n, push){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    slides[i].scrollTop = 0;
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    count.textContent = (i + 1) + ' / ' + slides.length;
+    titleEl.textContent = titleOf(slides[i]);
+    prev.disabled = i === 0;
+    next.disabled = i === slides.length - 1;
+    if (push !== false && location.hash !== '#' + (i + 1)) {
+      history.replaceState(null, '', '#' + (i + 1));
+    }
+  }
+
+  prev.addEventListener('click', () => show(i - 1));
+  next.addEventListener('click', () => show(i + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': case ' ': e.preventDefault(); show(i + 1); break;
+      case 'ArrowLeft':  case 'PageUp':            e.preventDefault(); show(i - 1); break;
+      case 'Home': e.preventDefault(); show(0); break;
+      case 'End':  e.preventDefault(); show(slides.length - 1); break;
+      case '?':
+        alert(
+          'Navigation\n\n' +
+          '→  / Space / PageDown   next\n' +
+          '←  / PageUp             previous\n' +
+          'Home / End              first / last\n' +
+          'Ctrl+P                  print (all slides)\n\n' +
+          'The URL hash tracks the slide, so a link can point at one.'
+        );
+        break;
+    }
+  });
+
+  const start = parseInt((location.hash || '').replace('#',''), 10);
+  show(Number.isFinite(start) && start > 0 ? start - 1 : 0, false);
+  window.addEventListener('hashchange', () => {
+    const n = parseInt((location.hash || '').replace('#',''), 10);
+    if (Number.isFinite(n) && n > 0) show(n - 1, false);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90mD:/deepseek-kernel-harness[39m
+
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/command-compact/tests/command-compact.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 155[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/command-compact/tests/loader-composition.spec.ts [2m([22m[2m1 test[22m[2m)[22m[32m 222[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction/tests/invariant.spec.ts [2m([22m[2m35 tests[22m[2m)[22m[33m 531[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-tool-result-pruner/tests/tool-result-pruner.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-tool-result-pruner/tests/loader-composition.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 283[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/loader-composition.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 462[2mms[22m[39m
+     [33m[2m✓[22m[39m loads the shipped token-meter, pruning, and compaction-basic YAML order [33m 335[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/output-masking/tests/output-masking.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 372[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/summarizer-instruction.spec.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction/tests/compaction.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 69[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction/tests/tool-pairing.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/manual-compaction.spec.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 1363[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-image-offload/tests/projection.spec.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 145[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/compaction-basic.spec.ts [2m([22m[2m105 tests[22m[2m)[22m[33m 1767[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 1268[2mms[22m[39m
+     [33m[2m✓[22m[39m uses the model actually routed by agent/request for post-step pressure [33m 359[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/api/gateway/tests/echo-stream.host.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 171[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-image-offload/tests/image-offload.spec.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 866[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m16 passed[39m[22m[90m (16)[39m
+[2m      Tests [22m [1m[32m288 passed[39m[22m[90m (288)[39m
+[2m   Start at [22m 11:16:52
+[2m   Duration [22m 5.77s[2m (transform 17.87s, setup 7.24s, import 25.26s, tests 8.00s, environment 5ms)[22m

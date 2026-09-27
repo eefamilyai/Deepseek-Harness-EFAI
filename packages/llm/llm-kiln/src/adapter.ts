@@ -662,6 +662,33 @@ function clipTurn(text: string, room: number): string {
  * @param partChars - the part's character budget.
  * @returns the turns, cut where they must be.
  */
+/**
+ * Split one turn's text into `count` contiguous pieces.
+ *
+ * The engine replays the whole conversation as ONE quoted turn, so a fold over
+ * that shape has nothing to bucket. The pieces are contiguous slices rather than
+ * head-and-tail cuts: each part is summarized in order and merged forward, so the
+ * material has to survive in sequence.
+ * @param turn - the turn to split.
+ * @param count - how many pieces to produce.
+ * @returns the pieces, in order.
+ */
+function splitTurn(turn: KilnMessage, count: number): KilnMessage[] {
+  const size = Math.ceil(turn.content.length / count)
+  const pieces: KilnMessage[] = []
+  for (let start = 0; start < turn.content.length; start += size) {
+    pieces.push({ ...turn, content: turn.content.slice(start, start + size) })
+  }
+  return pieces
+}
+
+/**
+ * Fit one part inside a capped prompt by cutting its turns, never by splitting
+ * it into more parts: the number of parts is what the call budget bounds.
+ * @param turns - the part's turns, in order.
+ * @param partChars - the part's character budget.
+ * @returns the turns, cut where they must be.
+ */
 function fitPart(turns: readonly KilnMessage[], partChars: number): KilnMessage[] {
   const total = turns.reduce((sum, turn) => sum + turn.content.length, 0)
   if (total <= partChars || turns.length === 0) return [...turns]
@@ -711,15 +738,22 @@ export function planCompactionFold(
       return turn === undefined ? [] : [turn]
     })
   const total = turns.reduce((sum, turn) => sum + turn.content.length, 0)
-  if (total <= partChars || turns.length < 2) return undefined
+  if (total <= partChars) return undefined
   const count = Math.min(maxParts, Math.ceil(total / partChars))
   if (count < 2) return undefined
+  // The engine replays the conversation as ONE quoted turn, so there is usually
+  // nothing to bucket: that single turn is split into `count` contiguous pieces
+  // first. A `turns.length < 2` guard here reported "one call suffices" for a
+  // transcript of any size, so the fold never ran and the capped route received
+  // the instruction with no conversation attached to condense.
+  const first = turns[0]
+  const spread = turns.length === 1 && first !== undefined ? splitTurn(first, count) : turns
   // Assign each turn to a part by where it falls in the conversation, so the
   // parts are contiguous and together cover all of it.
   const share = total / count
   const buckets: KilnMessage[][] = Array.from({ length: count }, () => [])
   let consumed = 0
-  for (const turn of turns) {
+  for (const turn of spread) {
     const index = Math.min(count - 1, Math.floor(consumed / share))
     buckets[index]?.push(turn)
     consumed += turn.content.length
@@ -808,8 +842,16 @@ export function buildTurns(options: GenerateOptions, imageText?: string): KilnMe
   // user turn, the shape they had when they shared the message after the calls.
   let previousWasTool = false
   for (const message of options.messages) {
-    const turn = flattenMessage(message, imageText)
-    if (turn === undefined) continue
+    const flattened = flattenMessage(message, imageText)
+    if (flattened === undefined) continue
+    // DSH-FORK(kiln): a compaction request is the material being condensed plus
+    // the instruction that asks for it, so neither turn may be clipped. Both
+    // turns are assembled per-request and carry no `source`, so
+    // `flattenMessage` never pinned them and the capped route dropped the whole
+    // quoted transcript, leaving the summarizer the instruction alone.
+    // EXIT: upstream pins a compaction request's own turns, or the route stops
+    // clipping a request whose whole body is the payload.
+    const turn = options.purpose === 'compaction' ? { ...flattened, pin: true } : flattened
     const isTool = message.role === 'tool'
     const last = turns.at(-1)
     if (isTool && previousWasTool && last !== undefined) {

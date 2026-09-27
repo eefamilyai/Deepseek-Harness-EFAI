@@ -1,0 +1,101 @@
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+[33mThe plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the [1mresolve.tsconfigPaths[22m option. You can remove the plugin and set [1mresolve.tsconfigPaths: true[22m in your Vite config instead.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90mD:/deepseek-kernel-harness[39m
+
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/command-compact/tests/command-compact.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 184[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/command-compact/tests/loader-composition.spec.ts [2m([22m[2m1 test[22m[2m)[22m[32m 261[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction/tests/invariant.spec.ts [2m([22m[2m35 tests[22m[2m)[22m[33m 564[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-tool-result-pruner/tests/tool-result-pruner.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-tool-result-pruner/tests/loader-composition.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 274[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/loader-composition.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 565[2mms[22m[39m
+     [33m[2m✓[22m[39m loads the shipped token-meter, pruning, and compaction-basic YAML order [33m 419[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/output-masking/tests/output-masking.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 393[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction/tests/compaction.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 72[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-image-offload/tests/projection.spec.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 133[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/summarizer-instruction.spec.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 79[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/manual-compaction.spec.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 1083[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction/tests/tool-pairing.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/compaction-basic.spec.ts [2m([22m[2m105 tests[22m[2m)[22m[33m 1443[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 899[2mms[22m[39m
+     [33m[2m✓[22m[39m uses the model actually routed by agent/request for post-step pressure [33m 388[2mms[22m[39m
+ [31m❯[39m [30m[45m thread-safe [49m[39m packages/compaction/compaction-image-offload/tests/image-offload.spec.ts [2m([22m[2m15 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 564[2mms[22m[39m
+     [32m✓[39m delegates unhandled summary errors: Error: summary failed[32m 77[2mms[22m[39m
+     [32m✓[39m delegates unhandled summary errors: LlmError: no count[32m 31[2mms[22m[39m
+[31m     [31m×[31m recovers real summary image preparation with a tighter budget and fresh pricing[39m[32m 80[2mms[22m[39m
+[31m     [31m×[31m offloads only the selected summary span and stops after exhausting its images[39m[32m 50[2mms[22m[39m
+     [32m✓[39m preserves omission when a subsequent summary failure is terminal[32m 32[2mms[22m[39m
+     [32m✓[39m does not record a decision after cancellation during a failed summary[32m 38[2mms[22m[39m
+     [32m✓[39m does not retry when cancellation follows a durable omission[32m 42[2mms[22m[39m
+     [32m✓[39m rejects a concurrently changed selection before recording omission[32m 27[2mms[22m[39m
+     [32m✓[39m logs one exact image selection and retries without replacing the message[32m 24[2mms[22m[39m
+     [32m✓[39m counts the adapter prefix in request order after a surface replacement[32m 23[2mms[22m[39m
+     [32m✓[39m offloads a tool-result image and leaves later images untouched[32m 22[2mms[22m[39m
+     [32m✓[39m advances across consecutive failures and preserves the first request snapshot[32m 25[2mms[22m[39m
+     [32m✓[39m removes the recovery listener when its plugin is disposed[32m 27[2mms[22m[39m
+     [32m✓[39m leaves every other failure to downstream recovery[32m 28[2mms[22m[39m
+     [32m✓[39m delegates IMAGE_OFFLOAD_REQUIRED once nothing remains to offload[32m 29[2mms[22m[39m
+ [32m✓[39m [30m[45m thread-safe [49m[39m packages/api/gateway/tests/echo-stream.host.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 140[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m [30m[45m thread-safe [49m[39m packages/compaction/compaction-image-offload/tests/image-offload.spec.ts[2m > [22msummary image offload[2m > [22mrecovers real summary image preparation with a tighter budget and fresh pricing
+[31m[1mAssertionError[22m: expected [ [], [] ] to deeply equal [ [], [], [ 'first', 'second' ] ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    [],[22m
+[2m    [],[22m
+[32m-   [[39m
+[32m-     "first",[39m
+[32m-     "second",[39m
+[32m-   ],[39m
+[2m  ][22m
+
+[36m [2m❯[22m packages/compaction/compaction-image-offload/tests/image-offload.spec.ts:[2m142:50[22m[39m
+    [90m140|[39m     const result = await compact.compactNow(agent, new AbortController…
+    [90m141|[39m     [34mexpect[39m(result)[33m.[39mnot[33m.[39m[34mtoBeNull[39m()
+    [90m142|[39m     expect(adapter.requests.map(offloadedNames)).toEqual([[], [], ['fi…
+    [90m   |[39m                                                  [31m^[39m
+    [90m143|[39m     expect(adapter.requests.slice(1).map(request => request.model)).to…
+    [90m144|[39m     [35mconst[39m events [33m=[39m agent[33m.[39msession[33m.[39m[34msnapshotEvents[39m()
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m [30m[45m thread-safe [49m[39m packages/compaction/compaction-image-offload/tests/image-offload.spec.ts[2m > [22msummary image offload[2m > [22moffloads only the selected summary span and stops after exhausting its images
+[31m[1mAssertionError[22m: expected [ [], [], [] ] to deeply equal [ [], [ 'first' ], …(1) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    [],[22m
+[32m-   [[39m
+[32m-     "first",[39m
+[32m-   ],[39m
+[32m-   [[39m
+[32m-     "first",[39m
+[32m-     "second",[39m
+[32m-   ],[39m
+[31m+   [],[39m
+[31m+   [],[39m
+[2m  ][22m
+
+[36m [2m❯[22m packages/compaction/compaction-image-offload/tests/image-offload.spec.ts:[2m166:59[22m[39m
+    [90m164|[39m     agent[33m.[39msession[33m.[39m[34mappend[39m([32m'turn/start'[39m[33m,[39m { turn[33m:[39m [34m4[39m })
+    [90m165|[39m     await expect(compact.compactRegion(selected.start, selected.end, a…
+    [90m166|[39m     expect(adapter.requests.slice(3).map(offloadedNames)).toEqual([[],…
+    [90m   |[39m                                                           [31m^[39m
+    [90m167|[39m     expect(decisions(agent.session).map(event => event.data.targets)).…
+    [90m168|[39m       [{ seq: selected.start, imageIndexes: [0] }], [{ seq: selected.s…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m15 passed[39m[22m[90m (16)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m286 passed[39m[22m[90m (288)[39m
+[2m   Start at [22m 11:12:16
+[2m   Duration [22m 6.75s[2m (transform 16.95s, setup 7.18s, import 26.71s, tests 6.87s, environment 6ms)[22m

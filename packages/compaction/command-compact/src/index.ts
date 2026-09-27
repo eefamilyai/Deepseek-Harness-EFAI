@@ -113,6 +113,14 @@ export function apply(ctx: Context): void {
       definitionId: CommandDefinitionId('@deepseek-ai/dsh-command-compact'),
       name: 'compact',
       description: 'Compact older conversation history',
+      // DSH-FORK(kiln): the input descriptor is what makes the client treat
+      // `/compact <text>` as this command instead of unclaimed prose. Without
+      // it the argued line is not advertised as args-tolerant, so the composer
+      // sends it to the model as ordinary chat and the instruction never
+      // reaches `executeCompact`.
+      // EXIT: upstream declares an input descriptor, or makes the argued line
+      // reach a registered command by default.
+      input: { hint: '[<instruction>]' },
       handler,
     })
   }, 'command-compact lifecycle')

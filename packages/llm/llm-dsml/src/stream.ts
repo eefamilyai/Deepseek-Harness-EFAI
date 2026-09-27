@@ -28,7 +28,7 @@
 import { randomUUID } from 'node:crypto'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlockType, FinishReason, StreamChunk, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { DsmlTranslator, trailingReasoningCalls } from './dsml.ts'
+import { closerRun, DsmlTranslator, GLITCH_RUN_DEFAULT, trailingReasoningCalls } from './dsml.ts'
 import type { DsmlEvent, DsmlOptions } from './dsml.ts'
 import { bumpShapes } from './catalog.ts'
 
@@ -47,6 +47,16 @@ export interface DsmlStreamOptions extends DsmlOptions {
    */
   readonly reasoningRecovery?: boolean
 }
+
+/**
+ * What the model is told when a closer run cuts its turn short.
+ *
+ * Deliberately free of tag literals: the note is prose, and writing the tags
+ * back would teach the shape being refused.
+ */
+const GLITCH_NOTE =
+  '\n\n[stopped: you repeated structural closers with no call between them. '
+  + 'Nothing in that run was a call. Write the call you meant, once.]\n'
 
 /** Mint a call id for a call this pass recovered rather than the provider issuing. */
 export function mintDsmlCallId(name: string): ToolCallId {
@@ -91,6 +101,16 @@ class DsmlStreamReader {
   private readonly repaired = new Set<string>()
   /** The text of the last reasoning block to close, and whether it closed last. */
   private reasoning: string | undefined
+  /**
+   * DSH-FORK(fix): set once a run of closer-only lines proves the model is
+   * repeating structure instead of writing a call. From then on this pass
+   * emits no further text: the loop is cut here, and the note tells the model
+   * to write the call again rather than re-emit the run.
+   * EXIT: upstream detects closer spam and halts a turn.
+   */
+  private halted = false
+  /** Rolling tail of the text block being read, for the closer-run test. */
+  private tail = ''
   private readonly tools: ReadonlyMap<string, ToolSchema>
   private readonly options: DsmlStreamOptions
 
@@ -158,7 +178,18 @@ class DsmlStreamReader {
       yield* this.forward(chunk)
       return
     }
+    // Once halted, later deltas are the same run continuing: drop them rather
+    // than streaming the spam the reader just refused.
+    if (this.halted) return
     for (const event of source.translator.push(chunk.text)) yield* this.emit(event)
+    // A run of closer-only lines is the model stuck, not a call: stop emitting
+    // text for this turn and say so once, so the next turn can start clean.
+    this.tail = (this.tail + chunk.text).slice(-4000)
+    if (closerRun(this.tail) >= GLITCH_RUN_DEFAULT) {
+      this.halted = true
+      this.repaired.add('closer-spam')
+      yield* this.text(GLITCH_NOTE)
+    }
   }
 
   private *end(chunk: StreamChunk & { type: 'block-end' }): Generator<StreamChunk> {
@@ -185,9 +216,11 @@ class DsmlStreamReader {
     // call, and the provider's own `stop` was reported about a text reply it did
     // not know carried one. A provider that already said `tool-calls`, and every
     // failure reason, are left exactly as the adapter reported them.
-    const reason: FinishReason = this.recovered > 0 && (chunk.reason.kind === 'stop' || chunk.reason.kind === 'max-tokens')
-      ? { kind: 'tool-calls' }
-      : chunk.reason
+    const reason: FinishReason = this.halted
+      ? (this.calls > 0 ? { kind: 'tool-calls' } : { kind: 'stop' })
+      : this.recovered > 0 && (chunk.reason.kind === 'stop' || chunk.reason.kind === 'max-tokens')
+        ? { kind: 'tool-calls' }
+        : chunk.reason
     yield { ...chunk, reason }
   }
 

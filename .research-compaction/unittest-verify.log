@@ -1,0 +1,45 @@
+test_failed_upload_degrades_to_local_text (test_tool_result_files.DeliverGlueTests.test_failed_upload_degrades_to_local_text) ... ok
+test_never_raises_when_the_spill_module_is_broken (test_tool_result_files.DeliverGlueTests.test_never_raises_when_the_spill_module_is_broken) ... ok
+test_small_result_returns_the_same_list (test_tool_result_files.DeliverGlueTests.test_small_result_returns_the_same_list) ... ok
+test_uploaded_result_names_the_provider_id (test_tool_result_files.DeliverGlueTests.test_uploaded_result_names_the_provider_id) ... ok
+test_anthropic_keeps_its_own_v1 (test_tool_result_files.EndpointTests.test_anthropic_keeps_its_own_v1) ... ok
+test_gemini_does_not_double_the_version_segment (test_tool_result_files.EndpointTests.test_gemini_does_not_double_the_version_segment) ... ok
+test_multipart_body_encodes_file_and_fields (test_tool_result_files.EndpointTests.test_multipart_body_encodes_file_and_fields) ... ok
+test_openai_tries_collection_then_verb (test_tool_result_files.EndpointTests.test_openai_tries_collection_then_verb) ... ok
+test_parse_file_id_shapes (test_tool_result_files.EndpointTests.test_parse_file_id_shapes) ... ok
+test_unknown_schema_and_empty_base_have_no_candidates (test_tool_result_files.EndpointTests.test_unknown_schema_and_empty_base_have_no_candidates) ... ok
+test_upload_text_never_raises (test_tool_result_files.EndpointTests.test_upload_text_never_raises) ... [ds_direct] provider_uploads: deepseek-web upload found no usable endpoint
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai POST failed: ConnectionError
+[ds_direct] provider_uploads: openai upload found no usable endpoint
+[ds_direct] provider_uploads: skipped (0 bytes) for openai
+ok
+test_empty_or_oversized_file_id_is_rejected (test_tool_result_files.SpillTests.test_empty_or_oversized_file_id_is_rejected) ... ok
+test_filename_is_deterministic_and_content_addressed (test_tool_result_files.SpillTests.test_filename_is_deterministic_and_content_addressed) ... ok
+test_human_message_is_never_touched (test_tool_result_files.SpillTests.test_human_message_is_never_touched) ... ok
+test_no_uploader_still_spills_to_disk (test_tool_result_files.SpillTests.test_no_uploader_still_spills_to_disk) ... ok
+test_original_list_is_not_mutated (test_tool_result_files.SpillTests.test_original_list_is_not_mutated) ... ok
+test_oversized_result_becomes_a_stub_and_uploads (test_tool_result_files.SpillTests.test_oversized_result_becomes_a_stub_and_uploads) ... ok
+test_raising_uploader_falls_back_to_text (test_tool_result_files.SpillTests.test_raising_uploader_falls_back_to_text) ... ok
+test_small_result_is_untouched (test_tool_result_files.SpillTests.test_small_result_is_untouched) ... ok
+test_unwritable_directory_keeps_inline_text (test_tool_result_files.SpillTests.test_unwritable_directory_keeps_inline_text) ... ok
+test_a_result_is_uploaded_once_across_repeated_turns (test_ds_direct_delivery.DeliverToolResultsTests.test_a_result_is_uploaded_once_across_repeated_turns) ... [ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+[ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+ok
+test_oversized_result_becomes_a_stub_and_uploads (test_ds_direct_delivery.DeliverToolResultsTests.test_oversized_result_becomes_a_stub_and_uploads) ... [ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+ok
+test_provider_without_a_file_id_still_spills_to_disk (test_ds_direct_delivery.DeliverToolResultsTests.test_provider_without_a_file_id_still_spills_to_disk) ... [ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+ok
+test_small_result_is_untouched_and_not_uploaded (test_ds_direct_delivery.DeliverToolResultsTests.test_small_result_is_untouched_and_not_uploaded) ... ok
+test_the_durable_list_is_not_mutated (test_ds_direct_delivery.DeliverToolResultsTests.test_the_durable_list_is_not_mutated) ... [ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+ok
+test_the_uploaded_id_is_returned_for_the_completion (test_ds_direct_delivery.DeliverToolResultsTests.test_the_uploaded_id_is_returned_for_the_completion) ... [ds_direct] ds_direct: 1 tool result(s) as files, 1 uploaded
+ok
+test_upload_failure_degrades_to_the_local_file (test_ds_direct_delivery.DeliverToolResultsTests.test_upload_failure_degrades_to_the_local_file) ... [ds_direct] ds_direct: upload of a_line_of_tool_output-140c6066cdaf.txt failed (upload endpoint is down)
+[ds_direct] ds_direct: 1 tool result(s) as files, 0 uploaded
+ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 4.713s
+
+OK

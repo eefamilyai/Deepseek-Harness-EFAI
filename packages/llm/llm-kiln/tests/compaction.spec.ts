@@ -11,8 +11,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { ToolCallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
-import { DEFAULT_COMPACTION_FOLD_PARTS, KilnAdapter, SUMMARIZER_SYSTEM, flattenMessage, planCompactionFold } from '@deepseek-ai/dsh-llm-kiln'
+import type { GenerateOptions, Message, RequestMessage } from '@deepseek-ai/dsh-llm'
+import { DEFAULT_COMPACTION_FOLD_PARTS, KilnAdapter, SUMMARIZER_SYSTEM, buildTurns, flattenMessage, planCompactionFold } from '@deepseek-ai/dsh-llm-kiln'
 import type { KilnBridge, KilnStreamEvent, KilnStreamRequest } from '@deepseek-ai/dsh-llm-kiln'
 
 /** The instruction every summarizer appends last. */
@@ -28,8 +28,23 @@ function conversation(turns: number, size: number): Message[] {
   return out
 }
 
+/**
+ * A conversation whose turns carry NO `source`, which is the shape a compaction
+ * request's own turns have: the summarizer assembles them per-request with
+ * `deepFreeze({ role: 'user', content: [...] })`, so nothing marks them and
+ * `flattenMessage` alone can never pin them.
+ */
+function sourceless(turns: number): RequestMessage[] {
+  const out: RequestMessage[] = []
+  for (let index = 0; index < turns; index += 1) {
+    out.push({ role: 'user', content: [{ type: 'text', text: `quoted turn ${index}` }] })
+    out.push(createToolResultMessage({ callId: ToolCallId(`q${index}`), content: [{ type: 'text', text: `quoted result ${index}` }], isError: false }))
+  }
+  return out
+}
+
 /** A compaction request over a conversation, closed by the instruction. */
-function compactionRequest(messages: Message[], provider = 'kiln-deepseek'): GenerateOptions {
+function compactionRequest(messages: RequestMessage[], provider = 'kiln-deepseek'): GenerateOptions {
   return {
     provider,
     model: 'deepseek-expert',
@@ -66,6 +81,29 @@ describe('messages a re-primed chat must keep', () => {
     const handoff = createUserMessage({ content: [{ type: 'text', text: 'handoff' }], source: { kind: 'session-recovery' } as never })
     expect(flattenMessage(checkpoint)).toMatchObject({ pin: true })
     expect(flattenMessage(handoff)).toMatchObject({ pin: true })
+  })
+
+  it('pins every turn of a compaction request, whose body is the payload being summarized', () => {
+    // The bug this pins: the compaction request's quoted transcript and its
+    // instruction are assembled per-request and carry no `source`, so
+    // `flattenMessage` never pinned them. On the message-capped route the
+    // oldest-first clip then dropped the whole quoted transcript — everything
+    // the summarizer was asked to condense — and left it the instruction alone.
+    const turns = buildTurns(compactionRequest(sourceless(3)))
+    const payload = turns.filter(turn => turn.role !== 'system')
+    expect(payload).toHaveLength(7)
+    for (const turn of payload) expect(turn.pin).toBe(true)
+  })
+
+  it('leaves an ordinary request unpinned, so the clip still trims it', () => {
+    // An ordinary turn carries no `purpose` at all: nothing here is pinned by
+    // the request shape, only by a `source` the harness marked.
+    const { purpose, ...ordinary } = compactionRequest(sourceless(3))
+    void purpose
+    const turns = buildTurns(ordinary)
+    const payload = turns.filter(turn => turn.role !== 'system')
+    expect(payload).toHaveLength(7)
+    for (const turn of payload) expect(turn.pin).toBeUndefined()
   })
 })
 
