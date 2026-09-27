@@ -314,6 +314,25 @@ const CALLS_WORD = /^(?:tool|function)[_▁]?calls?/
  */
 const ORPHAN_CLOSE = /<\/(?:tool_calls|function_calls|invoke|parameter)\s*>/gi
 
+/** Either taught envelope tag, opener or closer, in either spelling. */
+const ENVELOPE_TAG = /<\/?(?:tool|function)[_▁]?calls?\s*>/gi
+
+/**
+ * Whether a block is nothing but an empty taught envelope.
+ *
+ * A wrapper the model opened and closed around no call carries no
+ * information, so it is framing rather than content. The test strips every
+ * envelope tag and asks what is left, which lets the opener and the closer
+ * be spelled differently — they rewrite to one taught wrapper either way —
+ * and leaves a wrapper holding anything at all, prose included, as a block
+ * the reader must still show.
+ * @param body - the block's raw text.
+ * @returns true when only whitespace remains once the envelope is removed.
+ */
+function emptyEnvelope(body: string): boolean {
+  return body.replace(ENVELOPE_TAG, '').trim().length === 0
+}
+
 /**
  * A run of the vertical-line character DeepSeek wraps its own special tokens in
  * — the fullwidth U+FF5C the web session shows as `｜`, or an ASCII `|`. The
@@ -1276,11 +1295,14 @@ export class DsmlTranslator {
     // the one taught wrapper, so an opener and closer that disagree about which
     // word they used still pair.
     if (CALLS_WORD.test(word)) return closing ? TOOL_CALLS_CLOSE : TOOL_CALLS_OPEN
-    // The model's own frame, which always pairs with its own closer, so there
-    // is nothing for an inner tag to bind to and stripping is safe. Removing it
-    // rather than rewriting also keeps an EMPTY frame pair from surfacing as a
-    // visible `<tool_calls></tool_calls>` around a turn that called nothing.
-    if (/^calls?/.test(word)) return ''
+    // The model's own frame word — `calls`, `_call` — is the same envelope in
+    // the shorter spelling, so it becomes the one taught wrapper as well. It
+    // cannot simply be dropped: the invoke it wraps is frequently self-closing
+    // or carries its arguments on the opener, and this wrapper is then the only
+    // closer the block has. A frame that vanishes leaves that call unbounded,
+    // swallowing the rest of the stream. A wrapper that framed nothing is
+    // dropped whole by {@link DsmlTranslator.closeBlock} instead.
+    if (/^calls?/.test(word)) return closing ? TOOL_CALLS_CLOSE : TOOL_CALLS_OPEN
 
     if (word.startsWith('invoke')) {
       if (closing || (selfClosed && rest.length === 0)) return '</invoke>'
@@ -2037,6 +2059,11 @@ export class DsmlTranslator {
     // the only correction channel this transport has, and a dropped block
     // reads to the model as a call that ran and returned nothing.
     if (produced.length === 0) {
+      // An envelope the model opened and closed around no call at all is
+      // framing, not content. Nothing came out of it and there is nothing in
+      // it to show, so emitting the block here would put the bare wrapper tags
+      // in the answer where the model wrote a frame.
+      if (emptyEnvelope(raw)) return
       // A block the spelling rules could not read is not necessarily a failed
       // call: it may be a whole call in a notation nobody wrote a rule for,
       // wrapped in the taught envelope or not. Structure is tried before the

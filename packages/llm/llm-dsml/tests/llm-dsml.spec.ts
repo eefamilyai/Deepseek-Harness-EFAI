@@ -486,3 +486,46 @@ describe('llm-dsml plugin', () => {
     expect(chunks.some(chunk => chunk.type === 'block-start' && chunk.blockType === 'tool-call')).toBe(false)
   })
 })
+
+const NL = String.fromCharCode(10)
+const LT = String.fromCharCode(60)
+const GT = String.fromCharCode(62)
+const SL = String.fromCharCode(47)
+const P = String.fromCharCode(0xFF5C)
+const OPEN = LT + P + 'DSML' + P + ' calls' + GT
+const CLOSE = LT + SL + P + 'DSML' + P + ' calls' + GT
+const INV = LT + P + 'DSML' + P + ' invoke name="read"' + GT
+const PAR = LT + P + 'DSML' + P + ' parameter name="path" string="true">a.txt'
+  + LT + SL + P + 'DSML' + P + ' parameter' + GT
+
+describe('the bare calls frame is the taught wrapper', () => {
+  it('closes at its own wrapper instead of swallowing the prose after it', () => {
+    // Stripping the frame left the inner invoke as a bare opener whose
+    // `</invoke>` never arrives, so the block ran to end-of-stream and ate
+    // everything behind it. Rewriting the frame to the taught wrapper gives
+    // the block a real closer, and the sentence after it survives.
+    const reply = [
+      OPEN,
+      INV,
+      PAR,
+      CLOSE,
+      'after',
+      '',
+    ].join(NL)
+    expect(calls(reply)).toEqual([{ name: 'read', arguments: { path: 'a.txt' } }])
+    expect(visible(reply)).toContain('after')
+  })
+
+  it('frames nothing when the wrapper holds no call, and still shows what follows', () => {
+    const reply = [OPEN, CLOSE, 'still here', ''].join(NL)
+    const text = visible(reply)
+    expect(text).toContain('still here')
+    expect(text).not.toContain('DSML')
+    expect(calls(reply)).toEqual([])
+  })
+
+  it('leaves the word calls in a sentence exactly as written', () => {
+    const sentence = 'The calls went out and came back.'
+    expect(visible(sentence + NL)).toBe(sentence + NL)
+  })
+})
