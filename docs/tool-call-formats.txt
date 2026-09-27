@@ -1,0 +1,154 @@
+﻿TOOL CALL FORMATS - the exact shape to emit when you call a tool
+================================================================
+
+WHY THIS FILE IS ATTACHED
+-------------------------
+
+A text-only provider route has no native tool-call channel. Your tools reach you
+as text, and a tool call comes back as text. This file is the contract for that
+text. Read it once; the shape never changes.
+
+THE SHAPE
+---------
+
+<tool_calls>
+<invoke name="TOOL_NAME">
+<parameter name="PARAMETER_NAME">
+value
+</parameter>
+</invoke>
+</tool_calls>
+
+RULES
+-----
+
+1. One invoke element per tool call. Several of them may sit inside ONE
+   tool_calls block to call more than one tool at once.
+
+2. One parameter element per argument. Its value is the raw text between the
+   opening tag and its closer, so a multi-line value needs no quoting and no
+   escaping.
+
+3. Arguments go in parameter elements, NEVER as attributes on the invoke tag.
+   The invoke tag carries the tool name and nothing else.
+
+4. Every parameter listed as required for a tool must be present in every call
+   to it, including ones whose value seems obvious. A call missing one does not
+   run.
+
+5. A parameter typed object, array, number, integer, or boolean takes JSON.
+   A string parameter takes the text exactly as written.
+
+6. Tag names go on the OPENING tag only. A closer is just the closer - it never
+   repeats the name.
+
+7. Never stack closers. Each opening tag gets exactly one closer, and they
+   nest: parameter inside invoke, invoke inside tool_calls.
+
+8. Every tag sits on its own line. Do not collapse a call onto one line.
+
+9. A tool_calls block is the ONLY thing that executes. Everything else you write
+   is prose shown to the user - including fenced code blocks, which never run.
+
+10. After emitting a block, STOP and wait. Each result comes back as an OUTPUT:
+    line in the next turn. Never write, guess, or continue past a result you
+    have not been given.
+
+WORKED EXAMPLE - one call, three arguments
+------------------------------------------
+
+<tool_calls>
+<
+invoke name="read"
+>
+<
+parameter name="file_path"
+>
+D:\repo\src\index.ts
+</parameter>
+<
+parameter name="offset"
+>
+400
+</parameter>
+<
+parameter name="limit"
+>
+20
+</parameter>
+</invoke>
+</tool_calls>
+
+WORKED EXAMPLE - two calls in ONE block
+---------------------------------------
+
+<tool_calls>
+<
+invoke name="grep"
+>
+<
+parameter name="pattern"
+>
+device_id_rejected
+</parameter>
+</invoke>
+<
+invoke name="glob"
+>
+<
+parameter name="pattern"
+>
+**/*.spec.ts
+</parameter>
+</invoke>
+</tool_calls>
+
+WORKED EXAMPLE - a multi-line string argument
+---------------------------------------------
+
+<tool_calls>
+<
+invoke name="write"
+>
+<
+parameter name="file_path"
+>
+D:\repo\notes.txt
+</parameter>
+<
+parameter name="content"
+>
+first line
+second line
+third line
+</parameter>
+</invoke>
+</tool_calls>
+
+THE ONE MISTAKE THAT BREAKS EVERYTHING
+--------------------------------------
+
+A parameter value is RAW TEXT. The reader ends the argument at the first literal
+closing tag it sees. So if a parameter value contains a literal closing tag as
+ordinary text - for example while you are writing about the format itself - the
+reader stops there and the rest of your call is garbage.
+
+   SYMPTOM:  the tool name arrives mangled, with closing-tag fragments glued to
+             the front of it, and the call does not run.
+   CAUSE:    a literal closing tag appeared inside a parameter value.
+   FIX:      never write a literal closing tag inside a parameter value.
+             Describe it in prose, build it from parts in code, or write the
+             file with a placeholder and substitute afterwards.
+
+A stray closing tag at the end of a block closes nothing and corrupts the block.
+Emit exactly as many closers as openers, in nesting order.
+
+WHAT NOT TO EMIT
+----------------
+
+* No other tool-call notation. Anything else is read as prose, shown to the
+  user, and the tool does not run.
+* No attribute-style arguments: putting a file path attribute on the invoke tag
+  is wrong; it belongs in its own parameter element.
+* No JSON blob as the whole call. The block is the call; JSON is only the value
+  of a parameter typed object, array, number, integer, or boolean.

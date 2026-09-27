@@ -139,5 +139,84 @@ class ClipSpillTests(unittest.TestCase):
         self.assertNotIn("full text:", out["content"])
 
 
+class _FormatClient:
+    """A client that hands out a distinct id per upload and counts the calls."""
+
+    def __init__(self, raises=False):
+        self.uploads = []
+        self.raises = raises
+
+    def upload_file(self, filename, blob):
+        self.uploads.append((filename, len(blob)))
+        if self.raises:
+            raise RuntimeError("upload endpoint is down")
+        return "file-%d" % len(self.uploads)
+
+
+class ToolCallFormatsTests(unittest.TestCase):
+    """The tool-call contract rides every turn as an attachment.
+
+    This adapter has no native tool-call channel, so the exact shape of a call
+    has to sit in front of the model on the turn it writes one. The contract is
+    a repository file, and the attachment must be invisible when it cannot be
+    read or uploaded — a documentation file is never worth losing a turn over.
+    """
+
+    def setUp(self):
+        self._orig = os.environ.pop("KILN_TOOL_CALL_FORMATS", None)
+
+    def tearDown(self):
+        os.environ.pop("KILN_TOOL_CALL_FORMATS", None)
+        if self._orig is not None:
+            os.environ["KILN_TOOL_CALL_FORMATS"] = self._orig
+
+    def test_the_contract_file_is_found_from_the_runtime_tree(self):
+        path = ds_direct._tool_call_formats_path()
+        self.assertIsNotNone(path, "the contract file was not found")
+        self.assertTrue(os.path.isfile(path), path)
+        self.assertIn("tool-call-formats", os.path.basename(path))
+
+    def test_an_empty_override_disables_the_attachment(self):
+        os.environ["KILN_TOOL_CALL_FORMATS"] = ""
+        self.assertIsNone(ds_direct._tool_call_formats_path())
+        self.assertEqual(ds_direct._attach_tool_call_formats(_FormatClient()), [])
+
+    def test_the_contract_uploads_once_and_is_memoised(self):
+        c = _FormatClient()
+        first = ds_direct._attach_tool_call_formats(c)
+        second = ds_direct._attach_tool_call_formats(c)
+        self.assertEqual(first, second)
+        self.assertEqual(len(c.uploads), 1, "the contract was uploaded twice")
+        self.assertEqual(c.uploads[0][0], "tool-call-formats.txt")
+        self.assertGreater(c.uploads[0][1], 0)
+
+    def test_a_failed_upload_is_retried_rather_than_cached(self):
+        c = _FormatClient(raises=True)
+        self.assertEqual(ds_direct._attach_tool_call_formats(c), [])
+        c.raises = False
+        self.assertTrue(ds_direct._attach_tool_call_formats(c),
+                        "a transient failure must not be pinned for the client")
+
+    def test_every_turn_carries_the_contract(self):
+        c = _FormatClient()
+        ids = ds_direct._turn_attachment_ids(c, [], [])
+        self.assertEqual(len(ids), 1)
+        self.assertTrue(ids[0].startswith("file-"))
+
+    def test_the_turn_order_is_caller_then_contract_then_spill(self):
+        ids = ds_direct._turn_attachment_ids(_FormatClient(), ["a", "b"], ["c"])
+        self.assertEqual(ids, ["a", "b", "file-1", "c"])
+
+    def test_a_duplicate_id_rides_the_turn_only_once(self):
+        ids = ds_direct._turn_attachment_ids(_FormatClient(), ["file-1"], [])
+        self.assertEqual(ids, ["file-1"])
+
+    def test_a_broken_upload_still_sends_the_turn(self):
+        ids = ds_direct._turn_attachment_ids(_FormatClient(raises=True), ["a"], ["b"])
+        self.assertEqual(ids, ["a", "b"],
+                         "the caller's own attachments must survive a failed "
+                         "contract upload")
+
+
 if __name__ == "__main__":
     unittest.main()

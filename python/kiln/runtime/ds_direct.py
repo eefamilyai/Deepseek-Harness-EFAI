@@ -2425,6 +2425,103 @@ def _upload_spilled(client, filename, data):
     return file_id
 
 
+# ─── the tool-call contract, attached to every turn ─────────────────
+# This endpoint has no native tool-call channel: the tools and the calls to
+# them cross as TEXT, and the model has to emit one exact block shape or the
+# harness reads the call as prose and the turn stalls. `docs/tool-call-
+# formats.txt` writes that shape out, and it rides every turn as an attachment
+# so the contract sits in front of the model while it is writing the call —
+# not only in a system prompt it read many turns ago.
+_FORMATS_ENV = "KILN_TOOL_CALL_FORMATS"
+_FORMATS_REL = os.path.join("docs", "tool-call-formats.txt")
+_FORMATS_NAME = "tool-call-formats.txt"
+
+
+def _tool_call_formats_path():
+    """Locate the tool-call contract. -> absolute path, or None when absent.
+
+    The contract lives at the repository root and this runtime tree ships
+    inside a package, so it is not beside this file — hence the walk up from
+    `_DIR`. `KILN_TOOL_CALL_FORMATS` overrides the search for an install that
+    places the tree elsewhere; an EMPTY value disables the attachment, which
+    is the switch for an endpoint that rejects an extra attachment.
+    """
+    override = os.environ.get(_FORMATS_ENV)
+    if override is not None:
+        return override or None
+    for up in (3, 2, 1, 0):
+        cand = os.path.abspath(os.path.join(_DIR, *([os.pardir] * up), _FORMATS_REL))
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def _attach_tool_call_formats(client):
+    """Upload the tool-call contract for this client. -> [file id], or [].
+
+    Memoised on the client by content digest: the retry attempts inside `_open`
+    share one upload, and a lease that lands on a different account uploads the
+    bytes again rather than reusing an id that account cannot see. File ids are
+    account-scoped, exactly as they are for a spilled tool result.
+
+    Every failure is a skip — no file found, unreadable bytes, a rejected
+    upload. The turn still runs without the attachment, because losing a turn
+    to a documentation file is a far worse trade than one malformed call.
+    """
+    path = _tool_call_formats_path()
+    if not path:
+        return []
+    try:
+        with open(path, "rb") as f:
+            blob = f.read()
+    except Exception as exc:
+        config.dbg("ds_direct: tool-call formats unreadable (%s)", exc)
+        return []
+    if not blob:
+        return []
+    digest = hashlib.sha1(blob).hexdigest()
+    cache = getattr(client, "_tool_call_formats", None)
+    if not isinstance(cache, dict):
+        cache = {}
+        try:
+            client._tool_call_formats = cache
+        except Exception:
+            pass
+    if cache.get("digest") == digest and cache.get("ids"):
+        return list(cache["ids"])
+    try:
+        file_id = client.upload_file(_FORMATS_NAME, blob)
+    except Exception as exc:
+        config.dbg("ds_direct: tool-call formats upload failed (%s)", exc)
+        return []
+    if not file_id:
+        return []
+    # Cache only a success: a transient failure must be retried on the next
+    # turn, and caching it would pin the miss for the client's whole life.
+    cache["digest"] = digest
+    cache["ids"] = [str(file_id)]
+    config.dbg("ds_direct: tool-call formats attached (%d bytes, id=%s)",
+               len(blob), file_id)
+    return [str(file_id)]
+
+
+def _turn_attachment_ids(client, ref_file_ids, result_ids):
+    """The `ref_file_ids` for one turn, in the order they should ride.
+
+    The caller's ids come first: they are what this turn explicitly attached.
+    The tool-call contract follows, then the spilled tool results, so a retry
+    cannot re-upload bytes the caller already referenced. Duplicates are
+    dropped — an attachment named twice is still one attachment.
+    """
+    refs = []
+    for fid in (list(ref_file_ids or [])
+                + _attach_tool_call_formats(client)
+                + list(result_ids or [])):
+        if fid and fid not in refs:
+            refs.append(fid)
+    return refs
+
+
 def _prompt_for(messages, st):
     """What to actually send DeepSeek this turn.
 
@@ -2764,10 +2861,7 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                 # The caller's ids first: they are what this turn explicitly
                 # attached. The spilled-result ids follow, so a retry cannot
                 # re-upload bytes the caller already referenced.
-                _refs = list(ref_file_ids or [])
-                for _fid in _result_ids:
-                    if _fid not in _refs:
-                        _refs.append(_fid)
+                _refs = _turn_attachment_ids(client, ref_file_ids, _result_ids)
                 r = client.open_completion(st["sid"], prompt, thinking, search,
                                            model_type, st.get("parent"), need_preempt,
                                            ref_file_ids=_refs)
