@@ -33,6 +33,8 @@ class StubCompactionEngine extends CompactionEngine {
   failure: unknown
   operation: (() => Promise<CompactionResult | null>) | undefined
   calls: { agent: ManualCompactAgentContext; signal: AbortSignal }[] = []
+  /** The per-call instruction each `compactNow` call received, in order. */
+  readonly instructions: (string | undefined)[] = []
 
   override compactIfNeeded(
     _agent: CompactionAgentContext,
@@ -50,8 +52,10 @@ class StubCompactionEngine extends CompactionEngine {
     agent: ManualCompactAgentContext,
     signal: AbortSignal,
     sourceCommandId?: Parameters<CompactionEngine['compactNow']>[2],
+    instruction?: Parameters<CompactionEngine['compactNow']>[3],
   ): Promise<CompactionResult | null> {
     this.calls.push({ agent, signal })
+    this.instructions.push(instruction)
     if (this.operation !== undefined) return this.operation()
     return this.failure === undefined
       ? Promise.resolve(this.result === null ? null : this.appendResult(agent, this.result, sourceCommandId))
@@ -154,7 +158,7 @@ function expectLastLifecycle(
 }
 
 describe('@deepseek-ai/dsh-command-compact registration', () => {
-  it('registers one argument-free command with Loader-safe exports and disposes it', async () => {
+  it('registers one command with Loader-safe exports and disposes it', async () => {
     const test = await harness()
     expect(commandCompact.name).toBe('command-compact')
     expect(commandCompact.inject).toEqual(['commands', 'compaction'])
@@ -186,7 +190,7 @@ describe('/compact human command', () => {
     expect(test.compact.calls).toEqual([{ agent: test.agent, signal: controller.signal }])
   })
 
-  it('returns direct no-history and argument-rejection results', async () => {
+  it('returns a direct no-history result and forwards a per-call instruction', async () => {
     const test = await harness()
     test.compact.result = null
     const empty = await run(test)
@@ -195,14 +199,20 @@ describe('/compact human command', () => {
       text: 'No compactable history yet.',
     })
     expect(empty.commandId).toBe(expectLastLifecycle(test, '', empty.result))
+    expect(test.compact.instructions).toEqual([undefined])
 
-    const rejected = await run(test, ' now')
-    expect(rejected.result).toEqual({
-      kind: 'error',
-      text: 'Usage: /compact (no arguments)',
+    // Everything after `/compact` steers THIS compaction: it reaches
+    // `compactNow` as the instruction argument instead of a usage error.
+    test.compact.result = RESULT
+    const instructed = await run(test, ' now')
+    expect(instructed.result).toEqual({
+      kind: 'success',
+      text: 'Compacted 3 history items (~42 tokens).',
+      sourceEventSeq: RESULT.summarySeq,
     })
-    expect(rejected.commandId).toBe(expectLastLifecycle(test, ' now', rejected.result))
-    expect(test.compact.calls).toHaveLength(1)
+    expect(instructed.commandId).toBe(expectLastLifecycle(test, ' now', instructed.result))
+    expect(test.compact.instructions).toEqual([undefined, 'now'])
+    expect(test.compact.calls).toHaveLength(2)
   })
 
   it.each([

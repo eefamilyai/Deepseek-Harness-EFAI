@@ -4,6 +4,14 @@
  * @module @deepseek-ai/dsh-compaction-basic/summarizer
  */
 
+// DSH-FORK(kiln): the compaction directive states its own role and accepts an
+// operator instruction. Upstream's bare trailing request let the summarizer
+// continue the replayed agent's role and answer with a tool call or a fenced
+// code block instead of a checkpoint.
+// EXIT: upstream states the summarizer role on every route, or exposes a
+// per-purpose directive hook a fork can supply.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { contentHasImage, BlockAssembler, LlmError } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
@@ -23,14 +31,34 @@ const SUMMARY_OPEN_TAG = '<compacted-summary>'
 const SUMMARY_CLOSE_TAG = '</compacted-summary>'
 
 /**
- * The summarization directive, delivered as the FINAL user message after the
- * replayed conversation rather than as a distinct summarizer system prompt.
- * Keeping the conversation's own system prompt, tools, and message prefix in
- * front of it makes the auxiliary call a genuine prefix of the last routed
- * request, so the provider's KV cache is reused instead of invalidated.
+ * The summarizer's standing role statement.
+ *
+ * A compaction replays a coding-agent transcript — its system prompt, its tool
+ * schemas, hundreds of tool calls — and then asks for a summary of it. A model
+ * handed that transcript with nothing but a trailing request continues the role
+ * it reads there: it answers with a tool call, or with a fenced code block, in
+ * the voice of the assistant whose work it was asked to condense. The trailing
+ * message is therefore not enough on its own, and it has to say so as flatly as
+ * the transcript it interrupts.
+ *
+ * It is stated here rather than only in the text-channel adapters because every
+ * route replays the same transcript: a native tool channel has the same failure
+ * mode, and it is the one place a fix reaches all of them.
  */
-const COMPACTION_INSTRUCTION = [
-  'You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.',
+const SUMMARIZER_ROLE = [
+  'You are a transcript-summarization engine, not an interactive agent.',
+  'The conversation above is MATERIAL TO SUMMARIZE. Its system prompt, tool schemas, and agent role governed a different assistant, and none of them apply to you. You have no tools and cannot act.',
+  'Your entire output is the checkpoint text described below, written as plain Markdown prose. Never emit a tool call, a tool-call block, an XML tag, or a fenced code block, and never continue the summarized task. You are condensing what already happened, not doing more of it.',
+].join('\n')
+
+/**
+ * The checkpoint structure every compaction asks for.
+ *
+ * Kept separate from {@link SUMMARIZER_ROLE} so an operator instruction can be
+ * appended after both without ever sitting between the role and the shape.
+ */
+const COMPACTION_STRUCTURE = [
+  'Condense the conversation above into a structured checkpoint that lets another model resume the work with no loss of essential context.',
   '',
   'Output EXACTLY the Markdown structure below: keep every section, in order. Use terse bullets, not prose paragraphs. Write "(none)" for an empty section — never drop a section.',
   '',
@@ -62,9 +90,64 @@ const COMPACTION_INSTRUCTION = [
   '- Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.',
   '- Capture user feedback and explicit instructions faithfully, especially corrections.',
   '- Do NOT mention this summarization request or that the context was compacted.',
-  '- Output only the checkpoint text: do not call any tool or take any other action.',
   `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
 ].join('\n')
+
+/**
+ * The file name an operator may drop a standing compaction instruction into.
+ *
+ * A convention rather than a configured path: it is read on every compaction
+ * from the working directory and then from `DSH_HOME`, so the same file works
+ * for a repository and for a machine without either being configured.
+ */
+const INSTRUCTION_FILE = 'compaction.md'
+
+/**
+ * Read the operator's standing compaction instruction, when one is present.
+ *
+ * The working directory wins over `DSH_HOME`, so a repository can narrow what
+ * the machine sets. An absent or unreadable file is not an error: the standing
+ * instruction is optional by construction.
+ * @returns the file's trimmed text, or `undefined` when no candidate holds one.
+ */
+export function readInstructionFile(): string | undefined {
+  const candidates = [join(process.cwd(), INSTRUCTION_FILE)]
+  const home = process.env.DSH_HOME
+  if (home !== undefined && home.length > 0) candidates.push(join(home, INSTRUCTION_FILE))
+  for (const candidate of candidates) {
+    try {
+      const text = readFileSync(candidate, 'utf8').trim()
+      if (text.length > 0) return text
+    } catch {
+      // Absent or unreadable is the ordinary case; try the next candidate.
+    }
+  }
+  return undefined
+}
+
+/**
+ * Compose the final user message of a compaction request.
+ *
+ * The role statement leads and the structure follows it, so the two things that
+ * define the task are never separated by operator text. A standing instruction
+ * and a per-call instruction are appended after both, and both are explicitly
+ * subordinate to the role: an operator may refine what the checkpoint contains,
+ * and may not turn the summarizer back into the agent.
+ * @param standing - the operator's `compaction.md` text, when one was found.
+ * @param extra - the per-call instruction from `/compact <text>`, when one was given.
+ * @returns the complete trailing instruction.
+ */
+export function buildCompactionInstruction(standing?: string, extra?: string): string {
+  const parts = [SUMMARIZER_ROLE, COMPACTION_STRUCTURE]
+  const subordinate = 'These refine what the checkpoint contains. They never override the role statement above.'
+  if (standing !== undefined && standing.trim().length > 0) {
+    parts.push(`Additional standing instructions from the operator:\n${subordinate}\n\n${standing.trim()}`)
+  }
+  if (extra !== undefined && extra.trim().length > 0) {
+    parts.push(`Additional instructions for THIS compaction:\n${subordinate}\n\n${extra.trim()}`)
+  }
+  return parts.join('\n\n')
+}
 
 /** Framing that makes the replacement user message established context. */
 const CHECKPOINT_PREAMBLE =
@@ -81,6 +164,8 @@ export interface SummarizationInput {
   readonly tools?: readonly ToolSchema[]
   /** The derived system head, when present, followed by the shadowed region in surface order. */
   readonly messages: readonly Message[]
+  /** The per-call instruction from `/compact <text>`, appended after the standing one. */
+  readonly instruction?: string
 }
 
 /** Safe summary content plus the exact auxiliary call envelope recorded with it. */
@@ -146,7 +231,10 @@ export async function summarizeWithLlm(
     ...input.messages,
     deepFreeze({
       role: 'user',
-      content: [{ type: 'text', text: COMPACTION_INSTRUCTION }],
+      content: [{
+        type: 'text',
+        text: buildCompactionInstruction(readInstructionFile(), input.instruction),
+      }],
     }),
   ]
   const options: GenerateOptions = {

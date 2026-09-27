@@ -11,8 +11,6 @@ import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands
 export const name = 'command-compact'
 export const inject = ['commands', 'compaction']
 
-const USAGE = 'Usage: /compact (no arguments)'
-
 /** Fail loudly if a locally closed union gains an unhandled member. */
 /* v8 ignore start -- closed-union backstop is unreachable without violating the TypeScript contract */
 function assertNever(value: never): never {
@@ -55,16 +53,29 @@ function expectedFailure(error: ManualCompactionError): CommandResult {
   }
 }
 
-/** Execute one argument-free manual compaction request. */
+// DSH-FORK(kiln): `/compact <text>` carries a per-call instruction for THIS
+// compaction instead of rejecting the argument.
+// EXIT: upstream accepts a compaction instruction argument.
+/**
+ * Execute one manual compaction request.
+ *
+ * Everything after `/compact` is an instruction for THIS compaction. It is
+ * appended after the summarizer's role statement, so it can steer what the
+ * checkpoint covers without letting the summarizer fall back into the agent's
+ * role — the failure a bare trailing request produces on a replayed transcript.
+ */
 async function executeCompact(
   ctx: Context,
   invocation: CommandInvocation,
 ): Promise<CommandResult> {
-  if (invocation.rawInput.trim().length > 0) {
-    return { kind: 'error', text: USAGE }
-  }
+  const instruction = invocation.rawInput.trim()
   try {
-    const result = await ctx.compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
+    const result = await ctx.compaction.compactNow(
+      invocation.agent,
+      invocation.signal,
+      invocation.commandId,
+      ...instruction.length === 0 ? [] as const : [instruction] as const,
+    )
     if (result === null) return { kind: 'success', text: 'No compactable history yet.' }
     return {
       kind: 'success',

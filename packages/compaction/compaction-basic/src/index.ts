@@ -383,7 +383,10 @@ export class BasicCompactionEngine extends CompactionEngine {
   override compactNow(
     agent: Agent,
     signal: AbortSignal,
+    // DSH-FORK(kiln): thread the per-call instruction to the summarizer.
+    // EXIT: upstream carries a compaction instruction through compactNow.
     sourceCommandId?: CommandId,
+    instruction?: string,
   ): Promise<CompactionResult | null> {
     signal.throwIfAborted()
     try {
@@ -407,6 +410,7 @@ export class BasicCompactionEngine extends CompactionEngine {
               owner: null,
               stability: 'selected-span',
               ...sourceCommandId === undefined ? {} : { sourceCommandId },
+              ...instruction === undefined ? {} : { instruction },
               flush: async () => {
                 await this.ctx.sessions.flush(agent.session)
               },

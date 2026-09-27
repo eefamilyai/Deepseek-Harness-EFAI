@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **75** in **16** patch(es).
+Tier-2 files: **82** in **17** patch(es).
 
 ## Patches
 
@@ -51,6 +51,16 @@ Tier-2 files: **75** in **16** patch(es).
 
 - `packages/llm/llm/src/index.ts`
 - `packages/llm/llm/src/types.ts`
+
+### `patches/compaction.patch` — 7 file(s)
+
+- `packages/compaction/command-compact/src/index.ts`
+- `packages/compaction/command-compact/tests/command-compact.spec.ts`
+- `packages/compaction/compaction-basic/src/index.ts`
+- `packages/compaction/compaction-basic/src/region.ts`
+- `packages/compaction/compaction-basic/src/summarizer.ts`
+- `packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts`
+- `packages/compaction/compaction/src/index.ts`
 
 ### `patches/client-chat.patch` — 6 file(s)
 

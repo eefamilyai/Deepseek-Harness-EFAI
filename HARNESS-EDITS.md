@@ -20,9 +20,9 @@ For what the fork *is* — every plugin it adds, where each mounts, and which sw
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against the base `00102833df`, the fork modifies **75 upstream files** (16 patch groups) and regenerates 25 more. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
+Measured against the base `00102833df`, the fork modifies **80 upstream files** (17 patch groups) and regenerates 25 more. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
 
-Those 75 files are the entire cost of every future update, and the list is **frozen**: `local-overlay/SEAM.json` records it, and `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file absent from it.
+Those 80 files are the entire cost of every future update, and the list is **frozen**: `local-overlay/SEAM.json` records it, and `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file absent from it.
 
 The seam below is grouped by why each edit exists, because the fix differs per group.
 
@@ -76,11 +76,11 @@ in the 0.1.7-alpha.2 merge. See T2-J.
 
 ### Tier 2 — the seam with upstream (the whole problem)
 
-The seam is **75 patched paths**, down from 138 and then 92: composition, the identity opener,
+The seam is **80 patched paths**, down from 138 and then 92: composition, the identity opener,
 skill injection, and usage projection moved into fork-owned packages, and the 0.1.7-alpha.2 merge
 retired the edits upstream now covers itself (the turn-process fold, the code-block chrome, the icon
 glyph, the transcript-width fix, and the locale verbs). One path was then taken on deliberately: the fork deletes `.github/dependabot.yml`, because upstream's nightly dependency PRs against this fork's GitHub repository are noise, not updates it takes. The groups below are a curated selection — the edits worth understanding before
-a merge — not an exhaustive partition of those 75;
+a merge — not an exhaustive partition of those 80;
 `local-overlay/INVENTORY.md` is the authority for the full list, and
 `local-overlay/rules.json` for which group owns which path. The counts in each heading
 are that group's curated membership as written, not the total for its subsystem.
@@ -363,8 +363,9 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 29 | `scripts/verify-package-readme-model-experience.ts` | `all` | the fork ships package READMEs for fork-owned packages, so the audited `NO_MODEL_EXPERIENCE_SECTION` / `SENTENCE_MODEL_EXPERIENCE` allowlists must name them; without entries the gate rejects a correct README. | Upstream accepts a model-experience declaration inside each package manifest, so the allowlists stop being a central file. |
 | 30 | `client/ui-brand-official/**` (3 `README*`, `src/client/Brand.tsx`, `src/client/index.ts`, `tests/browser-plugin.client.spec.tsx`), `apps/web/tests/built-boot.expected.e2e.ts` | `brand` | the sidebar brand is the fork's in **every** build profile — upstream gates the registration behind `DSH_CLIENT_BUILD_PROFILE=official`, so an unprofiled build falls through to the shell's `DSH Local Build` label and its version badge; the name is live text carrying a specular sweep rather than the upstream name artwork, and the built-boot smoke pins that wordmark instead of the profile-dependent shell brand | A fork-owned client package owns the sidebar chrome, so the registration stops being a gate on an upstream package |
 | 31 | `client/ui-settings/src/client/config-form.ts` | `settings-freeze` | memoizes a decoded settings section per raw value and rehydrates the namespace schema once, so a settings write does not re-validate every section on the main thread; carried across upstream's `settings-scope.ts` → `config-form.ts` rename | **Upstream PR** |
+| 32 | `packages/compaction/{compaction,compaction-basic,command-compact}/**` (5 source files) | `kiln` | the summarizer's directive states its own role and accepts an operator instruction, because a replayed agent transcript plus a bare trailing request made the summarizer answer in the agent's voice — a tool call or a fenced code block instead of a checkpoint; the same files carry `/compact <text>` through to the summarizer | **Upstream PR** — upstream states the summarizer role on every route and accepts a compaction instruction argument |
 
-If row 4 moves to a fork-owned package and rows 9, 10, and 31 go upstream, what remains is the client chrome (rows 12, 20, 23, 24, 30) and the lists and infrastructure, which conflict predictably in one place each.
+If row 4 moves to a fork-owned package and rows 9, 10, and 31 go upstream, what remains is the client chrome (rows 12, 20, 23, 24, 30) and the lists and infrastructure, which conflict predictably in one place each, plus the compaction directive (row 32).
 
 ## Known fork debt
 

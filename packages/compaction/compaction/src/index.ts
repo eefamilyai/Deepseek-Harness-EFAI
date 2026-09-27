@@ -153,6 +153,10 @@ export abstract class CompactionEngine extends Service {
    * @param agent - idle agent whose durable history should be compacted.
    * @param signal - cancellation scoped to this compaction request.
    * @param sourceCommandId - initiating command identity for a manual compaction.
+   *
+   * DSH-FORK(kiln): the engine contract gains a per-call compaction instruction.
+   * EXIT: upstream declares an instruction parameter on compactNow.
+   * @param instruction - per-call summarization instruction from `/compact <text>`, when present.
    * @returns the compaction result, or `null` when no safe useful range exists.
    * @throws {@link ManualCompactionError} for expected busy, agent-cancellation,
    * changed-span, summarization/shrink, commit-stage, or persistence failures;
@@ -163,6 +167,7 @@ export abstract class CompactionEngine extends Service {
     agent: ManualCompactAgentContext,
     signal: AbortSignal,
     sourceCommandId?: CommandId,
+    instruction?: string,
   ): Promise<CompactionResult | null>
 
   /**

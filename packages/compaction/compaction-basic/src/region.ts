@@ -61,6 +61,11 @@ interface CompactionTransactionOptions {
   readonly flush?: () => Promise<void>
   /** Manual command that initiated this transaction, when present. */
   readonly sourceCommandId?: CommandId
+  // DSH-FORK(kiln): the transaction carries the per-call instruction to the
+  // summarizer, including across a re-prepared retry.
+  // EXIT: upstream carries a compaction instruction through the region.
+  /** Per-call summarization instruction from `/compact <text>`, when present. */
+  readonly instruction?: string
 }
 
 interface CompactionEntryState {
@@ -219,13 +224,14 @@ export async function compactSurfaceRegion(
   let stage: TransactionFailure['stage'] = 'summary'
 
   try {
-    const prepared = prepareCompaction(dependencies, session, selection)
+    const prepared = prepareCompaction(dependencies, session, selection, options.instruction)
     const summarized = await summarizeCompaction(
       dependencies,
       prepared,
       agent,
       compactionId,
       options.sourceCommandId,
+      options.instruction,
       assertStable,
       signal,
     )
@@ -362,6 +368,7 @@ function prepareCompaction(
   dependencies: RegionDependencies,
   session: Session,
   selection: SurfaceSelection,
+  instruction?: string,
 ): PreparedCompaction {
   const measurement = dependencies.meter.measure(session)
   const selectedNodes = measurement.nodes.slice(selection.startIdx, selection.endIdx + 1)
@@ -379,7 +386,7 @@ function prepareCompaction(
     // route-priced `tokens` instead.
     shadowedTokenCount: selectedNodes.reduce((total, node) => total + node.heuristicTokens, 0),
     shadowedRouteTokenCount: selectedNodes.reduce((total, node) => total + node.tokens, 0),
-    input: buildSummarizationInput(session, selection.shadowedSeqs),
+    input: buildSummarizationInput(session, selection.shadowedSeqs, instruction),
   }
 }
 
@@ -390,6 +397,7 @@ async function summarizeCompaction(
   agent: Agent,
   compactionId: CompactionResult['compactionId'],
   sourceCommandId: CommandId | undefined,
+  instruction: string | undefined,
   assertStable: StabilityCheck,
   signal?: AbortSignal,
 ): Promise<SummarizedCompaction> {
@@ -404,7 +412,7 @@ async function summarizeCompaction(
       assertStable(dependencies, agent.session, prepared)
       if (!dependencies.recover(error, agent, prepared.shadowedSeqs, signal)) throw error
       prepared = prepareCompaction(dependencies, agent.session,
-        validateSurfaceRegion(agent.session, prepared.start, prepared.end))
+        validateSurfaceRegion(agent.session, prepared.start, prepared.end), instruction)
     }
   }
   const checkpointMessage = createUserMessage({
@@ -544,6 +552,7 @@ function completeCompaction(
 function buildSummarizationInput(
   session: Session,
   shadowedSeqs: readonly SessionSeq[],
+  instruction?: string,
 ): SummarizationInput {
   const header = session.requestHeader()
   // shadowedSeqs are current surface seqs, so the surface has a node 0.
@@ -558,6 +567,7 @@ function buildSummarizationInput(
     .filter((message): message is Message => message !== null)
   return {
     ...header?.tools === undefined ? {} : { tools: header.tools },
+    ...instruction === undefined ? {} : { instruction },
     messages: system === null ? regionMessages : [system, ...regionMessages],
   }
 }

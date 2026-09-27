@@ -52,6 +52,12 @@
       ]
     },
     {
+      "name": "compaction",
+      "paths": [
+        "packages/compaction/"
+      ]
+    },
+    {
       "name": "client-chat",
       "paths": [
         "packages/client/ui-chat/"
