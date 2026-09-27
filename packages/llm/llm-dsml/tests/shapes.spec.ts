@@ -120,6 +120,37 @@ describe('an explanation is an explanation, however it is written', () => {
   }
 })
 
+describe('a bare value never swallows the frame around it', () => {
+  // An unquoted value runs to its terminator, so a call written without quotes
+  // hands the slot the closing bracket that belongs to the CALL. The bracket is
+  // frame, not content, and a value may not end with a closer nothing inside it
+  // opened - so it is cut, and the call reads the way the model wrote it.
+  it('reads an unquoted value in a bracket call', () => {
+    expect(codeOf('kernel(code=print(1))')).toBe('print(1)')
+  })
+
+  it('reads an unquoted value in a colon pair', () => {
+    expect(codeOf('kernel(code: print(1))')).toBe('print(1)')
+  })
+
+  it('reads an unquoted path in a bracket call', () => {
+    expect(extractShape('read(file_path=/a/b.txt)', TOOLS)?.args.get('file_path')).toBe('/a/b.txt')
+  })
+
+  it('keeps a closer the value opened itself', () => {
+    // 'print(1)' is balanced, so its own bracket is content. Only the
+    // unpartnered one - the frame's - is cut.
+    expect(codeOf('kernel(code=print(1)())')).toBe('print(1)()')
+  })
+
+  it('keeps a bracketed value the notation delimited', () => {
+    // The quotes already said where the value stopped, so a trailing bracket
+    // inside them is what the model wrote.
+    expect(codeOf('kernel(code="print(1)")')).toBe('print(1)')
+    expect(codeOf('kernel(code="print(1))")')).toBe('print(1))')
+  })
+})
+
 describe('the two duties do not bleed into each other', () => {
   // The reader decides per LINE, so that is the unit each duty is stated over:
   // the line that makes the call is read, and the line that talks about it is

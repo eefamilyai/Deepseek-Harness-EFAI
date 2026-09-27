@@ -109,6 +109,17 @@ interface Hit {
   readonly value: string
 }
 
+/** One way a slot is bound, and whether the notation ended the value itself. */
+interface Bound {
+  readonly pattern: RegExp
+  /**
+   * True when the value was written BARE - no quotes around it. Only a bare
+   * value can run past the argument and take the call's own closing bracket with
+   * it, so only a bare value is trimmed back to the frame.
+   */
+  readonly bare: boolean
+}
+
 /** A key written bare, pinned so it never matches inside a longer word. */
 const bare = (key: string): string => '(?<![\\w.-])' + key
 
@@ -124,9 +135,13 @@ const bare = (key: string): string => '(?<![\\w.-])' + key
  * Which branch matched does not matter downstream - every one captures the
  * value as group 1 - so a binding is always a (slot, text) pair.
  */
-function bindings(slot: string): readonly RegExp[] {
+function bindings(slot: string): readonly Bound[] {
   const key = escape(slot)
   const at = bare(key)
+  /** A branch the notation DELIMITED, so the call's frame cannot bleed into it. */
+  const held = (pattern: RegExp): Bound => ({ pattern, bare: false })
+  /** A branch whose value runs to a terminator, so the frame may have bled in. */
+  const open = (pattern: RegExp): Bound => ({ pattern, bare: true })
   return [
     // key="value" and key='value'. The closing quote must be TERMINATED by
     // the notation - a closer, punctuation, whitespace, or the end of the line.
@@ -134,46 +149,46 @@ function bindings(slot: string): readonly RegExp[] {
     // (`code="say "hi" twice"`) matched only as far as the inner quote, and the
     // twin below then bound the same slot to a second, longer string, so the
     // conflict rule refused a call that was never ambiguous.
-    new RegExp(at + '\\s*=\\s*"([^"]*)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi'),
-    new RegExp(at + "\\s*=\\s*'([^']*)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi'),
+    held(new RegExp(at + '\\s*=\\s*"([^"]*)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi')),
+    held(new RegExp(at + "\\s*=\\s*'([^']*)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi')),
     // The same pair, letting the value carry the delimiter itself. A quote the
     // notation does not terminate is CONTENT, not the end of the value, so the
     // value runs on to the next quote that is properly terminated. Both
     // branches agree wherever the strict one matches, so they never disagree
     // about a value; the loose one only adds the reading the strict one lost.
-    new RegExp(at + '\\s*=\\s*"([\\s\\S]*?)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi'),
-    new RegExp(at + "\\s*=\\s*'([\\s\\S]*?)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi'),
+    held(new RegExp(at + '\\s*=\\s*"([\\s\\S]*?)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi')),
+    held(new RegExp(at + "\\s*=\\s*'([\\s\\S]*?)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi')),
     // --key "value", --key=value, -key value - a shell flag
-    new RegExp('--?' + key + '\\s*(?:=\\s*)?\\s*"([^"]*)"', 'gi'),
-    new RegExp('--?' + key + "\\s*(?:=\\s*)?\\s*'([^']*)'", 'gi'),
+    held(new RegExp('--?' + key + '\\s*(?:=\\s*)?\\s*"([^"]*)"', 'gi')),
+    held(new RegExp('--?' + key + "\\s*(?:=\\s*)?\\s*'([^']*)'", 'gi')),
     // --key=value and -key value, unquoted. A shell flag is the one notation
     // where the separator is optional, so both positions are tried and the
     // value stops at whitespace.
-    new RegExp('--?' + key + '\\s*=\\s*([^' + BARE + ']+)', 'gi'),
-    new RegExp('--?' + key + '\\s+([^' + BARE + ']+)', 'gi'),
+    open(new RegExp('--?' + key + '\\s*=\\s*([^' + BARE + ']+)', 'gi')),
+    open(new RegExp('--?' + key + '\\s+([^' + BARE + ']+)', 'gi')),
     // "key": "value" and "key": value - a JSON object member. Same terminator
     // rule and same quote-carrying twin as the `=` pair above.
-    new RegExp('"' + key + '"\\s*:\\s*"([^"]*)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi'),
-    new RegExp('"' + key + '"\\s*:\\s*"([\\s\\S]*?)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi'),
-    new RegExp('"' + key + '"\\s*:\\s*([^' + BARE + ']+)', 'gi'),
+    held(new RegExp('"' + key + '"\\s*:\\s*"([^"]*)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi')),
+    held(new RegExp('"' + key + '"\\s*:\\s*"([\\s\\S]*?)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi')),
+    open(new RegExp('"' + key + '"\\s*:\\s*([^' + BARE + ']+)', 'gi')),
     // key: "value" and key: 'value' - a colon pair with a quoted value, with
     // the same terminator rule and the same quote-carrying twin.
-    new RegExp(at + '\\s*:\\s*"([^"]*)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi'),
-    new RegExp(at + '\\s*:\\s*"([\\s\\S]*?)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi'),
-    new RegExp(at + "\\s*:\\s*'([^']*)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi'),
-    new RegExp(at + "\\s*:\\s*'([\\s\\S]*?)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi'),
+    held(new RegExp(at + '\\s*:\\s*"([^"]*)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi')),
+    held(new RegExp(at + '\\s*:\\s*"([\\s\\S]*?)"(?=[ \\t]*(?:[)\\]},;/>]|\n|$))', 'gi')),
+    held(new RegExp(at + "\\s*:\\s*'([^']*)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi')),
+    held(new RegExp(at + "\\s*:\\s*'([\\s\\S]*?)'(?=[ \\t]*(?:[)\\]},;/>]|\n|$))", 'gi')),
     // key: value, unquoted. The value class already excludes newline, quotes,
     // and the closing characters, so it stops at the end of its own line.
-    new RegExp(at + '\\s*:\\s*([^' + BARE + ']+)', 'gi'),
+    open(new RegExp(at + '\\s*:\\s*([^' + BARE + ']+)', 'gi')),
     // an element whose own name is the slot
-    new RegExp('<' + key + '\\b[^>]*>([\\s\\S]*?)</' + key + '\\s*>', 'gi'),
+    held(new RegExp('<' + key + '\\b[^>]*>([\\s\\S]*?)</' + key + '\\s*>', 'gi')),
     // a container element naming the slot in one of its attributes
-    new RegExp(
+    held(new RegExp(
       '<[\\w:.-]+\\b[^>]*\\b' + ARG_LABEL + '\\s*=\\s*' + QUOTED + key + QUOTED + '[^>]*>([\\s\\S]*?)</[\\w:.-]+\\s*>',
       'gi',
-    ),
+    )),
     // key=value, unquoted, last so a quoted value never falls through to it
-    new RegExp(at + '\\s*=\\s*([^' + BARE + ']+)', 'gi'),
+    open(new RegExp(at + '\\s*=\\s*([^' + BARE + ']+)', 'gi')),
   ]
 }
 
@@ -208,19 +223,60 @@ function anyMatch(text: string, patterns: readonly RegExp[]): boolean {
   })
 }
 
+/** The opening bracket each closing bracket pairs with. */
+const PAIR: Readonly<Record<string, string>> = { ')': '(', ']': '[', '}': '{' }
+
+/**
+ * Cut back a BARE value that swallowed the call's own closing bracket.
+ *
+ * `kernel(code=print(1))` writes its argument with no quotes, so the value class
+ * runs to the end of the line and takes the frame's closer with it: the slot is
+ * bound to `print(1))`. That last bracket belongs to the CALL, not to the value,
+ * and a value may not end with a closer no opener inside it accounts for - so
+ * each unpartnered trailing closer is cut, and a value that was nothing but
+ * frame comes back empty and is dropped.
+ *
+ * Applied to bare values only. A notation that ended the value with a quote
+ * already said where it stopped, so `code="x)"` keeps its bracket: that one is a
+ * value the model wrote, not the frame leaking in.
+ * @param value - one captured value, already trimmed of surrounding whitespace.
+ * @returns the value with its unpartnered trailing closers removed.
+ */
+function trimFrame(value: string): string {
+  let out = value
+  for (;;) {
+    const last = out.charAt(out.length - 1)
+    const opener = PAIR[last]
+    if (opener === undefined) return out
+    let opens = 0
+    let closes = 0
+    for (const ch of out) {
+      if (ch === opener) opens += 1
+      else if (ch === last) closes += 1
+    }
+    if (closes <= opens) return out
+    out = out.slice(0, -1)
+  }
+}
+
 /** Every value bound to `slot`, and whether two of them disagree. */
 function valuesOf(text: string, slot: string): { readonly hits: readonly Hit[]; readonly conflict: boolean } {
   const hits: Hit[] = []
   const distinct = new Set<string>()
-  for (const pattern of bindings(slot)) {
-    pattern.lastIndex = 0
+  for (const bound of bindings(slot)) {
+    bound.pattern.lastIndex = 0
     let match: RegExpExecArray | null
-    while ((match = pattern.exec(text)) !== null) {
+    while ((match = bound.pattern.exec(text)) !== null) {
       // A zero-length match would spin this loop forever.
       if (match[0].length === 0) break
-      const value = (match[1] ?? '').trim()
+      const raw = (match[1] ?? '').trim()
+      const value = bound.bare ? trimFrame(raw) : raw
       if (value.length === 0) continue
       distinct.add(value)
+      // The span masked from the residue is the WHOLE match, closer included:
+      // the bracket trimmed off the value still belongs to the call's frame, and
+      // leaving it unmasked would make the residue test refuse a call that was
+      // never ambiguous.
       hits.push({ from: match.index, to: match.index + match[0].length, value })
     }
   }
@@ -296,7 +352,6 @@ function positionalBindings(name: string): readonly RegExp[] {
   const close = '\\s*[)\\]]'
   return [
     new RegExp(call + '"([^"]*)"' + close, 'gi'),
-    new RegExp(call + '"([^"]*)"' + close, 'gi'),
     new RegExp(call + "'([^']*)'" + close, 'gi'),
     // A bare payload is read to the LAST bracket on the line, not the first.
     // The value may itself be a call - `kernel(print(1))` passes a call whose
@@ -316,12 +371,6 @@ function positionalBindings(name: string): readonly RegExp[] {
   ]
 }
 
-/**
- * Read one call out of `text` by structure rather than by spelling.
- * @param text - one block or line of channel text the spelling rules missed.
- * @param tools - the request's declared schemas; the only oracle there is.
- * @returns the call, or undefined when the text is not one.
- */
 /**
  * Whether `text` is an EXPLANATION of the format rather than a call in it.
  *
@@ -346,15 +395,12 @@ function isIllustration(text: string): boolean {
   // A fence marker anywhere in the line means the line is delimiting an
   // example, not making a call.
   if (/^\s{0,3}(?:`{3,}|~{3,})/.test(text)) return true
-  // A backtick span that encloses the whole candidate is a quoted mention.
-  const spans = text.match(/`[^`]*`/g)
-  if (spans !== null) {
-    const quoted = spans.join('')
-    // The mention wins when the quoted text is where the call's name sits: a
-    // sentence with one quoted tag and an unquoted call beside it is still a
-    // call, so the test asks whether ANY quoted span carries a tool name.
-    if (quoted.length > 0 && text.trimStart().startsWith('`')) return true
-  }
+  // A line that OPENS with a backtick span is quoting the format rather than
+  // using it. Position is what makes this decidable: a sentence that mentions a
+  // call in passing starts with a word and keeps its words for the residue test,
+  // while a line whose first character is a backtick has nothing before the
+  // quote and nothing that could be its own argument.
+  if (text.match(/`[^`]*`/g) !== null && text.trimStart().startsWith('`')) return true
   return false
 }
 
