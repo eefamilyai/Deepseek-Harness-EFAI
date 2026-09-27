@@ -48,7 +48,15 @@ import ds_direct as dd  # noqa: E402
 # _device_id_for finds nothing and falls back to the machine-level Shumei
 # value -- which is precisely the "several accounts present one device" defect
 # this suite exists to catch, so a return-only stub would hide it.
-_MINTED_ID = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
+# A browser-minted Shumei fingerprint is standard base64 over canvas, GPU and
+# audio entropy -- roughly 89 characters, mixed case, usually padded. It is NOT a
+# UUID. The two identifiers a real client sends are different fields with
+# different shapes: ``device_id`` in the login body is that base64 blob, while
+# ``x-device-id`` on every request is a lowercase UUID. The header stub below
+# keeps the UUID shape for exactly that reason, and this value is synthetic so
+# the suite never carries a real device's fingerprint.
+_MINTED_ID = ("Mint3dBrowserF1ngerpr1ntStandInForLoginSerialSuite"
+              "000000000000000000000000000000000000AA==")
 _MINTED_X_DEVICE_ID = "3c2d1e0f-a5b4-6978-8796-4b5a3c2d1e0f"
 MINTED = []
 

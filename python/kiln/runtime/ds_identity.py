@@ -417,7 +417,24 @@ _DEVICE_ID_ENV = "DEEPSEEK_DEVICE_ID"
 # contents, and pretending otherwise would be worse than not checking. It exists
 # to catch the mistakes that are actually made -- a pasted bearer token, a bare
 # seed, a truncated copy -- before one is presented and earns ``code=40029``.
-_DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9+/=_-]{16,512}$")
+_DEVICE_ID_RE = re.compile(
+    # Standard base64, MIXED CASE, and no hyphen or underscore.
+    #
+    # A real fingerprint is 89 base64 characters of canvas, GPU and audio
+    # entropy, so it carries both cases essentially always -- the chance of 89
+    # draws from the base64 alphabet landing with no uppercase at all is about
+    # 1e-16. Every shape that was being accepted by mistake is single-case
+    # instead: the site's `smidV2` session cookie is a 14-digit timestamp
+    # followed by lowercase hex, a bare `token_hex(32)` seed is lowercase hex,
+    # and `x-device-id` is a lowercase UUID. Distinguishing those three from a
+    # real value without a checksum is exactly what this rule can honestly
+    # promise -- and a value that fails it is refused rather than presented,
+    # because presenting one earns `code=40029` and reads as rate limiting.
+    #
+    # This is why `.thumbcache_<hash>` is NOT refused: it holds the fingerprint
+    # itself (the login body is `B` followed by that cookie), and it carries
+    # both cases like the value it is.
+    r"^(?=.*[A-Z])(?=.*[a-z])[A-Za-z0-9+/=]{16,512}$")
 
 
 def device_path():
@@ -468,8 +485,9 @@ def set_device_id(value, source="manual"):
     text = str(value or "").strip()
     if not valid_device_id(text):
         raise ValueError(
-            "device_id is not shaped like a Shumei value: expected a base64-ish "
-            "string of 16-512 characters, got %d character(s)" % len(text))
+            "device_id is not shaped like a Shumei value: expected standard "
+            "base64 of 16-512 characters carrying both cases, got %d "
+            "character(s)" % len(text))
     doc = _read_device_doc()
     doc["device_id"] = text
     doc["source"] = source

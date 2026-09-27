@@ -52,6 +52,7 @@ __all__ = [
     "slug", "profile_dir", "account_record_path", "read_account_identity",
     "write_account_identity", "device_id_for_account", "did_for_account",
     "x_device_id_for_account", "did_from_url", "identity_status",
+    "device_id_from_cookie",
     "capture_identity", "list_profiles",
 ]
 
@@ -119,6 +120,18 @@ def write_account_identity(account_id, doc):
     """Record what this account's profile minted; returns the stored document."""
     stored = read_account_identity(account_id)
     stored.update({k: v for k, v in (doc or {}).items() if v})
+    rejected = str(stored.get("device_id") or "")
+    if not ds_identity.valid_device_id(rejected):
+        # A ``device_id`` the current rule rejects is NOT carried forward. Keeping
+        # it is how a value an older, looser capture accepted survived every later
+        # write: the record went on presenting it, and the operator saw a device
+        # id the code in the tree would never have produced. The shape is recorded
+        # so the page can say what was dropped and why.
+        if rejected:
+            stored["device_id_rejected"] = "%s...(len=%d, not a fingerprint)" % (
+                rejected[:20], len(rejected))
+        stored.pop("device_id", None)
+        stored.pop("origin", None)
     stored["account_id"] = str(account_id)
     stored["updated_at"] = time.time()
     _atomic_json(account_record_path(account_id), stored)
@@ -215,7 +228,40 @@ _UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
-_COOKIE_SLOTS = ("smidv2", "smidv1", "smid", "deviceid", "device_id", "ds_device_id")
+# Cookies that can carry the fingerprint itself. The ``smid*`` family is
+# deliberately NOT here: reading three real profile jars on this machine showed
+# ``smidV2`` holding ``<14-digit timestamp><hex>`` -- the site's own session
+# value, 63 characters, single case -- and a capture that stored it as the
+# ``device_id`` is exactly the defect this list used to cause.
+_COOKIE_SLOTS = ("deviceid", "device_id", "ds_device_id")
+
+# The one cookie the SDK keeps the fingerprint in. Measured against a login body
+# the operator captured from a real browser: the body is exactly ``"B"`` followed
+# by this cookie's value, so the cookie carries the fingerprint with the leading
+# character of its envelope dropped. Storing the cookie verbatim would replay a
+# value one character short of the one the client actually sends.
+_COOKIE_PREFIXES = (".thumbcache_",)
+_DEVICE_ID_PREFIX = "B"
+
+
+def device_id_from_cookie(name, value):
+    """The ``device_id`` a cookie carries, or ``None`` when it carries none.
+
+    A ``.thumbcache_<hash>`` cookie supplies the fingerprint minus the leading
+    ``B`` the login body restores; the named slots are taken verbatim. Either way
+    the result must pass the shape gate, so a session cookie is refused here
+    rather than stored and presented as a device.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    low = str(name or "").strip().lower()
+    if low.startswith(_COOKIE_PREFIXES):
+        candidate = _DEVICE_ID_PREFIX + text
+        return candidate if ds_identity.valid_device_id(candidate) else None
+    if low in _COOKIE_SLOTS:
+        return text if ds_identity.valid_device_id(text) else None
+    return None
 
 _STORAGE_PROBE = r"""() => {
   const out = {};
@@ -303,7 +349,14 @@ def capture_identity(account_id, headless=True, timeout_ms=45000, on_status=None
                 return
         if text:
             found[key] = text
-            found.setdefault("origin", origin)
+            # Origin is recorded PER FIELD, and ``origin`` alone means "the
+            # device_id's origin". A single shared key was set by whichever field
+            # happened to be captured first -- and the ``x-device-id`` header
+            # rides every request, so it always won -- which made a record whose
+            # device_id came from a cookie read as though it came from a header.
+            found["%s_origin" % key] = origin
+            if key == "device_id":
+                found["origin"] = origin
 
     with sync_playwright() as pw:
         # launch_persistent_context, not launch()+new_context(): the profile IS
@@ -376,9 +429,9 @@ def capture_identity(account_id, headless=True, timeout_ms=45000, on_status=None
             with contextlib.suppress(Exception):
                 for cookie in context.cookies():
                     name = str(cookie.get("name") or "").lower()
-                    if name in _COOKIE_SLOTS:
-                        remember("device_id", cookie.get("value"),
-                                 "cookie:%s" % name)
+                    candidate = device_id_from_cookie(name, cookie.get("value"))
+                    if candidate:
+                        remember("device_id", candidate, "cookie:%s" % name)
             with contextlib.suppress(Exception):
                 stored = page.evaluate(_STORAGE_PROBE)
                 if isinstance(stored, dict):

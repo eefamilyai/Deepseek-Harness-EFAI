@@ -142,9 +142,15 @@ try:
           repr(di.device_id_for_account(ACCT_A)))
     check("an unknown account has no record", dp.read_account_identity("nobody@x") == {})
 
+    # The fallback EXISTS; it is deliberately not Shumei-shaped. A machine with no
+    # configured or captured device_id presents a locally derived value, and
+    # test_ds_identity pins that value as 32 hex characters. Asking whether it
+    # passes the Shumei shape gate asks the wrong question: the gate exists to
+    # recognise a fingerprint, and this value is documented as not being one.
     machine_value = di.device_id()
     check("the machine-level value exists to fall back to",
-          di.valid_device_id(machine_value), repr(machine_value[:16]))
+          isinstance(machine_value, str) and bool(machine_value),
+          repr(machine_value[:16]))
     check("the per-account value is NOT the machine-level value",
           dp.device_id_for_account(ACCT_A) != machine_value,
           "an uncaptured account silently inherited the machine device")
@@ -219,6 +225,87 @@ try:
     check("the shape gate refuses an oversized value",
           not di.valid_device_id("x" * 600))
     check("the shape gate refuses None", not di.valid_device_id(None))
+    # The identifiers a real request carries are DIFFERENT SHAPES, and the gate
+    # has to tell them apart instead of treating either as "some string". The
+    # login block the operator supplied sends a lowercase UUID in the
+    # ``x-device-id`` header alongside a mixed-case base64 fingerprint in the
+    # body's ``device_id``. The site's own ``smidV2`` cookie is a third shape
+    # again -- a 14-digit timestamp followed by lowercase hex -- and it is a
+    # session value, not a fingerprint, which is the mistake this pins.
+    check("the shape gate refuses an x-device-id UUID",
+          not di.valid_device_id("54b12f3c-7918-4bb8-ab56-7debe7cdd68d"))
+    check("the shape gate refuses the site's own smid session cookie",
+          not di.valid_device_id(
+              "20260927205138c1162ca82345e0596922756f0c61e0c700db2371f23a1cd10"))
+    check("the smid session cookie is not read as a device_id",
+          not any("smid" in str(slot) for slot in dp._COOKIE_SLOTS),
+          repr(dp._COOKIE_SLOTS))
+
+    # ── the cookie the SDK actually keeps the fingerprint in ────────
+    # A login body captured from a real browser is exactly `B` followed by this
+    # cookie's value, so the cookie is the fingerprint minus that one leading
+    # character. Reading it verbatim would replay a value one character short of
+    # the one the client sends -- which is a different device.
+    LOGIN_BODY = ("BEvPTfsU3YjM/uUozsalKIVcdVXc3+WrdjgDjAQfyRusRmEC4n32H3BgqB4"
+                  "kIEDuY+9L7RBLStE3n/6Niki8rjg==")
+    THUMB_COOKIE = LOGIN_BODY[1:]
+    SMID_COOKIE = ("20260927205138c1162ca82345e0596922756f0c61e0c700db2371f23a1cd10")
+    check("the thumbcache cookie restores the login body's prefix",
+          dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", THUMB_COOKIE)
+          == LOGIN_BODY,
+          repr(dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", THUMB_COOKIE)))
+    check("a named slot is taken verbatim",
+          dp.device_id_from_cookie("deviceid", REAL_A) == REAL_A)
+    check("the smid session cookie yields no device_id",
+          dp.device_id_from_cookie("smidV2", SMID_COOKIE) is None,
+          "a session value must never be stored as a device")
+    check("an x-device-id UUID yields no device_id",
+          dp.device_id_from_cookie(".thumbcache_x",
+                                   "54b12f3c-7918-4bb8-ab56-7debe7cdd68d") is None)
+    check("an empty cookie yields nothing",
+          dp.device_id_from_cookie(".thumbcache_x", "") is None)
+
+    # ── a rejected device_id is dropped on write, not carried forward ──
+    # A value the current rule rejects must not survive a later write. Keeping it
+    # is how a shape an older, looser capture accepted went on being presented
+    # long after the rule tightened, which is exactly what the operator saw. The
+    # shape is recorded instead, so a row can say what was lost and why.
+    dp.write_account_identity("stale@example.com", {"device_id": SMID_COOKIE})
+    stale = dp.read_account_identity("stale@example.com")
+    check("a rejected device_id is not stored",
+          not stale.get("device_id"), repr(stale))
+    check("the rejected shape is recorded for the row",
+          "not a fingerprint" in str(stale.get("device_id_rejected")), repr(stale))
+    dp.write_account_identity("stale@example.com",
+                              {"x_device_id": "11111111-aaaa"})
+    again = dp.read_account_identity("stale@example.com")
+    check("a later write does not resurrect the rejected device_id",
+          not again.get("device_id"), repr(again))
+    check("the later write keeps the field it was given",
+          again.get("x_device_id") == "11111111-aaaa", repr(again))
+
+    # ── each identity field records its OWN origin ─────────────────
+    # One shared `origin` key was set by whichever field was captured first, and
+    # the x-device-id header rides every request -- so it always won, and a
+    # device_id that actually came from a cookie read as though it came from a
+    # header. That mislabel is what sent the investigation after the wrong slot.
+    dp.write_account_identity("origins@example.com", {
+        "device_id": REAL_A,
+        "device_id_origin": "cookie:.thumbcache_6b2e5483f9d8",
+        "x_device_id": "11111111-aaaa",
+        "x_device_id_origin": "request-header",
+        "did": "22222222-bbbb",
+        "did_origin": "query-param",
+        "origin": "cookie:.thumbcache_6b2e5483f9d8",
+    })
+    orec = dp.read_account_identity("origins@example.com")
+    check("the device_id keeps its own origin",
+          orec.get("device_id_origin") == "cookie:.thumbcache_6b2e5483f9d8",
+          repr(orec))
+    check("the x-device-id keeps its own origin",
+          orec.get("x_device_id_origin") == "request-header", repr(orec))
+    check("the did keeps its own origin",
+          orec.get("did_origin") == "query-param", repr(orec))
 
     # ── reading a value out of a JSON storage blob ──────────────────
     # The SDK does not always store the bare id; a slot can hold
@@ -312,7 +399,7 @@ try:
           dd._device_id_for(acct_a) == REAL_A,
           repr(dd._device_id_for(acct_a)))
     check("an account of None still resolves something",
-          di.valid_device_id(dd._device_id_for(None)))
+          bool(dd._device_id_for(None)), repr(dd._device_id_for(None)))
 
     # ── the per-profile header is not the Shumei id ─────────────────
     # A browser sends `x-device-id` on 47/47 /api/v0 requests in the reference
@@ -324,14 +411,18 @@ try:
     hdr_c = dd._extra_identity_headers(acct_c)
     check("an account with no recorded uuid still sends the header",
           "x-device-id" in hdr_c, repr(hdr_c))
+    # The header's own shape, which is a UUID -- not the login body's base64
+    # fingerprint. Checking it with the fingerprint gate would be checking the
+    # wrong field's shape and would pass only while the gate was too loose.
     check("that fallback is a well-formed uuid",
-          di.valid_device_id(hdr_c.get("x-device-id")),
+          bool(dp._UUID_RE.match(str(hdr_c.get("x-device-id") or ""))),
           repr(hdr_c.get("x-device-id")))
     check("the fallback is stable across calls",
           hdr_c.get("x-device-id") == dd._extra_identity_headers(acct_c).get("x-device-id"))
     hdr_none = dd._extra_identity_headers(None)
     check("no account still sends a well-formed header",
-          di.valid_device_id(hdr_none.get("x-device-id")), repr(hdr_none))
+          bool(dp._UUID_RE.match(str(hdr_none.get("x-device-id") or ""))),
+          repr(hdr_none))
     check("the header set is exactly the two identity headers",
           set(hdr_c) == {"x-device-id", "x-device-model"}, repr(sorted(hdr_c)))
     check("x-device-model is present and empty, as on the wire",
