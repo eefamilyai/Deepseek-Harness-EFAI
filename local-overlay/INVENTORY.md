@@ -169,7 +169,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 327 paths do not exist upstream, so no patch covers them and none can conflict.
+These 340 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -187,6 +187,7 @@ These 327 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/skills/dsh-edit-system-prompt/SKILL.md`
 - `.agents/skills/dsh-github/SKILL.md`
 - `.agents/skills/dsh-harness-edit/SKILL.md`
+- `.agents/skills/dsh-repair-dsml-parser/SKILL.md`
 - `.agents/skills/dsh-session-history/SKILL.md`
 - `.agents/skills/dsh-session-history/session-read.mjs`
 - `.merge-port/MERGE-STATUS.md`
@@ -366,13 +367,25 @@ These 327 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-kernel/tsconfig.json`
 - `packages/llm/llm-dsml/README.md`
 - `packages/llm/llm-dsml/package.json`
+- `packages/llm/llm-dsml/src/catalog.ts`
 - `packages/llm/llm-dsml/src/dsml.ts`
 - `packages/llm/llm-dsml/src/fallback.ts`
 - `packages/llm/llm-dsml/src/index.ts`
 - `packages/llm/llm-dsml/src/protocol.ts`
+- `packages/llm/llm-dsml/src/shapes.ts`
 - `packages/llm/llm-dsml/src/stream.ts`
+- `packages/llm/llm-dsml/tests/adversarial.spec.ts`
+- `packages/llm/llm-dsml/tests/catalog.spec.ts`
 - `packages/llm/llm-dsml/tests/fallback.spec.ts`
+- `packages/llm/llm-dsml/tests/illustration.spec.ts`
 - `packages/llm/llm-dsml/tests/llm-dsml.spec.ts`
+- `packages/llm/llm-dsml/tests/shape-reporting.spec.ts`
+- `packages/llm/llm-dsml/tests/shapes.spec.ts`
+- `packages/llm/llm-dsml/tests/stripped-closers.spec.ts`
+- `packages/llm/llm-dsml/tests/structural.spec.ts`
+- `packages/llm/llm-dsml/tests/unbreakable.spec.ts`
+- `packages/llm/llm-dsml/tests/value-and-fence.spec.ts`
+- `packages/llm/llm-dsml/tests/value-markup.spec.ts`
 - `packages/llm/llm-dsml/tsconfig.json`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`

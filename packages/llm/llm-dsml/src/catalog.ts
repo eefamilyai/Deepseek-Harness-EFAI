@@ -1,4 +1,4 @@
-﻿// The catalogue of malformed tool-call shapes the reader repairs, and the
+// The catalogue of malformed tool-call shapes the reader repairs, and the
 // repair each one gets. The reader already repairs all of these silently,
 // because a repaired call runs. What it could not do is remember them:
 // every new malformation cost the same investigation as the last one.
@@ -34,6 +34,12 @@ export interface RepairShape {
 // order is the order the reader tests them, which is why a shape that can be
 // mistaken for another sits where the reader puts it.
 export const KNOWN_SHAPES: readonly RepairShape[] = [
+  {
+    id: 'structural-notation',
+    saw: 'a complete call written in a notation the spelling rules never learned, so it reached prose intact',
+    fix: 'the tool name and its named values are read by structure, and the residue must reduce to punctuation and envelope words',
+    example: '{"tool": "kernel", "arguments": {"code": "print(1)"}}',
+  },
   {
     id: 'closer-stripped',
     saw: 'every opener kept and every closer lost, so intact arguments read as a command cut off mid-write',
@@ -393,22 +399,25 @@ export function bumpShapes(ids: readonly string[], explicit?: string): boolean {
   try {
     const counted = new Map<string, number>()
     for (const id of ids) counted.set(id, (counted.get(id) ?? 0) + 1)
-    let touched = false
-    const next = loadCatalog(path).map((shape) => {
+    const shapes = loadCatalog(path)
+    const known = learnedLiterals(path)
+    // A turn whose ids all name nothing the file carries has nothing to write,
+    // so the read is the whole of its cost.
+    const carries = shapes.some(shape => counted.has(shape.id))
+      || known.some(literal => counted.has(literalKey(literal.broken)))
+    if (!carries) return false
+    const next = shapes.map((shape) => {
       const bump = counted.get(shape.id)
       if (bump === undefined) return shape
-      touched = true
       return { ...shape, hits: (shape.hits ?? 0) + bump }
     })
     // A literal that was applied this turn is counted by the same rule, so the
     // file records which learned fragments are actually earning their keep.
-    const literals = learnedLiterals(path).map((literal) => {
+    const literals = known.map((literal) => {
       const bump = counted.get(literalKey(literal.broken))
       if (bump === undefined) return literal
-      touched = true
       return { ...literal, hits: (literal.hits ?? 0) + bump }
     })
-    if (!touched) return false
     writeCatalog(path, { version: 1, shapes: next, literals })
     return true
   } catch {

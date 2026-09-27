@@ -34,6 +34,7 @@ import {
   unescapeXml,
 } from './protocol.ts'
 import { learnedLiterals, literalKey } from './catalog.ts'
+import { extractShape, readShape } from './shapes.ts'
 
 /** What the translator emits for one complete provider turn. */
 export type DsmlEvent =
@@ -41,6 +42,16 @@ export type DsmlEvent =
   | { readonly kind: 'text'; readonly text: string }
   /** One complete tool call: the tool's registered name and JSON arguments. */
   | { readonly kind: 'tool-call'; readonly name: string; readonly arguments: string }
+
+/**
+ * The tool-call arm of {@link DsmlEvent}.
+ *
+ * A reader only ever HOLDS a call. Prose is emitted the moment it is read, so
+ * the held slot and the structural reader both carry this arm rather than the
+ * whole union — which is what lets the pair rule compare two calls' tool names
+ * without narrowing at every use.
+ */
+type ToolCall = Extract<DsmlEvent, { readonly kind: 'tool-call' }>
 
 /** How one reader treats output it could not turn into a call. */
 export interface DsmlOptions {
@@ -145,13 +156,50 @@ function parameterElements(body: string): { readonly run: string; readonly value
   })
 }
 
+/**
+ * Every bodied invoke element in one block, with the text between them.
+ *
+ * A parameter's value is RAW TEXT and may quote the format, so neither end of a
+ * call can be read off the first tag that looks like one: an invoke opener or
+ * closer inside a value is that value's content, exactly as a parameter opener
+ * is. What separates structure from content is DEPTH, counted over the same
+ * tokens the grammar is made of:
+ *
+ *   * an invoke opener only BOUNDS a call at parameter depth zero, and
+ *   * an invoke closer only ENDS one at parameter depth zero.
+ *
+ * Reading the closer off the first match cut a call off at the first tag in its
+ * own text. The arguments were complete in the block the whole time, and the
+ * call that ran was missing everything after that tag — while the tail then
+ * read as a body with an unclosed parameter, which refused the call entirely.
+ * A value whose own parameter pair balances never moves the depth at all, so a
+ * value that merely documents the format is untouched.
+ * @param raw - one block's raw text.
+ * @returns each element's attribute run and body, closer excluded.
+ */
 function invokeElements(raw: string): { readonly run: string; readonly body: string; readonly start: number; readonly end: number }[] {
-  const token = new RegExp('<' + 'invoke\\s+(' + ATTRIBUTE_RUN + ')>|<' + '/invoke\\s*>', 'gi')
-  const close = new RegExp('<' + '/invoke\\s*>', 'gi')
+  const token = new RegExp(
+    '<invoke\\s+(' + ATTRIBUTE_RUN + ')>|</invoke\\s*>|<parameter\\b|</parameter\\s*>',
+    'gi',
+  )
+  const close = new RegExp('</invoke\\s*>', 'gi')
   const opens: { run: string; at: number; from: number; to: number }[] = []
   let depth = 0
+  let openParameters = 0
   for (const match of raw.matchAll(token)) {
-    if (match[1] === undefined) {
+    const written = match[0]
+    if (written.startsWith('</parameter')) {
+      if (openParameters > 0) openParameters -= 1
+      continue
+    }
+    if (written.startsWith('<parameter')) {
+      openParameters += 1
+      continue
+    }
+    if (written.startsWith('</invoke')) {
+      // A closer inside a VALUE is the value quoting the format. It ends the
+      // call only once every parameter this call opened has closed again.
+      if (openParameters > 0) continue
       if (depth === 0) continue
       depth -= 1
       if (depth === 0) {
@@ -160,8 +208,10 @@ function invokeElements(raw: string): { readonly run: string; readonly body: str
       }
       continue
     }
-    if (match[0].endsWith('/>')) continue
-    if (depth === 0) opens.push({ run: match[1], at: match.index, from: match.index + match[0].length, to: -1 })
+    if (written.endsWith('/>')) continue
+    // An opener inside a VALUE is content for the same reason.
+    if (openParameters > 0) continue
+    if (depth === 0) opens.push({ run: match[1] ?? '', at: match.index, from: match.index + written.length, to: -1 })
     depth += 1
   }
   const found: { run: string; body: string; start: number; end: number }[] = []
@@ -720,7 +770,18 @@ export function invokeArguments(
     // above placed, not an argument — see UNPLACEABLE. Taking it anyway is how
     // `kernel` ended up executing `<｜｜DSML｜｜parameter name="code">import os…`
     // as Python and failing on U+FF5C.
-    if (only !== undefined && raw.length > 0 && !UNPLACEABLE.test(peeled)) {
+    // A body that is ONE element named for the slot still carries that slot's
+    // value: `<code>print(1)</code>` written inside an invoke that already named
+    // the tool. Taken whole it became the value, and `kernel` ran the tag text
+    // itself. The unwrap is limited to the element whose name IS the slot, so a
+    // value that merely looks like markup keeps every character of its own text.
+    const element = /^<([\w:.-]+)\b[^>]*>([\s\S]*)<\/\1\s*>$/.exec(raw)
+    const inner = element !== null && element[1] === only ? (element[2] ?? '').trim() : undefined
+    if (only !== undefined && inner !== undefined && inner.length > 0) {
+      const coerced = coerceParameterDetailed(tool, only, inner)
+      if (coerced.repaired) shapes?.add('quoted-scalar')
+      args[only] = coerced.value
+    } else if (only !== undefined && raw.length > 0 && !UNPLACEABLE.test(peeled)) {
       const coerced = coerceParameterDetailed(tool, only, raw)
       if (coerced.repaired) shapes?.add('quoted-scalar')
       args[only] = coerced.value
@@ -865,6 +926,28 @@ function outsideSpans(line: string): string {
 const ANY_MARKUP = new RegExp(`<${PIPES}|</?DSML\\b|<(?:invoke|tool_calls|function_calls|parameter)\\b`, 'i')
 
 /**
+ * Any trace of the TAUGHT dialect in a piece of text.
+ *
+ * The structural reader exists for notations nobody wrote a rule for, so text
+ * that carries this reader's own vocabulary is the wrong input for it: there
+ * the spelling rules already had their say, and a block they refused was
+ * refused for a reason — a parameter that never closed, an invoke cut off
+ * mid-write. Reading such a block's fragments as a name plus bindings would
+ * dispatch the very call the spelling rules declined, which is the one outcome
+ * worse than refusing it.
+ */
+const TAUGHT_MARKUP = new RegExp(`<${PIPES}|</?(?:DSML|invoke|parameter)\\b`, 'i')
+
+/**
+ * How many tool-naming lines are held before the oldest is released as prose.
+ *
+ * A bound is what keeps a multi-line notation from turning into a buffered
+ * reader: past this the run is a paragraph that mentions a tool, not a call,
+ * and it is shown.
+ */
+const PENDING_LINES = 8
+
+/**
  * Line-oriented incremental reader. A tool-call block may be split across any
  * number of stream chunks, so it is held until its closing tag arrives and then
  * parsed as one complete document.
@@ -880,6 +963,31 @@ const ANY_MARKUP = new RegExp(`<${PIPES}|</?DSML\\b|<(?:invoke|tool_calls|functi
  */
 export class DsmlTranslator {
   private partial = ''
+  /**
+   * Tool-naming lines the spelling rules read nothing from, held in case they
+   * are the front of a notation that runs across lines. See {@link absorbLine}.
+   */
+  private pending: string[] = []
+  /**
+   * A line already read as a call, held for ONE more line.
+   *
+   * A call written alone on its line and a line of a recitation look identical
+   * in isolation, and a binding repeated on the next line only becomes a
+   * conflict once that line has arrived. Holding the call for one line is what
+   * lets the pair be read as a pair: two lines that bind one slot twice are a
+   * conflict, and two lines naming different tools are a list of tools being
+   * SHOWN rather than a call being made. Both are refused, and the run leaves
+   * as the text it is. See {@link absorbLine}.
+   */
+  private held: { readonly line: string; readonly event: ToolCall } | undefined
+  /**
+   * True while the lines being read are a LIST of tools rather than a call.
+   *
+   * Two calls written back to back that name different tools are not two calls;
+   * they are the tool list being quoted, and every further item belongs to the
+   * same list. Set when such a pair is refused, cleared by a blank line.
+   */
+  private listed = false
   private block: OpenBlock | undefined
   /** True while inside an echoed `<system_reminder>` span whose text is dropped. */
   private suppressing = false
@@ -913,6 +1021,14 @@ export class DsmlTranslator {
    * open inside a fence because no line there is ever scanned for one.
    */
   private fence: string | undefined
+  /**
+   * Parameter depth inside the open block, carried across its lines.
+   *
+   * A block closer only ends the block at depth zero — see
+   * {@link blockCloserIndex} — so the count has to survive the line boundary
+   * between a parameter opener and the closer that ends it.
+   */
+  private blockParams = 0
 
   /**
    * @param tools - the request's tool schemas, keyed by name; an empty map makes
@@ -987,7 +1103,28 @@ export class DsmlTranslator {
     // Whitespace alone is held: it is as likely to be the indentation in front
     // of a tag, which the block consumes, as it is to be text. Releasing it
     // would leave that indentation visible above a call that ran.
-    if (this.partial.trim().length === 0) return
+    const sofar = this.partial.trim()
+    if (sofar.length === 0) return
+    // A line that could still BECOME a fence marker is held too. A fence is
+    // what makes an example an illustration rather than an action, and it is
+    // recognised by the whole line — so releasing the opening backticks before
+    // the newline arrives left `FENCE_OPEN` with the language tag alone, the
+    // fence never armed, and the example inside it DISPATCHED. Streaming a
+    // documented example one character at a time is how a live turn arrives,
+    // so that is not a corner: it is the path a reader's own format statement
+    // takes. Held only while the line still starts with a backtick or tilde,
+    // which is the whole of what a fence can begin with.
+    if (sofar.startsWith('`') || sofar.startsWith('~')) return
+    // A line that NAMES a declared tool is held to its newline too. The
+    // structural reader decides over the whole line, so releasing the front of
+    // a streamed envelope as prose left it with a fragment that no longer
+    // carried the name, and a call streamed a token at a time was never read.
+    if (this.holdable(sofar)) return
+    // A held run that is still growing owns the lines after it: releasing the
+    // front of the next line as prose would show text ahead of a call that is
+    // about to run, and would cut the run in half.
+    if (this.pending.length > 0) return
+    if (this.binding(this.partial)) return
     events.push({ kind: 'text', text: this.partial })
     this.partial = ''
     this.emitted = true
@@ -1011,13 +1148,32 @@ export class DsmlTranslator {
       this.consumeLine(this.partial, events)
       this.partial = ''
     }
+    // A held run the turn ended on is read once more as a whole — the last
+    // line may have completed it — and shown as prose when it is not a call.
+    if (this.pending.length > 0) {
+      const joined = this.pending.join('\n')
+      const call = this.structuralCall(joined)
+      this.pending.length = 0
+      if (call !== undefined) events.push(call)
+      else events.push({ kind: 'text', text: `${joined}\n` })
+    }
+    // A call read at the very end of the turn has no next line to wait for.
+    this.settleHeld(events)
     const open = this.block
     if (open !== undefined) {
       this.block = undefined
+      this.blockParams = 0
       const raw = open.lines.join('\n')
       const { produced } = this.parseCalls(raw)
       if (produced.length > 0) events.push(...produced)
-      else events.push({ kind: 'text', text: `${raw}\n` })
+      else {
+        // The same last resort `closeBlock` reaches for, on the flush path: a
+        // block the model never closed may still BE a call in a notation the
+        // spelling rules do not know, and structure is what reads it.
+        const structural = this.structuralCall(raw)
+        if (structural !== undefined) events.push(structural)
+        else events.push({ kind: 'text', text: `${raw}\n` })
+      }
     }
     // A repair nothing closed a block over — a tag mended in prose, or a block
     // the model never terminated — still owes its reminder.
@@ -1372,6 +1528,259 @@ export class DsmlTranslator {
   }
 
 
+  /**
+   * Where one line ends the open block, or -1 when it does not.
+   *
+   * A block closer only ends the block at PARAMETER DEPTH ZERO, because a
+   * parameter's value is raw text that may quote the format: a tool_calls or
+   * invoke closer of its own is content, and closing the block there cut the
+   * call off at the first inner tag — the same truncation invokeElements was
+   * fixed for, one level up. The depth rides {@link blockParams}, because an
+   * opener and its closer need not share a line.
+   * @param text - the part of the line not yet consumed by this block.
+   * @param closer - the tag that ends this block.
+   * @returns the closer's index, or -1 when it does not close here.
+   */
+  private blockCloserIndex(text: string, closer: string): number {
+    const scan = new RegExp('<parameter\\b|</parameter\\s*|' + escapeRegExp(closer), 'gi')
+    for (const match of text.matchAll(scan)) {
+      const written = match[0]
+      if (written === closer) {
+        if (this.blockParams === 0) return match.index
+        continue
+      }
+      if (written.startsWith('<parameter')) {
+        this.blockParams += 1
+        continue
+      }
+      if (this.blockParams > 0) this.blockParams -= 1
+    }
+    return -1
+  }
+
+  /**
+   * Read a line or block by STRUCTURE when the spelling rules found no call.
+   *
+   * Every rule above is about spelling, so a call written in a notation this
+   * reader was never taught reaches this point as prose: a JSON envelope, a
+   * colon pair, an element per key, a shell flag, a C-like call. Structure is
+   * what all of those share - a tool name and named argument values - so
+   * structure is what this reads, and `extractShape` is where that reading
+   * lives.
+   *
+   * The two duties are the same two duties here. A candidate exists only when
+   * the text names a tool this request declared, binds that tool's arguments,
+   * and leaves nothing behind but punctuation and the vocabulary every envelope
+   * is built from. Text that keeps words is an explanation, and is refused: a
+   * sentence, a fenced example, and a quoted snippet all still pass through as
+   * text, which is what keeps an example from running.
+   *
+   * A read here is a REPAIR all the same - the reader could not read the
+   * notation the model used - so it books the same reminder the taught dialect
+   * would have earned.
+   * @param text - one line, or one joined block, the spelling rules read nothing from.
+   * @returns the call, or undefined when the text is prose.
+   */
+  /**
+   * Whether a line may be the FRONT of a call that runs across lines.
+   *
+   * A YAML block, a run of key/value pairs, and a JSON envelope all become
+   * readable only once their last line has arrived. The first line of any of
+   * them is not yet a call, and deciding on it alone is how a streamed
+   * multi-line call went unread. Holding is limited to lines that name a
+   * declared tool and carry no element of this reader's own dialect, so only
+   * prose that mentions a tool pays any latency at all.
+   * @param line - one line the spelling rules read nothing from.
+   * @returns true when the line should be held rather than shown.
+   */
+  private holdable(line: string): boolean {
+    if (line.length === 0) return false
+    if (TAUGHT_MARKUP.test(line)) return false
+    // A fence or a quoted snippet is an explanation, never the front of a call.
+    if (line.startsWith('`') || line.startsWith('~')) return false
+    return this.mentionsTool(line)
+  }
+
+  /** Show every held line, in the order it arrived. */
+  private releasePending(events: DsmlEvent[]): void {
+    for (const line of this.pending) events.push({ kind: 'text', text: `${line}\n` })
+    this.pending.length = 0
+  }
+
+  /**
+   * Read the held run as one call, or release it once it has grown too long.
+   * @param events - where to emit.
+   */
+  private settlePending(events: DsmlEvent[]): void {
+    if (this.pending.length < 2) return
+    const joined = this.pending.join('\n')
+    const call = this.structuralCall(joined)
+    if (call !== undefined) {
+      this.pending.length = 0
+      this.hold(joined, call)
+      return
+    }
+    while (this.pending.length > PENDING_LINES) {
+      const oldest = this.pending.shift()
+      if (oldest !== undefined) events.push({ kind: 'text', text: `${oldest}\n` })
+    }
+  }
+
+  /**
+   * Read one line the spelling rules produced no call from, holding it when it
+   * may be part of a notation that runs across lines.
+   *
+   * The line alone is tried first, because a one-line call is the common case
+   * and must not pay for the multi-line one. Failing that, a line that may be
+   * the front of a longer call is held; anything else is prose.
+   * @param line - one line the spelling rules read nothing from.
+   * @param events - where to emit.
+   * @returns true when the line was consumed as a call or held for one.
+   */
+  private absorbLine(line: string, events: DsmlEvent[]): void {
+    if (line.length === 0) {
+      this.settleHeld(events)
+      this.releasePending(events)
+      this.listed = false
+      events.push({ kind: 'text', text: '\n' })
+      return
+    }
+    // A call already read is held until the NEXT line has been seen, because
+    // two lines that each look like a call may be one call written twice or a
+    // list of tools being shown - and only the pair says which.
+    const held = this.held
+    if (held !== undefined) {
+      const pair = readShape(`${held.line}\n${line}`, this.tools)
+      const alone = this.structuralCall(line)
+      if (pair.candidate !== undefined && pair.candidate.name === held.event.name) {
+        // The same call, said again. One reading, one call.
+        this.held = undefined
+        events.push(held.event)
+        return
+      }
+      if (pair.conflicted || (alone !== undefined && alone.name !== held.event.name)) {
+        // One slot bound to two values is a guess; two different tools named
+        // one after the other is a list of tools being SHOWN. Neither is a
+        // call, so the run is shown as the text it is, and every further line
+        // belongs to the same list.
+        this.held = undefined
+        this.listed = true
+        events.push({ kind: 'text', text: `${held.line}\n${line}\n` })
+        this.releasePending(events)
+        return
+      }
+      this.held = undefined
+      events.push(held.event)
+    }
+    if (this.listed) {
+      this.releasePending(events)
+      events.push({ kind: 'text', text: `${line}\n` })
+      return
+    }
+    // A line that is a complete call on its own runs once the next line has
+    // confirmed it, and anything held ahead of it is prose written before it.
+    const alone = this.structuralCall(line)
+    if (alone !== undefined) {
+      this.releasePending(events)
+      this.hold(line, alone)
+      return
+    }
+    // Otherwise it may be the front of a notation that runs across lines, or
+    // the continuation of one already held. Held either way, and the run is
+    // tried as a whole each time it grows.
+    if (this.pending.length > 0 || this.holdable(line)) {
+      this.pending.push(line)
+      this.settlePending(events)
+      return
+    }
+    this.releasePending(events)
+    events.push({ kind: 'text', text: `${line}\n` })
+  }
+
+  /** Keep a read call until the next line either confirms it or contradicts it. */
+  private hold(line: string, event: ToolCall): void {
+    this.held = { line, event }
+  }
+
+  /** Emit a held call once no further line can contradict it. */
+  private settleHeld(events: DsmlEvent[]): void {
+    const held = this.held
+    if (held === undefined) return
+    this.held = undefined
+    events.push(held.event)
+  }
+
+  /**
+   * Whether an unfinished line could still become a call.
+   *
+   * The spelling reader could release a partial with no `<` in it, because
+   * nothing without a tag could become one of the tags it reads. That is no
+   * longer true: a call in an untaught notation carries no tags at all, so a
+   * line that has not finished arriving may still be `kernel(code=…` or the
+   * front of a JSON object, and releasing it would show the user the front of
+   * a call and lose the call itself.
+   *
+   * The test is deliberately about what the line COULD become, never about
+   * what it means, so it costs prose only a bounded lookahead:
+   *
+   *   * Text with no space yet is held — it is one token, and a token may be a
+   *     tool name still arriving (`k`, `ke`, `ker`).
+   *   * Text carrying a binding character is held — `=`, `:`, `(`, `[`, `{`,
+   *     or `<` is where a notation starts saying what its arguments are.
+   *   * Text whose last word could still grow into a declared tool's name is
+   *     held — `tool: kern` has not finished naming anything.
+   *
+   * Everything else is prose, and is released at once. A sentence about a call
+   * is refused by the reader's own residue test whether it arrives whole or in
+   * pieces, so streaming it early costs nothing and buys back the token-by-
+   * token stream a native provider gives.
+   * @param line - the UNTRIMMED text accumulated for the unfinished line.
+   * @returns true when the line should be held rather than shown.
+   */
+  private binding(line: string): boolean {
+    // A space is what a notation puts between its name and its arguments, so a
+    // line that has reached one has said as much as a name alone can. Prose
+    // that reaches a space and names no tool is released on the spot.
+    if (!/\s/.test(line)) return true
+    // A quote is where a quoted value starts, and a line that has opened one has
+    // not finished saying what it says: releasing it showed the user the front
+    // of a JSON member and left the call without the name it carried.
+    if (/[=:(\[{<"']/.test(line)) return true
+    const tail = /([\w.-]+)\s*$/.exec(line)
+    if (tail === null) return false
+    const word = tail[1] ?? ''
+    for (const name of this.tools.keys()) {
+      if (name.startsWith(word) || word.startsWith(name)) return true
+    }
+    return false
+  }
+
+  private structuralCall(text: string): ToolCall | undefined {
+    // Cheap gate first. The structural reader builds a pattern set per tool, so
+    // running it on every sentence of a long answer would pay that cost for
+    // nothing; a line that does not even contain a declared tool's name cannot
+    // become a call, and this is the same substring test the note path uses.
+    // Taught markup is the SPELLING rules' territory, not this reader's. A block
+    // that carried `<invoke>` and still produced nothing was refused on purpose
+    // — truncated mid-write, or naming a slot that never closed — and reading
+    // its fragments structurally would dispatch the very call the spelling
+    // rules just declined. Structure is for a notation with no tags at all.
+    if (TAUGHT_MARKUP.test(text)) return undefined
+    if (!this.mentionsTool(text)) return undefined
+    const found = extractShape(text, this.tools)
+    if (found === undefined) return undefined
+    const tool = this.tools.get(found.name)
+    const args: Record<string, unknown> = {}
+    for (const [key, value] of found.args) {
+      const coerced = coerceParameterDetailed(tool, key, value)
+      if (coerced.repaired) this.shapes.add('quoted-scalar')
+      args[key] = coerced.value
+    }
+    this.shapes.add('structural-notation')
+    this.repaired = true
+    return { kind: 'tool-call', name: found.name, arguments: JSON.stringify(args) }
+  }
+
   private consumeLine(rawLine: string, events: DsmlEvent[]): void {
     const stripped = this.stripSuppressed(rawLine)
     // A line wholly inside a suppressed span yields no visible text; emit
@@ -1447,11 +1856,12 @@ export class DsmlTranslator {
           events.push({ kind: 'text', text: cleaned })
         }
         this.block = { lines: [], closer: opener.closer }
+        this.blockParams = 0
         rest = rest.slice(opener.index)
         split = true
         continue
       }
-      const close = rest.indexOf(block.closer)
+      const close = this.blockCloserIndex(rest, block.closer)
       if (close === -1) {
         block.lines.push(rest)
         return
@@ -1474,7 +1884,11 @@ export class DsmlTranslator {
     if (!split || rest.length > 0) {
       const cleaned = rest.replace(ORPHAN_CLOSE, '')
       if (cleaned !== rest) this.shapes.add('orphan-closer')
-      events.push({ kind: 'text', text: `${cleaned}\n` })
+      // A line the spelling rules found no call in is not necessarily prose: it
+      // may be the same call in a notation nobody wrote a rule for. That is what
+      // the structural reader is for, and it refuses anything that keeps words,
+      // so a sentence, an example, and a quoted snippet all still leave as text.
+      this.absorbLine(cleaned, events)
     }
   }
 
@@ -1612,6 +2026,7 @@ export class DsmlTranslator {
   private closeBlock(events: DsmlEvent[]): void {
     const block = this.block
     this.block = undefined
+    this.blockParams = 0
     if (block === undefined) return
     const joined = block.lines.join('\n')
     const raw = restoreStrippedClosers(joined)
@@ -1622,6 +2037,16 @@ export class DsmlTranslator {
     // the only correction channel this transport has, and a dropped block
     // reads to the model as a call that ran and returned nothing.
     if (produced.length === 0) {
+      // A block the spelling rules could not read is not necessarily a failed
+      // call: it may be a whole call in a notation nobody wrote a rule for,
+      // wrapped in the taught envelope or not. Structure is tried before the
+      // model is shown its own markup back, and the structural reader refuses
+      // prose on its own terms - so an example still cannot run from here.
+      const structural = this.structuralCall(raw)
+      if (structural !== undefined) {
+        events.push(structural, ...this.reminder())
+        return
+      }
       events.push({ kind: 'text', text: `${raw}\n${this.blockNote(raw, named, unknown)}` }, ...this.reminder())
       return
     }
@@ -1659,6 +2084,30 @@ export class DsmlTranslator {
       return '\n[malformed tool call — a tool_calls block runs only <invoke name="TOOL">…</invoke>; nothing ran]\n'
     }
     return ''
+  }
+
+  /**
+   * Whether `text` names a declared tool as a WORD rather than as a substring.
+   *
+   * The substring test the note path uses is deliberately loose — it only
+   * decides which sentence to append — but the structural reader's gate feeds a
+   * regex sweep, and a tool called `read` matches inside `already`, `thread`,
+   * and `spread`. Those are prose, and paying the sweep for them is what makes
+   * this gate worth having. A name bordered by word characters is a mention.
+   * @param text - the line or block about to be tried structurally.
+   * @returns true when a declared tool's name appears as a word.
+   */
+  private mentionsTool(text: string): boolean {
+    for (const name of this.tools.keys()) {
+      let at = text.indexOf(name)
+      while (at !== -1) {
+        const before = at === 0 ? '' : text.charAt(at - 1)
+        const after = text.charAt(at + name.length)
+        if (!/[\w.-]/.test(before) && !/[\w.-]/.test(after)) return true
+        at = text.indexOf(name, at + 1)
+      }
+    }
+    return false
   }
 
   /** Whether a block that produced nothing at least NAMES a tool this request declared. */
