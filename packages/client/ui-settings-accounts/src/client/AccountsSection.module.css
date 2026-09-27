@@ -1,32 +1,101 @@
+/*
+ * Accounts settings section.
+ *
+ * Three stacked cards — add a login, the pooled logins, the debug log — so the
+ * section reads as three answers rather than one undifferentiated form. Every
+ * colour is a --dsw-alias-* token; there are no literal colours here.
+ */
+
 .section {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .intro {
   margin: 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
-.notice {
-  padding: 8px 10px;
-  border-radius: 6px;
+/* --- banners: the outcome of an action, or a failure --- */
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 8px;
   background: var(--dsw-alias-bg-secondary);
+}
+
+.bannerError {
+  border-color: transparent;
+  background: var(--dsw-alias-bg-error);
+}
+
+.bannerNotice {
+  border-color: transparent;
+  background: var(--dsw-alias-bg-secondary);
+}
+
+.bannerTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.bannerError .bannerTitle {
+  color: var(--dsw-alias-label-error);
+}
+
+.bannerText {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* --- one card per question the section answers --- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-primary);
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cardSpacer {
+  flex: 1 1 auto;
+}
+
+.cardHint {
+  margin: 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.error {
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-error);
-  color: var(--dsw-alias-label-error);
-  font-size: 12px;
-}
+/* --- the add form --- */
 
 .group {
   display: flex;
@@ -44,7 +113,7 @@
 .label {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   font-weight: 500;
@@ -53,12 +122,20 @@
 .hint {
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-secondary);
 }
 
 .tab {
-  padding: 2px 8px;
-  border: 1px solid transparent;
+  padding: 3px 10px;
+  border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
@@ -68,20 +145,19 @@
 }
 
 .tab[aria-pressed='true'] {
-  border-color: var(--dsw-alias-border-l3);
-  background: var(--dsw-alias-bg-secondary);
-  color: var(--dsw-alias-label-primary);
-}
-
-.select {
-  height: 32px;
-  padding: 0 8px;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 6px;
   background: var(--dsw-alias-bg-primary);
   color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 13px;
+  font-weight: 500;
+}
+
+.staticProvider {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-secondary);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
 }
 
 .mobileRow {
@@ -98,41 +174,22 @@
   justify-content: flex-start;
 }
 
-/* --- the account list: one expandable row per pooled login --- */
-
-.listSection {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.listHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.listTitle {
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.listSpacer {
-  flex: 1 1 auto;
-}
+/* --- the account list: one expandable card per pooled login --- */
 
 .rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .row {
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--dsw-alias-bg-primary);
+}
+
+.rowOpen {
+  border-color: var(--dsw-alias-label-secondary);
 }
 
 .rowHead {
@@ -147,6 +204,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -157,14 +215,54 @@
   cursor: pointer;
 }
 
+/* A drawn chevron, so the control carries no translatable glyph. */
+.chevron {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--dsw-alias-label-secondary);
+  border-bottom: 1.5px solid var(--dsw-alias-label-secondary);
+  transform: rotate(-45deg);
+}
+
+.rowToggle[aria-expanded='true'] .chevron {
+  transform: rotate(45deg);
+}
+
+/* A drawn status dot, so status carries no translatable glyph. */
+.statusDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-secondary);
+}
+
+.statusOn {
+  background: var(--dsw-alias-label-primary);
+}
+
+.statusOff {
+  background: var(--dsw-alias-label-error);
+}
+
 .rowLabel {
   font-weight: 500;
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .badge {
-  padding: 1px 6px;
-  border-radius: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
   background: var(--dsw-alias-bg-secondary);
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
@@ -177,102 +275,122 @@
 }
 
 .rowActions {
+  flex: 0 0 auto;
   display: flex;
   gap: 6px;
 }
 
+/* --- the expanded identity rows --- */
+
 .fields {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 0 10px 10px 10px;
+  gap: 6px;
+  padding: 0 10px 10px 25px;
 }
 
-.fieldRow {
-  display: flex;
-  gap: 8px;
-  font-size: 12px;
-  line-height: 1.5;
+.fieldsHead {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fieldsGrid {
+  display: grid;
+  grid-template-columns: minmax(120px, 156px) minmax(0, 1fr);
+  gap: 1px 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-secondary);
 }
 
 .fieldLabel {
-  flex: 0 0 132px;
   color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .fieldValue {
-  flex: 1 1 auto;
   color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 1.65;
   word-break: break-all;
 }
 
 /* --- the debug log: what makes two logins at once legible --- */
 
-.logSection {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.logHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logTitle {
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-weight: 500;
-}
-
 .log {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  max-height: 220px;
+  max-height: 260px;
   overflow-y: auto;
-  padding: 6px 8px;
+  padding: 4px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--dsw-alias-bg-secondary);
 }
 
-.logEntry,
-.logWarn,
-.logError {
+.logRow {
   display: flex;
+  align-items: baseline;
   gap: 8px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-secondary);
 }
 
 .logWarn {
+  border-left-color: var(--dsw-alias-label-primary);
   color: var(--dsw-alias-label-primary);
 }
 
 .logError {
+  border-left-color: var(--dsw-alias-label-error);
   color: var(--dsw-alias-label-error);
 }
 
 .logTime {
-  flex: 0 0 62px;
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .logAccount {
-  flex: 0 0 168px;
+  flex: 0 0 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
 }
 
 .logEvent {
-  flex: 0 0 76px;
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-primary);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .logDetail {
   flex: 1 1 auto;
   word-break: break-word;
+}
+
+/* --- empty and idle states --- */
+
+.empty {
+  margin: 0;
+  padding: 14px;
+  border: 0.5px dashed var(--dsw-alias-border-l3);
+  border-radius: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }

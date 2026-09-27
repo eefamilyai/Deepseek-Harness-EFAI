@@ -187,6 +187,15 @@ export interface KilnAccountRow {
   readonly device_id: string
   readonly device_id_len: number
   readonly device_id_valid: boolean
+  /**
+   * Why a stored `device_id` was refused, or '' when none was.
+   *
+   * A record whose device failed the shape gate is repaired by PURGING the
+   * value, which would otherwise be indistinguishable from "never captured".
+   * This carries the refused value's shape so the row can say a capture was
+   * attempted and rejected, rather than silently looking empty.
+   */
+  readonly device_id_rejected: string
   /** 'account' when the account minted it, 'machine' when it inherits the machine value. */
   readonly device_id_source: string
   /** The per-profile header UUID, a different value from `device_id`. */
@@ -256,6 +265,7 @@ function parseAccountRows(value: unknown): KilnAccountRow[] {
       device_id: text(record['device_id']),
       device_id_len: typeof record['device_id_len'] === 'number' ? record['device_id_len'] : 0,
       device_id_valid: record['device_id_valid'] === true,
+      device_id_rejected: text(record['device_id_rejected']),
       device_id_source: text(record['device_id_source']),
       x_device_id: text(record['x_device_id']),
       did: text(record['did']),

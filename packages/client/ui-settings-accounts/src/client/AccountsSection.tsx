@@ -4,8 +4,8 @@
  *
  * Three things live here, and they answer one question each. The add form
  * answers "how do I get a login in". The list answers "what do I actually
- * have" — one expandable row per login, showing the identity rows the provider
- * reports, including the device each login presents from. The buttons on a row
+ * have" — one expandable card per login, showing the identity rows the provider
+ * reports, including the device each login presents from. The buttons on a card
  * answer "fix this one", without hand-editing ds_config.json or deleting a
  * directory by hand.
  *
@@ -14,10 +14,18 @@
  * running at once interleave on the wire, and a line that names its account is
  * what makes them separable again.
  *
+ * Every Host call is wrapped, because a rejected call is the one outcome this
+ * section must never render as "nothing here". A Host that predates a Remote
+ * method rejects with a TypeError rather than answering a result, and an
+ * unhandled rejection would leave the list and the log both blank with no
+ * explanation on screen — indistinguishable from genuinely having no accounts.
+ * The failure is therefore caught and shown, as its own message.
+ *
  * Nothing here knows what an account is beyond the shapes the wire takes, so a
  * second account-pooling provider appears without a change to this file.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -131,6 +139,47 @@ type IdentifierKind = 'email' | 'mobile'
 type RepairKind = 'relogin' | 'reprofile'
 
 /**
+ * A failure to show the operator, split into a headline and the detail.
+ * `title` is localized copy; `detail` is whatever the failing call said, which
+ * is a Host message and therefore shown verbatim.
+ */
+interface Failure {
+  readonly title: string
+  readonly detail: string
+}
+
+/**
+ * Join class names, skipping the falsy ones.
+ *
+ * A local joiner rather than a dependency: this section composes at most three
+ * classes at a time, which is less than the cost of another package edge.
+ * @param parts - class names, or a falsy value to skip one.
+ * @returns the space-joined class list.
+ */
+function cx(...parts: readonly (string | false | undefined)[]): string {
+  return parts.filter(part => typeof part === 'string' && part.length > 0).join(' ')
+}
+
+/**
+ * Describe a rejected call in one line.
+ *
+ * A rejection carries no result, so the only thing to report is the thrown
+ * value itself. An `Error` has a message; anything else is stringified, and a
+ * value that cannot even be stringified degrades to its type tag rather than
+ * throwing out of the error path.
+ * @param cause - the value a call rejected with.
+ * @returns a printable description.
+ */
+function describe(cause: unknown): string {
+  if (cause instanceof Error) return cause.message
+  try {
+    return String(cause)
+  } catch {
+    return Object.prototype.toString.call(cause)
+  }
+}
+
+/**
  * Render one log timestamp as a fixed `HH:MM:SS` clock reading.
  * @param at - Unix seconds.
  * @returns the clock reading.
@@ -144,12 +193,26 @@ function clock(at: number): string {
 /**
  * The severity class for one log line.
  * @param level - the entry's severity.
- * @returns the CSS module class name.
+ * @returns the CSS module class name, or the empty string for `info`.
  */
 function levelClass(level: string): string {
   if (level === 'error') return css.logError ?? ''
   if (level === 'warn') return css.logWarn ?? ''
-  return css.logEntry ?? ''
+  return ''
+}
+
+/**
+ * Render one failure banner.
+ * @param failure - the failure to show.
+ * @returns the banner element tree.
+ */
+function FailureBanner({ failure }: { failure: Failure }): ReactNode {
+  return (
+    <div className={cx(css.banner, css.bannerError)} role="alert">
+      <span className={css.bannerTitle}>{failure.title}</span>
+      {failure.detail.length > 0 && <span className={css.bannerText}>{failure.detail}</span>}
+    </div>
+  )
 }
 
 /**
@@ -167,7 +230,7 @@ export function AccountsSection({
   accountLog,
 }: AccountsSectionComponentProps) {
   const [providers, setProviders] = useState<readonly string[]>()
-  const [loadError, setLoadError] = useState(false)
+  const [providersFailure, setProvidersFailure] = useState<Failure>()
   const [kind, setKind] = useState<IdentifierKind>('email')
   const [email, setEmail] = useState('')
   const [mobile, setMobile] = useState('')
@@ -178,35 +241,44 @@ export function AccountsSection({
   const [done, setDone] = useState<string>()
 
   const [rows, setRows] = useState<readonly AccountsSectionAccount[]>()
-  const [rowsError, setRowsError] = useState(false)
+  const [rowsFailure, setRowsFailure] = useState<Failure>()
   const [expanded, setExpanded] = useState<readonly string[]>([])
   const [busy, setBusy] = useState<{ id: string; op: RepairKind }>()
   const [outcome, setOutcome] = useState<string>()
 
   const [entries, setEntries] = useState<readonly AccountsSectionLogEntry[]>([])
+  const [logFailure, setLogFailure] = useState<Failure>()
   // The last sequence number folded in. A poll asks for what is newer than this,
   // so entries are appended once and never re-read.
   const sinceRef = useRef(0)
 
   const loadProviders = useCallback(async (): Promise<void> => {
-    const routes = await listProviders()
-    if (routes === undefined) {
-      setLoadError(true)
-      return
+    try {
+      const routes = await listProviders()
+      if (routes === undefined) {
+        setProvidersFailure({ title: t('accounts.loadError'), detail: '' })
+        return
+      }
+      setProvidersFailure(undefined)
+      setProviders(routes)
+    } catch (cause) {
+      setProvidersFailure({ title: t('accounts.loadError'), detail: describe(cause) })
     }
-    setLoadError(false)
-    setProviders(routes)
-  }, [listProviders])
+  }, [listProviders, t])
 
   const loadRows = useCallback(async (provider: string): Promise<void> => {
-    const next = await listAccounts(provider)
-    if (next === undefined) {
-      setRowsError(true)
-      return
+    try {
+      const next = await listAccounts(provider)
+      if (next === undefined) {
+        setRowsFailure({ title: t('accounts.list.loadError'), detail: '' })
+        return
+      }
+      setRowsFailure(undefined)
+      setRows(next)
+    } catch (cause) {
+      setRowsFailure({ title: t('accounts.list.loadError'), detail: describe(cause) })
     }
-    setRowsError(false)
-    setRows(next)
-  }, [listAccounts])
+  }, [listAccounts, t])
 
   useEffect(() => { void loadProviders() }, [loadProviders])
 
@@ -217,14 +289,41 @@ export function AccountsSection({
     void loadRows(provider)
   }, [provider, loadRows])
 
+  // A poll can still be in flight when the effect below re-runs, because its
+  // dependency identity is not stable across renders. Without this guard the
+  // second poll reads the same cursor and fetches the same batch again, so one
+  // action renders as several identical rows.
+  const inFlightRef = useRef(false)
+
   const poll = useCallback(async (): Promise<void> => {
     if (provider === undefined) return
-    const fresh = await accountLog(provider, sinceRef.current)
-    if (fresh === undefined || fresh.length === 0) return
-    const last = fresh[fresh.length - 1]
-    if (last !== undefined) sinceRef.current = last.seq
-    setEntries(previous => [...previous, ...fresh])
-  }, [provider, accountLog])
+    if (inFlightRef.current) return
+    inFlightRef.current = true
+    try {
+      const fresh = await accountLog(provider, sinceRef.current)
+      if (fresh === undefined) {
+        setLogFailure({ title: t('accounts.log.loadError'), detail: '' })
+        return
+      }
+      setLogFailure(undefined)
+      if (fresh.length === 0) return
+      const last = fresh[fresh.length - 1]
+      if (last !== undefined) sinceRef.current = Math.max(sinceRef.current, last.seq)
+      // Fold by sequence number rather than by arrival. A batch may be delivered
+      // more than once when two polls share a cursor, and the sequence is the
+      // only identity an entry has -- appending blindly both duplicates the row
+      // and gives React two children with one key.
+      setEntries((previous) => {
+        const seen = new Set(previous.map(entry => entry.seq))
+        const add = fresh.filter(entry => !seen.has(entry.seq))
+        return add.length === 0 ? previous : [...previous, ...add]
+      })
+    } catch (cause) {
+      setLogFailure({ title: t('accounts.log.loadError'), detail: describe(cause) })
+    } finally {
+      inFlightRef.current = false
+    }
+  }, [provider, accountLog, t])
 
   useEffect(() => {
     if (provider === undefined) return undefined
@@ -254,9 +353,17 @@ export function AccountsSection({
     const account = kind === 'email'
       ? { email: identifier, password }
       : { mobile: identifier, area_code: areaCode.trim() || '+86', password }
-    const result = await addAccount(provider, account)
+    let result: { ok: true; account?: string } | { ok: false; message: string }
+    try {
+      result = await addAccount(provider, account)
+    } catch (cause) {
+      setPending(false)
+      // Clear the secret from component state before rendering the outcome.
+      setPassword('')
+      setError(describe(cause))
+      return
+    }
     setPending(false)
-    // Clear the secret from component state before rendering the outcome.
     setPassword('')
     if (!result.ok) {
       setError(result.message)
@@ -278,9 +385,16 @@ export function AccountsSection({
     if (provider === undefined) return
     setBusy({ id: account.id, op })
     setOutcome(undefined)
-    const result = op === 'relogin'
-      ? await reloginAccount(provider, account.id)
-      : await reprofileAccount(provider, account.id)
+    let result: AccountsSectionOpResult
+    try {
+      result = op === 'relogin'
+        ? await reloginAccount(provider, account.id)
+        : await reprofileAccount(provider, account.id)
+    } catch (cause) {
+      setBusy(undefined)
+      setOutcome(describe(cause))
+      return
+    }
     setBusy(undefined)
     setOutcome(result.ok
       ? t(op === 'relogin' ? 'accounts.relogin.ok' : 'accounts.reprofile.ok')
@@ -291,127 +405,145 @@ export function AccountsSection({
   return (
     <div className={css.section}>
       <p className={css.intro}>{t('accounts.intro')}</p>
-      {loadError && <div className={css.error} role="alert">{t('accounts.loadError')}</div>}
-      {error !== undefined && <div className={css.error} role="alert">{error}</div>}
-      {done !== undefined && <div className={css.notice} role="status">{done}</div>}
+      {providersFailure !== undefined && <FailureBanner failure={providersFailure} />}
+      {error !== undefined && <FailureBanner failure={{ title: error, detail: '' }} />}
+      {done !== undefined && (
+        <div className={cx(css.banner, css.bannerNotice)} role="status">
+          <span className={css.bannerTitle}>{done}</span>
+        </div>
+      )}
 
       {providers !== undefined && providers.length === 0 && (
         <p className={css.hint}>{t('accounts.noProviders')}</p>
       )}
 
       {provider !== undefined && (
-        <div className={css.group}>
-          <div className={css.field}>
-            <span className={css.label}>{t('accounts.provider.label')}</span>
-            <select
-              className={css.select}
-              value={provider}
-              disabled={pending}
-              onChange={() => { /* one route today; the control shows which */ }}
-            >
-              {providers?.map(route => <option key={route} value={route}>{route}</option>)}
-            </select>
-            <span className={css.hint}>{t('accounts.provider.hint')}</span>
+        <section className={css.card}>
+          <div className={css.cardHead}>
+            <h3 className={css.cardTitle}>{t('accounts.add.title')}</h3>
           </div>
+          <div className={css.group}>
+            <div className={css.field}>
+              <span className={css.label}>{t('accounts.provider.label')}</span>
+              <span className={css.staticProvider}>{provider}</span>
+              <span className={css.hint}>{t('accounts.provider.hint')}</span>
+            </div>
 
-          <div className={css.field}>
-            <span className={css.label}>
-              <button
-                type="button"
-                className={css.tab}
-                aria-pressed={kind === 'email'}
-                onClick={() => { setKind('email') }}
-              >
-                {t('accounts.email.label')}
-              </button>
-              <button
-                type="button"
-                className={css.tab}
-                aria-pressed={kind === 'mobile'}
-                onClick={() => { setKind('mobile') }}
-              >
-                {t('accounts.mobile.label')}
-              </button>
-            </span>
-            {kind === 'email'
-              ? (
-                <Input
-                  type="email"
-                  autoComplete="username"
-                  placeholder={t('accounts.email.placeholder')}
-                  value={email}
-                  disabled={pending}
-                  onChange={(event) => { setEmail(event.target.value) }}
-                />
-              )
-              : (
-                <div className={css.mobileRow}>
-                  <span className={css.areaCode}>
-                    <Input
-                      aria-label={t('accounts.areaCode.label')}
-                      placeholder="+86"
-                      value={areaCode}
-                      disabled={pending}
-                      onChange={(event) => { setAreaCode(event.target.value) }}
-                    />
-                  </span>
+            <div className={css.field}>
+              <span className={css.label}>
+                <span className={css.tabs}>
+                  <button
+                    type="button"
+                    className={css.tab}
+                    aria-pressed={kind === 'email'}
+                    onClick={() => { setKind('email') }}
+                  >
+                    {t('accounts.email.label')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.tab}
+                    aria-pressed={kind === 'mobile'}
+                    onClick={() => { setKind('mobile') }}
+                  >
+                    {t('accounts.mobile.label')}
+                  </button>
+                </span>
+              </span>
+              {kind === 'email'
+                ? (
                   <Input
-                    type="tel"
-                    autoComplete="tel"
-                    placeholder={t('accounts.mobile.placeholder')}
-                    value={mobile}
+                    type="email"
+                    autoComplete="username"
+                    placeholder={t('accounts.email.placeholder')}
+                    value={email}
                     disabled={pending}
-                    onChange={(event) => { setMobile(event.target.value) }}
+                    onChange={(event) => { setEmail(event.target.value) }}
                   />
-                </div>
-              )}
-          </div>
+                )
+                : (
+                  <div className={css.mobileRow}>
+                    <span className={css.areaCode}>
+                      <Input
+                        aria-label={t('accounts.areaCode.label')}
+                        placeholder="+86"
+                        value={areaCode}
+                        disabled={pending}
+                        onChange={(event) => { setAreaCode(event.target.value) }}
+                      />
+                    </span>
+                    <Input
+                      type="tel"
+                      autoComplete="tel"
+                      placeholder={t('accounts.mobile.placeholder')}
+                      value={mobile}
+                      disabled={pending}
+                      onChange={(event) => { setMobile(event.target.value) }}
+                    />
+                  </div>
+                )}
+            </div>
 
-          <div className={css.field}>
-            <span className={css.label}>{t('accounts.password.label')}</span>
-            <Input
-              type="password"
-              autoComplete="current-password"
-              placeholder={t('accounts.password.placeholder')}
-              value={password}
-              disabled={pending}
-              onChange={(event) => { setPassword(event.target.value) }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit()
-              }}
-            />
-          </div>
+            <div className={css.field}>
+              <span className={css.label}>{t('accounts.password.label')}</span>
+              <Input
+                type="password"
+                autoComplete="current-password"
+                placeholder={t('accounts.password.placeholder')}
+                value={password}
+                disabled={pending}
+                onChange={(event) => { setPassword(event.target.value) }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void submit()
+                }}
+              />
+            </div>
 
-          <div className={css.actions}>
-            <Button
-              variant="primary"
-              disabled={!canSubmit}
-              onClick={() => { void submit() }}
-            >
-              {pending ? t('accounts.submitting') : t('accounts.submit')}
-            </Button>
+            <div className={css.actions}>
+              <Button
+                variant="primary"
+                disabled={!canSubmit}
+                onClick={() => { void submit() }}
+              >
+                {pending ? t('accounts.submitting') : t('accounts.submit')}
+              </Button>
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
       {provider !== undefined && (
-        <div className={css.listSection}>
-          <div className={css.listHead}>
-            <h3 className={css.listTitle}>{t('accounts.list.title')}</h3>
-            <span className={css.listSpacer} />
-            <Button onClick={() => { void loadRows(provider) }}>{t('accounts.list.refresh')}</Button>
+        <section className={css.card}>
+          <div className={css.cardHead}>
+            <h3 className={css.cardTitle}>{t('accounts.list.title')}</h3>
+            {rows !== undefined && rows.length > 0 && (
+              <span className={css.badge}>
+                {t('accounts.list.count', { count: rows.length })}
+              </span>
+            )}
+            <span className={css.cardSpacer} />
+            <Button size="sm" onClick={() => { void loadRows(provider) }}>
+              {t('accounts.list.refresh')}
+            </Button>
           </div>
-          <p className={css.hint}>{t('accounts.list.hint')}</p>
-          {rowsError && <div className={css.error} role="alert">{t('accounts.list.loadError')}</div>}
-          {outcome !== undefined && <div className={css.notice} role="status">{outcome}</div>}
-          {rows !== undefined && rows.length === 0 && <p className={css.hint}>{t('accounts.list.empty')}</p>}
+          <p className={css.cardHint}>{t('accounts.list.hint')}</p>
+          {rowsFailure !== undefined && <FailureBanner failure={rowsFailure} />}
+          {outcome !== undefined && (
+            <div className={cx(css.banner, css.bannerNotice)} role="status">
+              <span className={css.bannerTitle}>{outcome}</span>
+            </div>
+          )}
+
+          {rows !== undefined && rows.length === 0 && (
+            <p className={css.empty}>{t('accounts.list.empty')}</p>
+          )}
 
           <div className={css.rows}>
             {rows?.map((row) => {
               const open = expanded.includes(row.id)
               const running = busy?.id === row.id ? busy.op : undefined
               return (
-                <div key={row.id} className={css.row}>
+                <div key={row.id} className={cx(css.row, open && css.rowOpen)}>
                   <div className={css.rowHead}>
                     <button
                       type="button"
@@ -419,22 +551,29 @@ export function AccountsSection({
                       aria-expanded={open}
                       onClick={() => { toggle(row.id) }}
                     >
+                      <span className={css.chevron} aria-hidden="true" />
+                      <span className={cx(
+                        css.statusDot,
+                        row.configured ? css.statusOn : css.statusOff,
+                      )}
+                      />
                       <span className={css.rowLabel}>{row.label}</span>
-                      <span className={row.configured ? css.badge : `${css.badge ?? ''} ${css.badgeOrphan ?? ''}`.trim()}>
-                        {row.configured ? t('accounts.list.configured') : t('accounts.list.orphan')}
-                      </span>
-                      <span className={css.badge}>
-                        {open ? t('accounts.list.collapse') : t('accounts.list.expand')}
+                      <span className={css.rowMeta}>
+                        <span className={cx(css.badge, !row.configured && css.badgeOrphan)}>
+                          {row.configured ? t('accounts.list.configured') : t('accounts.list.orphan')}
+                        </span>
                       </span>
                     </button>
                     <div className={css.rowActions}>
                       <Button
+                        size="sm"
                         disabled={running !== undefined}
                         onClick={() => { void repair(row, 'relogin') }}
                       >
                         {running === 'relogin' ? t('accounts.relogin.busy') : t('accounts.relogin')}
                       </Button>
                       <Button
+                        size="sm"
                         title={t('accounts.reprofile.warn')}
                         disabled={running !== undefined}
                         onClick={() => { void repair(row, 'reprofile') }}
@@ -445,44 +584,62 @@ export function AccountsSection({
                   </div>
                   {open && (
                     <div className={css.fields}>
-                      {row.fields.map(field => (
-                        <div key={field.label} className={css.fieldRow}>
-                          <span className={css.fieldLabel}>{field.label}</span>
-                          <span className={css.fieldValue}>{field.value}</span>
-                        </div>
-                      ))}
+                      <span className={css.fieldsHead}>{t('accounts.fields.title')}</span>
+                      {!row.configured && (
+                        <span className={css.hint}>{t('accounts.list.orphanHint')}</span>
+                      )}
+                      {row.fields.length === 0
+                        ? <span className={css.hint}>{t('accounts.fields.empty')}</span>
+                        : (
+                          <div className={css.fieldsGrid}>
+                            {row.fields.map(field => (
+                              <Fragment key={field.label}>
+                                <span className={css.fieldLabel}>{field.label}</span>
+                                <span className={css.fieldValue}>{field.value}</span>
+                              </Fragment>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>
               )
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {provider !== undefined && (
-        <div className={css.logSection}>
-          <div className={css.logHead}>
-            <h3 className={css.logTitle}>{t('accounts.log.title')}</h3>
-            <span className={css.listSpacer} />
-            <Button onClick={() => { setEntries([]) }}>{t('accounts.log.clear')}</Button>
+        <section className={css.card}>
+          <div className={css.cardHead}>
+            <h3 className={css.cardTitle}>{t('accounts.log.title')}</h3>
+            {entries.length > 0 && (
+              <span className={css.badge}>
+                {t('accounts.log.count', { count: entries.length })}
+              </span>
+            )}
+            <span className={css.cardSpacer} />
+            <Button size="sm" disabled={entries.length === 0} onClick={() => { setEntries([]) }}>
+              {t('accounts.log.clear')}
+            </Button>
           </div>
-          <p className={css.hint}>{t('accounts.log.hint')}</p>
+          <p className={css.cardHint}>{t('accounts.log.hint')}</p>
+          {logFailure !== undefined && <FailureBanner failure={logFailure} />}
           {entries.length === 0
-            ? <p className={css.hint}>{t('accounts.log.empty')}</p>
+            ? <p className={css.empty}>{t('accounts.log.empty')}</p>
             : (
               <div className={css.log} role="log">
                 {entries.map(entry => (
-                  <div key={entry.seq} className={levelClass(entry.level)}>
+                  <div key={entry.seq} className={cx(css.logRow, levelClass(entry.level))}>
                     <span className={css.logTime}>{clock(entry.at)}</span>
-                    <span className={css.logAccount}>{entry.account}</span>
                     <span className={css.logEvent}>{entry.event}</span>
+                    <span className={css.logAccount}>{entry.account}</span>
                     <span className={css.logDetail}>{entry.detail}</span>
                   </div>
                 ))}
               </div>
             )}
-        </div>
+        </section>
       )}
     </div>
   )

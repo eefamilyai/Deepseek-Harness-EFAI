@@ -404,6 +404,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     push('Device id origin', row.device_id_source)
     push('Device id length', row.device_id_len === 0 ? '' : String(row.device_id_len))
     push('Device id valid', row.device_id_len === 0 ? '' : String(row.device_id_valid))
+    push('Device id rejected', row.device_id_rejected)
     push('DID', row.did)
     push('Identity origin', row.origin)
     push('Captured at', row.captured_at === null ? '' : new Date(row.captured_at * 1000).toISOString())
