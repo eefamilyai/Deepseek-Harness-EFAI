@@ -97,3 +97,182 @@
   display: flex;
   justify-content: flex-start;
 }
+
+/* --- the account list: one expandable row per pooled login --- */
+
+.listSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.listHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.listTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.listSpacer {
+  flex: 1 1 auto;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-primary);
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.rowToggle {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowLabel {
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.badge {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-secondary);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.badgeOrphan {
+  background: var(--dsw-alias-bg-error);
+  color: var(--dsw-alias-label-error);
+}
+
+.rowActions {
+  display: flex;
+  gap: 6px;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 10px 10px 10px;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fieldLabel {
+  flex: 0 0 132px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.fieldValue {
+  flex: 1 1 auto;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-all;
+}
+
+/* --- the debug log: what makes two logins at once legible --- */
+
+.logSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.logHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-secondary);
+}
+
+.logEntry,
+.logWarn,
+.logError {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.logWarn {
+  color: var(--dsw-alias-label-primary);
+}
+
+.logError {
+  color: var(--dsw-alias-label-error);
+}
+
+.logTime {
+  flex: 0 0 62px;
+}
+
+.logAccount {
+  flex: 0 0 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logEvent {
+  flex: 0 0 76px;
+}
+
+.logDetail {
+  flex: 1 1 auto;
+  word-break: break-word;
+}

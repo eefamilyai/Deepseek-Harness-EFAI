@@ -3,13 +3,11 @@
  * The shapes the reader repairs in a block whose structure went wrong, and the
  * shapes it must still refuse.
  *
- * Three repairs are pinned here, each with the boundary that keeps it from
+ * Two repairs are pinned here, each with the boundary that keeps it from
  * firing where the block is genuinely unfinished:
  *
  *   * `orphan-group` — a wrapped block whose invoke OPENERS are all missing and
  *     whose invoke CLOSERS are present, one closer per call.
- *   * `invoke-closer-as-parameter` — an argument the model closed with the
- *     invoke closer instead of its own.
  *   * `closer-spam` — a run of closer-only lines, which is the model repeating
  *     structure rather than writing a call.
  *
@@ -130,35 +128,10 @@ describe('a wrapped block whose invoke openers are missing', () => {
   })
 })
 
-describe('an argument closed by the invoke closer', () => {
-  const closedByInvoke = [CO, IO + 'name="kernel"' + GT, PO + 'name="code">print(1)' + IC, CC, ''].join('\n')
-
-  it('reads the invoke closer as the argument end', () => {
-    expect(calls(closedByInvoke)).toEqual([{ name: 'kernel', arguments: { code: 'print(1)' } }])
-  })
-
-  it('reports both repairs it made', () => {
-    const shapes = run(closedByInvoke).reader.repairedShapes()
-    expect(shapes).toContain('invoke-closer-as-parameter')
-    expect(shapes).toContain('missing-invoke-close')
-  })
-
-  it('reads the argument the model closed this way and keeps the ones that closed', () => {
-    const mixed = [
-      CO,
-      IO + 'name="kernel"' + GT,
-      argument('code', 'print(1)'),
-      PO + 'name="timeoutMs">5000' + IC,
-      CC,
-      '',
-    ].join('\n')
-    expect(calls(mixed)).toEqual([{ name: 'kernel', arguments: { code: 'print(1)', timeoutMs: 5000 } }])
-  })
-
+describe('an argument left without its own closer', () => {
   it('refuses an argument with no closer of any kind', () => {
     const cut = [CO, IO + 'name="kernel"' + GT, PO + 'name="code">print(1)', CC, ''].join('\n')
     expect(calls(cut)).toEqual([])
-    expect(run(cut).reader.repairedShapes()).not.toContain('invoke-closer-as-parameter')
   })
 
   it('refuses two argument openers closed by one invoke closer', () => {
@@ -185,7 +158,6 @@ describe('an argument closed by the invoke closer', () => {
       '',
     ].join('\n')
     expect(calls(whole)).toEqual([{ name: 'kernel', arguments: { code: 'print(1)', timeoutMs: 5000 } }])
-    expect(run(whole).reader.repairedShapes()).not.toContain('invoke-closer-as-parameter')
   })
 })
 
@@ -286,4 +258,13 @@ describe('closer spam ends the turn', () => {
     ]), KERNEL_TOOLS))
     expect(blockedText(chunks)).not.toContain('repeated structural closers')
   })
+})
+
+describe('an argument value that quotes the format', () => {
+  it('still reads the call, because a quoted opener is not a tag', () => {
+    const quoted = '<parameter\\b'
+    const block = [CO, IO + 'name="kernel"' + GT, argument('code', quoted), IC, CC, ''].join('\n')
+    expect(calls(block)).toEqual([{ name: 'kernel', arguments: { code: quoted } }])
+  })
+
 })

@@ -20,9 +20,9 @@ For what the fork *is* — every plugin it adds, where each mounts, and which sw
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against the base `00102833df`, the fork modifies **80 upstream files** (17 patch groups) and regenerates 25 more. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
+Measured against the base `00102833df`, the fork modifies **87 upstream files** (17 patch groups) and regenerates 25 more. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
 
-Those 80 files are the entire cost of every future update, and the list is **frozen**: `local-overlay/SEAM.json` records it, and `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file absent from it.
+Those 87 files are the entire cost of every future update, and the list is **frozen**: `local-overlay/SEAM.json` records it, and `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file absent from it.
 
 The seam below is grouped by why each edit exists, because the fix differs per group.
 
@@ -130,24 +130,29 @@ Neither is a customization. Both are defects in upstream code that upstream user
 
 `packages/core/system-prompt/src/index.ts` (one line — the harness identity string), `packages/client/ui-chat/src/client/chat/StatsLine.module.css`, `packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css`, and three `locales.ts` files.
 
-**T2-F · Documentation and snapshot artifacts — 13 files**
+**T2-F · Documentation and snapshot artifacts — 16 files**
 
 | File | Δ | Generator |
 |---|---|---|
 | `docs/config-catalog.md` | +191 | `gen-config-catalog` |
 | `docs/subsystems/code-runtime.{md,zh.md,i18n.yaml}` | +104 | hand-written |
 | `docs/tool-catalog.md` | +32 | `gen-tool-catalog` |
-| `docs/subsystems/llm-streaming.{md,zh.md,i18n.yaml}` | +60 | hand-written |
+| `docs/subsystems/llm-streaming.{md,zh.md,i18n.yaml}` | +132 | hand-written |
+| `docs/subsystems/compaction.{md,zh.md,i18n.yaml}` | +16 | hand-written |
 | `apps/cli/composition.md` | +21 | `gen-doc-graphs` |
 | `docs/capability-seams.md` | +11 | `gen-doc-graphs` |
 | `snapshots/web/lifecycle-chrome/{hero,plan-active}.expected.md` | +2 | `test:snapshot:record` |
 | `THIRD_PARTY_NOTICES.md` | +1 | `gen-third-party-notices` |
 
+The `compaction` triplet mirrors `packages/compaction/compaction/src/index.ts` — already a
+seam file — after the engine contract gained a per-call instruction; the doc follows the code it
+documents, and recording it here is what keeps the two from diverging silently.
+
 Seven of these (~280 lines, counting `tsconfig.base.json` from T2-A) are regenerable output. Merging them by hand is wasted work that also produces a catalog describing the previous release. The other six — the `code-runtime` and `llm-streaming` triplets — are hand-written documentation for fork features, placed in upstream-owned files; they belong in fork-owned pages.
 
 **T2-G · Generator scripts — 3 files**
 
-`scripts/gen-tool-catalog.ts` (+18), `scripts/gen-doc-graphs.ts` (+10), `scripts/gen-cordis-catalog.ts` (+9).
+`scripts/gen-tool-catalog.ts` (+18), `scripts/gen-doc-graphs.ts` (+10), `scripts/gen-cordis-catalog.ts` (+13).
 
 **T2-H · Tests mirroring the above — 9 files**
 

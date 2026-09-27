@@ -163,6 +163,151 @@ function parseUploadedFiles(value: unknown): KilnUploadedFile[] {
   return files
 }
 
+/** One account the runtime can serve, as the Accounts tab renders it. */
+export interface KilnAccountRow {
+  /** The account id a route is pinned by; empty for a profile with no config entry. */
+  readonly id: string
+  /** The Chrome user-data directory name this account owns. */
+  readonly slug: string
+  /** Whether a configured login currently names this account. */
+  readonly configured: boolean
+  readonly email: string
+  readonly mobile: string
+  readonly area_code: string
+  /** Credential PRESENCE only. No token, cookie, or password value crosses here. */
+  readonly has_token: boolean
+  readonly has_cookie: boolean
+  readonly has_password: boolean
+  /** This account's Chrome user-data directory. */
+  readonly profile: string
+  readonly profile_exists: boolean
+  /** Where this account's captured identity is recorded. */
+  readonly record_path: string
+  /** The Shumei fingerprint this account presents, or '' when it has none yet. */
+  readonly device_id: string
+  readonly device_id_len: number
+  readonly device_id_valid: boolean
+  /** 'account' when the account minted it, 'machine' when it inherits the machine value. */
+  readonly device_id_source: string
+  /** The per-profile header UUID, a different value from `device_id`. */
+  readonly x_device_id: string
+  /** The `/client/settings` query-string UUID, different again from both. */
+  readonly did: string
+  /** How the identity was captured, or '' when none was. */
+  readonly origin: string
+  /** Capture time, or null when this account was never captured. */
+  readonly captured_at: number | null
+}
+
+/** One operator-visible event from the sidecar's log ring. */
+export interface KilnLogEntry {
+  readonly seq: number
+  readonly at: number
+  readonly account: string
+  readonly event: string
+  readonly level: string
+  readonly detail: string
+}
+
+/** The outcome of a re-login or a re-profile. A refusal is a value, not a throw. */
+export interface KilnAccountOpResult {
+  readonly ok: boolean
+  readonly account?: string
+  /** Why the repair was refused, when it was. */
+  readonly message?: string
+  /** Whether the browser identity was refreshed as part of the repair. */
+  readonly captured?: boolean
+  /** Whether re-profiling removed the previous profile before minting. */
+  readonly removed?: boolean
+}
+
+/** Read one string field, defaulting to '' rather than inventing a value. */
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+/**
+ * Read the sidecar's account rows, dropping anything malformed.
+ *
+ * Every field is read defensively because this crosses a process boundary: a
+ * row missing its `device_id` is a real state (a profile that has not minted one
+ * yet), so it must arrive as '' rather than as a crash or a fabricated value.
+ */
+function parseAccountRows(value: unknown): KilnAccountRow[] {
+  if (!Array.isArray(value)) return []
+  const rows: KilnAccountRow[] = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') continue
+    const record = entry as Record<string, unknown>
+    const captured = record['captured_at']
+    rows.push({
+      id: text(record['id']),
+      slug: text(record['slug']),
+      configured: record['configured'] === true,
+      email: text(record['email']),
+      mobile: text(record['mobile']),
+      area_code: text(record['area_code']),
+      has_token: record['has_token'] === true,
+      has_cookie: record['has_cookie'] === true,
+      has_password: record['has_password'] === true,
+      profile: text(record['profile']),
+      profile_exists: record['profile_exists'] === true,
+      record_path: text(record['record_path']),
+      device_id: text(record['device_id']),
+      device_id_len: typeof record['device_id_len'] === 'number' ? record['device_id_len'] : 0,
+      device_id_valid: record['device_id_valid'] === true,
+      device_id_source: text(record['device_id_source']),
+      x_device_id: text(record['x_device_id']),
+      did: text(record['did']),
+      origin: text(record['origin']),
+      captured_at: typeof captured === 'number' ? captured : null,
+    })
+  }
+  return rows
+}
+
+/** Read the sidecar's log entries, keeping only ones a sequence number can order. */
+function parseLogEntries(value: unknown): KilnLogEntry[] {
+  if (!Array.isArray(value)) return []
+  const entries: KilnLogEntry[] = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') continue
+    const record = entry as Record<string, unknown>
+    const seq = record['seq']
+    if (typeof seq !== 'number') continue
+    const at = record['at']
+    entries.push({
+      seq,
+      at: typeof at === 'number' ? at : 0,
+      account: text(record['account']),
+      event: text(record['event']),
+      level: text(record['level']) || 'info',
+      detail: text(record['detail']),
+    })
+  }
+  return entries
+}
+
+/** Unwrap one repair result; the sidecar answers `ok: true` for the envelope itself. */
+function parseAccountOp(frame: Record<string, unknown>): KilnAccountOpResult {
+  if (frame['ok'] !== true) {
+    return { ok: false, message: text(frame['error']) || 'the request was refused' }
+  }
+  const result = frame['result']
+  if (result === null || typeof result !== 'object') {
+    return { ok: false, message: 'the sidecar sent no result' }
+  }
+  const record = result as Record<string, unknown>
+  return {
+    ok: record['ok'] === true,
+    ...typeof record['account'] === 'string' ? { account: record['account'] } : {},
+    ...typeof record['error'] === 'string' ? { message: record['error'] } : {},
+    ...record['captured'] === true ? { captured: true } : {},
+    ...record['removed'] === true ? { removed: true } : {},
+  }
+}
+
+
 /** A pending single-response request. */
 interface Waiter {
   resolve(value: Record<string, unknown>): void
@@ -370,6 +515,75 @@ export class KilnBridge {
       ...typeof frame['account'] === 'string' ? { account: frame['account'] } : {},
       ...typeof frame['error'] === 'string' ? { message: frame['error'] } : {},
     }
+  }
+
+  /**
+   * Read every account the runtime can serve, with the identity each one owns.
+   *
+   * An operator cannot tell "adding an account worked" from "it silently did
+   * nothing" without this. The reply carries what each account is configured
+   * with, where its Chrome profile lives, and the `device_id` / `x-device-id` /
+   * `did` that profile actually minted — but only the PRESENCE of the
+   * credentials: a device id identifies a device, a bearer token authorizes a
+   * session, and only one of those belongs on the wire.
+   * @returns the account rows, in the sidecar's order.
+   */
+  async listAccounts(): Promise<readonly KilnAccountRow[]> {
+    const frame = await this.request({ cmd: 'accounts' })
+    if (frame['ok'] !== true) {
+      const detail = typeof frame['error'] === 'string' ? frame['error'] : 'the read was refused'
+      throw new LlmError(`Kiln account read failed: ${detail}`, 'TRANSPORT')
+    }
+    return parseAccountRows(frame['accounts'])
+  }
+
+  /**
+   * Mint a fresh bearer token for one account from its stored credentials.
+   *
+   * The repair for a token that went stale. The sidecar replays the login the
+   * account was added with and persists the new token into that account's own
+   * slot; the password is used and never returned.
+   * @param account - the account id to re-login.
+   * @param capture - also refresh this account's browser identity. Default true.
+   * @returns the repair's outcome; a refusal is a value, not a throw.
+   */
+  async reloginAccount(account: string, capture = true): Promise<KilnAccountOpResult> {
+    const frame = await this.request({ cmd: 'relogin', account, capture })
+    return parseAccountOp(frame)
+  }
+
+  /**
+   * Rebuild one account's Chrome profile and mint a fresh browser identity.
+   *
+   * `fresh` removes the existing user-data directory first, which is the point:
+   * a profile that reuses its old state replays its old `device_id`, and the
+   * repair for a flagged identity is a new one rather than the same one again.
+   * @param account - the account id to re-profile.
+   * @param fresh - remove the existing profile before minting. Default true.
+   * @returns the repair's outcome; a refusal is a value, not a throw.
+   */
+  async reprofileAccount(account: string, fresh = true): Promise<KilnAccountOpResult> {
+    const frame = await this.request({ cmd: 'reprofile', account, fresh })
+    return parseAccountOp(frame)
+  }
+
+  /**
+   * Drain the sidecar's operator log from a sequence number.
+   *
+   * Drained rather than paged: the ring is bounded and the caller keeps its own
+   * cursor, so a poll returns only what it has not seen. That is what makes two
+   * accounts running at once legible — every entry names the account it belongs
+   * to, so interleaved requests stay attributable.
+   * @param since - the last sequence number the caller already has.
+   * @returns the new entries, oldest first.
+   */
+  async accountLog(since = 0): Promise<readonly KilnLogEntry[]> {
+    const frame = await this.request({ cmd: 'account_log', since })
+    if (frame['ok'] !== true) {
+      const detail = typeof frame['error'] === 'string' ? frame['error'] : 'the read was refused'
+      throw new LlmError(`Kiln log read failed: ${detail}`, 'TRANSPORT')
+    }
+    return parseLogEntries(frame['entries'])
   }
 
   /**

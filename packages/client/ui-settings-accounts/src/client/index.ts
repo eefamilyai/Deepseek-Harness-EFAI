@@ -2,12 +2,15 @@
  * Accounts settings section, browser half.
  *
  * Registers one `settings.section` entry that adds a DeepSeek web login from
- * the UI. The Host calls go through the `llm` Remote namespace: `listAccountProviders`
- * names the routes that pool accounts, and `addAccount` tests one login and, on
- * success, persists it and publishes its new per-login route so the model
- * picker can select it.
+ * the UI and then shows what is pooled. The Host calls go through the `llm`
+ * Remote namespace: `listAccountProviders` names the routes that pool accounts,
+ * `addAccount` tests one login and, on success, persists it and publishes its
+ * new per-login route so the model picker can select it, `listAccounts` reads
+ * every pooled login with its identity rows, `reloginAccount` and
+ * `reprofileAccount` are the two in-place repairs, and `accountLog` is the
+ * per-account debug trail.
  *
- * Nothing here knows what an account is beyond the draft the wire takes, so a
+ * Nothing here knows what an account is beyond the shapes the wire takes, so a
  * second account-pooling provider appears without a change to this file.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -23,7 +26,14 @@ import type { AccountsSectionInjected } from './AccountsSection.tsx'
 import { en, zh } from './locales.ts'
 
 export type { AccountsKey } from './locales.ts'
-export type { AccountsSectionComponentProps, AccountsSectionInjected } from './AccountsSection.tsx'
+export type {
+  AccountsSectionAccount,
+  AccountsSectionComponentProps,
+  AccountsSectionField,
+  AccountsSectionInjected,
+  AccountsSectionLogEntry,
+  AccountsSectionOpResult,
+} from './AccountsSection.tsx'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'accounts'
@@ -59,6 +69,24 @@ export function apply(ctx: ClientContext): void {
       return result.value.ok
         ? { ok: true, ...result.value.account === undefined ? {} : { account: result.value.account } }
         : { ok: false, message: result.value.message ?? t('accounts.needIdentifier') }
+    },
+    listAccounts: async (provider) => {
+      const result = await ctx.remote.llm.listAccounts(provider)
+      return result.ok ? result.value : undefined
+    },
+    reloginAccount: async (provider, account) => {
+      const result = await ctx.remote.llm.reloginAccount(provider, account)
+      // A refused repair answers `ok: false` in the payload; a Remote failure
+      // is the route itself being unavailable, and its message is the reason.
+      return result.ok ? result.value : { ok: false, message: result.error.message }
+    },
+    reprofileAccount: async (provider, account) => {
+      const result = await ctx.remote.llm.reprofileAccount(provider, account)
+      return result.ok ? result.value : { ok: false, message: result.error.message }
+    },
+    accountLog: async (provider, since) => {
+      const result = await ctx.remote.llm.accountLog(provider, since)
+      return result.ok ? result.value : undefined
     },
   })
 

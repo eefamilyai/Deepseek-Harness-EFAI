@@ -255,6 +255,107 @@ export interface LlmAccountAddResult {
   /** A plain failure reason, on failure — never the credential. */
   readonly message?: string
 }
+
+/**
+ * One label/value row a provider reports about an account.
+ *
+ * A row is how a provider says something this boundary has no field for, so a
+ * second account-pooling provider adds its own identity rows without changing
+ * this interface.
+ */
+export interface LlmAccountField {
+  /** Human-readable field name, e.g. `X device id`. */
+  readonly label: string
+  /** The field's value. Never a credential — see {@link LlmAccountInfo}. */
+  readonly value: string
+}
+
+/**
+ * One pooled login, as an operator surface reads it.
+ *
+ * Identity describes a DEVICE and belongs to the operator; a credential
+ * authorizes a SESSION and does not. So a row reports whether a token, cookie,
+ * or password is PRESENT and never its value — the only values that ride here
+ * are the ones naming the device the login is presented from.
+ */
+export interface LlmAccountInfo {
+  /** The login id, as the provider names it (the route suffix). */
+  readonly id: string
+  /** The provider route that pools this login. */
+  readonly provider: string
+  /** A short human label for the list row. */
+  readonly label: string
+  /** Whether the login is currently in the provider's account pool. */
+  readonly configured: boolean
+  /** Provider-reported identity rows, in display order. */
+  readonly fields: readonly LlmAccountField[]
+}
+
+/** One operator-facing debug line about account activity. */
+export interface LlmAccountLogEntry {
+  /** Monotonic sequence number, unique within one provider. */
+  readonly seq: number
+  /** Unix seconds the event was recorded. */
+  readonly at: number
+  /** The account the event is attributed to. */
+  readonly account: string
+  /** Short event name, e.g. `login`, `relogin`, `reprofile`. */
+  readonly event: string
+  /** Severity: `info`, `warn`, or `error`. */
+  readonly level: string
+  /** A plain human sentence; never a credential. */
+  readonly detail: string
+}
+
+/** The outcome of one repair operation on one account. */
+export interface LlmAccountOpResult {
+  /** Whether the operation succeeded. */
+  readonly ok: boolean
+  /** The account operated on, when the id resolved. */
+  readonly account?: string
+  /** A plain failure reason, on failure. */
+  readonly message?: string
+}
+
+/**
+ * The account-administration half of an account-pooling provider: what an
+ * operator surface reads, and the two repairs it can ask for.
+ *
+ * `list` is the read. `relogin` re-authenticates a login whose session has gone
+ * stale. `reprofile` replaces the browser identity a login presents, which is
+ * the repair for a device fingerprint that has been flagged — a fresh identity
+ * rather than the same one again. `log` is the per-account debug trail that
+ * makes two logins running at once legible.
+ *
+ * A provider that pools accounts registers one of these alongside its
+ * {@link LlmAccountAdder}, exactly as it registers the adder.
+ */
+export interface LlmAccountAdmin {
+  /**
+   * Every login the provider pools, plus any it holds identity for but has not
+   * configured — an orphan is what an operator needs to see, not what to hide.
+   * @returns one row per login, in the provider's own order.
+   */
+  list: () => Promise<readonly LlmAccountInfo[]>
+  /**
+   * Re-authenticate one login, refreshing the credentials it serves with.
+   * @param account - the login id to re-authenticate.
+   * @returns whether the login now works, or a plain reason it does not.
+   */
+  relogin: (account: string) => Promise<LlmAccountOpResult>
+  /**
+   * Replace one login's browser identity, so it presents as a new device.
+   * @param account - the login id to re-profile.
+   * @returns whether a fresh identity is in place, or a plain reason not.
+   */
+  reprofile: (account: string) => Promise<LlmAccountOpResult>
+  /**
+   * Debug lines recorded since a sequence number, oldest first.
+   * @param since - return only entries with a higher sequence number.
+   * @returns the entries, in recording order.
+   */
+  log: (since: number) => Promise<readonly LlmAccountLogEntry[]>
+}
 // DSH-FORK end
 
 /** Merge-extensible provider model modality vocabulary. */
@@ -341,6 +442,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     /** An account addition was refused: unknown route, or an invalid draft. */
     'llm/account-rejected': {
       readonly provider: string
+      readonly account?: string
     }
     // DSH-FORK end
   }

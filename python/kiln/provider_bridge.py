@@ -14,6 +14,10 @@ Requests (stdin, newline-delimited JSON):
     {"id": 4, "cmd": "cancel", "target": 3}
     {"id": 5, "cmd": "upload_files", "provider": "deepseek",
      "files": [{"name": "notes.txt", "data": "<base64>"}], "account": "you@example.com"}
+    {"id": 6, "cmd": "accounts"}
+    {"id": 7, "cmd": "relogin", "account": "you@example.com", "capture": true}
+    {"id": 8, "cmd": "reprofile", "account": "you@example.com", "fresh": true}
+    {"id": 9, "cmd": "account_log", "since": 0}
 
 Responses (stdout, newline-delimited JSON), each carrying the request `id`:
 
@@ -186,6 +190,74 @@ def _add_account(req):
     _send({"id": req["id"], "ok": True, "account": acct_id})
 
 
+def _accounts(req):
+    """The accounts the runtime can serve, with the identity each one owns.
+
+    An operator cannot tell "adding an account worked" from "it silently did
+    nothing" without this, and cannot tell which of two pooled logins a flagged
+    request came from without the log beside it. So the reply carries the whole
+    picture: what the account is configured with, where its Chrome profile
+    lives, and the ``device_id`` / ``x-device-id`` / ``did`` that profile
+    actually minted.
+
+    The credential fields are PRESENCE ONLY. A device id identifies a device and
+    belongs to the operator who owns it; a bearer token or a login password
+    authorizes a session, and only one of those two belongs on a wire.
+    """
+    try:
+        mod = providers._load_module("ds_admin")
+        rows = mod.list_accounts()
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+    _send({"id": req["id"], "ok": True, "accounts": rows})
+
+
+def _account_op(req, name):
+    """Run one repair (`relogin` / `reprofile`) against a named account.
+
+    Both are the same shape: a plain result dict from ``ds_admin``, where a
+    refusal is a value rather than an exception. The password is used and never
+    returned, and every step the repair takes lands in the log the UI drains.
+    """
+    try:
+        mod = providers._load_module("ds_admin")
+        fn = getattr(mod, name)
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+    account = str(req.get("account") or "")
+    kwargs = {"capture": bool(req.get("capture", True))}
+    if name == "reprofile":
+        kwargs["fresh"] = bool(req.get("fresh", True))
+    timeout = req.get("timeout_ms")
+    if isinstance(timeout, int) and timeout > 0:
+        kwargs["timeout_ms"] = timeout
+    try:
+        result = fn(account, **kwargs)
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+    _send({"id": req["id"], "ok": True, "result": result})
+
+
+def _account_log(req):
+    """Drain the operator log from a sequence number, plus the newest seq.
+
+    Drained rather than paged: the ring is bounded and the UI keeps its own
+    cursor, so a poll returns only what the caller has not seen.
+    """
+    try:
+        mod = providers._load_module("ds_admin")
+        since = req.get("since") or 0
+        entries = mod.drain(since)
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+    _send({"id": req["id"], "ok": True, "entries": entries,
+           "last": entries[-1]["seq"] if entries else None})
+
+
 def _device_id(req):
     """Report, set, or capture the Shumei ``device_id`` this machine presents.
 
@@ -350,6 +422,14 @@ def _dispatch(req):
             _configure(req)
         elif cmd == "add_account":
             _add_account(req)
+        elif cmd == "accounts":
+            _accounts(req)
+        elif cmd == "relogin":
+            _account_op(req, "relogin")
+        elif cmd == "reprofile":
+            _account_op(req, "reprofile")
+        elif cmd == "account_log":
+            _account_log(req)
         elif cmd == "device_id":
             _device_id(req)
         elif cmd == "cancel":

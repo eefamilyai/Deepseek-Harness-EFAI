@@ -44,10 +44,13 @@ import { LlmError } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-settings'
 // The Loader's `loader/volatile-update` event and `fiber.entry`.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
-import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmAccountAdder } from '@deepseek-ai/dsh-llm'
+import type {
+  AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmAccountAdder, LlmAccountAdmin,
+  LlmAccountField, LlmAccountInfo, LlmAccountLogEntry, LlmAccountOpResult,
+} from '@deepseek-ai/dsh-llm'
 import { KilnAdapter } from './adapter.ts'
 import { KilnBridge } from './bridge.ts'
-import type { KilnProvider } from './bridge.ts'
+import type { KilnAccountRow, KilnLogEntry, KilnProvider } from './bridge.ts'
 
 export { DEFAULT_COMPACTION_FOLD_CHARS, DEFAULT_COMPACTION_FOLD_PARTS, KilnAdapter, SUMMARIZER_SYSTEM, buildTurns, flattenMessage, isRateLimit, mintCallId, planCompactionFold, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions } from './adapter.ts'
 export type { CompactionFoldPlan } from './adapter.ts'
@@ -376,6 +379,98 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   const accountHandle = ctx.llm.registerAccountProvider(`${prefix}deepseek`, addAccount)
 
+  /**
+   * The account-ADMINISTRATION half of the same route: what the Accounts
+   * settings page lists and expands, and the two repairs it can ask for.
+   *
+   * This is where a `KilnAccountRow` becomes the provider-neutral
+   * `LlmAccountInfo` the runtime speaks. The device identity rows are the point
+   * of the expansion: `x_device_id`, the Shumei `device_id` and its origin, and
+   * the `did` are three DIFFERENT values on purpose, and an operator debugging a
+   * flagged account needs to see which one it presented. Credentials stay
+   * presence-only — `has_token` and friends are booleans, never values.
+   * @param row - one sidecar account row.
+   * @returns the same account as the boundary reports it.
+   */
+  const toAccountInfo = (row: KilnAccountRow): LlmAccountInfo => {
+    const identity: LlmAccountField[] = []
+    const push = (label: string, value: string): void => {
+      if (value.length > 0) identity.push({ label, value })
+    }
+    push('Email', row.email)
+    push('Mobile', row.mobile.length === 0 ? '' : `${row.area_code} ${row.mobile}`.trim())
+    push('X device id', row.x_device_id)
+    push('Device id', row.device_id)
+    push('Device id origin', row.device_id_source)
+    push('Device id length', row.device_id_len === 0 ? '' : String(row.device_id_len))
+    push('Device id valid', row.device_id_len === 0 ? '' : String(row.device_id_valid))
+    push('DID', row.did)
+    push('Identity origin', row.origin)
+    push('Captured at', row.captured_at === null ? '' : new Date(row.captured_at * 1000).toISOString())
+    push('Profile', row.profile)
+    push('Profile exists', String(row.profile_exists))
+    push('Identity record', row.record_path)
+    push('Token stored', String(row.has_token))
+    push('Cookie stored', String(row.has_cookie))
+    push('Password stored', String(row.has_password))
+    return {
+      id: row.id.length > 0 ? row.id : row.slug,
+      provider: `${prefix}deepseek`,
+      label: row.email.length > 0
+        ? row.email
+        : row.mobile.length > 0 ? row.mobile : row.slug,
+      configured: row.configured,
+      fields: identity,
+    }
+  }
+
+  /**
+   * One sidecar debug line as the boundary reports it. The seq/at pair is what
+   * lets a poll ask only for what is new; the account name is what makes two
+   * logins running at once attributable instead of interleaved.
+   * @param entry - one sidecar log entry.
+   * @returns the same entry as the boundary reports it.
+   */
+  const toLogEntry = (entry: KilnLogEntry): LlmAccountLogEntry => ({
+    seq: entry.seq,
+    at: entry.at,
+    account: entry.account,
+    event: entry.event,
+    level: entry.level,
+    detail: entry.detail,
+  })
+
+  /**
+   * Repair one login's session. A stale token is the ordinary case, and the
+   * sidecar re-drives the real login rather than replaying the old one.
+   * @param account - the login id to re-authenticate.
+   * @returns whether the login now works, or a plain reason it does not.
+   */
+  const reloginAccount = async (account: string): Promise<LlmAccountOpResult> => {
+    const result = await bridge.reloginAccount(account)
+    return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
+  }
+
+  /**
+   * Replace one login's browser identity, so it presents as a different device.
+   * The repair for a flagged fingerprint is a NEW identity, not the same one
+   * again, which is why the sidecar deletes the old profile by default.
+   * @param account - the login id to re-profile.
+   * @returns whether a fresh identity is in place, or a plain reason it is not.
+   */
+  const reprofileAccount = async (account: string): Promise<LlmAccountOpResult> => {
+    const result = await bridge.reprofileAccount(account)
+    return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
+  }
+
+  const accountAdmin: LlmAccountAdmin = {
+    list: async () => (await bridge.listAccounts()).map(toAccountInfo),
+    relogin: reloginAccount,
+    reprofile: reprofileAccount,
+    log: async since => (await bridge.accountLog(since)).map(toLogEntry),
+  }
+  const adminHandle = ctx.llm.registerAccountAdmin(`${prefix}deepseek`, accountAdmin)
+
   // Releasing the routes does not stop the sidecar, so all three are torn down
   // in one fiber-scoped effect: routes first, so no request can arrive at a
   // process that is already going away.
@@ -383,6 +478,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     yield () => {
       handle()
       accountHandle()
+      adminHandle()
       directory?.()
       bridge.dispose()
     }

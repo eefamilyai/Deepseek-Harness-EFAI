@@ -653,9 +653,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the compaction result, or `null` if no compaction was needed.',
       },
       {
-        signature: 'abstract compactNow( agent: ManualCompactAgentContext, signal: AbortSignal, sourceCommandId?: CommandId, ): Promise<CompactionResult | null>',
+        signature: 'abstract compactNow( agent: ManualCompactAgentContext, signal: AbortSignal, sourceCommandId?: CommandId, instruction?: string, ): Promise<CompactionResult | null>',
         description: 'Explicitly compact useful history even below automatic pressure thresholds. Implementations synchronously start an idle task before any asynchronous work, select a useful range without writing on a no-op, then append a standalone `compaction/start` before summarization. That durable marker is the compaction lock until one `compaction/end` attempt. Later waking prompts remain accepted in FIFO order and start only after the optional durability checkpoint and idle-task settlement. Context injected while the summary runs may sit between the marker pair; only the selected span must remain stable.',
-        parameters: [{ name: 'agent', description: 'idle agent whose durable history should be compacted.' }, { name: 'signal', description: 'cancellation scoped to this compaction request.' }, { name: 'sourceCommandId', description: 'initiating command identity for a manual compaction.' }],
+        parameters: [{ name: 'agent', description: 'idle agent whose durable history should be compacted.' }, { name: 'signal', description: 'cancellation scoped to this compaction request.' }, { name: 'sourceCommandId', description: 'initiating command identity for a manual compaction.' }, { name: 'instruction', description: 'per-call summarization instruction from `/compact <text>`, when present.' }],
         returns: 'the compaction result, or `null` when no safe useful range exists.',
         throws: ['{@link ManualCompactionError} for expected busy, agent-cancellation, changed-span, summarization/shrink, commit-stage, or persistence failures; an aborted request preserves its exact abort reason. Failed attempts remain visible in the log.'],
       },
@@ -1434,6 +1434,36 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the added account and route, or the failure reason.',
       },
       {
+        signature: 'registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void',
+        description: 'Register the account-ADMINISTRATION half of an account-pooling provider: the read an operator surface lists, and the repairs it can ask for. Mirrors registerAccountProvider: one admin per route, released with the returned disposer, and a provider that pools accounts normally registers both — the adder to create a login, the admin to inspect and repair one.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'admin', description: 'the read and repair operations for that route\'s logins.' }],
+        returns: 'a disposer that withdraws the admin.',
+      },
+      {
+        signature: 'async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>',
+        description: 'Every login one provider pools, for an operator surface to list and expand.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }],
+        returns: 'one row per login, in the provider\'s own order.',
+      },
+      {
+        signature: 'async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
+        description: 'Re-authenticate one login, so a session that has gone stale works again.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-authenticate.' }],
+        returns: 'whether the login now works, or a plain reason it does not.',
+      },
+      {
+        signature: 'async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
+        description: 'Replace one login\'s browser identity, so it presents as a different device. The repair for a flagged fingerprint is a NEW identity, not the same one.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
+        returns: 'whether a fresh identity is in place, or a plain reason it is not.',
+      },
+      {
+        signature: 'async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>',
+        description: 'The debug trail recorded since a sequence number, oldest first. Every entry names its account, which is what makes two logins running at once legible.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'since', description: 'return only entries with a higher sequence number.' }],
+        returns: 'the entries, in recording order.',
+      },
+      {
         signature: '@Remote(\'listAccountProviders\') async remoteListAccountProviders(): Promise<string[]>',
         description: 'Remote read of the routes that accept account additions.',
         parameters: [],
@@ -1445,6 +1475,34 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
         returns: 'the added account and route, or the failure reason.',
         throws: ['RemoteError with `llm/account-rejected` when no route pools accounts, or when the draft is missing a password or an email/mobile.'],
+      },
+      {
+        signature: '@Remote(\'listAccounts\') async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]>',
+        description: 'Remote read of one provider\'s pooled logins, for an operator surface to list and expand. Every row reports identity — including the device the login presents from — and only whether a credential is PRESENT.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }],
+        returns: 'one row per login, in the provider\'s own order.',
+        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote(\'reloginAccount\') async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
+        description: 'Remote adapter that re-authenticates one pooled login.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-authenticate.' }],
+        returns: 'whether the login now works, or a plain reason it does not.',
+        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote(\'reprofileAccount\') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
+        description: 'Remote adapter that replaces one pooled login\'s browser identity.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
+        returns: 'whether a fresh identity is in place, or a plain reason it is not.',
+        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote(\'accountLog\') async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]>',
+        description: 'Remote read of one provider\'s account debug trail. A poll passes the last sequence number it saw and receives only what is new, so two logins running at once stay attributable per account rather than interleaved.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'since', description: 'return only entries with a higher sequence number.' }],
+        returns: 'the entries, in recording order.',
+        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
       },
       {
         signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
@@ -5386,8 +5444,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface LlmAccountAddResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly route?: string;\n    readonly message?: string;\n}',
   },
   {
+    name: 'LlmAccountAdmin',
+    declaration: 'export interface LlmAccountAdmin {\n    list: () => Promise<readonly LlmAccountInfo[]>;\n    relogin: (account: string) => Promise<LlmAccountOpResult>;\n    reprofile: (account: string) => Promise<LlmAccountOpResult>;\n    log: (since: number) => Promise<readonly LlmAccountLogEntry[]>;\n}',
+  },
+  {
     name: 'LlmAccountDraft',
     declaration: 'export interface LlmAccountDraft {\n    readonly email?: string;\n    readonly mobile?: string;\n    readonly area_code?: string;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'LlmAccountField',
+    declaration: 'export interface LlmAccountField {\n    readonly label: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'LlmAccountInfo',
+    declaration: 'export interface LlmAccountInfo {\n    readonly id: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly configured: boolean;\n    readonly fields: readonly LlmAccountField[];\n}',
+  },
+  {
+    name: 'LlmAccountLogEntry',
+    declaration: 'export interface LlmAccountLogEntry {\n    readonly seq: number;\n    readonly at: number;\n    readonly account: string;\n    readonly event: string;\n    readonly level: string;\n    readonly detail: string;\n}',
+  },
+  {
+    name: 'LlmAccountOpResult',
+    declaration: 'export interface LlmAccountOpResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly message?: string;\n}',
   },
   {
     name: 'LlmAdapter',
@@ -5455,7 +5533,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'listAccountProviders\')\n    async remoteListAccountProviders(): Promise<string[]>;\n    @Remote(\'addAccount\')\n    async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(re /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void;\n    async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>;\n    async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>;\n    @Remote(\'listAccountProviders\')\n    async remoteListAccountProviders(): Promise<string[]>;\n    @Remote(\'addAccount\')\n    async remote /* …truncated — full shape in source */',
   },
   {
     name: 'LocalizedText',

@@ -12,7 +12,11 @@ import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type {
   GenerateOptions,
   LlmAccountAddResult,
+  LlmAccountAdmin,
   LlmAccountDraft,
+  LlmAccountInfo,
+  LlmAccountLogEntry,
+  LlmAccountOpResult,
   RequestMessage,
   LlmConfigurableProvider,
   LlmDiscoveredModel,
@@ -355,6 +359,7 @@ export class LlmRuntime extends TypertRemoteService {
     (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
   >()
   private accountAdders = new Map<string, LlmAccountAdder>()
+  private accountAdmins = new Map<string, LlmAccountAdmin>()
 
   constructor(ctx: Context) {
     super(ctx, 'llm')
@@ -691,6 +696,92 @@ export class LlmRuntime extends TypertRemoteService {
     return add(account)
   }
 
+  /**
+   * Register the account-ADMINISTRATION half of an account-pooling provider:
+   * the read an operator surface lists, and the repairs it can ask for. Mirrors
+   * {@link registerAccountProvider}: one admin per route, released with the
+   * returned disposer, and a provider that pools accounts normally registers
+   * both — the adder to create a login, the admin to inspect and repair one.
+   * @param provider - the provider route that pools logins.
+   * @param admin - the read and repair operations for that route's logins.
+   * @returns a disposer that withdraws the admin.
+   */
+  registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void {
+    const dispose = this.ctx.effect(function* (this: LlmRuntime) {
+      if (provider.length === 0) {
+        throw new LlmError('an account admin needs a non-empty route', 'INVALID_ACCOUNT_PROVIDER')
+      }
+      if (this.accountAdmins.has(provider)) {
+        throw new LlmError(`an account admin for "${provider}" is already registered`, 'DUPLICATE_ACCOUNT_PROVIDER')
+      }
+      this.accountAdmins.set(provider, admin)
+      yield () => {
+        this.accountAdmins.delete(provider)
+      }
+    }.bind(this), 'llm.registerAccountAdmin()')
+    return () => void dispose()
+  }
+
+  /**
+   * Resolve the admin for a route, or fail naming the route.
+   * @param provider - the provider route that pools logins.
+   * @returns the registered admin.
+   */
+  private accountAdmin(provider: string): LlmAccountAdmin {
+    const admin = this.accountAdmins.get(provider)
+    if (admin === undefined) {
+      throw new LlmError(`no account admin is registered for "${provider}"`, 'NO_ACCOUNT_PROVIDER')
+    }
+    return admin
+  }
+
+  /**
+   * Every login one provider pools, for an operator surface to list and expand.
+   * @param provider - the provider route that pools logins.
+   * @returns one row per login, in the provider's own order.
+   */
+  async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]> {
+    return this.accountAdmin(provider).list()
+  }
+
+  /**
+   * Re-authenticate one login, so a session that has gone stale works again.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to re-authenticate.
+   * @returns whether the login now works, or a plain reason it does not.
+   */
+  async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult> {
+    if (account.length === 0) {
+      throw new LlmError('relogin needs an account id', 'INVALID_ACCOUNT')
+    }
+    return this.accountAdmin(provider).relogin(account)
+  }
+
+  /**
+   * Replace one login's browser identity, so it presents as a different device.
+   * The repair for a flagged fingerprint is a NEW identity, not the same one.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to re-profile.
+   * @returns whether a fresh identity is in place, or a plain reason it is not.
+   */
+  async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult> {
+    if (account.length === 0) {
+      throw new LlmError('reprofile needs an account id', 'INVALID_ACCOUNT')
+    }
+    return this.accountAdmin(provider).reprofile(account)
+  }
+
+  /**
+   * The debug trail recorded since a sequence number, oldest first. Every entry
+   * names its account, which is what makes two logins running at once legible.
+   * @param provider - the provider route that pools logins.
+   * @param since - return only entries with a higher sequence number.
+   * @returns the entries, in recording order.
+   */
+  async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]> {
+    return this.accountAdmin(provider).log(since)
+  }
+
   // DSH-FORK(kiln): expose the account-pool surface to the browser so a settings
   // page can add a login without editing ds_config.json by hand. Both wrappers
   // only translate a local failure into a structured Remote code; the local
@@ -719,6 +810,93 @@ export class LlmRuntime extends TypertRemoteService {
   async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult> {
     try {
       return await this.addAccount(provider, account)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/account-rejected',
+        error instanceof Error ? error.message : String(error),
+        { provider },
+        { cause: error },
+      )
+    }
+  }
+
+  /**
+   * Remote read of one provider's pooled logins, for an operator surface to
+   * list and expand. Every row reports identity — including the device the
+   * login presents from — and only whether a credential is PRESENT.
+   * @param provider - the provider route that pools logins.
+   * @returns one row per login, in the provider's own order.
+   * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+   */
+  @Remote('listAccounts')
+  async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]> {
+    try {
+      return [...await this.listAccounts(provider)]
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/account-rejected',
+        error instanceof Error ? error.message : String(error),
+        { provider },
+        { cause: error },
+      )
+    }
+  }
+
+  /**
+   * Remote adapter that re-authenticates one pooled login.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to re-authenticate.
+   * @returns whether the login now works, or a plain reason it does not.
+   * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+   */
+  @Remote('reloginAccount')
+  async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult> {
+    try {
+      return await this.reloginAccount(provider, account)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/account-rejected',
+        error instanceof Error ? error.message : String(error),
+        { provider, account },
+        { cause: error },
+      )
+    }
+  }
+
+  /**
+   * Remote adapter that replaces one pooled login's browser identity.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to re-profile.
+   * @returns whether a fresh identity is in place, or a plain reason it is not.
+   * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+   */
+  @Remote('reprofileAccount')
+  async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult> {
+    try {
+      return await this.reprofileAccount(provider, account)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/account-rejected',
+        error instanceof Error ? error.message : String(error),
+        { provider, account },
+        { cause: error },
+      )
+    }
+  }
+
+  /**
+   * Remote read of one provider's account debug trail. A poll passes the last
+   * sequence number it saw and receives only what is new, so two logins running
+   * at once stay attributable per account rather than interleaved.
+   * @param provider - the provider route that pools logins.
+   * @param since - return only entries with a higher sequence number.
+   * @returns the entries, in recording order.
+   * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+   */
+  @Remote('accountLog')
+  async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]> {
+    try {
+      return [...await this.accountLog(provider, since)]
     } catch (error: unknown) {
       throw new RemoteError(
         'llm/account-rejected',

@@ -497,7 +497,6 @@ describe('near-misses of the taught format', () => {
       + '</invoke>\n</tool_calls>\n']
     expect(calls(chunks)).toEqual([['kernel', { code: '# Check router wiring\nimport re' }]])
     expect(prose(chunks)).not.toContain('DSML')
-    expect(prose(chunks)).toContain('format reminder')
   })
 
   it('leaves a parameter legitimately called `invoke` alone', () => {
@@ -546,11 +545,6 @@ describe('near-misses of the taught format', () => {
     expect(prose(chunks)).not.toContain('42')
   })
 
-  it('reminds once per block, however many repairs that block needed', () => {
-    const chunks = ['<tool_calls>\n<invoke=kernel>\n<parameter=code>print(1)</parameter>\n</invoke>\n</tool_calls>\n']
-    expect(prose(chunks).match(/format reminder/g)).toHaveLength(1)
-  })
-
   it('says nothing at all about a block written in the taught shape', () => {
     // A note after every call is read as decoration, and this transport has no
     // channel to spend on decoration.
@@ -558,14 +552,12 @@ describe('near-misses of the taught format', () => {
     expect(prose(chunks)).toBe('')
   })
 
-  it('still sends the reminder when no block ever closed around the repair', () => {
+  it('still reads the call when no block ever closed around the repair', () => {
     // Two repairs at once and no `</invoke>` anywhere: the equals spelling, and
     // the invoke the argument never had. The call is recovered at end of stream,
-    // where no `closeBlock` runs — so the reminder has to be owed, not emitted
-    // by whichever path happened to finish the block.
+    // where no `closeBlock` runs.
     const chunks = ['<parameter=code>print(1)</parameter>\n']
     expect(calls(chunks)).toEqual([['kernel', { code: 'print(1)' }]])
-    expect(prose(chunks)).toContain('format reminder')
   })
 
   it('refuses a call whose last parameter never closed, `</invoke>` or not', () => {
@@ -601,7 +593,6 @@ describe('near-misses of the taught format', () => {
     // was spent and neither side could see why.
     const chunks = ['<parameter name="code" string="true"># Read the request body\nimport re</parameter>\n']
     expect(calls(chunks)).toEqual([['kernel', { code: '# Read the request body\nimport re' }]])
-    expect(prose(chunks)).toContain('format reminder')
   })
 
   it('leaves the same tag alone inside a sentence', () => {
@@ -627,13 +618,12 @@ describe('near-misses of the taught format', () => {
     expect(calls(['<parameter name="nope">print(1)</parameter>\n'])).toEqual([])
   })
 
-  it('reminds but runs nothing for a bare parameter that names no argument', () => {
+  it('runs nothing for a bare parameter that names no argument', () => {
     // Two spellings of the same dead end: no attributes at all, and attributes
     // that never say which argument this is. Nothing can be placed either way,
-    // so the value stays visible — with a word about why it did not run.
+    // so the value stays visible.
     for (const chunks of [['<parameter>print(1)</parameter>\n'], ['<parameter string="true">print(1)</parameter>\n']]) {
       expect(calls(chunks)).toEqual([])
-      expect(prose(chunks)).toContain('format reminder')
     }
   })
 })

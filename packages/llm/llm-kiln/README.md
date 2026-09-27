@@ -140,7 +140,7 @@ Every fold call is a fresh one-shot chat, so none of it reuses a prefix; the con
 
 #### What the model sees
 
-One bracketed line, appended after the block it is about, when the reader either could not run the block or had to repair a near-miss of the format to run it. This is the only correction channel a text transport has: a dropped block reads back to the model as a call that ran and returned nothing. A repaired call still runs, and its reminder states the shape that works rather than the spelling that was accepted — naming the accepted spelling would teach it. A turn written in the taught shape draws no note at all.
+One bracketed line, appended after the block it is about, when the reader could not run it. This is the only correction channel a text transport has: a dropped block reads back to the model as a call that ran and returned nothing. A turn written in the taught shape draws no note at all.
 
 ##### Notes verbatim
 
@@ -149,12 +149,11 @@ One bracketed line, appended after the block it is about, when the reader either
 [unfinished tool call — the tool exists, but this block never completed one; nothing ran]
 [malformed tool call — an <invoke> tag here carries no readable name="..."; nothing ran]
 [malformed tool call — a tool_calls block runs only <invoke name="TOOL">…</invoke>; nothing ran]
-[format reminder — one argument per `<parameter name="NAME">value</parameter>` inside `<invoke name="TOOL">`, as your instructions show. The block above was repaired to run; write it that way.]
 ```
 
 #### Token effect
 
-One line on the turns that need one, at most one reminder per block. Each note then stays in the flattened transcript for the rest of the session, like any other assistant text.
+One line on the turns that need one. Each note then stays in the flattened transcript for the rest of the session, like any other assistant text.
 
 #### KV Cache effect
 

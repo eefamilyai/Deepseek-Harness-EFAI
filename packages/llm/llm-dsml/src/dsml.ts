@@ -239,6 +239,21 @@ function orphanParameterCall(
 }
 
 /**
+ * One structural parameter opener, spelled as the grammar allows it: the tag
+ * name followed by whatever a real tag puts there -- whitespace before an
+ * attribute run, the `>` that ends a bare tag, or the `/` of a self-closing
+ * one.
+ *
+ * A word boundary is NOT that test, though it reads like one. What follows
+ * the name in a genuine tag is a space or an angle bracket, while a boundary
+ * accepts ANY non-word character -- including the backslash of a regex
+ * source. A value that merely quotes the format therefore opened a parameter
+ * the reader never saw close: the depth stayed at one, the block read as cut
+ * off mid-write, and a complete call was dropped as prose.
+ */
+const PARAMETER_OPENER = '<' + 'parameter(?=[\\s/>=]|$)'
+
+/**
  * Every bodied invoke element in one block, with the text between them.
  *
  * A parameter's value is RAW TEXT and may quote the format, so neither end of a
@@ -261,7 +276,7 @@ function orphanParameterCall(
  */
 function invokeElements(raw: string): { readonly run: string; readonly body: string; readonly start: number; readonly end: number }[] {
   const token = new RegExp(
-    '<invoke\\s+(' + ATTRIBUTE_RUN + ')>|</invoke\\s*>|<parameter\\b|</parameter\\s*>',
+    '<invoke\\s+(' + ATTRIBUTE_RUN + ')>|</invoke\\s*>|' + PARAMETER_OPENER + '|</parameter\\s*>',
     'gi',
   )
   const close = new RegExp('</invoke\\s*>', 'gi')
@@ -330,7 +345,7 @@ function invokeElements(raw: string): { readonly run: string; readonly body: str
  * @returns the value with exactly its surplus trailing closers gone.
  */
 function stripSurplusClosers(value: string): string {
-  const openers = (value.match(new RegExp('<' + 'parameter\\b', 'gi')) ?? []).length
+  const openers = (value.match(new RegExp(PARAMETER_OPENER, 'gi')) ?? []).length
   const closers = [...value.matchAll(new RegExp('<' + '/parameter\\s*>', 'gi'))].length
   const tail = new RegExp('<' + '/parameter\\s*>\\s*$')
   let surplus = closers - openers
@@ -409,7 +424,10 @@ const ORPHAN_CLOSE = /<\/(?:tool_calls|function_calls|invoke|parameter)\s*>/gi
 const INVOKE_ENVELOPE_CLOSE = /<\/(?:tool_calls|function_calls|invoke)\s*>/gi
 
 /** Whether a block opened an `<invoke>` anywhere — the question that separates the wrapper-closed spelling from the wrapped-orphan one. */
-const INVOKE_OPENER = /<invoke\b/i
+const INVOKE_OPENER = new RegExp('<' + 'invoke(?=[\\s/>=]|$)', 'i')
+
+/** The same opener as a global scan, for the walks that need every hit rather than the first. */
+const INVOKE_SCAN = new RegExp('<' + 'invoke(?=[\\s/>=]|$)', 'gi')
 
 /** Either taught envelope tag, opener or closer, in either spelling. */
 const ENVELOPE_TAG = /<\/?(?:tool|function)[_▁]?calls?\s*>/gi
@@ -574,7 +592,7 @@ const BARE_FRAME = /<\/?[_▁]*calls?\s*\/?>/gi
  * lost call, it redirects one: the model asked for a tool it was never given and
  * would have had a DIFFERENT tool run on its argument.
  */
-const MARKUP = new RegExp(`</?(?:invoke|tool_calls|function_calls)\\b|<${PIPES}`, 'i')
+const MARKUP = new RegExp(`</?(?:invoke|tool_calls|function_calls)(?=[\\s/>=]|$)|<${PIPES}`, 'i')
 
 /**
  * The nameless opener above, and the closer that ends it.
@@ -596,10 +614,10 @@ const NAMELESS_PARAMETER_PAIR = /<parameter\s*=?\s*>|<\/parameter\s*>/gi
  * cannot place. The pipe is matched fullwidth only — an ASCII `|` is an
  * operator in every language these tools run.
  */
-const UNPLACEABLE = /｜|<parameter\b|<invoke\b/i
+const UNPLACEABLE = new RegExp('｜|' + PARAMETER_OPENER + '|' + '<' + 'invoke(?=[\\s/>=]|$)', 'i')
 
 /** One `<parameter …` opener, however it is spelled from there on. */
-const PARAMETER_OPEN = /<parameter\b/i
+const PARAMETER_OPEN = new RegExp(PARAMETER_OPENER, 'i')
 
 /**
  * How many parameter openers and closers a body holds.
@@ -617,7 +635,7 @@ const PARAMETER_OPEN = /<parameter\b/i
  * @returns the opener count and the closer count, uncompared.
  */
 function parameterCounts(body: string): { readonly open: number; readonly close: number; readonly surplus: number } {
-  const token = new RegExp('<' + 'parameter\\b|<' + '/parameter\\s*>', 'gi')
+  const token = new RegExp(PARAMETER_OPENER + '|<' + '/parameter\\s*>', 'gi')
   let open = 0
   let close = 0
   let depth = 0
@@ -653,7 +671,7 @@ function parameterCounts(body: string): { readonly open: number; readonly close:
  * @returns true when the body is a call still being written.
  */
 function unfinished(body: string): boolean {
-  const token = new RegExp('<' + 'parameter\\b|<' + '/parameter\\s*>', 'gi')
+  const token = new RegExp(PARAMETER_OPENER + '|<' + '/parameter\\s*>', 'gi')
   let depth = 0
   for (const match of body.matchAll(token)) {
     if (match[0].startsWith('<' + '/')) {
@@ -705,7 +723,7 @@ export function trailingReasoningCalls(
   // taken whole; otherwise on a bare invoke. An earlier quoted example sits
   // before this anchor and is excluded from the candidate.
   const wrapper = lastMatchIndex(reasoning, /<(?:tool|function)_calls>/gi)
-  const at = wrapper >= 0 ? wrapper : lastMatchIndex(reasoning, /<invoke\b/gi)
+  const at = wrapper >= 0 ? wrapper : lastMatchIndex(reasoning, INVOKE_SCAN)
   if (at < 0) return undefined
   const candidate = reasoning.slice(at)
   const translator = new DsmlTranslator(tools, options)
@@ -912,7 +930,7 @@ interface OpenBlock {
 function firstOpener(rest: string): { readonly index: number; readonly closer: string } | undefined {
   const wrapped = rest.indexOf(TOOL_CALLS_OPEN)
   const functional = rest.indexOf(FUNCTION_CALLS_OPEN)
-  const bare = rest.search(/<invoke\b/i)
+  const bare = rest.search(INVOKE_OPENER)
   const candidates: { index: number; closer: string }[] = []
   if (wrapped !== -1) candidates.push({ index: wrapped, closer: TOOL_CALLS_CLOSE })
   if (functional !== -1) candidates.push({ index: functional, closer: FUNCTION_CALLS_CLOSE })
@@ -1618,7 +1636,7 @@ export class DsmlTranslator {
    * @returns the closer's index, or -1 when it does not close here.
    */
   private blockCloserIndex(text: string, closer: string): number {
-    const scan = new RegExp('<parameter\\b|</parameter\\s*|' + escapeRegExp(closer), 'gi')
+    const scan = new RegExp(PARAMETER_OPENER + '|</parameter\\s*|' + escapeRegExp(closer), 'gi')
     for (const match of text.matchAll(scan)) {
       const written = match[0]
       if (written === closer) {
@@ -2065,7 +2083,7 @@ export class DsmlTranslator {
         continue
       }
       const after = raw.slice(start + match[0].length)
-      const nextInvoke = after.search(/<invoke\b/i)
+      const nextInvoke = after.search(INVOKE_OPENER)
       const region = nextInvoke === -1 ? after : after.slice(0, nextInvoke)
       if (PARAMETER_OPEN.test(region)) {
         // A region that still holds an unclosed argument is a call being
@@ -2264,7 +2282,7 @@ export class DsmlTranslator {
 export function restoreStrippedClosers(text: string): string {
   const PC = '<' + '/' + 'parameter' + '>'
   const IC = '<' + '/' + 'invoke' + '>'
-  const invokes = (text.match(/<invoke\b/gi) ?? []).length
+  const invokes = (text.match(INVOKE_SCAN) ?? []).length
   if (invokes < 2) return text
   const closed = (text.split(PC).length - 1) + (text.split(IC).length - 1)
   if (closed > 0) return text

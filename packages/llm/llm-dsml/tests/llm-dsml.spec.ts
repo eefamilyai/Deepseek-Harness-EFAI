@@ -193,11 +193,10 @@ describe('silent reading', () => {
     expect(visible(block, { notes: true })).toContain('no such tool')
   })
 
-  it('adds no format reminder to a block it repaired', () => {
+  it('adds no note to a block it repaired', () => {
     const block = ['<tool_calls>', '<invoke=read>', '<parameter=path>a.txt</parameter>', '</invoke>', '</tool_calls>', ''].join('\n')
     expect(calls(block, { notes: false })).toEqual([{ name: 'read', arguments: { path: 'a.txt' } }])
     expect(visible(block, { notes: false })).toBe('')
-    expect(visible(block, { notes: true })).toContain('format reminder')
   })
 
   it('leaves prose about the format exactly as written', () => {

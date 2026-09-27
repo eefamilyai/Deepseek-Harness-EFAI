@@ -1005,6 +1005,51 @@ listAccountProviders(): string[]
 async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
 
 /**
+ * Register the account-ADMINISTRATION half of an account-pooling provider:
+ * the read an operator surface lists, and the repairs it can ask for. Mirrors
+ * {@link registerAccountProvider}: one admin per route, released with the
+ * returned disposer, and a provider that pools accounts normally registers
+ * both — the adder to create a login, the admin to inspect and repair one.
+ * @param provider - the provider route that pools logins.
+ * @param admin - the read and repair operations for that route's logins.
+ * @returns a disposer that withdraws the admin.
+ */
+registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void
+
+/**
+ * Every login one provider pools, for an operator surface to list and expand.
+ * @param provider - the provider route that pools logins.
+ * @returns one row per login, in the provider's own order.
+ */
+async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>
+
+/**
+ * Re-authenticate one login, so a session that has gone stale works again.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to re-authenticate.
+ * @returns whether the login now works, or a plain reason it does not.
+ */
+async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
+
+/**
+ * Replace one login's browser identity, so it presents as a different device.
+ * The repair for a flagged fingerprint is a NEW identity, not the same one.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to re-profile.
+ * @returns whether a fresh identity is in place, or a plain reason it is not.
+ */
+async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
+
+/**
+ * The debug trail recorded since a sequence number, oldest first. Every entry
+ * names its account, which is what makes two logins running at once legible.
+ * @param provider - the provider route that pools logins.
+ * @param since - return only entries with a higher sequence number.
+ * @returns the entries, in recording order.
+ */
+async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
+
+/**
  * Remote read of the routes that accept account additions.
  * @returns the registered account-provider routes, in registration order.
  */
@@ -1021,6 +1066,45 @@ async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccount
  *   or when the draft is missing a password or an email/mobile.
  */
 @Remote('addAccount') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
+
+/**
+ * Remote read of one provider's pooled logins, for an operator surface to
+ * list and expand. Every row reports identity — including the device the
+ * login presents from — and only whether a credential is PRESENT.
+ * @param provider - the provider route that pools logins.
+ * @returns one row per login, in the provider's own order.
+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+ */
+@Remote('listAccounts') async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]>
+
+/**
+ * Remote adapter that re-authenticates one pooled login.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to re-authenticate.
+ * @returns whether the login now works, or a plain reason it does not.
+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+ */
+@Remote('reloginAccount') async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
+
+/**
+ * Remote adapter that replaces one pooled login's browser identity.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to re-profile.
+ * @returns whether a fresh identity is in place, or a plain reason it is not.
+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+ */
+@Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
+
+/**
+ * Remote read of one provider's account debug trail. A poll passes the last
+ * sequence number it saw and receives only what is new, so two logins running
+ * at once stay attributable per account rather than interleaved.
+ * @param provider - the provider route that pools logins.
+ * @param since - return only entries with a higher sequence number.
+ * @returns the entries, in recording order.
+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+ */
+@Remote('accountLog') async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]>
 
 /**
  * Remote adapter for one draft provider interrogation.
