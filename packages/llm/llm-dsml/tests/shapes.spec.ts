@@ -149,6 +149,22 @@ describe('a bare value never swallows the frame around it', () => {
     expect(codeOf('kernel(code="print(1)")')).toBe('print(1)')
     expect(codeOf('kernel(code="print(1))")')).toBe('print(1))')
   })
+
+  it('reads a value that carries its own brackets', () => {
+    // `file[1].txt` opens and closes its own bracket, so the value runs past
+    // both. Only an UNPARTNERED trailing closer is the frame, and trimFrame is
+    // what removes that - a terminator set cutting at `]` would hand this slot
+    // `file[1` and then refuse the call the model wrote in full.
+    expect(extractShape('read(file_path=file[1].txt)', TOOLS)?.args.get('file_path')).toBe('file[1].txt')
+  })
+
+  it('refuses a value cut off inside its own punctuation', () => {
+    // `print("yaml")` stops the bare class at the value's own opening quote, so
+    // the capture is the fragment `print(`. Running a fragment is a syntax
+    // error the model never wrote, so the slot is dropped and the call refused.
+    expect(codeOf('kernel(code: print("yaml"))')).toBeUndefined()
+    expect(codeOf('kernel(code=print("yaml"))')).toBeUndefined()
+  })
 })
 
 describe('the two duties do not bleed into each other', () => {

@@ -66,13 +66,17 @@ const QUOTED = '[' + QUOTES + ']'
 /**
  * Characters that end a bare value, written as a character-class body.
  *
- * The closing bracket MUST stay escaped. Unescaped it closes the class right
- * there, so a pattern meant to read "key = value" instead demands a literal
- * bracket after every value - a branch that then matches nothing but text
- * already carrying one, which reads as "this argument was never bound" and
- * drops the whole call.
+ * No bracket is in the set, and that is the point. A value may carry its own
+ * brackets - `read(file_path=file[1].txt)` writes a path whose index is part
+ * of the argument - so a set that cut at `]` handed the slot `file[1` and the
+ * guard below then refused a call the model wrote in full. The only brackets
+ * that belong to the CALL are the unpartnered trailing closers, and trimFrame
+ * is what removes those; cutting them here as well was redundant and wrong.
+ *
+ * The quotes DO stay in the class. A bare value that ran past its own opening
+ * quote would capture the notation's delimiter as content.
  */
-const STOP = ' \\t\\r\\n,;}\\]'
+const STOP = ' \t\r\n,;'
 
 /** The same set plus both quote characters, for a value written bare. */
 const BARE = STOP + QUOTES
@@ -227,6 +231,40 @@ function anyMatch(text: string, patterns: readonly RegExp[]): boolean {
 const PAIR: Readonly<Record<string, string>> = { ')': '(', ']': '[', '}': '{' }
 
 /**
+ * Whether a bare value's own punctuation closes.
+ *
+ * A bare value runs to the first character its class excludes, so it can stop in
+ * the MIDDLE of the text it was carrying: `code: print("yaml")` stops at the
+ * value's own opening quote, and `code=print(` at the call's own bracket. The
+ * capture is then a fragment, and running a fragment is worse than refusing -
+ * `print(` is a syntax error the model never wrote.
+ *
+ * So a value that ends inside something it opened is not a value. Every opener
+ * must be closed and every quote character paired for the capture to be the
+ * whole of what was written. A QUOTED value is exempt, because the notation
+ * itself already said where the value stopped.
+ */
+function closed(value: string): boolean {
+  const stack: string[] = []
+  let single = 0
+  let double = 0
+  for (const ch of value) {
+    if (ch === '(' || ch === '[' || ch === '{') {
+      stack.push(ch)
+      continue
+    }
+    const opener = PAIR[ch]
+    if (opener !== undefined) {
+      if (stack.pop() !== opener) return false
+      continue
+    }
+    if (ch === '"') double += 1
+    else if (ch === "'") single += 1
+  }
+  return stack.length === 0 && single % 2 === 0 && double % 2 === 0
+}
+
+/**
  * Cut back a BARE value that swallowed the call's own closing bracket.
  *
  * `kernel(code=print(1))` writes its argument with no quotes, so the value class
@@ -272,6 +310,11 @@ function valuesOf(text: string, slot: string): { readonly hits: readonly Hit[]; 
       const raw = (match[1] ?? '').trim()
       const value = bound.bare ? trimFrame(raw) : raw
       if (value.length === 0) continue
+      // A bare capture that stops inside its own punctuation is a fragment of
+      // the text, not the text. Discarding it drops the slot, and a call
+      // missing a slot it requires is refused - which is the honest answer for
+      // a value the reader could not read to its end.
+      if (bound.bare && !closed(value)) continue
       distinct.add(value)
       // The span masked from the residue is the WHOLE match, closer included:
       // the bracket trimmed off the value still belongs to the call's frame, and
