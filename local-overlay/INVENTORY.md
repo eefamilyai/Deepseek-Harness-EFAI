@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **84** in **17** patch(es).
+Tier-2 files: **87** in **17** patch(es).
 
 ## Patches
 
@@ -135,8 +135,11 @@ Tier-2 files: **84** in **17** patch(es).
 - `packages/session/session-format-v0-to-v1/src/validation.ts`
 - `packages/session/session-format-v0-to-v1/tests/relationships.spec.ts`
 
-### `patches/docs.patch` — 4 file(s)
+### `patches/docs.patch` — 7 file(s)
 
+- `docs/subsystems/compaction.i18n.yaml`
+- `docs/subsystems/compaction.md`
+- `docs/subsystems/compaction.zh.md`
 - `docs/subsystems/llm-streaming.i18n.yaml`
 - `docs/subsystems/llm-streaming.md`
 - `docs/subsystems/llm-streaming.zh.md`
@@ -181,7 +184,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 339 paths do not exist upstream, so no patch covers them and none can conflict.
+These 445 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
@@ -196,6 +199,10 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/notes/implemented/feature/2026-09-24-compaction-handoff.i18n.yaml`
 - `.agents/notes/implemented/feature/2026-09-24-compaction-handoff.md`
 - `.agents/notes/implemented/feature/2026-09-24-compaction-handoff.zh.md`
+- `.agents/notes/implemented/feature/2026-09-27-compact-argument-admission.i18n.yaml`
+- `.agents/notes/implemented/feature/2026-09-27-compact-argument-admission.md`
+- `.agents/notes/implemented/feature/2026-09-27-compact-argument-admission.zh.md`
+- `.agents/skills/dsh-compaction-pipeline/SKILL.md`
 - `.agents/skills/dsh-edit-system-prompt/SKILL.md`
 - `.agents/skills/dsh-github/SKILL.md`
 - `.agents/skills/dsh-harness-edit/SKILL.md`
@@ -204,11 +211,102 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/skills/dsh-session-history/session-read.mjs`
 - `.merge-port/MERGE-STATUS.md`
 - `.merge-port/apiproxy-and-fixtures.patch`
+- `.recon/accounts-tab.md`
+- `.recon/ds-direct-flagging.md`
+- `.recon/probe_fresh_identity.py`
+- `.recon/probe_fresh_identity.run.log`
+- `.recon/probe_signin_dom.py`
+- `.recon/probe_two_accounts.py`
+- `.recon/probe_waf_boundary.py`
+- `.recon/zz-full-out.txt`
+- `.recon/zz-full-out3.txt`
+- `.recon/zz-probe-out.txt`
+- `.recon/zz-probe-out2.txt`
+- `.research-compaction/CONTEXT-INIT-DESIGN.md`
+- `.research-compaction/REPORT.md`
+- `.research-compaction/after-fix.log`
+- `.research-compaction/agent-sdk.txt`
+- `.research-compaction/aider.txt`
+- `.research-compaction/anthropic-context-eng.txt`
+- `.research-compaction/autogen-memory.txt`
+- `.research-compaction/baseline.log`
+- `.research-compaction/basic-alone.log`
+- `.research-compaction/basic-memory.txt`
+- `.research-compaction/build2.log`
+- `.research-compaction/ds-free-api-proxy.py`
+- `.research-compaction/exports.mjs`
+- `.research-compaction/final-tests.log`
+- `.research-compaction/full.log`
+- `.research-compaction/implementation-review.html`
+- `.research-compaction/infix.log`
+- `.research-compaction/infix2.log`
+- `.research-compaction/io-alone.log`
+- `.research-compaction/langgraph-memory.txt`
+- `.research-compaction/letta.txt`
+- `.research-compaction/manus-blog.txt`
+- `.research-compaction/mcp-memory.txt`
+- `.research-compaction/mem0.txt`
+- `.research-compaction/oc-mnemoria.txt`
+- `.research-compaction/oh30-amortized_forgetting_condenser.py`
+- `.research-compaction/oh30-browser_output_condenser.py`
+- `.research-compaction/oh30-llm_summarizing_condenser.py`
+- `.research-compaction/oh30-no_op_condenser.py`
+- `.research-compaction/oh30-observation_masking_condenser.py`
+- `.research-compaction/oh30-recent_events_condenser.py`
+- `.research-compaction/openai-agents.txt`
+- `.research-compaction/opencode.txt`
+- `.research-compaction/probe-cases.json`
+- `.research-compaction/probe-compaction-e2e.mjs`
+- `.research-compaction/probe-final.mjs`
+- `.research-compaction/probe-orphan.cjs`
+- `.research-compaction/probe-orphan.mjs`
+- `.research-compaction/probe-shape.mjs`
+- `.research-compaction/probe-stream-final.mjs`
+- `.research-compaction/pytest-toolresult.log`
+- `.research-compaction/recon-diff.txt`
+- `.research-compaction/sdk-14_context_condenser.py`
+- `.research-compaction/sdk-README.md.py`
+- `.research-compaction/sdk-__init__.py`
+- `.research-compaction/sdk-base.py`
+- `.research-compaction/sdk-condenser.py`
+- `.research-compaction/sdk-llm_summarizing_condenser.py`
+- `.research-compaction/sdk-no_op_condenser.py`
+- `.research-compaction/sdk-pipeline_condenser.py`
+- `.research-compaction/sdk-summarizing_prompt.j2.py`
+- `.research-compaction/sdk-utils.py`
+- `.research-compaction/serena.txt`
+- `.research-compaction/swe-agent.txt`
+- `.research-compaction/unittest-all.log`
+- `.research-compaction/unittest-all2.log`
+- `.research-compaction/unittest-final.log`
+- `.research-compaction/unittest-final2.log`
+- `.research-compaction/unittest-final3.log`
+- `.research-compaction/unittest-r7.log`
+- `.research-compaction/unittest-r7b.log`
+- `.research-compaction/unittest-r7c.log`
+- `.research-compaction/unittest-r8.log`
+- `.research-compaction/unittest-r9.log`
+- `.research-compaction/unittest-toolresult.log`
+- `.research-compaction/unittest-verify.log`
+- `.research-compaction/vitest-fix3.log`
+- `.research-compaction/vitest-fix4.log`
+- `.research-compaction/vitest-fix5.log`
+- `.research-compaction/vitest-fix6.log`
+- `.research-compaction/vitest-hermetic.log`
+- `.research-compaction/vitest-host.log`
+- `.research-compaction/vitest-root.txt`
+- `.research-compaction/vitest-src.txt`
+- `.research-compaction/vitest-temp.log`
+- `.research-compaction/vitest.log`
+- `.research-compaction/vitest2.txt`
+- `.research-compaction/vitest3.txt`
+- `AGENTS.local.md`
 - `AI_BIG_PROJECT_DESIGN.md`
 - `HARNESS-EDITS.md`
 - `HARNESS.md`
 - `SESSION-system-prompt-as-file-upload.md`
 - `SESSION-tool-output-file-delivery.md`
+- `compaction.md`
 - `desktop/harness-desktop/README.md`
 - `desktop/harness-desktop/chrome/browser-start.html`
 - `desktop/harness-desktop/chrome/toolbar-preload.js`
@@ -217,6 +315,7 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `desktop/harness-desktop/main.js`
 - `desktop/harness-desktop/package-lock.json`
 - `desktop/harness-desktop/package.json`
+- `docs/tool-call-formats.txt`
 - `efai/ensure-profile-bundles.mjs`
 - `efai/merge_upstream.py`
 - `efai/test_merge_upstream.py`
@@ -392,9 +491,11 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-dsml/src/stream.ts`
 - `packages/llm/llm-dsml/tests/adversarial.spec.ts`
 - `packages/llm/llm-dsml/tests/catalog.spec.ts`
+- `packages/llm/llm-dsml/tests/closer-repairs.spec.ts`
 - `packages/llm/llm-dsml/tests/fallback.spec.ts`
 - `packages/llm/llm-dsml/tests/illustration.spec.ts`
 - `packages/llm/llm-dsml/tests/llm-dsml.spec.ts`
+- `packages/llm/llm-dsml/tests/orphan-block.spec.ts`
 - `packages/llm/llm-dsml/tests/shape-reporting.spec.ts`
 - `packages/llm/llm-dsml/tests/shapes.spec.ts`
 - `packages/llm/llm-dsml/tests/stripped-closers.spec.ts`
@@ -471,6 +572,7 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/web/web-browser/tsconfig.json`
 - `python/kiln/provider_bridge.py`
 - `python/kiln/runtime/.python-version`
+- `python/kiln/runtime/DS-DIRECT-FLAGGING.md`
 - `python/kiln/runtime/README.ds-direct.md`
 - `python/kiln/runtime/README.vision-tools.md`
 - `python/kiln/runtime/_check_deps.py`
@@ -482,8 +584,11 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/compaction.py`
 - `python/kiln/runtime/config.py`
 - `python/kiln/runtime/context_store.py`
+- `python/kiln/runtime/ds_admin.py`
 - `python/kiln/runtime/ds_direct.py`
+- `python/kiln/runtime/ds_hif.py`
 - `python/kiln/runtime/ds_identity.py`
+- `python/kiln/runtime/ds_profile.py`
 - `python/kiln/runtime/ds_waf.py`
 - `python/kiln/runtime/gemini_provider.py`
 - `python/kiln/runtime/kernel_child.py`
@@ -498,6 +603,8 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/sha3_wasm_bg.wasm`
 - `python/kiln/runtime/sse_client.py`
 - `python/kiln/runtime/test_browser_page_pick.py`
+- `python/kiln/runtime/test_ds_admin.py`
+- `python/kiln/runtime/test_ds_did.py`
 - `python/kiln/runtime/test_ds_direct_accounting.py`
 - `python/kiln/runtime/test_ds_direct_clip.py`
 - `python/kiln/runtime/test_ds_direct_delivery.py`
@@ -505,8 +612,10 @@ These 339 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/test_ds_direct_modes.py`
 - `python/kiln/runtime/test_ds_direct_pow_waf.py`
 - `python/kiln/runtime/test_ds_direct_system.py`
+- `python/kiln/runtime/test_ds_hif.py`
 - `python/kiln/runtime/test_ds_identity.py`
 - `python/kiln/runtime/test_ds_login_serial.py`
+- `python/kiln/runtime/test_ds_profile.py`
 - `python/kiln/runtime/test_ds_waf_challenge_input.py`
 - `python/kiln/runtime/test_fast_search.py`
 - `python/kiln/runtime/test_harness_tools.py`

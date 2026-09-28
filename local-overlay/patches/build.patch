@@ -1,5 +1,5 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index 042e19d444..580e479385 100644
+index 042e19d444..0a7ae63437 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
 @@ -75,6 +75,8 @@ export const SERVICE_PAGE: Record<string, string> = {
@@ -19,17 +19,21 @@ index 042e19d444..580e479385 100644
    configuredAgentIdentities: 'not a service: launcher-provided boot-context value (ConfiguredAgentIdentities | undefined) — packages/core/agent-loop/README.md owns this launcher contract',
    launcherSessionQueryPath: 'not a service: launcher-provided boot-context value (string | undefined) — packages/session-query/session-query-sqlite/README.md owns this launcher contract',
    dshHomePath: 'not a service: boot-provided root accessor function (typeof dshHomePath | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
-@@ -334,6 +337,9 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+@@ -334,6 +337,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmConfigurableProvider: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
 +  LlmAccountAdder: 'llm-streaming.md',
 +  LlmAccountDraft: 'llm-streaming.md',
 +  LlmAccountAddResult: 'llm-streaming.md',
++  LlmAccountInfo: 'llm-streaming.md',
++  LlmAccountLogEntry: 'llm-streaming.md',
++  LlmAccountOpResult: 'llm-streaming.md',
++  LlmAccountAdmin: 'llm-streaming.md',
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -831,6 +837,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -831,6 +841,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-preset-registry/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',

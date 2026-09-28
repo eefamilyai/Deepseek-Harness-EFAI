@@ -5,7 +5,7 @@ index 2e95de4ae4..e89a48f107 100644
 @@ -11,8 +11,6 @@ import type { CommandInvocation, CommandResult } from '@deepseek-ai/dsh-commands
  export const name = 'command-compact'
  export const inject = ['commands', 'compaction']
-
+ 
 -const USAGE = 'Usage: /compact (no arguments)'
 -
  /** Fail loudly if a locally closed union gains an unhandled member. */
@@ -14,7 +14,7 @@ index 2e95de4ae4..e89a48f107 100644
 @@ -55,16 +53,29 @@ function expectedFailure(error: ManualCompactionError): CommandResult {
    }
  }
-
+ 
 -/** Execute one argument-free manual compaction request. */
 +// DSH-FORK(kiln): `/compact <text>` carries a per-call instruction for THIS
 +// compaction instead of rejecting the argument.
@@ -71,7 +71,7 @@ index 73f0cf9728..6dfbd6bf73 100644
    calls: { agent: ManualCompactAgentContext; signal: AbortSignal }[] = []
 +  /** The per-call instruction each `compactNow` call received, in order. */
 +  readonly instructions: (string | undefined)[] = []
-
+ 
    override compactIfNeeded(
      _agent: CompactionAgentContext,
 @@ -50,8 +52,10 @@ class StubCompactionEngine extends CompactionEngine {
@@ -87,7 +87,7 @@ index 73f0cf9728..6dfbd6bf73 100644
        ? Promise.resolve(this.result === null ? null : this.appendResult(agent, this.result, sourceCommandId))
 @@ -154,7 +158,7 @@ function expectLastLifecycle(
  }
-
+ 
  describe('@deepseek-ai/dsh-command-compact registration', () => {
 -  it('registers one argument-free command with Loader-safe exports and disposes it', async () => {
 +  it('registers one command with Loader-safe exports and disposes it', async () => {
@@ -102,12 +102,12 @@ index 73f0cf9728..6dfbd6bf73 100644
 +      // treats `/compact <text>` as unclaimed prose.
 +      input: { hint: '[<instruction>]' },
      })
-
+ 
      await test.plugin.dispose()
 @@ -186,7 +193,7 @@ describe('/compact human command', () => {
      expect(test.compact.calls).toEqual([{ agent: test.agent, signal: controller.signal }])
    })
-
+ 
 -  it('returns direct no-history and argument-rejection results', async () => {
 +  it('returns a direct no-history result and forwards a per-call instruction', async () => {
      const test = await harness()
@@ -118,7 +118,7 @@ index 73f0cf9728..6dfbd6bf73 100644
      })
      expect(empty.commandId).toBe(expectLastLifecycle(test, '', empty.result))
 +    expect(test.compact.instructions).toEqual([undefined])
-
+ 
 -    const rejected = await run(test, ' now')
 -    expect(rejected.result).toEqual({
 -      kind: 'error',
@@ -138,7 +138,7 @@ index 73f0cf9728..6dfbd6bf73 100644
 +    expect(test.compact.instructions).toEqual([undefined, 'now'])
 +    expect(test.compact.calls).toHaveLength(2)
    })
-
+ 
    it.each([
 diff --git a/packages/compaction/command-compact/tests/loader-composition.spec.ts b/packages/compaction/command-compact/tests/loader-composition.spec.ts
 index d37448d5ad..342252563d 100644
@@ -189,11 +189,11 @@ index 7b3d77d299..dacd14cf37 100644
 +  /** Per-call summarization instruction from `/compact <text>`, when present. */
 +  readonly instruction?: string
  }
-
+ 
  interface CompactionEntryState {
 @@ -219,13 +224,14 @@ export async function compactSurfaceRegion(
    let stage: TransactionFailure['stage'] = 'summary'
-
+ 
    try {
 -    const prepared = prepareCompaction(dependencies, session, selection)
 +    const prepared = prepareCompaction(dependencies, session, selection, options.instruction)
@@ -223,7 +223,7 @@ index 7b3d77d299..dacd14cf37 100644
 +    input: buildSummarizationInput(session, selection.shadowedSeqs, instruction),
    }
  }
-
+ 
 @@ -390,6 +397,7 @@ async function summarizeCompaction(
    agent: Agent,
    compactionId: CompactionResult['compactionId'],
@@ -258,13 +258,13 @@ index 7b3d77d299..dacd14cf37 100644
    }
  }
 diff --git a/packages/compaction/compaction-basic/src/summarizer.ts b/packages/compaction/compaction-basic/src/summarizer.ts
-index 2b85f6470e..edfa02a77b 100644
+index 2b85f6470e..45004aaf8c 100644
 --- a/packages/compaction/compaction-basic/src/summarizer.ts
 +++ b/packages/compaction/compaction-basic/src/summarizer.ts
 @@ -4,6 +4,17 @@
   * @module @deepseek-ai/dsh-compaction-basic/summarizer
   */
-
+ 
 +// DSH-FORK(kiln): a compaction request holds the summarizer role in the system
 +// slot, quotes the replayed conversation instead of letting its own system
 +// prompt govern, offers no tool channel, and accepts an operator instruction.
@@ -281,7 +281,7 @@ index 2b85f6470e..edfa02a77b 100644
  import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 @@ -23,14 +34,34 @@ const SUMMARY_OPEN_TAG = '<compacted-summary>'
  const SUMMARY_CLOSE_TAG = '</compacted-summary>'
-
+ 
  /**
 - * The summarization directive, delivered as the FINAL user message after the
 - * replayed conversation rather than as a distinct summarizer system prompt.
@@ -328,7 +328,7 @@ index 2b85f6470e..edfa02a77b 100644
 -  '- Output only the checkpoint text: do not call any tool or take any other action.',
    `- If the conversation already contains a ${SUMMARY_OPEN_TAG} block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.`,
  ].join('\n')
-
+ 
 +/**
 + * Fences marking the replayed conversation as material under discussion.
 + *
@@ -410,7 +410,7 @@ index 2b85f6470e..edfa02a77b 100644
  /** Framing that makes the replacement user message established context. */
  const CHECKPOINT_PREAMBLE =
    'This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.'
-
+ 
  /**
 - * The replayed conversation surface the summarizer condenses. Reproducing the
 - * last routed request's system prompt, tools, and leading messages verbatim
@@ -431,11 +431,11 @@ index 2b85f6470e..edfa02a77b 100644
 +  /** The per-call instruction from `/compact <text>`, appended after the standing one. */
 +  readonly instruction?: string
  }
-
+ 
  /** Safe summary content plus the exact auxiliary call envelope recorded with it. */
 @@ -107,12 +218,61 @@ export type SummaryResult = {
  )
-
+ 
  /**
 - * Run the default cache-reusing `ctx.llm.stream()` summarization call: replay
 - * the conversation prefix, then append the compaction instruction as the final
@@ -466,7 +466,7 @@ index 2b85f6470e..edfa02a77b 100644
 +  const turns: string[] = []
 +  const media: ContentBlock[] = []
 +  for (const message of messages) {
-+    const rendered = message.content.map(block => {
++    const rendered = message.content.map((block) => {
 +      if (block.type === 'text') return block.text
 +      media.push(block)
 +      return `[${block.type} attached]`
@@ -500,7 +500,7 @@ index 2b85f6470e..edfa02a77b 100644
   * @param signal - optional cancellation forwarded to the adapter.
   * @returns safe text-only summary blocks and the exact call envelope and output.
 @@ -143,17 +303,23 @@ export async function summarizeWithLlm(
-
+ 
    const assembler = new BlockAssembler()
    const messages: RequestMessage[] = [
 -    ...input.messages,
@@ -533,7 +533,7 @@ index 6d6b7c56bf..1b72d81723 100644
 @@ -1383,6 +1383,12 @@ async function summarizerHarness(
    return { ctx, adapter, compact }
  }
-
+ 
 +// DSH-FORK(kiln): these cases pin what the summarizer REQUEST looks like, and
 +// upstream's shape (the replayed agent prompt in the system slot, the agent's
 +// own tools offered) is the shape that let the summarizer continue the agent's
@@ -549,7 +549,7 @@ index 6d6b7c56bf..1b72d81723 100644
      const start = system === undefined ? 0 : 1
 -    const prefix = session.deriveMessages().slice(0, system ? 3 : 2)
      const result = await compact.compactRegion(nodes[start]!, nodes[start + 1]!, agent(session, MODEL), SIGNAL)
-
+ 
 -    expect(adapter.lastOptions).not.toHaveProperty('system')
 -    expect(adapter.lastOptions?.tools).toEqual(tools)
 -    expect(adapter.lastOptions?.messages.slice(0, -1)).toEqual(prefix)
@@ -581,7 +581,7 @@ index 6d6b7c56bf..1b72d81723 100644
 @@ -1484,10 +1506,20 @@ describe('default one-shot summarizer', () => {
        messages: [system, prefix],
      }, agent(conversation(1), MODEL))
-
+ 
 -    expect(adapter.lastOptions).not.toHaveProperty('system')
 -    expect(adapter.lastOptions?.tools).toEqual(tools)
 +    expect(adapter.lastOptions?.system).toContain('transcript-summarization engine')
@@ -617,7 +617,7 @@ index 6d6b7c56bf..1b72d81723 100644
 +    expect(policyQuotedText).toContain('WARM SYSTEM')
 +    expect(policyQuotedText).toContain('warm prefix')
    })
-
+ 
    it('resolves the latest routed provider/model before the AgentOptions pair', async () => {
 diff --git a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
 index b6c8ff7f86..03950fcf7f 100644
@@ -625,7 +625,7 @@ index b6c8ff7f86..03950fcf7f 100644
 +++ b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
 @@ -100,12 +100,10 @@ class OverflowRecoveryAdapter extends LlmAdapter {
    }
-
+ 
    override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
 -    // The cache-reusing summarizer replays the conversation prefix and marks
 -    // its call only by the compaction instruction in the trailing user message.
@@ -661,5 +661,5 @@ index 3efe4e87eb..412d3eaa0b 100644
      sourceCommandId?: CommandId,
 +    instruction?: string,
    ): Promise<CompactionResult | null>
-
+ 
    /**
