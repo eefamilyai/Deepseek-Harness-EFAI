@@ -251,7 +251,7 @@ def _remove_account(req):
     """
     try:
         mod = providers._load_module("ds_admin")
-        result = mod.remove_account(account=str(req.get("account") or ""),
+        result = mod.remove_account(account_id=str(req.get("account") or ""),
                                     slug=str(req.get("slug") or ""),
                                     purge=bool(req.get("purge", False)))
     except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
