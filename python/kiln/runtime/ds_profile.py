@@ -251,8 +251,20 @@ def device_id_from_cookie(name, value):
     ``B`` the login body restores; the named slots are taken verbatim. Either way
     the result must pass the shape gate, so a session cookie is refused here
     rather than stored and presented as a device.
+
+    The value is percent-decoded first, because Chrome's jar stores it escaped:
+    read out of three real profile jars on this machine, every ``.thumbcache_``
+    value ends ``%3D%3D`` rather than ``==`` and is 92 characters on disk against
+    88 decoded. ``%`` is not in the base64 alphabet, so feeding the raw text to
+    the shape gate failed it, this function returned ``None``, and the capture
+    fell through to the machine-level device -- a row read ``origin = machine``
+    while the real fingerprint sat in the profile the whole time.
+
+    It is ``unquote`` and not ``unquote_plus``: ``+`` is a DATA character in
+    base64, and the ``_plus`` variant rewrites it to a space, which corrupts the
+    fingerprint into a value the gate then rejects.
     """
-    text = str(value or "").strip()
+    text = urllib.parse.unquote(str(value or "").strip())
     if not text:
         return None
     low = str(name or "").strip().lower()

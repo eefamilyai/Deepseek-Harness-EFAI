@@ -265,6 +265,37 @@ try:
     check("an empty cookie yields nothing",
           dp.device_id_from_cookie(".thumbcache_x", "") is None)
 
+    # ── the jar stores that cookie percent-encoded ──────────────────
+    # Read out of three real profile jars on this machine: every `.thumbcache_`
+    # value ends `%3D%3D`, not `==` -- the `=` padding is stored escaped, and the
+    # value is 92 characters on disk against 88 decoded. `%` is not in the base64
+    # alphabet, so building `B` + the raw text failed the shape gate, the reader
+    # returned None, and the capture fell through to the MACHINE-level device.
+    # That is the whole reason a row read `Device id origin = machine` while the
+    # real fingerprint sat in the profile untouched.
+    ENCODED_THUMB = THUMB_COOKIE[:-2] + "%3D%3D"
+    check("the jar's escaped padding is what the fixture models",
+          "%3D%3D" in ENCODED_THUMB and "==" not in ENCODED_THUMB)
+    check("a percent-encoded thumbcache cookie restores the login body",
+          dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", ENCODED_THUMB)
+          == LOGIN_BODY,
+          repr(dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", ENCODED_THUMB)))
+
+    # `+` is a DATA character in base64, not a space. `unquote_plus` would turn it
+    # into a space, corrupting the value into something the gate rejects -- so the
+    # decode must be `unquote`. A jar that escapes the `+` too has to work as well.
+    check("the fixture actually carries a literal plus",
+          "+" in ENCODED_THUMB)
+    check("a literal plus in the cookie survives the decode",
+          dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", ENCODED_THUMB)
+          == LOGIN_BODY and " " not in LOGIN_BODY,
+          "unquote_plus would have replaced the + with a space")
+    FULLY_ENCODED = ENCODED_THUMB.replace("+", "%2B")
+    check("a fully percent-encoded cookie also decodes",
+          dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", FULLY_ENCODED)
+          == LOGIN_BODY,
+          repr(dp.device_id_from_cookie(".thumbcache_6b2e5483f9d8", FULLY_ENCODED)))
+
     # ── a rejected device_id is dropped on write, not carried forward ──
     # A value the current rule rejects must not survive a later write. Keeping it
     # is how a shape an older, looser capture accepted went on being presented
