@@ -140,10 +140,12 @@ os.makedirs(os.path.join(_IDENTITY_SCRATCH, "profiles"), exist_ok=True)
 
 # An orphaned profile: on disk, not named by any config entry.
 orphan_slug = ds_profile.slug("orphan@example.com")
+ORPHAN_DEVICE = ("BdQNjmtlDqa0FTFU7mQKwc5VqKKTaIzQuhev79oEmf9dJPQgY24bGBqjLuUZ2nv6d"
+                 "PaBsLuCULkcRwLQSctydZg==")
 os.makedirs(os.path.join(_IDENTITY_SCRATCH, "profiles", orphan_slug), exist_ok=True)
 with open(os.path.join(_IDENTITY_SCRATCH, "accounts", "%s.json" % orphan_slug),
           "w", encoding="utf-8") as f:
-    json.dump({"device_id": "d" * 32, "x_device_id": "x" * 36, "did": "did-1",
+    json.dump({"device_id": ORPHAN_DEVICE, "x_device_id": "x" * 36, "did": "did-1",
                "origin": "capture", "updated_at": 1700000000}, f)
 
 rows = ds_admin.list_accounts()
@@ -155,7 +157,8 @@ orphan = [r for r in rows if r["slug"] == orphan_slug][0]
 results.append(_check("an orphaned profile reports configured=False",
                       orphan["configured"] is False, repr(orphan)))
 results.append(_check("an orphaned profile reports the device it minted",
-                      orphan["device_id"] == "d" * 32, repr(orphan.get("device_id"))))
+                      orphan["device_id"] == ORPHAN_DEVICE,
+                      repr(orphan.get("device_id"))))
 results.append(_check("an orphaned profile reports its x-device-id and did",
                       orphan["x_device_id"] == "x" * 36 and orphan["did"] == "did-1",
                       repr(orphan)))
@@ -163,6 +166,61 @@ results.append(_check("a row never carries a credential VALUE",
                       set(orphan) >= {"has_token", "has_cookie", "has_password"}
                       and not any(k in orphan for k in ("token", "cookie", "password")),
                       repr(sorted(orphan))))
+
+# --- an orphan row applies the SAME shape rule as a configured row ----------
+# Reading the record raw here made one page disagree with itself: a configured
+# row refused a value the rule rejects while the orphan row beside it presented
+# that value as the device. Both halves now answer to `valid_device_id`.
+_rejected_slug = ds_profile.slug("rejected@example.com")
+os.makedirs(os.path.join(_IDENTITY_SCRATCH, "profiles", _rejected_slug), exist_ok=True)
+with open(os.path.join(_IDENTITY_SCRATCH, "accounts", "%s.json" % _rejected_slug),
+          "w", encoding="utf-8") as f:
+    json.dump({"device_id": "20260927205138c1162ca82345e0596922756f0c61e0c700db2371f23a1cd10",
+               "origin": "capture"}, f)
+rows = ds_admin.list_accounts()
+bad = [r for r in rows if r["slug"] == _rejected_slug][0]
+results.append(_check("an orphan row does not present a value the rule rejects",
+                      bad["device_id"] == "", repr(bad.get("device_id"))))
+results.append(_check("it still reports the device it actually has as invalid",
+                      bad["device_id_valid"] is False, repr(bad)))
+
+# --- the write path keeps a field and its label together --------------------
+# `device_id_origin` says where the device_id came from, so purging the value
+# while leaving the label is a dangling origin: the row renders a provenance
+# for a device that no longer exists.
+_reset()
+rec = ds_profile.write_account_identity("labels@example.com", {
+    "device_id": ORPHAN_DEVICE,
+    "device_id_origin": "login-payload",
+    "origin": "login-payload",
+})
+results.append(_check("a good write stores the value and both labels",
+                      rec.get("device_id") == ORPHAN_DEVICE
+                      and rec.get("device_id_origin") == "login-payload",
+                      repr(rec)))
+rec = ds_profile.write_account_identity("labels@example.com", {
+    "device_id": "20260927205138c1162ca82345e0596922756f0c61e0c700db2371f23a1cd10",
+    "device_id_origin": "cookie:smidV2",
+    "origin": "cookie:smidV2",
+})
+results.append(_check("a rejected write purges the value",
+                      not rec.get("device_id"), repr(rec)))
+results.append(_check("a rejected write purges the dangling origin with it",
+                      not rec.get("device_id_origin") and not rec.get("origin"),
+                      repr(sorted(rec))))
+results.append(_check("a rejected write records what it dropped",
+                      "not a fingerprint" in str(rec.get("device_id_rejected")),
+                      repr(rec)))
+
+# A later GOOD value must clear the note the bad one left, or the row shows a
+# working fingerprint next to "not a fingerprint".
+rec = ds_profile.write_account_identity("labels@example.com",
+                                        {"device_id": ORPHAN_DEVICE,
+                                         "origin": "login-payload"})
+results.append(_check("a good value clears the stale rejection note",
+                      not rec.get("device_id_rejected"), repr(rec)))
+results.append(_check("the good value itself is stored",
+                      rec.get("device_id") == ORPHAN_DEVICE, repr(rec)))
 
 # --- the repairs refuse as values ------------------------------------------
 _reset()

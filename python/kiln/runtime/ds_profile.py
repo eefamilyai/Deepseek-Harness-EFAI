@@ -121,7 +121,13 @@ def write_account_identity(account_id, doc):
     stored = read_account_identity(account_id)
     stored.update({k: v for k, v in (doc or {}).items() if v})
     rejected = str(stored.get("device_id") or "")
-    if not ds_identity.valid_device_id(rejected):
+    if ds_identity.valid_device_id(rejected):
+        # A GOOD value clears the note a previous bad one left. Keeping the note
+        # is how a row came to show a working fingerprint next to "not a
+        # fingerprint": the rejection was recorded once and then outlived the
+        # value it described, because nothing ever removed it.
+        stored.pop("device_id_rejected", None)
+    else:
         # A ``device_id`` the current rule rejects is NOT carried forward. Keeping
         # it is how a value an older, looser capture accepted survived every later
         # write: the record went on presenting it, and the operator saw a device
@@ -130,7 +136,12 @@ def write_account_identity(account_id, doc):
         if rejected:
             stored["device_id_rejected"] = "%s...(len=%d, not a fingerprint)" % (
                 rejected[:20], len(rejected))
+        # The value and its label go together. ``device_id_origin`` describes
+        # where the device_id came from, so purging the value while leaving the
+        # label is a dangling origin -- and the row renders it as though a device
+        # with that provenance existed.
         stored.pop("device_id", None)
+        stored.pop("device_id_origin", None)
         stored.pop("origin", None)
     stored["account_id"] = str(account_id)
     stored["updated_at"] = time.time()

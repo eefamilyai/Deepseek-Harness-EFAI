@@ -196,7 +196,12 @@ def _orphan_view(slug):
     """
     rec = _record_by_slug(slug)
     folder = os.path.join(ds_identity.identity_dir(), "profiles", slug)
-    device_id = str(rec.get("device_id") or "")
+    # Shape-checked the same way a configured row is. Reading the record raw here
+    # made the two halves of one page disagree: a configured row refused a value
+    # its rule rejects while the orphan row beside it presented that value as the
+    # device. One page, one rule.
+    raw_device_id = str(rec.get("device_id") or "")
+    device_id = raw_device_id if ds_identity.valid_device_id(raw_device_id) else ""
     return {
         "id": "",
         "slug": slug,
