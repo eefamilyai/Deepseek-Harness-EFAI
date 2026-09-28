@@ -1464,6 +1464,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the entries, in recording order.',
       },
       {
+        signature: 'async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>',
+        description: 'Forget one login, or one orphaned identity, from a provider\'s list.\n\nThe repair for an entry that should not be there at all — a login that was replaced, or a profile a removed one left behind. `account` is empty for an orphan: the login id it was configured under is exactly what is gone, so its slug is the only handle left. The browser profile survives unless `purge` is set — it cost a real login to mint, and a replacement account can still present it.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to forget; \'\' when only a slug is known.' }, { name: 'slug', description: 'the profile slug, which is all an orphan carries.' }, { name: 'purge', description: 'also delete the browser profile.' }],
+        returns: 'whether the entry is gone, or a plain reason it is not.',
+      },
+      {
         signature: '@Remote(\'listAccountProviders\') async remoteListAccountProviders(): Promise<string[]>',
         description: 'Remote read of the routes that accept account additions.',
         parameters: [],
@@ -1495,6 +1501,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Remote adapter that replaces one pooled login\'s browser identity.',
         parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
         returns: 'whether a fresh identity is in place, or a plain reason it is not.',
+        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote(\'removeAccount\') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>',
+        description: 'Remote adapter that forgets one pooled login, or one orphaned identity.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to forget; \'\' when only a slug is known.' }, { name: 'slug', description: 'the profile slug, which is all an orphan carries.' }, { name: 'purge', description: 'also delete the browser profile.' }],
+        returns: 'whether the entry is gone, or a plain reason it is not.',
         throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
       },
       {
@@ -5445,7 +5458,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAccountAdmin',
-    declaration: 'export interface LlmAccountAdmin {\n    list: () => Promise<readonly LlmAccountInfo[]>;\n    relogin: (account: string) => Promise<LlmAccountOpResult>;\n    reprofile: (account: string) => Promise<LlmAccountOpResult>;\n    log: (since: number) => Promise<readonly LlmAccountLogEntry[]>;\n}',
+    declaration: 'export interface LlmAccountAdmin {\n    list: () => Promise<readonly LlmAccountInfo[]>;\n    relogin: (account: string) => Promise<LlmAccountOpResult>;\n    reprofile: (account: string) => Promise<LlmAccountOpResult>;\n    remove: (account: string, slug: string, purge: boolean) => Promise<LlmAccountOpResult>;\n    log: (since: number) => Promise<readonly LlmAccountLogEntry[]>;\n}',
   },
   {
     name: 'LlmAccountDraft',
@@ -5457,7 +5470,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAccountInfo',
-    declaration: 'export interface LlmAccountInfo {\n    readonly id: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly configured: boolean;\n    readonly fields: readonly LlmAccountField[];\n}',
+    declaration: 'export interface LlmAccountInfo {\n    readonly id: string;\n    readonly slug: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly configured: boolean;\n    readonly fields: readonly LlmAccountField[];\n}',
   },
   {
     name: 'LlmAccountLogEntry',
@@ -5533,7 +5546,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void;\n    async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>;\n    async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>;\n    @Remote(\'listAccountProviders\')\n    async remoteListAccountProviders(): Promise<string[]>;\n    @Remote(\'addAccount\')\n    async remote /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void;\n    async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>;\n    async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>;\n    async removeAccount(provider: string, account: string, slug: string, purge: boolean): Promise<LlmAccountOpResult>;\n    @Remote(\'listA /* …truncated — full shape in source */',
   },
   {
     name: 'LocalizedText',

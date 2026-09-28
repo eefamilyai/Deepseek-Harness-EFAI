@@ -416,6 +416,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     push('Password stored', String(row.has_password))
     return {
       id: row.id.length > 0 ? row.id : row.slug,
+      slug: row.slug,
       provider: `${prefix}deepseek`,
       label: row.email.length > 0
         ? row.email
@@ -464,10 +465,27 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
   }
 
+  /**
+   * Forget one login, or one orphaned identity, from the sidecar's list.
+   *
+   * `account` is empty for an orphan — the login id it was configured under is
+   * exactly what is gone, so its slug is the only handle left. The browser
+   * profile survives unless `purge` is set.
+   * @param account - the login id to forget; '' when only a slug is known.
+   * @param slug - the profile slug, which is all an orphan carries.
+   * @param purge - also delete the browser profile.
+   * @returns whether the entry is gone, or a plain reason it is not.
+   */
+  const removeAccount = async (account: string, slug: string, purge: boolean): Promise<LlmAccountOpResult> => {
+    const result = await bridge.removeAccount(account, slug, purge)
+    return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
+  }
+
   const accountAdmin: LlmAccountAdmin = {
     list: async () => (await bridge.listAccounts()).map(toAccountInfo),
     relogin: reloginAccount,
     reprofile: reprofileAccount,
+    remove: removeAccount,
     log: async since => (await bridge.accountLog(since)).map(toLogEntry),
   }
   const adminHandle = ctx.llm.registerAccountAdmin(`${prefix}deepseek`, accountAdmin)

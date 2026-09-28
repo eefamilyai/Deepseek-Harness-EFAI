@@ -241,6 +241,25 @@ def _account_op(req, name):
     _send({"id": req["id"], "ok": True, "result": result})
 
 
+def _remove_account(req):
+    """Forget one account, or one orphaned profile, from the operator's list.
+
+    Two shapes arrive here and both are valid, because the list has two halves:
+    a configured row is named by its account id, an orphaned one by nothing but
+    its slug. ``purge`` is passed straight through -- it is the caller's explicit
+    decision to destroy the browser profile as well, and it defaults to off.
+    """
+    try:
+        mod = providers._load_module("ds_admin")
+        result = mod.remove_account(account=str(req.get("account") or ""),
+                                    slug=str(req.get("slug") or ""),
+                                    purge=bool(req.get("purge", False)))
+    except Exception as e:  # noqa: BLE001 — report, never kill the sidecar
+        _send({"id": req["id"], "ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+        return
+    _send({"id": req["id"], "ok": True, "result": result})
+
+
 def _account_log(req):
     """Drain the operator log from a sequence number, plus the newest seq.
 
@@ -428,6 +447,8 @@ def _dispatch(req):
             _account_op(req, "relogin")
         elif cmd == "reprofile":
             _account_op(req, "reprofile")
+        elif cmd == "remove_account":
+            _remove_account(req)
         elif cmd == "account_log":
             _account_log(req)
         elif cmd == "device_id":

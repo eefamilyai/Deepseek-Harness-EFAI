@@ -228,6 +228,14 @@ export interface KilnAccountOpResult {
   readonly captured?: boolean
   /** Whether re-profiling removed the previous profile before minting. */
   readonly removed?: boolean
+  /** The profile slug the operation addressed, when it had one. */
+  readonly slug?: string
+  /** Whether a config slot was deleted — what stops the login being a route. */
+  readonly removedConfig?: boolean
+  /** Whether the stored identity record was deleted. */
+  readonly removedRecord?: boolean
+  /** Whether the browser profile itself was deleted, which only `purge` does. */
+  readonly removedProfile?: boolean
 }
 
 /** Read one string field, defaulting to '' rather than inventing a value. */
@@ -314,6 +322,11 @@ function parseAccountOp(frame: Record<string, unknown>): KilnAccountOpResult {
     ...typeof record['error'] === 'string' ? { message: record['error'] } : {},
     ...record['captured'] === true ? { captured: true } : {},
     ...record['removed'] === true ? { removed: true } : {},
+    ...typeof record['slug'] === 'string' && record['slug'] !== ''
+      ? { slug: record['slug'] } : {},
+    ...record['removed_config'] === true ? { removedConfig: true } : {},
+    ...record['removed_record'] === true ? { removedRecord: true } : {},
+    ...record['removed_profile'] === true ? { removedProfile: true } : {},
   }
 }
 
@@ -574,6 +587,24 @@ export class KilnBridge {
    */
   async reprofileAccount(account: string, fresh = true): Promise<KilnAccountOpResult> {
     const frame = await this.request({ cmd: 'reprofile', account, fresh })
+    return parseAccountOp(frame)
+  }
+
+  /**
+   * Forget one login, or one orphaned identity, from the account list.
+   *
+   * The repair for an entry that should not be there at all: a login that was
+   * replaced, or a profile a removed one left behind. The browser identity
+   * survives unless `purge` is set — it cost a real login to mint, and a
+   * replacement account can still present it, so destroying it is a separate
+   * decision rather than part of forgetting the login.
+   * @param account - the login id to forget; '' when only a slug is known.
+   * @param slug - the profile slug, which is all an orphan carries.
+   * @param purge - also delete the browser profile. Default false.
+   * @returns the removal's outcome; a refusal is a value, not a throw.
+   */
+  async removeAccount(account: string, slug = '', purge = false): Promise<KilnAccountOpResult> {
+    const frame = await this.request({ cmd: 'remove_account', account, slug, purge })
     return parseAccountOp(frame)
   }
 

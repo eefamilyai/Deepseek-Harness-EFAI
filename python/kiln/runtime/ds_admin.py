@@ -41,6 +41,7 @@ __all__ = [
     "list_accounts",
     "record",
     "relogin",
+    "remove_account",
     "reprofile",
 ]
 
@@ -368,3 +369,104 @@ def reprofile(account_id, fresh=True, capture=True, timeout_ms=45000):
     if not ok:
         return {"ok": False, "error": error}
     return {"ok": True, "account": account_id, "removed": removed, "captured": True}
+
+
+def remove_account(account_id="", slug="", purge=False):
+    """Forget an account: its config slot, its identity record, its profile.
+
+    Three things can name one login, and they are removed together so the page
+    cannot be left showing a row that half-exists:
+
+      * the ds_config.json slot -- removed by ``ds_direct.remove_account``, and
+        what actually makes the account stop being a route;
+      * the recorded identity document under ``accounts/<slug>.json``;
+      * the Chrome profile under ``profiles/<slug>`` -- ONLY with ``purge``.
+
+    ``purge`` defaults to False on purpose. A browser profile is an identity, not
+    a credential: it is the thing that cost a real login to mint, and a re-login
+    or a replacement account can still use it. Deleting it is a separate,
+    explicit decision, so the ordinary removal keeps it and the row simply moves
+    to the orphan half of the list.
+
+    Both keys are accepted because the two halves of the list are addressed
+    differently: a configured row has an id, while an orphan has ONLY a slug --
+    the account id it was configured under is exactly what is gone. A caller that
+    passes both (the UI does) gets a single consistent operation.
+
+    Returns a plain result dict; a refusal is a value, not an exception.
+    """
+    account_id = str(account_id or "").strip()
+    slug = str(slug or "").strip() or (ds_profile.slug(account_id) if account_id else "")
+    if not account_id and not slug:
+        return {"ok": False, "error": "an account id or a slug is required"}
+
+    result = {"ok": True, "account": account_id, "slug": slug,
+              "removed_config": False, "removed_record": False,
+              "removed_profile": False}
+
+    if account_id:
+        dd = _ds_direct()
+        if dd is None:
+            return {"ok": False, "error": "the ds_direct module is unavailable"}
+        try:
+            removed, error = dd.remove_account(account_id)
+        except Exception as e:  # noqa: BLE001 -- report, never raise into the bridge
+            message = "%s: %s" % (type(e).__name__, e)
+            record(account_id, "remove-failed", message, level="error")
+            return {"ok": False, "error": message}
+        if error:
+            record(account_id, "remove-failed", error, level="error")
+            return {"ok": False, "error": error}
+        result["removed_config"] = bool(removed)
+
+    if not result["removed_config"] and not slug:
+        message = "no configured account matches %r" % account_id
+        record(account_id, "remove-missing", message, level="error")
+        return {"ok": False, "error": message}
+
+    record(account_id or slug, "remove-start",
+           "config=%s purge=%s" % ("yes" if result["removed_config"] else "no",
+                                   "yes" if purge else "no"))
+
+    # The record goes with the login: an identity document that no login and no
+    # profile points at is not a useful thing to keep, and leaving it behind is
+    # what puts a deleted account straight back on this page as an orphan.
+    #
+    # `account_record_path` hashes its ARGUMENT into a slug, so it takes the
+    # account id and only the account id. An orphan has no id left to give it --
+    # the slug we were handed IS already that hash -- so its path is assembled
+    # directly. Passing a slug to the helper would hash it a second time and
+    # quietly delete nothing.
+    if account_id:
+        record_path = ds_profile.account_record_path(account_id)
+    elif slug:
+        record_path = os.path.join(ds_identity.identity_dir(), "accounts",
+                                   "%s.json" % slug)
+    else:
+        record_path = ""
+    if record_path and os.path.exists(record_path):
+        try:
+            os.remove(record_path)
+            result["removed_record"] = True
+        except Exception as e:  # noqa: BLE001 -- a locked file is a real, named failure
+            message = "could not remove %s (%s)" % (record_path, e)
+            record(account_id or slug, "remove-record-failed", message, level="error")
+            return {"ok": False, "error": message, **result}
+
+    if purge and slug:
+        folder = os.path.join(ds_identity.identity_dir(), "profiles", slug)
+        if os.path.isdir(folder):
+            try:
+                shutil.rmtree(folder)
+                result["removed_profile"] = True
+            except Exception as e:  # noqa: BLE001 -- a locked profile is a real, named failure
+                message = "could not remove %s (%s)" % (folder, e)
+                record(account_id or slug, "remove-profile-failed", message, level="error")
+                return {"ok": False, "error": message, **result}
+
+    record(account_id or slug, "remove-ok",
+           "config=%s record=%s profile=%s" % (
+               "yes" if result["removed_config"] else "no",
+               "yes" if result["removed_record"] else "no",
+               "yes" if result["removed_profile"] else "no"))
+    return result

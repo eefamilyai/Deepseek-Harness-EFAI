@@ -43,6 +43,7 @@ os.environ["KILN_IDENTITY_DIR"] = _IDENTITY_SCRATCH
 os.environ.pop("DEEPSEEK_DEVICE_ID", None)
 
 import ds_admin  # noqa: E402 -- after the env is pinned
+import ds_direct  # noqa: E402
 import ds_identity  # noqa: E402
 import ds_profile  # noqa: E402
 
@@ -267,6 +268,144 @@ with open(os.path.join(folder, "marker.txt"), "w", encoding="utf-8") as f:
 res = ds_admin.reprofile(target, fresh=False, capture=False)
 results.append(_check("reprofile(fresh=False) keeps the profile",
                       os.path.isdir(folder) and res.get("removed") is False, repr(res)))
+
+# --- removal: the config slot, the record, the profile ---------------------
+#
+# Three things can name one login, and a removal that handles only some of them
+# leaves the page showing a row that half-exists. Each half is pinned here, in
+# the order the operator meets them: the legacy top-level slot, an ``accounts[]``
+# entry beside a sibling that must survive, and an orphan that has no config slot
+# left to delete.
+_CFG = os.path.join(_SCRATCH, "remove-config.json")
+os.environ["KILN_DS_CONFIG"] = _CFG
+
+# Credentials can also arrive from the environment; that path is not under test
+# here and a stray exported token would add an account to every assertion below.
+for _name in ("DEEPSEEK_TOKEN", "DEEPSEEK_COOKIE", "DEEPSEEK_EMAIL",
+              "DEEPSEEK_MOBILE", "DEEPSEEK_PASSWORD", "DEEPSEEK_AREA_CODE"):
+    os.environ.pop(_name, None)
+
+
+def _write_config(doc):
+    with open(_CFG, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    ds_direct._load_accounts(force=True)
+
+
+def _read_config():
+    with open(_CFG, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+_ds_direct_mod = ds_admin._ds_direct()
+results.append(_check("the admin layer can reach ds_direct",
+                      _ds_direct_mod is not None))
+
+# A top-level login is the pre-``accounts`` layout: the credential FIELDS sit on
+# the document itself, so there is no element to drop and the fields are what go.
+_reset()
+_write_config({
+    "device_id": ORPHAN_DEVICE,
+    "email": "legacy@example.com",
+    "token": "bearer-legacy",
+    "cookie": "cookie-legacy",
+    "password": "pw-legacy",
+})
+legacy_id = "legacy@example.com"
+removed, error = ds_direct.remove_account(legacy_id)
+results.append(_check("removing a top-level login succeeds",
+                      removed == legacy_id and error is None,
+                      "%r / %r" % (removed, error)))
+doc = _read_config()
+results.append(_check("its login fields are gone",
+                      not any(k in doc for k in ("token", "cookie", "password")),
+                      repr(sorted(doc))))
+results.append(_check("the document-level device_id SURVIVES a removal",
+                      doc.get("device_id") == ORPHAN_DEVICE,
+                      repr(doc.get("device_id"))))
+
+# An ``accounts[]`` entry is dropped from the array. The sibling beside it must
+# keep its own credentials AND its own position -- a removal that renumbers the
+# array would hand the next account the wrong identity.
+_reset()
+_write_config({
+    "device_id": ORPHAN_DEVICE,
+    "accounts": [
+        {"email": "keep@example.com", "token": "bearer-keep", "cookie": "ck-keep"},
+        {"email": "drop@example.com", "token": "bearer-drop", "cookie": "ck-drop"},
+        {"email": "tail@example.com", "token": "bearer-tail", "cookie": "ck-tail"},
+    ],
+})
+removed, error = ds_direct.remove_account("drop@example.com")
+results.append(_check("removing one accounts[] entry succeeds",
+                      removed == "drop@example.com" and error is None,
+                      "%r / %r" % (removed, error)))
+arr = _read_config().get("accounts")
+results.append(_check("exactly the named entry is gone",
+                      [e.get("email") for e in arr]
+                      == ["keep@example.com", "tail@example.com"],
+                      repr([e.get("email") for e in arr])))
+results.append(_check("the surviving entries keep their own credentials",
+                      arr[0].get("token") == "bearer-keep"
+                      and arr[1].get("token") == "bearer-tail",
+                      repr(arr)))
+
+# A removal that matched nothing is a REFUSAL, not a silent success: the caller
+# has to be able to tell "deleted" from "was never there".
+removed, error = ds_direct.remove_account("nobody@example.com")
+results.append(_check("removing an unknown account refuses with a value",
+                      removed is None and bool(error), "%r / %r" % (removed, error)))
+removed, error = ds_direct.remove_account("")
+results.append(_check("removing an empty id refuses",
+                      removed is None and bool(error), "%r / %r" % (removed, error)))
+
+# The admin layer owns the other two halves. It is given BOTH handles because a
+# configured row has an id while an orphan has only a slug.
+_reset()
+_write_config({"device_id": ORPHAN_DEVICE,
+               "accounts": [{"email": "gone@example.com", "token": "t",
+                             "cookie": "c"}]})
+_slug = ds_profile.slug("gone@example.com")
+os.makedirs(os.path.join(_IDENTITY_SCRATCH, "profiles", _slug), exist_ok=True)
+ds_profile.write_account_identity("gone@example.com",
+                                  {"device_id": ORPHAN_DEVICE, "origin": "capture"})
+
+res = ds_admin.remove_account(account_id="gone@example.com", slug=_slug)
+results.append(_check("the admin removal succeeds", res.get("ok") is True, repr(res)))
+results.append(_check("it reports the config slot as removed",
+                      res.get("removed_config") is True, repr(res)))
+results.append(_check("it reports the identity record as removed",
+                      res.get("removed_record") is True, repr(res)))
+results.append(_check("it leaves the profile alone by default",
+                      res.get("removed_profile") is False
+                      and os.path.isdir(os.path.join(_IDENTITY_SCRATCH, "profiles", _slug)),
+                      repr(res)))
+results.append(_check("the identity record is gone from disk",
+                      not os.path.exists(ds_profile.account_record_path(_slug)),
+                      ds_profile.account_record_path(_slug)))
+
+# purge is the explicit "delete the identity too" ask, and it is the ONLY thing
+# that touches the profile.
+_reset()
+_slug2 = ds_profile.slug("purge@example.com")
+os.makedirs(os.path.join(_IDENTITY_SCRATCH, "profiles", _slug2), exist_ok=True)
+res = ds_admin.remove_account(account_id="", slug=_slug2, purge=True)
+results.append(_check("a slug alone addresses an orphan", res.get("ok") is True, repr(res)))
+results.append(_check("purge=True removes the profile",
+                      res.get("removed_profile") is True
+                      and not os.path.isdir(os.path.join(_IDENTITY_SCRATCH, "profiles", _slug2)),
+                      repr(res)))
+
+res = ds_admin.remove_account()
+results.append(_check("a removal with neither id nor slug refuses",
+                      res.get("ok") is False and bool(res.get("error")), repr(res)))
+
+# A failed removal is written down: the operator asked to be able to see it.
+events = [e["event"] for e in ds_admin.drain()]
+results.append(_check("a successful removal is recorded",
+                      "remove-ok" in events or "remove-start" in events, repr(events)))
+
+os.environ.pop("KILN_DS_CONFIG", None)
 
 print()
 print("%d/%d checks passed" % (sum(1 for r in results if r), len(results)))

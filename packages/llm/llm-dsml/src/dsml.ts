@@ -120,7 +120,7 @@ const ATTRIBUTE_RUN = '(?:"[^"]*"|\'[^\']*\'|[^>"\'])*["\']?'
  * @returns each element's attribute run and its value, closer excluded.
  */
 function scanParameters(body: string): { readonly run: string; readonly at: number; readonly from: number }[] {
-  const token = new RegExp('<' + 'parameter\\s+(' + ATTRIBUTE_RUN + ')>|<' + '/parameter\\s*>', 'gi')
+  const token = new RegExp('<' + 'parameter\\b(' + ATTRIBUTE_RUN + ')>|<' + '/parameter\\s*>', 'gi')
   const spans: { run: string; at: number; from: number }[] = []
   let depth = 0
   for (const match of body.matchAll(token)) {

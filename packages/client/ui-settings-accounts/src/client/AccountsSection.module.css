@@ -2,14 +2,30 @@
  * Accounts settings section.
  *
  * Three stacked cards — add a login, the pooled logins, the debug log — so the
- * section reads as three answers rather than one undifferentiated form. Every
- * colour is a --dsw-alias-* token; there are no literal colours here.
+ * section reads as three answers rather than one undifferentiated form.
+ *
+ * Elevation cannot come from a shadow here: the theme ships no shadow token,
+ * and in light mode `bg-layer-1`, `bg-layer-2` and `bg-layer-3` all resolve to
+ * the same white, so a card painted `bg-layer-3` on the modal's `bg-layer-2`
+ * is white on white. The only depth vocabulary the palette actually offers is
+ * the translucent wash scale — `bg-skeleton` 0.04, `interactive-bg-hover` 0.06,
+ * `interactive-bg-active` 0.10, `interactive-bg-hover-accent` 0.14 — so nesting
+ * is expressed as increasing wash depth, and every panel that must hold its own
+ * edge gets a border instead of a shadow. The scale is a wash rather than fixed
+ * greys precisely so it inverts correctly in dark mode.
+ *
+ * Severity rides the state tokens (`state-error-primary`, `state-warn-primary`,
+ * `state-success-primary`), never a label colour: a label token describes text
+ * hierarchy, so reusing one for "this failed" would say nothing and would
+ * disappear the moment the text hierarchy changed.
+ *
+ * Every colour here is a `--dsw-alias-*` token; there are no literal colours.
  */
 
 .section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .intro {
@@ -28,17 +44,17 @@
   padding: 9px 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 8px;
-  background: var(--dsw-alias-bg-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .bannerError {
   border-color: transparent;
-  background: var(--dsw-alias-bg-error);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
 }
 
 .bannerNotice {
   border-color: transparent;
-  background: var(--dsw-alias-bg-secondary);
+  background: var(--dsw-alias-interactive-bg-hover-accent);
 }
 
 .bannerTitle {
@@ -49,7 +65,7 @@
 }
 
 .bannerError .bannerTitle {
-  color: var(--dsw-alias-label-error);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .bannerText {
@@ -65,22 +81,23 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-primary);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-3);
 }
 
 .cardHead {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+  min-height: 28px;
 }
 
 .cardTitle {
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
@@ -125,37 +142,49 @@
   line-height: 1.45;
 }
 
+/* A segmented control. The track is a deep well; the pressed tab is a bordered
+ * white chip floating on it, which is what makes the selected side read as the
+ * one physically lifted out of the two. A transparent border on the resting tab
+ * keeps both tabs the same size, so pressing one does not shift the row. */
 .tabs {
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-secondary);
+  border-radius: 9px;
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .tab {
-  padding: 3px 10px;
-  border: 0;
-  border-radius: 6px;
+  padding: 3px 12px;
+  border: 0.5px solid transparent;
+  border-radius: 7px;
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 
-.tab[aria-pressed='true'] {
-  background: var(--dsw-alias-bg-primary);
+.tab:hover {
   color: var(--dsw-alias-label-primary);
-  font-weight: 500;
 }
 
+.tab[aria-pressed='true'] {
+  border-color: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+/* The provider this section acts on: a read-only fact, so it is drawn as a
+ * quiet pill rather than as a control. */
 .staticProvider {
   align-self: flex-start;
   padding: 4px 10px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 999px;
-  background: var(--dsw-alias-bg-secondary);
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
 }
@@ -182,21 +211,25 @@
   gap: 6px;
 }
 
+/* One wash step below the card, so each login reads as its own object. */
 .row {
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-primary);
+  border-radius: 9px;
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* An open row is the one being inspected: a real edge and a deeper wash, so it
+ * stays the visually selected object while its payload is on screen. */
 .rowOpen {
-  border-color: var(--dsw-alias-label-secondary);
+  border-color: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .rowHead {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 9px 7px 10px;
 }
 
 .rowToggle {
@@ -229,21 +262,23 @@
   transform: rotate(45deg);
 }
 
-/* A drawn status dot, so status carries no translatable glyph. */
+/* A drawn status dot, so status carries no translatable glyph. The colour is
+ * the whole message, which is why it is a state token and not a label one. */
 .statusDot {
   flex: 0 0 auto;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--dsw-alias-label-secondary);
+  corner-shape: round;
+  background: var(--dsw-alias-state-idle-primary);
 }
 
 .statusOn {
-  background: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-state-success-primary);
 }
 
 .statusOff {
-  background: var(--dsw-alias-label-error);
+  background: var(--dsw-alias-state-error-primary);
 }
 
 .rowLabel {
@@ -263,21 +298,33 @@
 .badge {
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--dsw-alias-bg-secondary);
+  corner-shape: round;
+  background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   white-space: nowrap;
 }
 
 .badgeOrphan {
-  background: var(--dsw-alias-bg-error);
-  color: var(--dsw-alias-label-error);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .rowActions {
   flex: 0 0 auto;
   display: flex;
-  gap: 6px;
+  gap: 4px;
+}
+
+/* Remove is destructive, so it is the one row action that is not neutral. The
+ * element-qualified selectors buy the specificity needed to beat the ghost
+ * variant's own hover rule without an `!important`. */
+.rowActions button.danger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rowActions button.danger:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
 }
 
 /* --- the expanded identity rows --- */
@@ -286,109 +333,162 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 0 10px 10px 25px;
+  padding: 0 10px 10px 10px;
 }
 
 .fieldsHead {
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
+/* The identity grid is the row's payload. It is drawn as a bordered table
+ * rather than another wash, because a third nested wash inside the open row's
+ * own wash would be indistinguishable from it. */
 .fieldsGrid {
   display: grid;
   grid-template-columns: minmax(120px, 156px) minmax(0, 1fr);
   gap: 1px 12px;
   padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-secondary);
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 8px;
 }
 
 .fieldLabel {
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
-  line-height: 1.65;
+  line-height: 1.7;
 }
 
 .fieldValue {
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
-  line-height: 1.65;
-  word-break: break-all;
+  line-height: 1.7;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
-/* --- the debug log: what makes two logins at once legible --- */
+/* --- the debug log: what makes two logins at once legible ---
+ *
+ * Two lines per entry rather than four columns. The detail is both the payload
+ * (a profile path, a device-id length, a failure reason) and the longest field,
+ * so it takes the full width on a line of its own instead of being squeezed
+ * into whatever the time, event and account leave behind. The meta line above
+ * it carries the three short fields, which is where scanning happens.
+ *
+ * The timestamp gets a fixed column so the times stack vertically down the
+ * list, and the level rides the leading rule AND the event pill, so a warning
+ * or a failure reads as one entry without repainting every field in it. The
+ * detail keeps the primary colour because it is the payload; the time and
+ * account stay quieter so a long list scans by pill rather than by wall of
+ * text.
+ */
 
 .log {
   display: flex;
   flex-direction: column;
-  max-height: 260px;
+  gap: 3px;
+  max-height: 340px;
   overflow-y: auto;
-  padding: 4px;
+  padding: 7px;
   border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-secondary);
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .logRow {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: 5px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px 6px 10px;
+  border-radius: 7px;
   border-left: 2px solid transparent;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--dsw-alias-label-secondary);
 }
 
+.logRow:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+/* The level shows as the leading rule, so one entry reads as one event rather
+ * than repainting every field in it. */
 .logWarn {
-  border-left-color: var(--dsw-alias-label-primary);
-  color: var(--dsw-alias-label-primary);
+  border-left-color: var(--dsw-alias-state-warn-primary);
 }
 
 .logError {
-  border-left-color: var(--dsw-alias-label-error);
-  color: var(--dsw-alias-label-error);
+  border-left-color: var(--dsw-alias-state-error-primary);
 }
 
+.logError .logEvent {
+  border-color: transparent;
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.logError .logDetail {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.logMeta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* A fixed column, so the times line up down the list and the eye can skip
+ * straight to the event names. */
 .logTime {
   flex: 0 0 auto;
-  color: var(--dsw-alias-label-secondary);
+  min-width: 52px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
+/* The pill must read as a chip *on* the well, so it is painted with the card
+ * surface and given an edge — a wash inside a deeper wash would disappear. */
+.logEvent {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .logAccount {
-  flex: 0 0 150px;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--dsw-alias-label-primary);
-}
-
-.logEvent {
-  flex: 0 0 auto;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--dsw-alias-bg-primary);
+  color: var(--dsw-alias-label-secondary);
   font-size: 11px;
-  white-space: nowrap;
 }
 
 .logDetail {
-  flex: 1 1 auto;
-  word-break: break-word;
+  padding-left: 2px;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
 }
 
 /* --- empty and idle states --- */
 
 .empty {
   margin: 0;
-  padding: 14px;
+  padding: 16px;
   border: 0.5px dashed var(--dsw-alias-border-l3);
-  border-radius: 8px;
+  border-radius: 9px;
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 1.5;

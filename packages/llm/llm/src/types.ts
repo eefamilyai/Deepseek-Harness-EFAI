@@ -281,6 +281,16 @@ export interface LlmAccountField {
 export interface LlmAccountInfo {
   /** The login id, as the provider names it (the route suffix). */
   readonly id: string
+  /**
+   * The browser-profile slug this login's identity lives under.
+   *
+   * `id` and `slug` are different handles on the same account: the id names the
+   * config slot, the slug names the profile directory and the identity record.
+   * An orphan carries ONLY a slug, because the id it was configured under is
+   * exactly what is gone — so both travel, and a caller addresses whichever one
+   * it has.
+   */
+  readonly slug: string
   /** The provider route that pools this login. */
   readonly provider: string
   /** A short human label for the list row. */
@@ -349,6 +359,20 @@ export interface LlmAccountAdmin {
    * @returns whether a fresh identity is in place, or a plain reason not.
    */
   reprofile: (account: string) => Promise<LlmAccountOpResult>
+  /**
+   * Forget one login, or one orphaned identity, from the provider's list.
+   *
+   * The repair for an entry that should not be there at all — a login that was
+   * replaced, or a profile a removed one left behind. The browser identity
+   * survives unless `purge` is set: it cost a real login to mint, and a
+   * replacement account can still present it, so destroying it is a separate
+   * decision rather than part of forgetting the login.
+   * @param account - the login id to forget; '' when only a slug is known.
+   * @param slug - the profile slug, which is all an orphan carries.
+   * @param purge - also delete the browser profile. Default false.
+   * @returns whether the entry is gone, or a plain reason it is not.
+   */
+  remove: (account: string, slug: string, purge: boolean) => Promise<LlmAccountOpResult>
   /**
    * Debug lines recorded since a sequence number, oldest first.
    * @param since - return only entries with a higher sequence number.

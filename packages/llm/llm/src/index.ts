@@ -782,6 +782,33 @@ export class LlmRuntime extends TypertRemoteService {
     return this.accountAdmin(provider).log(since)
   }
 
+  /**
+   * Forget one login, or one orphaned identity, from a provider's list.
+   *
+   * The repair for an entry that should not be there at all — a login that was
+   * replaced, or a profile a removed one left behind. `account` is empty for an
+   * orphan: the login id it was configured under is exactly what is gone, so its
+   * slug is the only handle left. The browser profile survives unless `purge` is
+   * set — it cost a real login to mint, and a replacement account can still
+   * present it.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to forget; '' when only a slug is known.
+   * @param slug - the profile slug, which is all an orphan carries.
+   * @param purge - also delete the browser profile.
+   * @returns whether the entry is gone, or a plain reason it is not.
+   */
+  async removeAccount(
+    provider: string,
+    account: string,
+    slug: string,
+    purge: boolean,
+  ): Promise<LlmAccountOpResult> {
+    if (account.length === 0 && slug.length === 0) {
+      throw new LlmError('remove needs an account id or a profile slug', 'INVALID_ACCOUNT')
+    }
+    return this.accountAdmin(provider).remove(account, slug, purge)
+  }
+
   // DSH-FORK(kiln): expose the account-pool surface to the browser so a settings
   // page can add a login without editing ds_config.json by hand. Both wrappers
   // only translate a local failure into a structured Remote code; the local
@@ -874,6 +901,34 @@ export class LlmRuntime extends TypertRemoteService {
   async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult> {
     try {
       return await this.reprofileAccount(provider, account)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/account-rejected',
+        error instanceof Error ? error.message : String(error),
+        { provider, account },
+        { cause: error },
+      )
+    }
+  }
+
+  /**
+   * Remote adapter that forgets one pooled login, or one orphaned identity.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to forget; '' when only a slug is known.
+   * @param slug - the profile slug, which is all an orphan carries.
+   * @param purge - also delete the browser profile.
+   * @returns whether the entry is gone, or a plain reason it is not.
+   * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+   */
+  @Remote('removeAccount')
+  async remoteRemoveAccount(
+    provider: string,
+    account: string,
+    slug: string,
+    purge: boolean,
+  ): Promise<LlmAccountOpResult> {
+    try {
+      return await this.removeAccount(provider, account, slug, purge)
     } catch (error: unknown) {
       throw new RemoteError(
         'llm/account-rejected',

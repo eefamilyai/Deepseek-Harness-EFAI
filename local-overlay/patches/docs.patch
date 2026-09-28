@@ -57,7 +57,7 @@ index 9b82fb7a7b..e9ad8ed40b 100644
  /**
   * Forcibly compact a range of surface nodes into a single summary node.
 diff --git a/docs/subsystems/llm-streaming.i18n.yaml b/docs/subsystems/llm-streaming.i18n.yaml
-index 757474dd41..492b62ddd5 100644
+index 757474dd41..fdf13fb1d3 100644
 --- a/docs/subsystems/llm-streaming.i18n.yaml
 +++ b/docs/subsystems/llm-streaming.i18n.yaml
 @@ -2,5 +2,5 @@
@@ -66,10 +66,10 @@ index 757474dd41..492b62ddd5 100644
  #   pnpm run verify-translation-pairing --write docs/subsystems/llm-streaming.md
 -llm-streaming.md: 07fc6599bc5d4eb5a4af9b566032004932052585
 -llm-streaming.zh.md: 079a33599d1e5169af6402db2b2abdd7dc978369
-+llm-streaming.md: 7fc9928423484661fdebd7839044b0b2e653422e
-+llm-streaming.zh.md: 803162c06eedaa0e36e6bd3255a0307ed667d352
++llm-streaming.md: 5049e504cef7fb6d394056426657be50733208ca
++llm-streaming.zh.md: a9e43d87654af7307391b81d1a728597f3971b99
 diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
-index 07fc6599bc..7fc9928423 100644
+index 07fc6599bc..5049e504ce 100644
 --- a/docs/subsystems/llm-streaming.md
 +++ b/docs/subsystems/llm-streaming.md
 @@ -917,7 +917,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
@@ -81,7 +81,7 @@ index 07fc6599bc..7fc9928423 100644
  
  ```ts cordis-catalog
  /**
-@@ -976,6 +976,136 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+@@ -976,6 +976,164 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
   */
  async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
  
@@ -159,6 +159,23 @@ index 07fc6599bc..7fc9928423 100644
 +async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
 +
 +/**
++ * Forget one login, or one orphaned identity, from a provider's list.
++ *
++ * The repair for an entry that should not be there at all — a login that was
++ * replaced, or a profile a removed one left behind. `account` is empty for an
++ * orphan: the login id it was configured under is exactly what is gone, so its
++ * slug is the only handle left. The browser profile survives unless `purge` is
++ * set — it cost a real login to mint, and a replacement account can still
++ * present it.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to forget; '' when only a slug is known.
++ * @param slug - the profile slug, which is all an orphan carries.
++ * @param purge - also delete the browser profile.
++ * @returns whether the entry is gone, or a plain reason it is not.
++ */
++async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
++
++/**
 + * Remote read of the routes that accept account additions.
 + * @returns the registered account-provider routes, in registration order.
 + */
@@ -203,6 +220,17 @@ index 07fc6599bc..7fc9928423 100644
 + * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
 + */
 +@Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
++
++/**
++ * Remote adapter that forgets one pooled login, or one orphaned identity.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to forget; '' when only a slug is known.
++ * @param slug - the profile slug, which is all an orphan carries.
++ * @param purge - also delete the browser profile.
++ * @returns whether the entry is gone, or a plain reason it is not.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('removeAccount') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
 +
 +/**
 + * Remote read of one provider's account debug trail. A poll passes the last
@@ -219,7 +247,7 @@ index 07fc6599bc..7fc9928423 100644
   * Remote adapter for one draft provider interrogation.
   * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
-index 079a33599d..803162c06e 100644
+index 079a33599d..a9e43d8765 100644
 --- a/docs/subsystems/llm-streaming.zh.md
 +++ b/docs/subsystems/llm-streaming.zh.md
 @@ -923,7 +923,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
@@ -231,7 +259,7 @@ index 079a33599d..803162c06e 100644
  
  ```ts cordis-catalog
  /**
-@@ -982,6 +982,136 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+@@ -982,6 +982,164 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
   */
  async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
  
@@ -309,6 +337,23 @@ index 079a33599d..803162c06e 100644
 +async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
 +
 +/**
++ * Forget one login, or one orphaned identity, from a provider's list.
++ *
++ * The repair for an entry that should not be there at all — a login that was
++ * replaced, or a profile a removed one left behind. `account` is empty for an
++ * orphan: the login id it was configured under is exactly what is gone, so its
++ * slug is the only handle left. The browser profile survives unless `purge` is
++ * set — it cost a real login to mint, and a replacement account can still
++ * present it.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to forget; '' when only a slug is known.
++ * @param slug - the profile slug, which is all an orphan carries.
++ * @param purge - also delete the browser profile.
++ * @returns whether the entry is gone, or a plain reason it is not.
++ */
++async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
++
++/**
 + * Remote read of the routes that accept account additions.
 + * @returns the registered account-provider routes, in registration order.
 + */
@@ -353,6 +398,17 @@ index 079a33599d..803162c06e 100644
 + * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
 + */
 +@Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
++
++/**
++ * Remote adapter that forgets one pooled login, or one orphaned identity.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to forget; '' when only a slug is known.
++ * @param slug - the profile slug, which is all an orphan carries.
++ * @param purge - also delete the browser profile.
++ * @returns whether the entry is gone, or a plain reason it is not.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('removeAccount') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
 +
 +/**
 + * Remote read of one provider's account debug trail. A poll passes the last

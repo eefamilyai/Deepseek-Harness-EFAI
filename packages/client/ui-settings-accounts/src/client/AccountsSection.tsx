@@ -44,8 +44,16 @@ export interface AccountsSectionField {
 
 /** One pooled login, as this section lists and expands it. */
 export interface AccountsSectionAccount {
-  /** The login id, as the provider names it. */
+  /** The login id, as the provider names it; its slug for an orphan. */
   readonly id: string
+  /**
+   * The browser-profile slug this login's identity lives under.
+   *
+   * The handle that always exists: a configured row has an id and a slug, while
+   * an orphan has only the slug, because the id it was configured under is
+   * exactly what is gone.
+   */
+  readonly slug: string
   /** The provider route that pools this login. */
   readonly provider: string
   /** A short human label for the row. */
@@ -120,6 +128,25 @@ export interface AccountsSectionInjected {
    */
   reprofileAccount: (provider: string, account: string) => Promise<AccountsSectionOpResult>
   /**
+   * Forget one login, or one orphaned identity, from the provider's list.
+   *
+   * The repair for an entry that should not be there at all. `account` is empty
+   * for an orphan — the login id it was configured under is exactly what is
+   * gone, so its slug is the only handle left. The browser profile survives
+   * unless `purge` is set.
+   * @param provider - the provider route that pools logins.
+   * @param account - the login id to forget; '' when only a slug is known.
+   * @param slug - the profile slug, which is all an orphan carries.
+   * @param purge - also delete the browser profile.
+   * @returns whether the entry is gone, or a plain reason it is not.
+   */
+  removeAccount: (
+    provider: string,
+    account: string,
+    slug: string,
+    purge: boolean,
+  ) => Promise<AccountsSectionOpResult>
+  /**
    * Read the debug lines recorded since a sequence number.
    * @param provider - the provider route that pools logins.
    * @param since - return only entries with a higher sequence number.
@@ -136,7 +163,7 @@ export type AccountsSectionComponentProps =
 type IdentifierKind = 'email' | 'mobile'
 
 /** Which repair a row is running, so only that row shows as busy. */
-type RepairKind = 'relogin' | 'reprofile'
+type RepairKind = 'relogin' | 'reprofile' | 'remove'
 
 /**
  * A failure to show the operator, split into a headline and the detail.
@@ -227,6 +254,7 @@ export function AccountsSection({
   listAccounts,
   reloginAccount,
   reprofileAccount,
+  removeAccount,
   accountLog,
 }: AccountsSectionComponentProps) {
   const [providers, setProviders] = useState<readonly string[]>()
@@ -402,6 +430,41 @@ export function AccountsSection({
     await Promise.all([loadRows(provider), poll()])
   }, [provider, reloginAccount, reprofileAccount, loadRows, poll, t])
 
+  /**
+   * Forget one row, after the operator confirms it.
+   *
+   * A configured row is addressed by its account id; an orphaned one carries no
+   * id at all -- the login it was configured under is exactly what is gone -- so
+   * its slug is the only handle, and the same slug names its identity record and
+   * its profile directory.
+   *
+   * The confirmation is a browser `confirm` because this is destructive and
+   * irreversible. It also carries the purge choice: removing the config slot is
+   * reversible by adding the login again, but deleting the browser profile is
+   * not, so the two are separate answers rather than one destructive default.
+   */
+  const remove = useCallback(async (account: AccountsSectionAccount): Promise<void> => {
+    if (provider === undefined) return
+    const wantsPurge = window.confirm(`${t('accounts.remove.confirm')}\n\n${t('accounts.remove.purgeHint')}`)
+    setBusy({ id: account.id, op: 'remove' })
+    setOutcome(undefined)
+    let result: AccountsSectionOpResult
+    try {
+      // An orphan's client id IS its slug, but its config slot is gone by
+      // definition. Passing that id would ask the Host to delete a slot that no
+      // longer exists, turning a valid removal into a refusal.
+      const id = account.configured ? account.id : ''
+      result = await removeAccount(provider, id, account.slug, wantsPurge)
+    } catch (cause) {
+      setBusy(undefined)
+      setOutcome(describe(cause))
+      return
+    }
+    setBusy(undefined)
+    setOutcome(result.ok ? t('accounts.remove.ok') : result.message ?? t('accounts.list.loadError'))
+    await Promise.all([loadRows(provider), poll()])
+  }, [provider, removeAccount, loadRows, poll, t])
+
   return (
     <div className={css.section}>
       <p className={css.intro}>{t('accounts.intro')}</p>
@@ -567,18 +630,28 @@ export function AccountsSection({
                     <div className={css.rowActions}>
                       <Button
                         size="sm"
-                        disabled={running !== undefined}
+                        disabled={running !== undefined || !row.configured}
+                        title={row.configured ? undefined : t('accounts.list.orphanHint')}
                         onClick={() => { void repair(row, 'relogin') }}
                       >
                         {running === 'relogin' ? t('accounts.relogin.busy') : t('accounts.relogin')}
                       </Button>
                       <Button
                         size="sm"
-                        title={t('accounts.reprofile.warn')}
-                        disabled={running !== undefined}
+                        title={row.configured ? t('accounts.reprofile.warn') : t('accounts.list.orphanHint')}
+                        disabled={running !== undefined || !row.configured}
                         onClick={() => { void repair(row, 'reprofile') }}
                       >
                         {running === 'reprofile' ? t('accounts.reprofile.busy') : t('accounts.reprofile')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        className={css.danger}
+                        title={t('accounts.remove.warn')}
+                        disabled={running !== undefined}
+                        onClick={() => { void remove(row) }}
+                      >
+                        {running === 'remove' ? t('accounts.remove.busy') : t('accounts.remove')}
                       </Button>
                     </div>
                   </div>
@@ -631,10 +704,12 @@ export function AccountsSection({
               <div className={css.log} role="log">
                 {entries.map(entry => (
                   <div key={entry.seq} className={cx(css.logRow, levelClass(entry.level))}>
-                    <span className={css.logTime}>{clock(entry.at)}</span>
-                    <span className={css.logEvent}>{entry.event}</span>
-                    <span className={css.logAccount}>{entry.account}</span>
-                    <span className={css.logDetail}>{entry.detail}</span>
+                    <div className={css.logMeta}>
+                      <span className={css.logTime}>{clock(entry.at)}</span>
+                      <span className={css.logEvent}>{entry.event}</span>
+                      <span className={css.logAccount}>{entry.account}</span>
+                    </div>
+                    {entry.detail !== '' && <span className={css.logDetail}>{entry.detail}</span>}
                   </div>
                 ))}
               </div>

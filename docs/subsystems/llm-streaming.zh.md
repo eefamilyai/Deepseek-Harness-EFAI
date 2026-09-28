@@ -1056,6 +1056,23 @@ async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpR
 async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
 
 /**
+ * Forget one login, or one orphaned identity, from a provider's list.
+ *
+ * The repair for an entry that should not be there at all — a login that was
+ * replaced, or a profile a removed one left behind. `account` is empty for an
+ * orphan: the login id it was configured under is exactly what is gone, so its
+ * slug is the only handle left. The browser profile survives unless `purge` is
+ * set — it cost a real login to mint, and a replacement account can still
+ * present it.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to forget; '' when only a slug is known.
+ * @param slug - the profile slug, which is all an orphan carries.
+ * @param purge - also delete the browser profile.
+ * @returns whether the entry is gone, or a plain reason it is not.
+ */
+async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
+
+/**
  * Remote read of the routes that accept account additions.
  * @returns the registered account-provider routes, in registration order.
  */
@@ -1100,6 +1117,17 @@ async accountLog(provider: string, since: number): Promise<readonly LlmAccountLo
  * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
  */
 @Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
+
+/**
+ * Remote adapter that forgets one pooled login, or one orphaned identity.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to forget; '' when only a slug is known.
+ * @param slug - the profile slug, which is all an orphan carries.
+ * @param purge - also delete the browser profile.
+ * @returns whether the entry is gone, or a plain reason it is not.
+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
+ */
+@Remote('removeAccount') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
 
 /**
  * Remote read of one provider's account debug trail. A poll passes the last

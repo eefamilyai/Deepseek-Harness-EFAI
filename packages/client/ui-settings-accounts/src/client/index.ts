@@ -84,6 +84,12 @@ export function apply(ctx: ClientContext): void {
       const result = await ctx.remote.llm.reprofileAccount(provider, account)
       return result.ok ? result.value : { ok: false, message: result.error.message }
     },
+    removeAccount: async (provider, account, slug, purge) => {
+      const result = await ctx.remote.llm.removeAccount(provider, account, slug, purge)
+      // A refused removal answers `ok: false` in the payload; a Remote failure
+      // is the route itself being unavailable, and its message is the reason.
+      return result.ok ? result.value : { ok: false, message: result.error.message }
+    },
     accountLog: async (provider, since) => {
       const result = await ctx.remote.llm.accountLog(provider, since)
       return result.ok ? result.value : undefined

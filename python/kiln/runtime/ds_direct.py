@@ -768,6 +768,97 @@ def add_account(email="", password="", area_code="+86", mobile="", device_id="")
     return acct_id, None
 
 
+def _remove_account_from_config(acct_id):
+    """Delete the ds_config.json slot that NAMES `acct_id`. Returns (removed, error).
+
+    Only the matching slot is touched, and the two kinds of slot are not the same
+    edit:
+
+      * an ``accounts[]`` entry is dropped from the array, so the entries around
+        it keep their own credentials and their own order;
+      * the legacy top-level login -- the pre-``accounts`` layout, where
+        ``{"token","cookie","email",...}`` sits directly on the document -- has no
+        element to drop, so its login FIELDS are removed instead.
+
+    An entry is matched by the same id the loader gives it, positional tag
+    included, so a slot that carries no email/mobile/id at all is still
+    addressable rather than unreachable.
+
+    The document-level ``device_id`` survives either way. It describes the
+    MACHINE, not the login, and ``accounts[]`` entries that carry none inherit it
+    -- deleting it alongside one login would silently re-identify every account
+    still configured.
+
+    ``removed`` distinguishes "deleted" from "was never there"; the caller needs
+    that, because a removal that matched nothing must not be reported as one.
+    """
+    removed = False
+    for p in _config_paths():
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                doc = json.load(f)
+        except Exception as e:  # noqa: BLE001 -- never rewrite a file we cannot parse
+            return False, "%s exists but is not valid JSON (%s)" % (p, e)
+        if not isinstance(doc, dict):
+            continue
+        tag = os.path.basename(p) or "cfg"
+        touched = False
+
+        arr = doc.get("accounts")
+        if isinstance(arr, list):
+            # Positions are computed against the ORIGINAL list, before anything is
+            # dropped: `_acct_id_for` falls back to the index, so renumbering
+            # mid-pass would compare against the wrong positional.
+            keep = [raw for i, raw in enumerate(arr)
+                    if not (isinstance(raw, dict)
+                            and _acct_id_for(raw, f"{tag}:acct{i}") == acct_id)]
+            if len(keep) != len(arr):
+                doc["accounts"] = keep
+                touched = True
+
+        if _doc_usable(doc) and _acct_id_for(doc, tag + ":top") == acct_id:
+            for key in ("token", "cookie", "email", "mobile", "area_code",
+                        "password", "headers"):
+                doc.pop(key, None)
+            touched = True
+
+        if not touched:
+            continue
+        try:
+            _atomic_json(p, doc)
+        except Exception as e:  # noqa: BLE001 -- report the write failure to the caller
+            return False, "could not write %s (%s)" % (p, e)
+        removed = True
+    return removed, None
+
+
+def remove_account(account_id):
+    """Forget one configured DeepSeek login, leaving its browser identity alone.
+
+    Removing the CONFIG SLOT is this module's whole job: it is what makes the
+    account stop being a route and stop being handed to a turn. The identity
+    record and the Chrome profile that profile owns are a different question --
+    they describe a device rather than a login, they are worth keeping when a
+    login is only being replaced, and ``ds_admin.remove_account`` is the layer
+    that decides their fate.
+
+    Returns (account_id, None) when a slot was deleted, else (None, error). A
+    refusal is a value, not an exception, the same contract ``add_account`` keeps.
+    """
+    account_id = str(account_id or "").strip()
+    if not account_id:
+        return None, "an account id is required"
+    removed, error = _remove_account_from_config(account_id)
+    if error:
+        return None, error
+    if not removed:
+        return None, "no configured account matches %r" % account_id
+    _load_accounts(force=True)
+    return account_id, None
+
+
 def _account_order(key, pinned=None):
     """Accounts to try this turn: the conversation's account first (so it stays
     on ONE DeepSeek chat), then the rest as failover in ring order.
