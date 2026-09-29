@@ -1617,6 +1617,26 @@ class _Client:
                 raise _AuthExpired()
             raise RuntimeError(f"DeepSeek refused the upload: {msg} (code {code})")
 
+        # The SAME nested verdict class the completion path reads, and it was
+        # missing here. The outer envelope says code 0 / msg "" while the real
+        # refusal sits at `data.biz_code`; reading only `code` and then hunting
+        # for `biz_data` reported a full attachment list and a rate limit as the
+        # identical "upload returned no file id". A mute is already handled
+        # above by `_mute_of`, and `_biz_verdict_in` delegates it again, so this
+        # adds no second mute path.
+        ref_full = _ref_file_verdict_in([r.text])
+        if ref_full:
+            raise _ContextFull(
+                "the chat's attachment list is full (%s); compact the "
+                "conversation and continue in a new chat" % ref_full)
+        biz_verdict = _biz_verdict_in([r.text])
+        if biz_verdict:
+            # Received, not retried: an upload refusal we do not understand is
+            # one a resend answers identically, and re-logging-in here is the
+            # login storm that escalates a throttle into a mute.
+            raise RuntimeError(
+                "DeepSeek refused the upload (biz_code %s): %s" % biz_verdict)
+
         biz = (payload.get("data") or {}).get("biz_data")
         if not isinstance(biz, dict):
             raise RuntimeError(f"upload returned no file id: {r.text[:200]}")
@@ -2090,6 +2110,13 @@ def upload_files(files, account=None, cancelled=None):
             try:
                 out.append({"name": name, "id": client.upload_file(name, blob),
                             "size": len(blob)})
+            except (_Muted, _ContextFull):
+                # A verdict about the ACCOUNT or the CHAT, not about this file.
+                # Swallowing it into a per-file error string would report a mute
+                # as "couldn't read that file" and hide the one answer the
+                # operator needs; a full attachment list would dead-end instead
+                # of compacting. Re-raised so the caller sees the real type.
+                raise
             except (_AuthExpired, _SessionStale) as e:
                 # These invalidate the credential, not the file — the caller
                 # re-logs-in and retries the whole call, exactly as

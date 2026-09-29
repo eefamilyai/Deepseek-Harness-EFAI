@@ -33,6 +33,7 @@ Pinned here, in order:
 
 No network and no credentials: the tests drive a fake client.
 """
+import contextlib
 import os
 import sys
 import threading
@@ -424,6 +425,120 @@ check("%d consecutive refusals each send exactly ONE request" % REFUSAL_RUN,
       _run_opened == REFUSAL_RUN,
       "opened=%d for %d refusals -- more than one means a resend"
       % (_run_opened, REFUSAL_RUN))
+
+
+# ── the UPLOAD path reads the same nested verdict ───────────────────
+# Third surface, same defect class. `upload_file` read only the TOP-LEVEL
+# `code`, so a refusal nested at `data.biz_code` fell past it and then failed
+# to find `biz_data` -- reporting a rate limit, a full attachment list, and
+# anything else as the ONE identical string "upload returned no file id". The
+# stubbed client below makes the response body the only variable.
+import types as _types
+
+
+class _UpResp:
+    def __init__(self, text):
+        self.status_code = 200
+        self.text = text
+
+    def json(self):
+        return _json.loads(self.text)
+
+
+class _UpMime:
+    def addpart(self, **kw):
+        pass
+
+    def close(self):
+        pass
+
+
+def _upload_with(body):
+    """Run upload_file against `body`; -> ("ok", id) or ("err", exception)."""
+    saved_pow, saved_mime = dd.solve_pow, dd.CurlMime
+    dd.solve_pow = lambda ch: "pow"
+    dd.CurlMime = _UpMime
+    try:
+        c = object.__new__(dd._Client)
+        c.token = "tok"
+        c.account = FakeAccount()
+        c._pow = lambda path: {"challenge": "x"}
+        # Stubbed so the assertion is about verdict classification and nothing
+        # else -- no identity files, no header assembly.
+        c._headers = lambda *a, **k: {}
+        c.sess = _types.SimpleNamespace(post=lambda *a, **k: _UpResp(body))
+        return ("ok", c.upload_file("f.png", b"blob"))
+    except BaseException as e:      # noqa: BLE001 -- the test asserts on the type
+        return ("err", e)
+    finally:
+        dd.solve_pow, dd.CurlMime = saved_pow, saved_mime
+
+
+_up_rate = _upload_with('{"code":0,"msg":"","data":{"biz_code":7,'
+                        '"biz_msg":"rate limit reached","biz_data":null}}')
+check("an upload rate limit names the code DeepSeek sent",
+      _up_rate[0] == "err" and "7" in str(_up_rate[1])
+      and "rate limit reached" in str(_up_rate[1]),
+      repr(str(_up_rate[1]))[:160])
+check("the upload rate limit is NOT 'no file id'",
+      "no file id" not in str(_up_rate[1]),
+      "the dead-end message the nested read removes: %r" % str(_up_rate[1])[:120])
+check("the upload rate limit is a plain RuntimeError, with no remedy attached",
+      isinstance(_up_rate[1], RuntimeError)
+      and not isinstance(_up_rate[1], (dd._AuthExpired, dd._Muted, dd._ContextFull)),
+      type(_up_rate[1]).__name__)
+
+_up_refs = _upload_with('{"code":0,"msg":"","data":{"biz_code":10,'
+                        '"biz_msg":"too many ref file","biz_data":null}}')
+check("an upload ref-file refusal reaches _ContextFull",
+      isinstance(_up_refs[1], dd._ContextFull),
+      "a full attachment list must compact, not dead-end: %s" % type(_up_refs[1]).__name__)
+
+_up_mute = _upload_with('{"code":0,"msg":"","data":{"biz_code":5,'
+                        '"biz_msg":"user is muted",'
+                        '"biz_data":{"is_muted":1,"mute_until":1790932407.459}}}')
+check("an upload MUTE is classified as _Muted",
+      isinstance(_up_mute[1], dd._Muted),
+      "a mute must not read as a generic upload failure: %s" % type(_up_mute[1]).__name__)
+
+_up_ok = _upload_with('{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"",'
+                      '"biz_data":{"id":"file-abc","status":"PENDING"}}}')
+check("a successful upload still returns its id",
+      _up_ok == ("ok", "file-abc"), repr(str(_up_ok))[:160])
+
+# The BATCH layer must not swallow an account-level verdict into a per-file
+# error string. `upload_files` catches broadly per file so one bad file cannot
+# lose the others; without an explicit re-raise a mute arrives as "couldn't read
+# that file" and the operator never learns the account is muted.
+class _UpClient:
+    def __init__(self, exc):
+        self._exc = exc
+        self.account = FakeAccount()
+
+    def upload_file(self, name, blob):
+        raise self._exc
+
+
+def _batch_with(exc):
+    saved = dd._lease_client
+    dd._lease_client = lambda a=None: contextlib.nullcontext(_UpClient(exc))
+    try:
+        return ("ok", dd.upload_files([("f.png", b"blob")]))
+    except BaseException as e:      # noqa: BLE001 -- the test asserts on the type
+        return ("err", e)
+    finally:
+        dd._lease_client = saved
+
+
+_b_mute = _batch_with(dd._Muted("muted"))
+check("a mute during a batch upload is NOT swallowed into a file error",
+      isinstance(_b_mute[1], dd._Muted),
+      "a mute reported as a bad file hides the only actionable verdict: %s"
+      % type(_b_mute[1]).__name__)
+_b_ref = _batch_with(dd._ContextFull("too many refs"))
+check("a ref-file refusal during a batch upload reaches _ContextFull",
+      isinstance(_b_ref[1], dd._ContextFull),
+      "a full attachment list must compact, not dead-end: %s" % type(_b_ref[1]).__name__)
 
 
 print()
