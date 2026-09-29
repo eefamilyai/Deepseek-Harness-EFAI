@@ -93,18 +93,34 @@ describe('a refused block does not spill its argument values', () => {
     expect(run(refused).shown).toContain('unfinished tool call')
   })
 
-  it('drops the value of an element whose closer never arrived', () => {
+  it('drops the payload of an element whose closer never arrived, once the block DID close', () => {
+    const closed = [
+      o('tool_calls'),
+      o('invoke', 'name="kernel"'),
+      o('parameter', 'name="code"'),
+      'rm -rf /tmp/x',
+      c('tool_calls'),
+      '',
+    ].join(NL)
+    const { calls, shown } = run(closed)
+    expect(calls).toEqual([])
+    expect(shown).not.toContain('rm -rf /tmp/x')
+    expect(shown).toContain('unfinished tool call')
+  })
+
+  it('keeps the text of a block the model never closed', () => {
+    // The other half of the rule, and the long-standing one: a stream that
+    // simply stopped is flushed as text, because the text is the only record of
+    // what was written. llm-kiln's suite pins this independently.
     const truncated = [
       o('tool_calls'),
       o('invoke', 'name="kernel"'),
       o('parameter', 'name="code"'),
       'rm -rf /tmp/x',
-      '',
     ].join(NL)
     const { calls, shown } = run(truncated)
     expect(calls).toEqual([])
-    expect(shown).not.toContain('rm -rf /tmp/x')
-    expect(shown).toContain('unfinished tool call')
+    expect(shown).toContain('rm -rf /tmp/x')
   })
 
   it('keeps the value out even when the note is switched off', () => {

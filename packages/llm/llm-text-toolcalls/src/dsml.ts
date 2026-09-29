@@ -2535,6 +2535,17 @@ export class DsmlTranslator {
     const joined = block.lines.join('\n')
     const raw = restoreStrippedClosers(joined)
     if (raw !== joined) this.shapes.add('closer-stripped')
+    // Whether the block's OWN closer arrived. This is the difference between a
+    // block the model finished writing and one the stream cut off. A finished
+    // block whose call still would not parse is showing the values the call
+    // would have run with -- the reported spill. A block the stream cut off has
+    // no closer anywhere, and its text is the only record of what was written,
+    // so it is flushed as text, which is the long-standing rule.
+    //
+    // Measured from the TEXT, not from which path called this: an argument the
+    // model never closed keeps the envelope closer from being read as the block
+    // closer, so a finished block can still arrive here through the flush.
+    const closeArrived = raw.includes(block.closer)
     const { produced, named, unknown } = this.parseCalls(raw)
     // Nothing callable came out: show the block. A model that named a tool it
     // does not have needs to SEE that it did — the next turn's transcript is
@@ -2575,10 +2586,16 @@ export class DsmlTranslator {
       // shown; whatever real prose the block carried survives the strip and is
       // still displayed. The note that follows names the mistake in words, so
       // the model is told what went wrong without the user ever seeing a tag.
-      // The framing comes off, and so does each argument's value: a refused
-      // call that showed its payload back was the wire protocol reaching the
-      // user as prose, which is what this line was reported for.
-      const shown = deFramed(withoutParameterPayload(raw))
+      // The framing always comes off. A CLOSED block loses its payload too: the
+      // model finished writing it and the reader still could not read it, so
+      // the values are what the call would have run with and showing them back
+      // is the wire protocol reaching the user as prose -- the reported spill.
+      //
+      // A block the model never closed is the other case. There the text is the
+      // only record of what was written, and the long-standing rule is to flush
+      // it as text rather than invent the end it never wrote. Stripping there
+      // would hide the very thing the model needs to see to correct itself.
+      const shown = deFramed(closeArrived ? withoutParameterPayload(raw) : raw)
       if (shown.length > 0) events.push({ kind: 'text', text: `${shown}\n` })
       const note = this.blockNote(raw, named, unknown)
       if (note.length > 0) events.push({ kind: 'text', text: note })
