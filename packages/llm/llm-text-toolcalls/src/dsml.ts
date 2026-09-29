@@ -1473,7 +1473,7 @@ export class DsmlTranslator {
    * @param closing - true when the token carried a `/` in its leading pipe run.
    * @param payload - everything between the pipe run and the closing `>`.
    */
-  private nativeToken(whole: string, closing: boolean, payload: string): string {
+  private nativeToken(_whole: string, closing: boolean, payload: string): string {
     // Two tags fused into one token — see FUSED_OPENER. The inner opener is the
     // tag the model meant, so the false start ahead of it is dropped and the
     // rest of this routine reads the one tag that remains.
@@ -1644,7 +1644,7 @@ export class DsmlTranslator {
       this.shapes.add('nameless-parameter')
     }
     if (this.namedOpen !== undefined && this.namedClose !== undefined) {
-      out = out.replace(this.namedOpen, (whole, name: string, run: string) => {
+      out = out.replace(this.namedOpen, (_whole, name: string, run: string) => {
         // Declared or not, a tag written with a tool's name becomes the taught
         // invoke spelling. An undeclared name has to stay visible, and the taught
         // spelling is how this reader already keeps a name it cannot place visible
