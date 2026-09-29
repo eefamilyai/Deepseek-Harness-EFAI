@@ -34,6 +34,7 @@ import {
   unescapeXml,
 } from './protocol.ts'
 import { learnedLiterals, literalKey } from './catalog.ts'
+import { salvageCalls } from './salvage.ts'
 import { extractShape, readShape } from './shapes.ts'
 
 /** What the translator emits for one complete provider turn. */
@@ -2281,6 +2282,20 @@ export class DsmlTranslator {
       const structural = this.structuralCall(raw)
       if (structural !== undefined) {
         events.push(structural)
+        return
+      }
+      // DSH-FORK(salvage): the pipeline of last resort. Every pass above is a
+      // recogniser, and a block they all refuse was refused for the shape it
+      // was written in -- not for what it carries. Before showing the block
+      // back to the model, read it in three stages: find the spans with call
+      // intent, separate each into tool / parameters / residue, and assemble
+      // what the request's own schemas can own. A span that resolves to nothing
+      // is refused, so an example still cannot run from here.
+      // EXIT: upstream has no structural salvage pass.
+      const salvaged = salvageCalls(raw, this.tools)
+      if (salvaged !== undefined) {
+        this.shapes.add('salvaged')
+        events.push(...salvaged.map(call => ({ kind: 'tool-call' as const, name: call.name, arguments: call.arguments })))
         return
       }
       events.push({ kind: 'text', text: `${raw}\n${this.blockNote(raw, named, unknown)}` })
