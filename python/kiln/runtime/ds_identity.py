@@ -84,14 +84,18 @@ def client_hints():
 
 
 # --- the high-entropy half of the client hints ---------------------------------
-# The triple above is what Chrome sends everywhere. Six MORE hints ride the
-# same-origin requests to chat.deepseek.com, and a capture of that site shows all
-# nine on every one of its 47 requests -- completion, pow-challenge, settings --
-# while `hif-*.deepseek.com`, `gator.volces.com` and the CDN get the triple only.
-# The split is the browser's, not a choice: the extra hints are granted per
-# origin (by `Accept-CH` or its meta equivalent, and the grant persists), so a
-# client that sends the triple to DeepSeek's API is advertising a browser that
-# declined a grant the real one accepted.
+# Six hints Chrome sends ONLY to an origin that has granted them, via `Accept-CH`
+# or its `<meta http-equiv>` equivalent. The grant is per-origin and persists in
+# a profile, so this set is a fact about the ORIGIN, not about the browser.
+#
+# Measured against chat.deepseek.com with a real desktop Chrome: the site
+# advertises no `Accept-CH` in any response and no meta tag in its HTML, and
+# Chrome answers with the TRIPLE only, on every request. The nine-hint set is
+# therefore NOT what this origin receives, and a client that sends it presents a
+# browser state that cannot exist here -- a louder tell than sending too few.
+#
+# The derivation below stays because it is sound for any origin that DOES grant
+# the set; nothing on the chat path sends these.
 #
 # Nothing here is invented. Chrome derives every one of these from the same two
 # facts this module already owns -- the browser version and the OS -- so they are
@@ -205,6 +209,30 @@ def client_headers():
         "x-client-bundle-id": CLIENT_BUNDLE_ID,
         "x-client-timezone-offset": str(timezone_offset()),
     }
+
+
+# --- headers EVERY browser sends to EVERY origin -------------------------------
+# `accept-language` is not optional and not per-origin: Chrome attaches it to
+# every request it makes, a document load and an XHR alike. curl_cffi's
+# impersonation reproduces the TLS handshake and the header ORDER but not this
+# value, so a client that never sets it sends a request a browser cannot produce.
+#
+# The value is Chrome's own en-US form -- the language tag, then the base
+# language with a quality weight. A bare `en-US` (what a headless browser with a
+# forced locale reports) is not what a real desktop Chrome emits, and `en_US`
+# with an underscore is the DeepSeek client's own locale spelling, not a BCP-47
+# language tag, so it would be the wrong vocabulary in this header.
+ACCEPT_LANGUAGE = "en-US,en;q=0.9"
+
+
+def browser_headers():
+    """The headers a browser sends everywhere, independent of the origin.
+
+    Kept apart from `client_headers` (which is the chat APPLICATION's x-client-*
+    group) and from the chat-origin-only device headers: this one is a fact about
+    the browser, so every request that carries a User-Agent carries it too.
+    """
+    return {"accept-language": ACCEPT_LANGUAGE}
 
 
 # --- headers only chat.deepseek.com receives ----------------------------------

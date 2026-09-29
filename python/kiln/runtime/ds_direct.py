@@ -1163,11 +1163,16 @@ class _Client:
             "content-type": "application/json", "origin": "https://chat.deepseek.com",
             "referer": "https://chat.deepseek.com/",
             "user-agent": UA,
-            # All nine hints: chat.deepseek.com is an origin a real browser holds
-            # the high-entropy grant for, and it receives the full set on every
-            # request the capture contains. Sending the triple here advertises a
-            # browser that declined a grant the real one accepted.
-            **ds_identity.client_hints_full(),
+            # Every browser sends this on every request; curl_cffi's impersonation
+            # does not supply it, so leaving it out was a header gap.
+            **ds_identity.browser_headers(),
+            # The TRIPLE, not the high-entropy nine. Chrome emits the six extra
+            # hints only after an origin grants them via Accept-CH; measured
+            # against this site, no response and no meta tag carries that grant,
+            # and real desktop Chrome sends the triple on every request. Six
+            # hints the origin never asked for describe a browser state that
+            # cannot exist here -- a louder tell than sending too few.
+            **ds_identity.client_hints(),
             # The completion call is a same-origin XHR the chat page makes.
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
@@ -1217,14 +1222,14 @@ class _Client:
         h = {
             "accept": "*/*", "content-type": "application/json",
             "origin": "https://chat.deepseek.com",
+            **ds_identity.browser_headers(),
             # The real client posts this XHR from the sign-in page, so its
             # referer is /sign_in and not /.
             "referer": "https://chat.deepseek.com/sign_in",
             "user-agent": UA,
-            # Same granted origin as `_headers`, so the same nine hints. The
-            # login POST is the request the anti-abuse stack reads hardest, and
-            # a short hint set there is the loudest version of the mismatch.
-            **ds_identity.client_hints_full(),
+            # Same triple as `_headers`, for the same measured reason: this
+            # origin grants no high-entropy hints, so a browser sends none.
+            **ds_identity.client_hints(),
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
             **_NOT_A_NAVIGATION,
@@ -1455,7 +1460,7 @@ class _Client:
             # client/settings request in the capture.
             "referer": "https://chat.deepseek.com/",
             "user-agent": UA,
-            **ds_identity.client_hints_full(),
+            **ds_identity.client_hints(),
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
             **_NOT_A_NAVIGATION,
@@ -3047,10 +3052,10 @@ def _ref_file_verdict_in(raw_lines):
 # recognise keep their own diagnosis above (5 mute, 10 ref-file); everything
 # else lands here.
 #
-# It is NOT retried. An unrecognised verdict is by definition one we do not know
-# how to fix, so a resend answers the same way while spending a /users/login on
-# it. The account is refreshed anyway — a stale credential is the usual cause of
-# a code we do not recognise — so the next turn starts from a healthy token.
+# It is NOT retried, and NOT re-logged-in. An unrecognised verdict is by
+# definition one we do not know how to fix, so a resend answers the same way --
+# and an eager /users/login on it is a login burst against an account DeepSeek is
+# already declining, which the anti-abuse stack escalates into a mute.
 #
 # A MUTE is never re-logged-in either: the credential is fine, so the login
 # succeeds and changes nothing.
@@ -3589,7 +3594,12 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
             # the next turn starts from a healthy token.
             biz = _biz_verdict_in(raw_sink)
             if biz:
-                client.login()
+                # NOT re-authenticated here. An eager login on an unrecognised
+                # verdict posts another /users/login for an account DeepSeek is
+                # already declining to serve, and a burst of logins from one
+                # address is what the anti-abuse stack escalates -- the signal it
+                # mutes on. The verdict is received and the turn fails; a later
+                # turn re-authenticates only if it actually needs to.
                 raise RuntimeError(
                     "DeepSeek refused the request (biz_code %s): %s" % biz)
             verdict = _auth_verdict_in(raw_sink)
@@ -3885,11 +3895,12 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
             _drop_vision_session()
             st = _vision_session(client)
             continue
-        # Any other non-success biz_code on this surface: NOT retried, but the
-        # account is refreshed first, exactly as on the main chat.
+        # Any other non-success biz_code on this surface: received, and the turn
+        # fails. NOT retried and NOT re-logged-in -- an eager /users/login on an
+        # unrecognised verdict is a login burst against an account DeepSeek is
+        # already declining, which the anti-abuse stack escalates into a mute.
         biz = _biz_verdict_in(raw_sink)
         if biz:
-            client.login()
             raise RuntimeError(
                 "DeepSeek vision refused the request (biz_code %s): %s" % biz)
         break

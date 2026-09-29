@@ -352,28 +352,32 @@ try:
           "authorization" not in {k.lower() for k in login_headers},
           "an expired token on a fresh login is itself the failure being fixed")
 
-    # ── the full nine-hint set, on both chat request paths ──────────
-    # A capture of chat.deepseek.com carries all nine sec-ch-ua-* headers on
-    # every one of its 47 requests, with no Accept-CH negotiation anywhere in
-    # the log -- the grant is simply held. A client that sends the triple
-    # advertises a browser that declined a grant the real one accepted, so
-    # `client_hints_full` is what both paths must use.
-    full = di.client_hints_full()
-    check("the full hint set is all nine headers", len(full) == 9, repr(sorted(full)))
-    check("the full hint set is the triple plus the extras",
-          set(full) == set(di.client_hints()) | set(di.client_hint_extras()),
-          repr(sorted(set(full) ^ (set(di.client_hints())
-                                  | set(di.client_hint_extras())))))
+    # ── the chat paths send the TRIPLE, not the high-entropy nine ───
+    # Chrome sends the six high-entropy hints only to an origin that granted
+    # them via Accept-CH. Measured against chat.deepseek.com with real desktop
+    # Chrome: no response and no meta tag carries that grant, and Chrome sends
+    # the triple on every request. Six hints this origin never asked for
+    # describe a browser state that cannot exist here.
+    triple = di.client_hints()
+    check("the chat hint set is the triple", len(triple) == 3, repr(sorted(triple)))
+    _extra = set(di.client_hint_extras())
     for name, hdrs in (("the request", headers), ("the login request", login_headers)):
-        missing = sorted(k for k in full if k not in hdrs)
-        check("%s carries all nine client hints" % name, not missing,
-              "missing %s" % missing)
-        check("%s carries the hint VALUES the full set names" % name,
-              all(hdrs.get(k) == val for k, val in full.items()),
-              repr({k: hdrs.get(k) for k in full if hdrs.get(k) != full[k]}))
+        check("%s carries the client-hint triple" % name,
+              all(hdrs.get(k) == v for k, v in triple.items()),
+              repr({k: hdrs.get(k) for k in triple if hdrs.get(k) != triple[k]}))
+        leaked = sorted(_extra & set(hdrs))
+        check("%s sends NO ungranted high-entropy hint" % name, not leaked,
+              "this origin grants no Accept-CH, so these advertise a browser "
+              "state that cannot exist: %s" % leaked)
 
     # The high-entropy half is DERIVED from the User-Agent, so the version in
-    # the hint and the version in the UA cannot drift apart.
+    # the hint and the version in the UA cannot drift apart. Nothing on the chat
+    # path sends it (see above), but the derivation is still held to the UA here
+    # so it stays sound for any origin that DOES grant the set.
+    full = di.client_hints_full()
+    check("the derivable set is still the triple plus six extras",
+          len(full) == 9 and set(full) == set(di.client_hints()) | _extra,
+          repr(sorted(full)))
     check("the full-version hint is the User-Agent's version",
           full["sec-ch-ua-full-version"] == '"%s"' % di._ua_version(),
           "%s vs UA %s" % (full["sec-ch-ua-full-version"], di._ua_version()))
@@ -659,6 +663,25 @@ try:
           "Chrome/134" not in src_direct)
     check("ds_waf no longer hardcodes a Chrome 134 User-Agent",
           "Chrome/134" not in inspect.getsource(dw))
+
+    # ── accept-language: a header every browser sends, curl_cffi does not ──
+    # curl_cffi reproduces the TLS handshake and the header ORDER but not this
+    # value, so a client that never sets it sends a request no browser produces.
+    # Measured against the site: real Chrome carried accept-language on 15/15
+    # chat.deepseek.com requests while the harness carried none.
+    check("a browser accept-language is declared",
+          getattr(di, "ACCEPT_LANGUAGE", "") == "en-US,en;q=0.9",
+          "got %r" % (getattr(di, "ACCEPT_LANGUAGE", None),))
+    check("browser_headers() exposes it",
+          di.browser_headers().get("accept-language") == "en-US,en;q=0.9",
+          repr(di.browser_headers()))
+    check("it is not the underscore locale spelling",
+          "_" not in di.ACCEPT_LANGUAGE,
+          "en_US is the client's locale field, not a BCP-47 language tag")
+    _src_direct = inspect.getsource(dd)
+    check("the request headers carry it",
+          _src_direct.count("**ds_identity.browser_headers(),") >= 2,
+          "expected it on both _headers and _login_headers")
 finally:
     shutil.rmtree(_SCRATCH, ignore_errors=True)
 

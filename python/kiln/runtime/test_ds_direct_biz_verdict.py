@@ -17,10 +17,10 @@ Why "not retried" is the whole point. The old code answered every unrecognised
 body with "DeepSeek returned an empty response (HTTP 200): no answer and no
 diagnostic" and left the operator to guess. Resending is not a remedy: a code we
 do not recognise is by definition one we do not know how to fix, so the resend
-comes back identical while spending a /users/login on each attempt. So the turn
-refreshes the credential once -- a stale token is the usual cause of a code we
-do not recognise -- and then fails with the code and message DeepSeek actually
-sent.
+comes back identical. Neither is re-logging-in: an eager /users/login on a
+verdict we do not understand is a login burst against an account DeepSeek is
+already declining, which its anti-abuse stack escalates into a mute. So the turn
+receives the verdict and fails with the code and message DeepSeek actually sent.
 
 Pinned here, in order:
   * `_biz_verdict_of` / `_biz_verdict_in` find a code nobody has taught them;
@@ -28,9 +28,8 @@ Pinned here, in order:
     tailored handling and are not flattened into this one;
   * they reject every non-refusal (success codes, a null or string `data`, a
     non-dict, model prose);
-  * end to end on the main chat and on the vision chat: exactly ONE login, no
-    second request, and an error naming the code -- never the empty-response
-    message.
+  * end to end on the main chat and on the vision chat: NO login, no second
+    request, and an error naming the code -- never the empty-response message.
 
 No network and no credentials: the tests drive a fake client.
 """
@@ -146,9 +145,9 @@ check("the main-chat raise region contains no retry",
       "a continue here is the retry the operator forbade: %r" % _region[:200])
 check("the main-chat raise names the code and the message",
       "biz_code %s" in _region and "%s" in _region)
-check("the account is refreshed before the refusal is raised",
-      "client.login()" in _region,
-      "a stale token is the usual cause of a code we do not recognise")
+check("the account is NOT re-logged-in for the refusal",
+      "client.login()" not in _region,
+      "an eager login on an unrecognised verdict is the mute-rate regression")
 
 # ── the type it reaches ─────────────────────────────────────────────
 # It is a PLAIN RuntimeError on purpose, not one of the three tailored types.
@@ -183,8 +182,9 @@ check("the vision raise region contains no retry",
       "the vision surface must not resend either: %r" % _region_v[-200:])
 check("the vision raise region names the code",
       "biz_code %s" in _region_v)
-check("the vision account is refreshed before the refusal",
-      "client.login()" in _region_v)
+check("the vision account is NOT re-logged-in for the refusal",
+      "client.login()" not in _region_v,
+      "the vision surface must not earn a mute either")
 
 
 # ── end to end, main chat ───────────────────────────────────────────
@@ -281,9 +281,9 @@ check("it is NOT a mute",
       not isinstance(error_b, dd._Muted), repr(str(error_b))[:160])
 check("it is NOT a context overflow",
       not isinstance(error_b, dd._ContextFull), repr(str(error_b))[:160])
-check("the account was refreshed exactly once",
-      client_b.logins == 1,
-      "logins=%d -- a stale token is the usual cause, so one refresh is wanted"
+check("the account was NOT re-logged-in",
+      client_b.logins == 0,
+      "logins=%d -- an eager login here is the mute-rate regression"
       % client_b.logins)
 check("the turn was NOT resent",
       len(client_b.opened) == 1,
@@ -293,16 +293,15 @@ check("no fresh chat was opened",
       client_b.new_sessions == 0,
       "new_sessions=%d -- a fresh chat answers the same way" % client_b.new_sessions)
 
-# The account refresh is a courtesy, not a gate: even when the login itself
-# fails, the verdict must still be reported rather than replaced by a login
-# error the operator cannot act on.
+# The verdict is reported on its own terms: nothing about the credential is
+# touched, so no login error can replace it.
 events_l, error_l, client_l = drive(responses=[FakeResponse(lines=[BIZ_SSE])],
                                     login_ok=False)
-check("a failed refresh still reports the verdict, not a login error",
+check("the verdict is reported, not a login error",
       "42" in str(error_l) and "something new went wrong" in str(error_l),
       repr(str(error_l))[:200])
-check("a failed refresh still does not resend",
-      len(client_l.opened) == 1, repr(client_l.opened))
+check("no login was attempted even with login_ok=False",
+      client_l.logins == 0, "logins=%d" % client_l.logins)
 
 
 # ── end to end, the vision/attachment chat ──────────────────────────
@@ -384,8 +383,8 @@ check("the vision error is NOT an auth failure",
 check("the vision error is NOT a context overflow",
       not isinstance(ve, dd._ContextFull),
       "an unknown code must not burn a vision chat: %r" % str(ve)[:160])
-check("the vision account was refreshed exactly once",
-      vc.logins == 1, "logins=%d" % vc.logins)
+check("the vision account was NOT re-logged-in",
+      vc.logins == 0, "logins=%d" % vc.logins)
 check("the vision turn was NOT resent",
       len(vc.opened) == 1,
       "opened=%d -- no fresh chat, no resend: %r" % (len(vc.opened), vc.opened))
