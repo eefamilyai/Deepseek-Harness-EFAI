@@ -583,6 +583,54 @@ function deFramed(body: string): string {
 }
 
 /**
+ * A block with every parameter element's payload removed.
+ *
+ * A parameter's value is what the call would have RUN with, not what the model
+ * was saying. {@link deFramed} takes the framing off a refused block and keeps
+ * the text between the tags -- which is right for prose and wrong for payload:
+ * a call refused for its shape then spills its arguments into the answer, and
+ * the user reads the wire protocol one level down, as bare values with no tag
+ * left to explain them.
+ *
+ * So the element goes whole, opener and closer included, whether or not the
+ * closer arrived. An element that never closed is a command cut off mid-write,
+ * and everything after it is that command's argument -- which is exactly the
+ * text that must not be shown.
+ * @param body - the block as the model wrote it.
+ * @returns the block with each parameter element and its value removed.
+ */
+function withoutParameterPayload(body: string): string {
+  // A provider that wraps its tokens in pipes writes the element as
+  // `｜｜parameter ...｜｜`, so the element is matched with its
+  // pipe run allowed on both sides of the tag name.
+  const run = '[|\uFF5C]*'
+  const opener = new RegExp('^<' + run + 'parameter(?=[\\s/>=]|$)')
+  const closer = new RegExp('^<' + run + '/parameter')
+  const kept: string[] = []
+  let inPayload = false
+  for (const line of body.split('\n')) {
+    const lead = line.trimStart()
+    // Any tag line ends a payload run; which tag it is decides what happens to
+    // the line itself.
+    if (lead.startsWith('<')) inPayload = false
+    if (opener.test(lead)) {
+      // The element and the value written on it are what the call would have
+      // run with, not something the model was saying.
+      inPayload = true
+      continue
+    }
+    if (closer.test(lead)) continue
+    // A value may continue on the lines after its element, and an element whose
+    // closer never arrived owns everything to the next tag. A line the run does
+    // not reach is the model's own writing, and a refused block still shows the
+    // sentence it carried.
+    if (inPayload) continue
+    kept.push(line)
+  }
+  return kept.join('\n')
+}
+
+/**
  * Whether a line is nothing but markup, and so framing rather than prose.
  *
  * A line carrying any real text is left exactly as written; only a line whose
@@ -2527,7 +2575,10 @@ export class DsmlTranslator {
       // shown; whatever real prose the block carried survives the strip and is
       // still displayed. The note that follows names the mistake in words, so
       // the model is told what went wrong without the user ever seeing a tag.
-      const shown = deFramed(raw)
+      // The framing comes off, and so does each argument's value: a refused
+      // call that showed its payload back was the wire protocol reaching the
+      // user as prose, which is what this line was reported for.
+      const shown = deFramed(withoutParameterPayload(raw))
       if (shown.length > 0) events.push({ kind: 'text', text: `${shown}\n` })
       const note = this.blockNote(raw, named, unknown)
       if (note.length > 0) events.push({ kind: 'text', text: note })
