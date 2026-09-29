@@ -1084,12 +1084,43 @@ class _RotateAccount(Exception):
 
 
 class _ContextFull(RuntimeError):
-    """The DeepSeek chat is full ("Length limit reached"). Not transient and not
-    per-account — the transcript itself is too long — so it is NOT retried here
-    and NOT failed over to another login. It is raised with context-overflow
-    wording the harness recognises, which runs the same compaction as `/compact`
-    and retries; on that retry the transcript is shorter and _stream_with opens a
-    fresh chat primed with the compacted history (see the shrink check)."""
+    """This chat can no longer serve the turn, and a compaction is the fix.
+
+    Two verdicts raise it, and they share every property that matters here.
+    `Length limit reached` says the transcript is too long; `too many ref file`
+    (biz_code 10) says the attachment list accumulated on it is too long. Both
+    are properties of the CHAT rather than of the request, neither is transient,
+    neither is per-account — so neither is retried here and neither fails over
+    to another login, which would inherit or re-create the same overfull state.
+
+    It is raised with context-overflow wording the harness recognises, which
+    runs the same compaction as `/compact` and retries; on that retry the
+    transcript is shorter and _stream_with opens a fresh chat primed with the
+    compacted history (see the shrink check). For the attachment case that
+    fresh chat is the whole remedy: the accumulated references belonged to the
+    old one."""
+
+
+class _Muted(RuntimeError):
+    """DeepSeek has MUTED this account — an account-level moderation verdict that
+    arrives inside an HTTP 200 body, one nesting level below every other refusal:
+
+        {"code":0,"msg":"","data":{"biz_code":5,"biz_msg":"user is muted",
+         "biz_data":{"is_muted":1,"mute_until":1790932407.459}}}
+
+    Its own type because it is the one refusal whose correct answer is none of
+    the neighbours' answers. It is NOT the credential: the token is fine, so a
+    re-login succeeds and changes nothing — running `_AuthExpired`'s login path
+    at it just posts another /users/login for an account DeepSeek has already
+    said it will not serve. NOT the session: a fresh chat is muted too. NOT the
+    device: the verdict is about the account, so the next login on this machine
+    is unaffected. And NOT a rate limit: `mute_until` is days away, so there is
+    no window this turn can wait out.
+
+    Raised only before anything has streamed, and surfaced rather than retried,
+    because the two real remedies — switch accounts, or wait — are the
+    operator's to choose.
+    """
 
 
 class _Client:
@@ -1473,6 +1504,16 @@ class _Client:
                 raise _AuthExpired(
                     "DeepSeek refused the bearer token: %s"
                     % (payload.get("msg") or payload.get("code")))
+            # A mute hides one level deeper, under `data`, where the read above
+            # cannot see it -- the outer envelope is code 0 / msg "". Left
+            # unread, this route reports "returned no challenge" for an account
+            # DeepSeek has plainly told us it will not serve.
+            muted = _mute_of(payload)
+            if muted:
+                raise _Muted(
+                    "DeepSeek has muted this account: %s. Re-logging in will not "
+                    "clear it; switch to another account or wait for it to lift."
+                    % muted)
             if attempt == 0 and ds_waf is not None and _waf_intercepted(r):
                 # A stale `aws-waf-token` keeps the page loading while this route
                 # still refuses it, so take a freshly solved token and retry.
@@ -1550,6 +1591,16 @@ class _Client:
         # A 200 does NOT mean it worked. DeepSeek returns its real verdict in
         # `code`, and reading only the HTTP status turned every refusal into the
         # generic "no file id" — hiding the reason DeepSeek had just given us.
+        # A mute sits under `data`, where the top-level read below cannot see it
+        # -- the outer envelope is code 0 / msg "". Checked first so the operator
+        # gets "muted" rather than "refused the upload".
+        muted = _mute_of(payload)
+        if muted:
+            raise _Muted(
+                "DeepSeek has muted this account: %s. Re-logging in will not "
+                "clear it; switch to another account or wait for it to lift."
+                % muted)
+
         code = payload.get("code")
         if code not in (None, 0):
             msg = payload.get("msg") or "unknown error"
@@ -2612,19 +2663,63 @@ def _attach_tool_call_formats(client):
     return [str(file_id)]
 
 
-def _turn_attachment_ids(client, ref_file_ids, result_ids):
+def _ref_ids_already_sent(st):
+    """The file ids a completion of THIS chat has already referenced.
+
+    Keyed on the session id, so a different chat — a compaction retry, a
+    self-heal, an account switch — reads as an empty set and receives every
+    attachment it actually needs. A stale sid in the record means nothing here.
+    """
+    if not isinstance(st, dict) or st.get("ref_sent_sid") != st.get("sid"):
+        return frozenset()
+    ids = st.get("ref_sent")
+    return frozenset(ids) if isinstance(ids, list) else frozenset()
+
+
+def _remember_ref_ids(st, ids):
+    """Record the file ids a SUCCESSFUL completion just referenced.
+
+    Called only after the request came back, so a retry that never reached
+    DeepSeek does not silently drop the attachment it was about to send.
+
+    Bounded on purpose: this record exists to stop unbounded growth, so it may
+    not become one. A chat long enough to evict the oldest ids here has been
+    compacted long before, and the eviction costs only a re-reference.
+    """
+    if not isinstance(st, dict) or not ids:
+        return
+    if st.get("ref_sent_sid") != st.get("sid"):
+        st["ref_sent"] = []
+        st["ref_sent_sid"] = st.get("sid")
+    kept = [i for i in (st.get("ref_sent") or []) if isinstance(i, str)]
+    for fid in ids:
+        if fid and fid not in kept:
+            kept.append(fid)
+    st["ref_sent"] = kept[-200:]
+
+
+def _turn_attachment_ids(client, ref_file_ids, result_ids, st=None):
     """The `ref_file_ids` for one turn, in the order they should ride.
 
     The caller's ids come first: they are what this turn explicitly attached.
     The tool-call contract follows, then the spilled tool results, so a retry
     cannot re-upload bytes the caller already referenced. Duplicates are
     dropped — an attachment named twice is still one attachment.
+
+    An id that has already ridden a turn of THIS chat is dropped. Once a
+    completion references an attachment DeepSeek keeps it on the chat, so
+    naming it again adds nothing the model can read and grows the list every
+    turn — which is how a long conversation reached `too many ref file`
+    (biz_code 10). The caller's own `ref_file_ids` are exempt: they are this
+    turn's explicit instruction, not a leftover from a previous one.
     """
     refs = []
-    for fid in (list(ref_file_ids or [])
-                + _attach_tool_call_formats(client)
-                + list(result_ids or [])):
+    for fid in list(ref_file_ids or []):
         if fid and fid not in refs:
+            refs.append(fid)
+    already = _ref_ids_already_sent(st)
+    for fid in (_attach_tool_call_formats(client) + list(result_ids or [])):
+        if fid and fid not in refs and fid not in already:
             refs.append(fid)
     return refs
 
@@ -2797,6 +2892,210 @@ def _auth_verdict_in(raw_lines):
             continue
         if isinstance(obj, dict) and _is_auth_verdict(obj.get("code"), obj.get("msg")):
             return str(obj.get("msg") or obj.get("code"))
+    return None
+
+
+# A MUTE is the third verdict DeepSeek delivers inside an HTTP 200 body, and it
+# is nested one level deeper than the other two:
+#
+#   {"code":0,"msg":"","data":{"biz_code":5,"biz_msg":"user is muted",
+#    "biz_data":{"is_muted":1,"mute_until":1790932407.459}}}
+#
+# The OUTER envelope says success -- code 0, msg "" -- so every reader that looks
+# at the status or the top-level pair sees a healthy request that happened to
+# stream nothing, and reports the generic empty-response error. That is exactly
+# what the operator saw: "no answer and no diagnostic", while DeepSeek had said
+# in plain words why. `login()` already reads this nested pair for its own
+# failure detail (`code=/biz_code biz_msg`); this is the same read, on the
+# completion, vision, upload, and pow paths.
+#
+# What separates a mute from its neighbours is its shape: an ACCOUNT-level
+# moderation verdict with an expiry. Not the credential (a re-login succeeds and
+# changes nothing), not the session (a fresh chat is muted too), not the device
+# (the next account is unaffected), and not a rate limit (the window is days,
+# not something a turn can wait out).
+_MUTE_CODE = "5"
+_MUTE_MSG_RE = re.compile(r"\bmuted\b|\bmute\b", re.I)
+
+
+def _mute_verdict(code, msg):
+    """True when DeepSeek's nested pair says this ACCOUNT is muted."""
+    if code is not None and str(code) == _MUTE_CODE:
+        return True
+    return bool(msg) and bool(_MUTE_MSG_RE.search(str(msg)))
+
+
+def _mute_of(obj):
+    """The mute message in a PARSED response envelope, or None.
+
+    The nested read, for the routes that already hold decoded JSON (`_pow`,
+    `upload_file`). `biz_msg` is preferred over the outer `msg`, which is empty
+    on a mute by construction.
+    """
+    if not isinstance(obj, dict):
+        return None
+    data = obj.get("data")
+    if not isinstance(data, dict):
+        return None
+    if not _mute_verdict(data.get("biz_code"), data.get("biz_msg")):
+        return None
+    return str(data.get("biz_msg") or "user is muted")
+
+
+def _mute_verdict_in(raw_lines):
+    """The mute verdict carried by a raw body, or None.
+
+    The raw-lines twin of `_mute_of`, for the streaming paths, which keep the
+    body as it arrived rather than decoding it. Only a parsed OBJECT carrying a
+    nested `data` counts -- the model's own prose can never produce that shape,
+    so the message regex cannot be tripped by an answer that merely discusses
+    being muted.
+
+    Returns a line naming the expiry when DeepSeek supplied one, so the operator
+    learns WHEN the account comes back rather than only that it went away.
+    """
+    for line in raw_lines or ():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", "ignore")
+        text = line[5:].strip() if isinstance(line, str) and line.startswith("data:") else line
+        try:
+            obj = json.loads(text)
+        except Exception:
+            continue
+        msg = _mute_of(obj)
+        if not msg:
+            continue
+        data = obj.get("data")
+        biz = data.get("biz_data") if isinstance(data, dict) else None
+        until = biz.get("mute_until") if isinstance(biz, dict) else None
+        # `bool` is an `int`, and `True` is not a timestamp.
+        if isinstance(until, (int, float)) and not isinstance(until, bool) and until > 0:
+            try:
+                when = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(float(until)))
+                return "%s (until %s)" % (msg, when)
+            except (ValueError, OSError, OverflowError):
+                pass
+        return msg
+    return None
+
+
+# The request's ATTACHMENT LIST is full — a fifth verdict delivered in the same
+# HTTP 200 body, and the second one nested under `data`:
+#
+#   {"code":0,"msg":"","data":{"biz_code":10,"biz_msg":"too many ref file",
+#    "biz_data":null}}
+#
+# Its own classification because no neighbour's answer fits. Not the credential
+# (the token is fine), not the session (a fresh chat inherits nothing), not the
+# account (no moderation is involved), not a rate limit (no window reopens), and
+# not a mute (nothing is suspended). It is a SIZE verdict on the completion's
+# `ref_file_ids`: the turn named more attachments than DeepSeek accepts on one
+# request.
+#
+# And it is the one refusal that heals in place, because the list is OURS. The
+# accumulated ids are what overflowed it, and a compaction retry re-primes a
+# fresh chat — which names only the attachments a fresh chat needs. Surfaced as
+# a plain error it would be a dead end: the operator can neither shrink the list
+# nor resend past it, since every resend carries the same accumulated ids.
+_REF_FILE_CODE = "10"
+_REF_FILE_MSG_RE = re.compile(r"too many ref[\s_-]*files?|too many files?\b", re.I)
+
+
+def _ref_file_verdict(code, msg):
+    """True when DeepSeek's nested pair says the request carried too many files."""
+    if code is not None and str(code) == _REF_FILE_CODE:
+        return True
+    return bool(msg) and bool(_REF_FILE_MSG_RE.search(str(msg)))
+
+
+def _ref_file_of(obj):
+    """The too-many-refs message in a PARSED response envelope, or None."""
+    if not isinstance(obj, dict):
+        return None
+    data = obj.get("data")
+    if not isinstance(data, dict):
+        return None
+    if not _ref_file_verdict(data.get("biz_code"), data.get("biz_msg")):
+        return None
+    return str(data.get("biz_msg") or "too many ref file")
+
+
+def _ref_file_verdict_in(raw_lines):
+    """The too-many-refs verdict carried by a raw body, or None.
+
+    The raw-lines twin of `_ref_file_of`, for the completion path. Only a parsed
+    OBJECT carrying a nested `data` counts, for the reason `_mute_verdict_in`
+    requires it too: the model's own streamed prose must never be able to
+    classify itself, and no answer it writes produces that envelope.
+    """
+    for line in raw_lines or ():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", "ignore")
+        text = line[5:].strip() if isinstance(line, str) and line.startswith("data:") else line
+        try:
+            obj = json.loads(text)
+        except Exception:
+            continue
+        msg = _ref_file_of(obj)
+        if msg:
+            return msg
+    return None
+
+
+# ANY OTHER refusal DeepSeek reports in that same nested shape: an HTTP 200
+# whose `data` object carries a `biz_code` that is not a success. The codes we
+# recognise keep their own diagnosis above (5 mute, 10 ref-file); everything
+# else lands here.
+#
+# It is NOT retried. An unrecognised verdict is by definition one we do not know
+# how to fix, so a resend answers the same way while spending a /users/login on
+# it. The account is refreshed anyway — a stale credential is the usual cause of
+# a code we do not recognise — so the next turn starts from a healthy token.
+#
+# A MUTE is never re-logged-in either: the credential is fine, so the login
+# succeeds and changes nothing.
+_BIZ_OK_CODES = ("0", "")
+
+
+def _biz_verdict_of(obj):
+    """The (code, msg) of any non-success nested biz_code, or None.
+
+    `_mute_of` and `_ref_file_of` claim their own codes first, so this reads as
+    the catch-all: whatever is left is a refusal we do not have a tailored
+    remedy for.
+    """
+    if not isinstance(obj, dict):
+        return None
+    data = obj.get("data")
+    if not isinstance(data, dict):
+        return None
+    code = data.get("biz_code")
+    if code is None or str(code) in _BIZ_OK_CODES:
+        return None
+    msg = data.get("biz_msg")
+    if _mute_verdict(code, msg) or _ref_file_verdict(code, msg):
+        return None
+    return (str(code), str(msg or "no detail"))
+
+
+def _biz_verdict_in(raw_lines):
+    """The generic nested biz_code verdict carried by a raw body, or None.
+
+    The raw-lines twin of `_biz_verdict_of`. Same guard as its neighbours: only
+    a parsed OBJECT carrying a nested `data` counts, so the model's own prose
+    can never classify itself.
+    """
+    for line in raw_lines or ():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", "ignore")
+        text = line[5:].strip() if isinstance(line, str) and line.startswith("data:") else line
+        try:
+            obj = json.loads(text)
+        except Exception:
+            continue
+        hit = _biz_verdict_of(obj)
+        if hit:
+            return hit
     return None
 
 
@@ -3015,8 +3314,9 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                 prompt = _prompt_for(_msgs, st)
                 # The caller's ids first: they are what this turn explicitly
                 # attached. The spilled-result ids follow, so a retry cannot
-                # re-upload bytes the caller already referenced.
-                _refs = _turn_attachment_ids(client, ref_file_ids, _result_ids)
+                # re-upload bytes the caller already referenced, and ids this
+                # chat already carries are dropped so the list stays bounded.
+                _refs = _turn_attachment_ids(client, ref_file_ids, _result_ids, st)
                 r = client.open_completion(st["sid"], prompt, thinking, search,
                                            model_type, st.get("parent"), need_preempt,
                                            ref_file_ids=_refs)
@@ -3048,6 +3348,10 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                     # 429 / 5xx / anything transient: surface it, but do NOT burn the
                     # conversation's session over a rate limit or a blip
                     raise RuntimeError(f"DeepSeek {r.status_code}: {r.text[:150]}")
+                # The ids are now DeepSeek's to hold for this chat. Recorded only
+                # on a 200, so a request that was refused never loses an
+                # attachment the retry still needs to name.
+                _remember_ref_ids(st, _refs)
                 return r, st
             except _AuthExpired:
                 # Retry only while a fresh login actually SUCCEEDS. A failed login
@@ -3245,6 +3549,49 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
         # runs the re-login retry, which is the same hand-relogin failure the pow
         # fix removed, one request later.
         if not yielded:
+            # A MUTE rides this same 200 body, one level deeper than every other
+            # verdict (see `_mute_verdict_in`). Checked FIRST because it must not
+            # be answered by a re-login: the credential is fine and the account
+            # is muted, so re-authenticating succeeds and changes nothing -- it
+            # posts another /users/login for an account DeepSeek has already
+            # told us it will not serve.
+            muted = _mute_verdict_in(raw_sink)
+            if muted:
+                _persist_cookies(client)
+                raise _Muted(
+                    "DeepSeek has muted this account: %s. This is an account-level "
+                    "moderation verdict, not a credential or session problem, so "
+                    "re-logging in will not clear it. Switch to another account, or "
+                    "wait for the mute to lift." % muted)
+            # The request carried more attachments than DeepSeek accepts on one
+            # turn (`too many ref file`, biz_code 10). This is the attachment
+            # list's own "length limit reached": a property of this chat, which
+            # has accumulated file references since it was opened. Compact and
+            # re-prime, exactly as for a full chat — the fresh chat carries only
+            # the references the compacted transcript still needs. Surfaced as a
+            # plain error it would be a dead end: every resend would name the
+            # same accumulated list and be refused identically.
+            ref_full = _ref_file_verdict_in(raw_sink)
+            if ref_full:
+                import sys as _sys
+                print("[ds_direct] too many attachments on this chat — asking the "
+                      "harness to compact: %s" % ref_full, file=_sys.stderr, flush=True)
+                _persist_cookies(client)
+                raise _ContextFull(
+                    "context window exceeded — the DeepSeek chat accumulated too "
+                    "many file attachments (%s); compact the conversation and "
+                    "continue in a new chat" % ref_full)
+            # Any OTHER non-success biz_code, in the same nested shape. NOT
+            # retried: an unrecognised verdict is one we do not know how to fix,
+            # so a resend would answer the same way and only spend a
+            # /users/login on it. The account is refreshed anyway — a stale
+            # credential is the usual cause of a code we do not recognise — so
+            # the next turn starts from a healthy token.
+            biz = _biz_verdict_in(raw_sink)
+            if biz:
+                client.login()
+                raise RuntimeError(
+                    "DeepSeek refused the request (biz_code %s): %s" % biz)
             verdict = _auth_verdict_in(raw_sink)
             if verdict:
                 if auth_tries < 3 and client.login():
@@ -3497,26 +3844,55 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
         if r.status_code == 404:
             raise _SessionStale("the vision chat no longer exists")
 
-    r = _send(st.get("parent"))
-    _classify(r)
-    if r.status_code in (400, 422):
-        # Nearly always a rejected parent_message_id. Start a fresh turn in the
-        # SAME chat before giving up on it.
-        with _session_lock:
-            st["parent"] = None
-            _save_sessions()
-        r = _send(None)
+    # This ONE chat serves every image description, so DeepSeek accumulates the
+    # attachments of every batch on it and eventually refuses the turn with
+    # `too many ref file` (biz_code 10) — the same attachment-list limit the main
+    # chat hits, on a chat the `_turn_attachment_ids` bound cannot reach because
+    # `describe_files` calls `open_completion` directly. A fresh chat is the whole
+    # remedy here: this one is a scratch pad whose history nothing depends on, so
+    # unlike the main chat it needs no compaction and no re-priming. Bounded to
+    # one so a refusal that is NOT about attachments can't spin.
+    ref_heal = 0
+    while True:
+        r = _send(st.get("parent"))
         _classify(r)
-    if r.status_code != 200:
-        raise RuntimeError(f"DeepSeek vision {r.status_code}: {r.text[:180]}")
+        if r.status_code in (400, 422):
+            # Nearly always a rejected parent_message_id. Start a fresh turn in the
+            # SAME chat before giving up on it.
+            with _session_lock:
+                st["parent"] = None
+                _save_sessions()
+            r = _send(None)
+            _classify(r)
+        if r.status_code != 200:
+            raise RuntimeError(f"DeepSeek vision {r.status_code}: {r.text[:180]}")
 
-    raw_sink = []
-    parts = []
-    for kind, text in _parse(r, cancelled or (lambda: False), raw_sink):
-        if kind == "content":
-            parts.append(text)
-    _persist_cookies(client)
-    body = "".join(parts).strip()
+        raw_sink = []
+        parts = []
+        for kind, text in _parse(r, cancelled or (lambda: False), raw_sink):
+            if kind == "content":
+                parts.append(text)
+        _persist_cookies(client)
+        body = "".join(parts).strip()
+        if body:
+            return body
+        # The vision chat's own attachment list is full. Drop it and describe the
+        # batch in a fresh one, which carries none of the accumulated references.
+        if ref_heal < 1 and _ref_file_verdict_in(raw_sink):
+            ref_heal += 1
+            print("[ds_direct] the vision chat accumulated too many attachments — "
+                  "opening a fresh one", file=_sys_err(), flush=True)
+            _drop_vision_session()
+            st = _vision_session(client)
+            continue
+        # Any other non-success biz_code on this surface: NOT retried, but the
+        # account is refreshed first, exactly as on the main chat.
+        biz = _biz_verdict_in(raw_sink)
+        if biz:
+            client.login()
+            raise RuntimeError(
+                "DeepSeek vision refused the request (biz_code %s): %s" % biz)
+        break
     if not body:
         # A dead bearer token arrives HERE, not at the status: the completion POST
         # answers HTTP 200 with {"code":40003,"msg":"Authorization Failed
@@ -3526,6 +3902,17 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
         # catches only _AuthExpired — so the built-in re-login never ran and the
         # attachment failed until the operator relogged in by hand. Same class as
         # the pow and stream paths, one request surface over.
+        # Same nested verdict, same body, one request surface over: check the
+        # mute BEFORE the credential, because a re-login cannot clear it and the
+        # caller's retry would otherwise burn a login per attempt on an account
+        # DeepSeek has already refused.
+        muted = _mute_verdict_in(raw_sink)
+        if muted:
+            raise _Muted(
+                "DeepSeek has muted this account: %s. This is an account-level "
+                "moderation verdict, not a credential or session problem, so "
+                "re-logging in will not clear it. Switch to another account, or "
+                "wait for the mute to lift." % muted)
         verdict = _auth_verdict_in(raw_sink)
         if verdict:
             raise _AuthExpired("DeepSeek refused the bearer token: %s" % verdict)

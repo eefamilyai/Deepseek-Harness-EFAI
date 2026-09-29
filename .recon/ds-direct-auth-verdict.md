@@ -112,3 +112,129 @@ token codes.
   `node_modules` (`lefthook` missing, 1386 `.pnpm` entries mid-churn). Pushed with
   `LEFTHOOK=0`, the bypass the hook's own body defines. Both commits are
   Python-only, so the TS gate could not have covered them anyway.
+
+---
+
+# The second and third nested verdicts: mute, and too many ref files
+
+Two more refusals ride that same HTTP 200 body, one level below the envelope,
+where the outer `code`/`msg` pair still says success. Both reached the generic
+empty-response branch for the reason the auth verdict did: `_parse` consumes only
+`event:`-framed `data:` lines, so a bare JSON envelope matches nothing, nothing
+streams, and `_stream_with` reports "no diagnostic".
+
+## `biz_code` 5 — "user is muted"
+
+    {"code":0,"msg":"","data":{"biz_code":5,"biz_msg":"user is muted",
+     "biz_data":{"is_muted":1,"mute_until":1790932407.459}}}
+
+An ACCOUNT-level moderation verdict, not a credential one. `_Muted` is its own
+type precisely so nothing answers it with a re-login: the credential is fine, so
+re-authenticating succeeds and changes nothing while posting another
+`/users/login` for an account DeepSeek has already refused to serve. Checked
+before the auth verdict at every site that reads a 200 body, and before the
+dead-session self-heal.
+
+`_mute_verdict_in` names the expiry when DeepSeek supplies one, so the operator
+learns WHEN the account returns rather than only that it left.
+
+### Where the mute check landed
+
+| site | reader | notes |
+| --- | --- | --- |
+| `solve_pow` (2 branches) | `_mute_of` | parsed envelope; pow has decoded JSON |
+| `_stream_with` | `_mute_verdict_in` | raw lines; checked FIRST, before auth |
+| `_run_vision_turn` | `_mute_verdict_in` | raw lines; checked before auth |
+
+Both `_mute_of` (parsed) and `_mute_verdict_in` (raw lines) require a parsed
+OBJECT carrying a nested `data`, so the model's own prose can never classify
+itself by writing the word "muted".
+
+### Residual gap, stated plainly
+
+`upload_files` (2059-2099) has no mute check of its own: it is a thin wrapper
+that re-raises `_AuthExpired`/`_SessionStale` from the upload path beneath it. An
+account is normally found muted at the pow solve, which precedes any upload, so
+this is unlikely to be reached in practice — but it is not covered by a test, and
+it is not claimed as covered here.
+
+## `biz_code` 10 — "too many ref file"
+
+    {"code":0,"msg":"","data":{"biz_code":10,"biz_msg":"too many ref file",
+     "biz_data":null}}
+
+The attachment list's own "length limit reached" — a property of the CHAT, not of
+the credential, the account, or the connection. Every retry names the same
+accumulated list and is refused identically, so a plain error is a dead end. It
+raises `_ContextFull`, the SAME type a full transcript raises, which routes it to
+the harness compactor; on retry the fresh chat carries only the references the
+compacted transcript still needs.
+
+### Why the list grew without bound (the root cause)
+
+`_turn_attachment_ids` unions the caller's ids, the tool-call contract's ids, and
+every spilled tool-result id, and `open_completion` sends the whole list every
+turn. `tool_result_files` spills EVERY tool result (`max_inline_chars` defaults to
+0), so a long agentic conversation re-named an ever-growing set of ids it had
+already handed over. DeepSeek keeps an attachment on a chat once a completion has
+referenced it, so re-naming one adds nothing readable and only grows the list.
+
+`_ref_ids_already_sent` / `_remember_ref_ids` now record what this chat has
+already seen, keyed on the session id, and those ids are dropped from later
+turns. A different sid (a compacted retry) reports nothing sent, so a fresh chat
+still gets everything it needs. The record is capped at the last 200 ids: a record
+meant to stop unbounded growth must not become one. The caller's own
+`ref_file_ids` are exempt — that is this turn's explicit instruction, not a
+leftover.
+
+### The vision chat had the same limit and no remedy
+
+`describe_files` drives ONE shared vision chat and calls `open_completion`
+directly, so the `_turn_attachment_ids` bound never reaches it: every image batch
+adds its references to that single chat for the life of the chat. It met the same
+`biz_code` 10, and `_run_vision_turn` fell through to `RuntimeError("the vision
+model returned nothing")`.
+
+The remedy there is a FRESH chat, not a compaction: unlike the main chat this one
+is a scratch pad whose history nothing depends on, so there is nothing to shrink
+and nothing to re-prime. Bounded to one heal, and only the ref-file verdict
+triggers it — a 401 or an ordinary empty body still takes its own path.
+
+## The fifth refusal: any OTHER non-success biz_code
+
+Anything else in that nested shape is NOT retried. An unrecognised verdict is one
+we do not know how to fix, so a resend answers the same way while spending a
+`/users/login` on it. The account is refreshed anyway — a stale credential is the
+usual cause of a code we do not recognise — so the next turn starts from a
+healthy token. Wired on both the main chat and the vision turn.
+
+## The refusal taxonomy that must keep holding
+
+| verdict | type | remedy |
+| --- | --- | --- |
+| AWS WAF (202 + `x-amzn-waf-action`) | `WafError` | must NOT rotate accounts |
+| device verdict (`_is_device_risk`) | — | must not rotate |
+| dead token (40001/40003) | `_AuthExpired` | re-login, retry the same chat |
+| `biz_code` 5 mute | `_Muted` | switch account; re-login cannot clear it |
+| `biz_code` 10 too many refs | `_ContextFull` | compact (main chat) / fresh chat (vision) |
+| any other non-success code | `RuntimeError` | surface it; no retry |
+
+40300 (MISSING_HEADER) stays a pow-header refusal a fresh login fixes, checked
+separately from the two token codes.
+
+## Verification
+
+- `test_ds_direct_mute.py`: 26 checks, exit 0.
+- `test_ds_direct_ref_limit.py`: 33 checks (7 vision ones new), exit 0.
+- Full kiln ds suite: 17/17 files, exit 0.
+
+## The accept-encoding question, settled
+
+A real Chrome sends `accept-encoding: gzip, deflate, br, zstd`; the question was
+whether the connector's `chrome150` impersonation matches it on the wire, and
+whether a caller-supplied override would still decompress. Probed against a
+gzip-echoing endpoint: `chrome150` ALREADY puts `gzip, deflate, br, zstd` on the
+wire, the body decodes, and a caller-supplied value is not duplicated — curl_cffi
+routes it to one header, not two. So there was no parity gap to close and
+`_headers` / `_login_headers` were left alone deliberately: adding the header
+would be a no-op at best and a second source of truth at worst.
