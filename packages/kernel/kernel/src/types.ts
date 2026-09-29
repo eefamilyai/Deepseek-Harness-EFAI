@@ -116,6 +116,53 @@ export interface KernelExecuteResult {
    * consumer knows whether the calling route can accept image input at all.
    */
   readonly images?: readonly KernelCellImage[]
+  /**
+   * Present when the cell overran its primary budget instead of finishing.
+   *
+   * A backgrounded cell is NOT a failure and the namespace is intact, so
+   * `outcome` stays `ok` and `output` carries the notice. This field is what
+   * lets a caller attach the still-running work to something it can poll —
+   * without it the cell would run on with its output reachable from nowhere.
+   */
+  readonly background?: KernelBackground
+}
+
+/**
+ * A cell that overran its primary budget and kept running in the background.
+ *
+ * The kernel does not kill such a cell: the namespace survives, the process
+ * stays healthy, and the cell is force-stopped only at its secondary deadline.
+ * Its output arrives later, so the caller needs both halves of the handle —
+ * which cell to ask about, and how long the kernel will keep it alive.
+ */
+export interface KernelBackground {
+  /** Kernel-assigned id for the detached cell, unique for the process's life. */
+  readonly id: number
+  /**
+   * Wall-clock budget (ms) the backgrounded cell may still run before the
+   * kernel force-stops it, measured from the moment it was detached.
+   */
+  readonly timeoutMs: number
+}
+
+/**
+ * One poll of a backgrounded cell: whether the kernel still knows it, whether
+ * it is still running, and — once it has finished — how it ended and what it
+ * produced.
+ */
+export interface KernelBackgroundPoll {
+  /**
+   * False when the kernel no longer holds this id: it already finished and its
+   * result was collected, or the kernel restarted and lost it. A caller must
+   * treat this as terminal rather than retrying.
+   */
+  readonly known: boolean
+  /** True while the cell is still running; absent once `known` is false. */
+  readonly running?: boolean
+  /** How the cell ended once it stopped: `finished`, or the stop reason. */
+  readonly status?: string
+  /** Everything the cell captured, returned once on the poll that drains it. */
+  readonly text?: string
 }
 
 /**
@@ -166,9 +213,24 @@ export interface KernelProvider {
   /**
    * Whether a cell is currently queued or running. Optional so providers that
    * cannot cheaply report it simply leave it unset; callers gate re-entrant
-   * reads (e.g. an RLM context dump during an in-flight fan-out) on `false`.
+   * reads (e.g. a context dump during an in-flight fan-out) on `false`.
    */
   busy?(): boolean
+  /**
+   * Poll one backgrounded cell, draining its output the first time it is asked
+   * about after finishing. Optional: a backend that never backgrounds a cell
+   * has nothing to poll, and a caller must treat the method's absence as "this
+   * cell cannot be followed" rather than as an error.
+   * @param id - the id from {@link KernelExecuteResult.background}.
+   * @returns whether the cell is known, still running, and its output once drained.
+   */
+  pollBackground?(id: number): Promise<KernelBackgroundPoll>
+  /**
+   * Ask one backgrounded cell to stop. Optional for the same reason as
+   * {@link KernelProvider.pollBackground}.
+   * @param id - the id from {@link KernelExecuteResult.background}.
+   */
+  stopBackground?(id: number): Promise<void>
 }
 
 /** Error codes raised by the kernel seam. */

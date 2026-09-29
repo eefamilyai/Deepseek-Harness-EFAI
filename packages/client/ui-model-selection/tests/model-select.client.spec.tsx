@@ -379,7 +379,10 @@ describe('ModelSelect account grouping', () => {
 
 
   it('merges account routes under one provider header and targets the picked account', () => {
-    const select = vi.fn().mockResolvedValue(true)
+    // A resolved result, not a bare truthy value: `settleSelection` reads the
+    // failure branch off this object, so `true` rejected the chain with an
+    // unhandled error instead of settling the pick.
+    const select = vi.fn().mockResolvedValue({ ok: true })
     const directory = createSnapshotStore<ModelDirectoryState>(state({
       current: { provider: 'kiln-deepseek', model: 'deepseek-v4-flash' },
       groups: [
@@ -406,7 +409,12 @@ describe('ModelSelect account grouping', () => {
     const picker = screen.getByRole('group', { name: 'DeepSeek accounts' })
     expect(picker).toBeTruthy()
     const accountButtons = within(picker).getAllByRole('menuitemradio')
-    expect(accountButtons.map(button => button.textContent)).toEqual(['DeepSeek', 'one', 'two'])
+    // The unpinned pooled route carries its own label, not the provider name:
+    // labelling it `DeepSeek` made it read as a duplicate account beside the
+    // logins. Read the expected string from the same dictionary the component
+    // does, so a copy change moves both together.
+    expect(accountButtons.map(button => button.textContent))
+      .toEqual([(zh as Record<string, string>)['account.auto'], 'one', 'two'])
 
     // Pick account `one`; the base-route model pick must then submit the bound route.
     fireEvent.click(within(picker).getByRole('menuitemradio', { name: 'one' }))

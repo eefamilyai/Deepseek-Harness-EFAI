@@ -15,7 +15,7 @@ None of these providers has a `tools` field - `ds_direct` is a web chat session 
 
 The catalog is generated from the request's own `tools`, so the roster the harness composed is the roster the model is told about, and a tool that is switched off cannot linger in the prompt as an instruction to call something that no longer exists.
 
-Both halves live in [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) and are re-exported here. This adapter is where the format is **taught**, because it is the transport that has no other channel; the reader runs over **every** route, since which markup a model writes comes from the model rather than from the transport.
+Both halves live in [`@deepseek-ai/dsh-llm-text-toolcalls`](../llm-text-toolcalls/README.md) and are re-exported here. This adapter is where the format is **taught**, because it is the transport that has no other channel; the reader runs over **every** route, since which markup a model writes comes from the model rather than from the transport.
 
 ## Composition
 
@@ -33,7 +33,7 @@ Both halves live in [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) and are
 |---|---|
 | [`src/index.ts`](src/index.ts) | The Cordis plugin: registers every route, applies the live DeepSeek-web credentials, launches the sidecar |
 | [`src/adapter.ts`](src/adapter.ts) | `KilnAdapter`: the registry as a harness adapter, and the message flattening |
-| [`@deepseek-ai/dsh-llm-dsml`](../llm-dsml/README.md) | The format statement and its streaming reader, shared with every other route |
+| [`@deepseek-ai/dsh-llm-text-toolcalls`](../llm-text-toolcalls/README.md) | The format statement and its streaming reader, shared with every other route |
 | [`src/bridge.ts`](src/bridge.ts) | The sidecar client over newline-delimited JSON |
 
 ## Model Experience

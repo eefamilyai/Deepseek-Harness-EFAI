@@ -84,7 +84,6 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
   // audited allowlists must name them; without entries the gate rejects a correct README.
   // EXIT: upstream accepts a model-experience declaration inside each package manifest.
-  'packages/agent-memory/agent-memory-mode': { kind: 'indirect', reason: 'The row owns only the agentMemory.enabled setting; the memory engine it gates owns the injected index and the memory tools.' },
   'packages/kernel/kernel': { kind: 'indirect', reason: 'The Service Definition delegates model rendering to dsh-tool-kernel, exactly as dsh-web delegates to dsh-tool-web.' },
   'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
   'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },

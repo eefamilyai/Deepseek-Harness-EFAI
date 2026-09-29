@@ -17,7 +17,7 @@ index a5a8570a51..ac66a29ed0 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c551469419..8e93ea26ff 100644
+index c551469419..7b3c3e43db 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
 @@ -369,6 +369,7 @@
@@ -28,7 +28,7 @@ index c551469419..8e93ea26ff 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -451,6 +452,29 @@
+@@ -451,6 +452,26 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -36,7 +36,7 @@ index c551469419..8e93ea26ff 100644
 +    { "path": "./apps/desktop/tsconfig.host.json" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/session/command-session-info" },
-+    { "path": "./packages/llm/llm-dsml" },
++    { "path": "./packages/llm/llm-text-toolcalls" },
 +    { "path": "./packages/llm/llm-kiln" },
 +    { "path": "./packages/llm/llm-system-file" },
 +    { "path": "./packages/fs/tool-notebook-edit" },
@@ -45,10 +45,7 @@ index c551469419..8e93ea26ff 100644
 +    { "path": "./packages/kernel/kernel-python" },
 +    { "path": "./packages/kernel/tool-kernel" },
 +    { "path": "./packages/kernel/roster" },
-+    { "path": "./packages/kernel/kernel-rlm-context" },
-+    { "path": "./packages/rlm/rlm" },
 +    { "path": "./packages/agent-memory/agent-memory" },
-+    { "path": "./packages/agent-memory/agent-memory-mode" },
 +    { "path": "./packages/session/session-recovery-context" },
 +    { "path": "./packages/host/version-route" },
 +    { "path": "./packages/core/efai-identity" },

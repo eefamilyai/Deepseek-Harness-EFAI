@@ -21,7 +21,7 @@
  * {@link DsmlOptions.notes}: a transport that taught the format may correct the
  * model that misspelled it, and a transport that taught nothing says nothing.
  *
- * @module @deepseek-ai/dsh-llm-dsml/dsml
+ * @module @deepseek-ai/dsh-llm-text-toolcalls/dsml
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -180,6 +180,7 @@ function parameterElements(body: string): { readonly run: string; readonly value
 function orphanParameterCall(
   raw: string,
   tools: ReadonlyMap<string, ToolSchema>,
+  boundaryClosesLast = false,
 ): { readonly name: string; readonly region: string } | undefined {
   // The invoke and envelope closers are structure here: the block-level reader
   // drops them wherever it meets them, and a stray one between two arguments
@@ -190,10 +191,22 @@ function orphanParameterCall(
   // both spellings of both envelope tags come off here: left in, the opener
   // sits in the residue ahead of the first argument and the block is refused
   // for carrying text it never carried.
-  const region = raw.replace(INVOKE_ENVELOPE_CLOSE, '').replace(ENVELOPE_TAG, '')
+  let region = raw.replace(INVOKE_ENVELOPE_CLOSE, '').replace(ENVELOPE_TAG, '')
   // A call dispatches only when it is WHOLE, and that rule does not relax
   // because the opener went missing: an argument whose own closer never arrived
   // is a command cut off mid-write, and its end must never be invented.
+  //
+  // One exception, and only structure earns it. When the block wrote a SURPLUS
+  // invoke closer -- more closers than the zero openers that reach here -- one
+  // of those closers ended an argument rather than a call. The group it bounds
+  // therefore had its last argument terminated at that boundary, and reading
+  // the boundary as the end is reading a terminator the model wrote, not
+  // inventing one. It stays narrow: a single unmatched opener, and only when
+  // the caller counted the surplus itself.
+  if (boundaryClosesLast && unfinished(region)) {
+    const counts = parameterCounts(region)
+    if (counts.open - counts.close === 1) region += PARAMETER_CLOSER
+  }
   if (unfinished(region)) return undefined
   const spans = scanParameters(region)
   if (spans.length === 0) return undefined
@@ -254,6 +267,14 @@ function orphanParameterCall(
 const PARAMETER_OPENER = '<' + 'parameter(?=[\\s/>=]|$)'
 
 /**
+ * One argument closer, spelled for code that has to WRITE one rather than match
+ * one. {@link orphanParameterCall} appends it when the invoke closer bounded the
+ * last argument instead of the argument's own closer. Built from parts, like
+ * every other tag literal here.
+ */
+const PARAMETER_CLOSER = '<' + '/parameter>'
+
+/**
  * Every bodied invoke element in one block, with the text between them.
  *
  * A parameter's value is RAW TEXT and may quote the format, so neither end of a
@@ -274,13 +295,26 @@ const PARAMETER_OPENER = '<' + 'parameter(?=[\\s/>=]|$)'
  * @param raw - one block's raw text.
  * @returns each element's attribute run and body, closer excluded.
  */
-function invokeElements(raw: string): { readonly run: string; readonly body: string; readonly start: number; readonly end: number }[] {
+function invokeElements(raw: string): {
+  readonly run: string
+  readonly body: string
+  readonly start: number
+  readonly end: number
+  readonly boundaryClosesLast: boolean
+}[] {
   const token = new RegExp(
     '<invoke\\s+(' + ATTRIBUTE_RUN + ')>|</invoke\\s*>|' + PARAMETER_OPENER + '|</parameter\\s*>',
     'gi',
   )
   const close = new RegExp('</invoke\\s*>', 'gi')
-  const opens: { run: string; at: number; from: number; to: number }[] = []
+  const opens: {
+    run: string
+    at: number
+    from: number
+    to: number
+    boundaryAt: number
+    boundaryClosesLast: boolean
+  }[] = []
   let depth = 0
   let openParameters = 0
   for (const match of raw.matchAll(token)) {
@@ -296,7 +330,23 @@ function invokeElements(raw: string): { readonly run: string; readonly body: str
     if (written.startsWith('</invoke')) {
       // A closer inside a VALUE is the value quoting the format. It ends the
       // call only once every parameter this call opened has closed again.
-      if (openParameters > 0) continue
+      if (openParameters > 0) {
+        // A closer DIRECTLY ahead is the one thing this tag can be: the model
+        // wrote its last argument closer with the invoke name, so the argument
+        // that closer terminates is followed straight away by the invoke's own
+        // closer. A closer a VALUE merely quotes is followed by the rest of that
+        // value, so this test stays out of its way and the value keeps its tag.
+        const ahead = raw.slice(match.index + written.length).replace(/^\s+/, '')
+        if (ahead.startsWith('</invoke')) {
+          openParameters -= 1
+          const top = opens[opens.length - 1]
+          if (top !== undefined) {
+            top.boundaryAt = match.index
+            if (openParameters === 0) top.boundaryClosesLast = true
+          }
+        }
+        continue
+      }
       if (depth === 0) continue
       depth -= 1
       if (depth === 0) {
@@ -308,19 +358,55 @@ function invokeElements(raw: string): { readonly run: string; readonly body: str
     if (written.endsWith('/>')) continue
     // An opener inside a VALUE is content for the same reason.
     if (openParameters > 0) continue
-    if (depth === 0) opens.push({ run: match[1] ?? '', at: match.index, from: match.index + written.length, to: -1 })
+    if (depth === 0) {
+      opens.push({
+        run: match[1] ?? '',
+        at: match.index,
+        from: match.index + written.length,
+        to: -1,
+        boundaryAt: -1,
+        boundaryClosesLast: false,
+      })
+    }
     depth += 1
   }
-  const found: { run: string; body: string; start: number; end: number }[] = []
+  const found: {
+    run: string
+    body: string
+    start: number
+    end: number
+    boundaryClosesLast: boolean
+  }[] = []
   opens.forEach((open, index) => {
     if (open.to >= 0) {
-      found.push({ run: open.run, body: raw.slice(open.from, open.to), start: open.at, end: open.to })
+      // The wrong-tag closer that terminated the last argument bounds the
+      // body too: left in, it rides into that argument's value and the JSON
+      // coercion then refuses a value the model wrote correctly.
+      const stop = open.boundaryAt >= 0 ? open.boundaryAt : open.to
+      found.push({
+        run: open.run,
+        body: raw.slice(open.from, stop),
+        start: open.at,
+        end: open.to,
+        boundaryClosesLast: open.boundaryClosesLast,
+      })
       return
     }
     const end = index + 1 < opens.length ? (opens[index + 1]?.at ?? raw.length) : raw.length
-    const at = lastMatchIndex(raw.slice(open.from, end), close)
+    const tail = raw.slice(open.from, end)
+    // The boundary the reader already identified is exact, and using it is what
+    // keeps every closer PAST it -- another call's, or the block's own tail --
+    // out of this body. Without one the body runs to the last closer before the
+    // next invoke, which is what lets a value quote the format.
+    const at = open.boundaryAt >= 0 ? open.boundaryAt - open.from : lastMatchIndex(tail, close)
     if (at < 0) return
-    found.push({ run: open.run, body: raw.slice(open.from, open.from + at), start: open.at, end: open.from + at })
+    found.push({
+      run: open.run,
+      body: raw.slice(open.from, open.from + at),
+      start: open.at,
+      end: open.from + at,
+      boundaryClosesLast: open.boundaryClosesLast,
+    })
   })
   return found
 }
@@ -489,7 +575,7 @@ const SYSTEM_REMINDER_TAG = new RegExp(`<${PIPES}*/?${PIPES}*\\s*system[_-]?remi
  * The payload uses {@link ATTRIBUTE_RUN} rather than `[^>]*` so a quoted
  * attribute value may itself contain `>`.
  */
-const DSML_TOKEN = new RegExp(`<${PIPES}*(/?)${PIPES}*\\s*DSML${PIPES}*\\s*(${ATTRIBUTE_RUN})>`, 'gi')
+const DSML_TOKEN = new RegExp(`<${PIPES}*(/?)${PIPES}*(?:DSML${PIPES}*)+\\s*(${ATTRIBUTE_RUN})>`, 'gi')
 
 /**
  * The payload's leading word, and whatever follows it, when that word is a
@@ -670,7 +756,7 @@ function parameterCounts(body: string): { readonly open: number; readonly close:
  * @param body - the text between one invoke's tags, or up to the next invoke.
  * @returns true when the body is a call still being written.
  */
-function unfinished(body: string): boolean {
+function unfinished(body: string, boundaryClosesLast = false): boolean {
   const token = new RegExp(PARAMETER_OPENER + '|<' + '/parameter\\s*>', 'gi')
   let depth = 0
   for (const match of body.matchAll(token)) {
@@ -680,7 +766,27 @@ function unfinished(body: string): boolean {
     }
     depth += 1
   }
-  return depth > 0
+  if (depth === 0) return false
+  return !boundaryClosesLast || depth > 1
+}
+
+/**
+ * How many invoke closers a text holds beyond the invoke openers it holds.
+ *
+ * Every opener is entitled to one closer, and a closer that pairs with an
+ * opener is that opener's end. Any closer PAST that count closed no invoke at
+ * all, so it is structure with nowhere to go -- and the only thing a malformed
+ * block leaves open for it to close is the argument still waiting. Counting
+ * them is what lets the reader tell a value QUOTING an invoke closer (a
+ * balanced pair, surplus zero) from a model that wrote the wrong tag name
+ * (surplus one), which no amount of looking at the tag itself can decide.
+ * @param text - any span of channel text.
+ * @returns the unpaired invoke-closer count, never negative.
+ */
+function surplusInvokeClosers(text: string): number {
+  const open = [...text.matchAll(new RegExp('<invoke(?=[\\s/>=]|$)', 'gi'))].length
+  const close = [...text.matchAll(new RegExp('</invoke\\s*>', 'gi'))].length
+  return Math.max(0, close - open)
 }
 
 /** Escape a tool name for embedding in a `RegExp`. Names are identifiers, but a stray metachar must never widen the match. */
@@ -1275,22 +1381,12 @@ export class DsmlTranslator {
     }
     // A call read at the very end of the turn has no next line to wait for.
     this.settleHeld(events)
-    const open = this.block
-    if (open !== undefined) {
-      this.block = undefined
-      this.blockParams = 0
-      const raw = open.lines.join('\n')
-      const { produced } = this.parseCalls(raw)
-      if (produced.length > 0) events.push(...produced)
-      else {
-        // The same last resort `closeBlock` reaches for, on the flush path: a
-        // block the model never closed may still BE a call in a notation the
-        // spelling rules do not know, and structure is what reads it.
-        const structural = this.structuralCall(raw)
-        if (structural !== undefined) events.push(structural)
-        else events.push({ kind: 'text', text: `${raw}\n` })
-      }
-    }
+    // A block the model never closed is settled by exactly the code that settles
+    // a closed one: the flush is not a second reader. This used to re-implement
+    // the no-call branch and skip the note, so a turn that ended mid-block
+    // showed the model its own markup back with no explanation -- the one thing
+    // the note exists to prevent.
+    this.closeBlock(events)
     return events
   }
 
@@ -2036,7 +2132,7 @@ export class DsmlTranslator {
       // with NO argument — a tool invoked for nothing either way. This is the
       // same measurement the wrapper-closed pass makes; see its note.
       const body = element.body
-      if (unfinished(body)) continue
+      if (unfinished(body, element.boundaryClosesLast)) continue
       // Every argument closed and one closer is left over, so the body is
       // FINISHED and the surplus tag is structure the reader drops. It is a
       // repair all the same, and it is counted.
@@ -2089,7 +2185,7 @@ export class DsmlTranslator {
         // A region that still holds an unclosed argument is a call being
         // written, not a call to read: an invoke closer read as an argument
         // end is byte-identical to a truncation, so it is refused here.
-        if (unfinished(region)) continue
+        if (unfinished(region, surplusInvokeClosers(raw) > 0)) continue
         // The same surplus-closer repair the bodied pass above counts: this
         // invoke has no closer of its own, so an extra argument closer in the
         // region is dropped by the same rule and is the same shape.
@@ -2380,14 +2476,26 @@ export function orphanGroupCalls(
   raw: string,
   tools: ReadonlyMap<string, ToolSchema>,
 ): readonly { readonly name: string; readonly region: string }[] | undefined {
+  // This reader only runs when the block opened NO invoke, so every invoke
+  // closer in it is a surplus one. Two or more prove that a closer ended an
+  // argument somewhere -- one call has one closer, and there is no opener for
+  // any of them -- which is the one reading that lets the last argument of the
+  // last group be bounded by it. A lone closer proves nothing and is refused.
+  const surplus = [...raw.matchAll(new RegExp('<' + '/invoke\\s*>', 'gi'))].length >= 2
   const parts = raw.replace(ENVELOPE_TAG, '').split(new RegExp('<' + '/invoke\\s*>', 'gi'))
+  const present = parts.filter(part => part.trim().length > 0)
+  if (present.length === 0) return undefined
   const groups: { readonly name: string; readonly region: string }[] = []
-  for (const part of parts) {
-    if (part.trim().length === 0) continue
-    const one = orphanParameterCall(part, tools)
+  for (let index = 0; index < present.length; index += 1) {
+    const part = present[index]
+    if (part === undefined) return undefined
+    const last = index === present.length - 1
+    const one = orphanParameterCall(part, tools, surplus && last)
     if (one === undefined) return undefined
     groups.push(one)
   }
-  if (groups.length < 2) return undefined
+  // A single group with no boundary to close belongs to the single-orphan rule,
+  // which reads the whole block on its own and is the shape it reports.
+  if (groups.length < 2 && !surplus) return undefined
   return groups
 }

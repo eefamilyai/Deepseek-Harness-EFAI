@@ -121,10 +121,21 @@ Source: [`packages/core/agent-loop/src/index.ts:292`](../packages/core/agent-loo
 
 ## `@deepseek-ai/dsh-agent-memory`
 
-Requires: `storageDomain` · `systemPrompt` · `tools`
-
 ```ts config-catalog
+/** Plugin config: the switch, and the engine settings it mounts with. */
 export interface Config {
+  /**
+   * Whether the durable memory engine runs. On: `memory_add`,
+   * `memory_recall`, and `memory_map`, automatic capture of tool output, and a
+   * bounded index re-injected each turn. Off: none of it, and nothing is
+   * written. Applies immediately.
+   */
+  enabled: Volatile<boolean>
+  /** Engine settings, passed through verbatim when the engine mounts. */
+  engine: EngineConfig
+}
+
+export interface EngineConfig {
   /** How many of the newest memory nodes the injected index lists. */
   maxIndexNodes?: number
   /** Character ceiling on the whole injected index; it is truncated to fit. */
@@ -138,30 +149,9 @@ export interface Config {
 }
 ```
 
-Source: [`packages/agent-memory/agent-memory/src/index.ts:36`](../packages/agent-memory/agent-memory/src/index.ts)
+Depends on: `Volatile` (`@deepseek-ai/cordis`)
 
-<a id="deepseek-aidsh-agent-memory-mode"></a>
-
-## `@deepseek-ai/dsh-agent-memory-mode`
-
-```ts config-catalog
-/** Plugin config: the switch, and the engine settings it mounts with. */
-export interface Config {
-  /**
-   * Whether the durable memory engine runs. On: `memory_add`,
-   * `memory_recall`, and `memory_map`, automatic capture of tool output, and a
-   * bounded index re-injected each turn. Off: none of it, and nothing is
-   * written. Applies immediately.
-   */
-  enabled: Volatile<boolean>
-  /** Engine settings, passed through verbatim when the engine mounts. */
-  engine: AgentMemoryConfig
-}
-```
-
-Depends on: [`AgentMemoryConfig`](#deepseek-aidsh-agent-memory) · `Volatile` (`@deepseek-ai/cordis`)
-
-Source: [`packages/agent-memory/agent-memory-mode/src/index.ts:41`](../packages/agent-memory/agent-memory-mode/src/index.ts)
+Source: [`packages/agent-memory/agent-memory/src/index.ts:41`](../packages/agent-memory/agent-memory/src/index.ts)
 
 <a id="deepseek-aidsh-agent-preset"></a>
 
@@ -1530,7 +1520,7 @@ export interface KernelRuntimeConfig {
 }
 ```
 
-Source: [`packages/kernel/kernel/src/index.ts:42`](../packages/kernel/kernel/src/index.ts)
+Source: [`packages/kernel/kernel/src/index.ts:49`](../packages/kernel/kernel/src/index.ts)
 
 <a id="deepseek-aidsh-kernel-python"></a>
 
@@ -1561,32 +1551,6 @@ export interface Config {
 Depends on: `Volatile` (`@deepseek-ai/cordis`)
 
 Source: [`packages/kernel/kernel-python/src/index.ts:57`](../packages/kernel/kernel-python/src/index.ts)
-
-<a id="deepseek-aidsh-kernel-rlm-context"></a>
-
-## `@deepseek-ai/dsh-kernel-rlm-context`
-
-Requires: `kernel` · `systemPrompt`
-
-```ts config-catalog
-/** Plugin config. */
-export interface Config {
-  /** Skip the read-back and contribute nothing (defaults to false). */
-  disabled?: boolean
-  /**
-   * When set, contribute ONLY for this agent id. Children (in-process
-   * subagents) have different ids and are therefore skipped, preserving their
-   * clean context. Omitted = contribute for every agent (legacy, single-agent).
-   */
-  ownerAgentId?: string
-  /** Cap on rendered answer text, to keep the runtime snapshot bounded. */
-  maxAnswerChars?: number
-  /** Cap on rendered bind text per value. */
-  maxBindChars?: number
-}
-```
-
-Source: [`packages/kernel/kernel-rlm-context/src/index.ts:69`](../packages/kernel/kernel-rlm-context/src/index.ts)
 
 <a id="deepseek-aidsh-llm-deepseek"></a>
 
@@ -1679,39 +1643,6 @@ Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicy
 
 Source: [`packages/llm/llm-deepseek/src/config.ts:28`](../packages/llm/llm-deepseek/src/config.ts)
 
-<a id="deepseek-aidsh-llm-dsml"></a>
-
-## `@deepseek-ai/dsh-llm-dsml`
-
-Requires: `llm`
-
-```ts config-catalog
-/** Plugin config. */
-export interface Config {
-  /**
-   * Recover a complete tool call the model left at the end of its reasoning
-   * when the turn produced none in its answer. Off, such a call stays in the
-   * thought and the turn runs nothing.
-   */
-  reasoningRecovery?: boolean
-  /**
-   * Provider routes to leave untouched, by registered route name. Empty — the
-   * default — reads every route, which is the point of the pass; name a route
-   * here only to rule out this reader while diagnosing one.
-   */
-  excludeProviders?: string[]
-  /**
-   * When a provider refuses a request because the model cannot take native
-   * tools (OpenRouter's "No endpoints found that support tool use"), send it
-   * again with the tools stated as text and read the calls back from the reply.
-   * Defaults to true; off, the refusal fails the turn as the provider sent it.
-   */
-  textToolFallback?: boolean
-}
-```
-
-Source: [`packages/llm/llm-dsml/src/index.ts:67`](../packages/llm/llm-dsml/src/index.ts)
-
 <a id="deepseek-aidsh-llm-kiln"></a>
 
 ## `@deepseek-ai/dsh-llm-kiln`
@@ -1777,7 +1708,7 @@ export interface DeepseekCredentials {
 
 Depends on: `Volatile` (`@deepseek-ai/cordis`)
 
-Source: [`packages/llm/llm-kiln/src/index.ts:100`](../packages/llm/llm-kiln/src/index.ts)
+Source: [`packages/llm/llm-kiln/src/index.ts:103`](../packages/llm/llm-kiln/src/index.ts)
 
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -2145,6 +2076,39 @@ export type Config = Readonly<Record<string, never>>
 ```
 
 Source: [`packages/llm/llm-retry/src/index.ts:25`](../packages/llm/llm-retry/src/index.ts)
+
+<a id="deepseek-aidsh-llm-text-toolcalls"></a>
+
+## `@deepseek-ai/dsh-llm-text-toolcalls`
+
+Requires: `llm`
+
+```ts config-catalog
+/** Plugin config. */
+export interface Config {
+  /**
+   * Recover a complete tool call the model left at the end of its reasoning
+   * when the turn produced none in its answer. Off, such a call stays in the
+   * thought and the turn runs nothing.
+   */
+  reasoningRecovery?: boolean
+  /**
+   * Provider routes to leave untouched, by registered route name. Empty — the
+   * default — reads every route, which is the point of the pass; name a route
+   * here only to rule out this reader while diagnosing one.
+   */
+  excludeProviders?: string[]
+  /**
+   * When a provider refuses a request because the model cannot take native
+   * tools (OpenRouter's "No endpoints found that support tool use"), send it
+   * again with the tools stated as text and read the calls back from the reply.
+   * Defaults to true; off, the refusal fails the turn as the provider sent it.
+   */
+  textToolFallback?: boolean
+}
+```
+
+Source: [`packages/llm/llm-text-toolcalls/src/index.ts:80`](../packages/llm/llm-text-toolcalls/src/index.ts)
 
 <a id="deepseek-aidsh-lsp-stdio"></a>
 
@@ -2614,64 +2578,6 @@ export interface Config {
 ```
 
 Source: [`packages/guard/repeat-tool-reminder/src/index.ts:35`](../packages/guard/repeat-tool-reminder/src/index.ts)
-
-<a id="deepseek-aidsh-rlm"></a>
-
-## `@deepseek-ai/dsh-rlm`
-
-Requires: `llm` · `kernel` · `systemPrompt` · `tools`
-
-```ts config-catalog
-/** Plugin config (resolved under schemastery defaults). */
-export interface Config {
-  /** Cap on recursive turns when the tool does not say. */
-  maxSteps?: number
-  /** Cap on a tool-supplied max_steps (safety bound). */
-  maxMaxSteps?: number
-}
-```
-
-Source: [`packages/rlm/rlm/src/index.ts:49`](../packages/rlm/rlm/src/index.ts)
-
-<a id="deepseek-aidsh-roster"></a>
-
-## `@deepseek-ai/dsh-roster`
-
-```ts config-catalog
-/**
- * Plugin config. Every field is live: an edit reaches the running plugin
- * without a remount, is held as pending, and lands at the end of the turn in
- * flight.
- */
-export interface Config {
-  /**
-   * Whether the persistent Python kernel is available to the model. Off, the
-   * `kernel` and `rlm` tools both leave the prompt; the conventional roster is
-   * unaffected.
-   */
-  kernel: Volatile<boolean>
-  /**
-   * Whether the recursive RLM engine is the kernel category's surface instead
-   * of the standalone `kernel` tool. Requires `kernel`.
-   */
-  rlm: Volatile<boolean>
-  /**
-   * Whether the conventional tool roster is available. Off, every non-kernel
-   * tool leaves the model's prompt and refuses to execute.
-   */
-  enabled: Volatile<boolean>
-  /**
-   * Per-tool overrides. A name absent here is enabled, so a newly mounted tool
-   * is available until someone turns it off. Choosing a preset's tools is the
-   * preset editor's job; this map is for withdrawing one host-plane tool.
-   */
-  tools: Volatile<Record<string, boolean>>
-}
-```
-
-Depends on: `Volatile` (`@deepseek-ai/cordis`)
-
-Source: [`packages/kernel/roster/src/index.ts:107`](../packages/kernel/roster/src/index.ts)
 
 <a id="deepseek-aidsh-sandbox-local"></a>
 
@@ -3881,10 +3787,12 @@ export interface Config {
   maxTimeoutMs?: number
   /** SECONDARY budget (ms): when a backgrounded cell is force-stopped. Defaults to 1800000. */
   backgroundTimeoutMs?: number
+  /** Interval (ms) between polls of a cell that outlived its primary budget. Defaults to 1000. */
+  backgroundPollMs?: number
 }
 ```
 
-Source: [`packages/kernel/tool-kernel/src/index.ts:69`](../packages/kernel/tool-kernel/src/index.ts)
+Source: [`packages/kernel/tool-kernel/src/index.ts:96`](../packages/kernel/tool-kernel/src/index.ts)
 
 <a id="deepseek-aidsh-tool-lsp"></a>
 
@@ -4012,6 +3920,40 @@ export interface Config {
 ```
 
 Source: [`packages/workflow/tool-ralph/src/index.ts:21`](../packages/workflow/tool-ralph/src/index.ts)
+
+<a id="deepseek-aidsh-tool-roster"></a>
+
+## `@deepseek-ai/dsh-tool-roster`
+
+```ts config-catalog
+/**
+ * Plugin config. Every field is live: an edit reaches the running plugin
+ * without a remount, is held as pending, and lands at the end of the turn in
+ * flight.
+ */
+export interface Config {
+  /**
+   * Whether the persistent Python kernel is available to the model. Off, the
+   * `kernel` tool leaves the prompt; the conventional roster is unaffected.
+   */
+  kernel: Volatile<boolean>
+  /**
+   * Whether the conventional tool roster is available. Off, every non-kernel
+   * tool leaves the model's prompt and refuses to execute.
+   */
+  enabled: Volatile<boolean>
+  /**
+   * Per-tool overrides. A name absent here is enabled, so a newly mounted tool
+   * is available until someone turns it off. Choosing a preset's tools is the
+   * preset editor's job; this map is for withdrawing one host-plane tool.
+   */
+  tools: Volatile<Record<string, boolean>>
+}
+```
+
+Depends on: `Volatile` (`@deepseek-ai/cordis`)
+
+Source: [`packages/kernel/roster/src/index.ts:89`](../packages/kernel/roster/src/index.ts)
 
 <a id="deepseek-aidsh-tool-session-query"></a>
 

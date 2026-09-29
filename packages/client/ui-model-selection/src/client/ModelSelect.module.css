@@ -98,7 +98,10 @@
   width: max-content;
   min-width: min(240px, calc(100vw - 32px));
   max-width: min(420px, calc(100vw - 32px));
-  max-height: min(360px, calc(100vh - 96px));
+  /* DSH-FORK(browser): a pooled provider carries one row per login plus its own
+     models, and 360px cut the list off with the last login below the fold.
+     EXIT: upstream adopts account grouping in ModelSelect. */
+  max-height: min(520px, calc(100vh - 96px));
   overflow: hidden;
   padding: 3px;
   /* Surface tokens match the Menu primitive card (ui-primitives
@@ -337,6 +340,11 @@
   padding: 4px;
   border: 0.5px solid var(--dsw-alias-border-inverted);
   border-radius: 10px;
+  /* The picker scrolls on its own so every login stays reachable however many
+     the account tab holds: the card's own clamp is the outer bound, and this
+     inner one keeps the models below the picker visible while it scrolls. */
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .accountOption {

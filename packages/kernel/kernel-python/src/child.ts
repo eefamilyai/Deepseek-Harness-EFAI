@@ -95,6 +95,14 @@ export interface KernelFrame {
    * `out` is the "still running in the background" notice.
    */
   readonly backgrounded?: boolean
+  /**
+   * The kernel's own id for the cell a `backgrounded` frame detached.
+   *
+   * It rides the frame rather than the request id because the request is
+   * already answered: the cell outlived its primary budget, so this is a
+   * handle for a LATER question, not a correlation for this one.
+   */
+  readonly backgroundId?: number
   /** A Python→TS seam request; never a cell result. Routed to the seam handler. */
   readonly seam?: SeamRequest
   /**

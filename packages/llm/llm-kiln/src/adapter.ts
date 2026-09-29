@@ -45,7 +45,7 @@ import {
   toolIndex,
   toolProtocolPrompt,
   trailingReasoningCalls,
-} from '@deepseek-ai/dsh-llm-dsml'
+} from '@deepseek-ai/dsh-llm-text-toolcalls'
 import type { KilnBridge, KilnMessage, KilnProvider, KilnStreamEvent, KilnStreamRequest, KilnUploadFile } from './bridge.ts'
 
 /** Constructor options: the sidecar and the route mapping the plugin owns. */

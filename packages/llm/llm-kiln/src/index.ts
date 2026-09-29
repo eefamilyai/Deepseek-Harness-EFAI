@@ -67,14 +67,14 @@ export type {
   KilnUploadFile,
   KilnUploadResult,
 } from './bridge.ts'
-// The reader and the format statement moved to `@deepseek-ai/dsh-llm-dsml`,
+// The reader and the format statement moved to `@deepseek-ai/dsh-llm-text-toolcalls`,
 // which reads every route's text channel rather than only the ones that have
 // no other channel. They are re-exported here because this adapter is still
 // where the format is TAUGHT, so a consumer holding a Kiln route finds both
 // halves of the transport in one place.
-export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from '@deepseek-ai/dsh-llm-dsml'
-export type { DsmlEvent } from '@deepseek-ai/dsh-llm-dsml'
-export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requiredNames, toolIndex, toolProtocolPrompt, unescapeXml } from '@deepseek-ai/dsh-llm-dsml'
+export { DsmlTranslator, invokeArguments, trailingReasoningCalls } from '@deepseek-ai/dsh-llm-text-toolcalls'
+export type { DsmlEvent } from '@deepseek-ai/dsh-llm-text-toolcalls'
+export { coerceParameter, DSML_CLOSE, DSML_OPEN, escapeXml, parameterNames, requiredNames, toolIndex, toolProtocolPrompt, unescapeXml } from '@deepseek-ai/dsh-llm-text-toolcalls'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'llm-kiln'

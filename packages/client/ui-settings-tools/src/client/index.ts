@@ -1,9 +1,9 @@
 /**
  * Tools settings section, browser half.
  *
- * Registers one `settings.section` entry rendering the kernel, RLM, and
- * conventional-tool switches. All three are live fields of the `tool-roster`
- * row, so the section reads and writes that row's config form and nothing else.
+ * Registers one `settings.section` entry rendering the kernel and
+ * conventional-tool switches. Both are live fields of the `tool-roster` row,
+ * so the section reads and writes that row's config form and nothing else.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls ctx.locale into this program.

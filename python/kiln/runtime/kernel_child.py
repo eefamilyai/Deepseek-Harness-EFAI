@@ -1146,11 +1146,6 @@ except Exception as _vision_import_error:  # pragma: no cover
     vision_tools = None
     _vision_import_error = _vision_import_error
 from context_store import context_stats, index_context, search_context  # noqa: E402 — deferred: heavy deps
-try:  # noqa: E402 — RLM context-as-variable facet (local overlay)
-    import rlm_context  # noqa: E402
-except Exception as _rlm_import_error:
-    rlm_context = None
-    _rlm_import_error = _rlm_import_error
 # ── Skills (Cline-style) ─────────────────────────────────────────────────────
 
 
@@ -2950,7 +2945,7 @@ def _run_cell(code):
 # kernel/state-snapshot.ts.
 # ─────────────────────────────────────────────────────────────
 _SNAPSHOT_MARKER = "__KILN_KERNEL_STATE__"
-_STATE_ALWAYS_SKIP = {"rlm", "asyncio", "exit", "quit", "open"}
+_STATE_ALWAYS_SKIP = {"asyncio", "exit", "quit", "open"}
 _SNAPSHOT_MAX_BYTES = 256 * 1024 * 1024
 
 
@@ -3511,6 +3506,10 @@ class _CellRunner(_threading.Thread):
         self.bg_id = None
         self.deadline = None
         self.stopped = False
+        #: True once a background job in the harness has claimed this cell's output.
+        #: An adopted cell is drained by `bg_poll` alone, so its text reaches the job
+        #: ring instead of being prepended to some later foreground cell's frame.
+        self.adopted = False
 
     def run(self):
         _active_conv.value = self._conv
@@ -3566,9 +3565,20 @@ def _bg_body(runner):
 def _flush_bg():
     """Collect background cells that finished since the last frame, drop them
 
-    from the registry, and return their output to prepend to the next result."""
+    from the registry, and return their output to prepend to the next result.
+
+    An ADOPTED cell is skipped: a harness background job owns its text, and
+    `_ctrl_bg_poll` is the only thing that drains it. Its pictures still ride
+    the next frame, because a job ring carries text and nothing else."""
     with _bg_lock:
-        for bid, runner in [(b, r) for b, r in _bg_runners.items() if r.done.is_set()]:
+        for bid, runner in list(_bg_runners.items()):
+            if runner.adopted:
+                if runner.done.is_set() and runner.images:
+                    _bg_images.extend(runner.images)
+                    runner.images = []
+                continue
+            if not runner.done.is_set():
+                continue
             status = "stopped after its background timeout" if runner.stopped else "finished"
             _bg_results.append("[bg#%d %s]\n%s" % (bid, status, _bg_body(runner)))
             # A backgrounded cell's pictures have no frame of their own; they
@@ -3640,9 +3650,51 @@ _CTRL_PREFIX = "\x00KILN_CTRL\x00"
 _LAST_CELL_TIMEOUT_MS = [None]
 
 
+def _ctrl_bg_poll(bg_id):
+    """Drain one adopted background cell, reporting whether it is still running.
+
+    Adopting on the FIRST poll is what hands the cell's text to the job that
+    asked for it: from then on `_flush_bg` leaves this runner alone, so the
+    output cannot surface twice — once in the job ring and once in some later
+    foreground frame."""
+    with _bg_lock:
+        runner = _bg_runners.get(bg_id)
+        if runner is None:
+            return {"known": False}
+        runner.adopted = True
+        if not runner.done.is_set():
+            return {"known": True, "running": True}
+        status = "stopped after its background timeout" if runner.stopped else "finished"
+        text = _bg_body(runner)
+        runner.images = []
+        del _bg_runners[bg_id]
+        return {"known": True, "running": False, "status": status, "text": text}
+
+
+def _ctrl_bg_stop(bg_id):
+    """Ask one background cell to stop, without waiting for it to actually die.
+
+    Un-adopting first is the point: a cell that ignores KeyboardInterrupt — a
+    thread parked in an uninterruptible C call — must not hold a job ring open
+    forever, so its eventual stop notice goes back to the ordinary frame path
+    instead of waiting on a poll that may never come."""
+    with _bg_lock:
+        runner = _bg_runners.get(bg_id)
+        if runner is None:
+            return {"known": False}
+        runner.adopted = False
+        runner.stopped = True
+    _stop_runner(runner)
+    return {"known": True, "stopping": True}
+
+
 def _handle_ctrl(req):
     """Dispatch a control request from the parent; returns the result dict."""
     cmd = req.get("cmd") if isinstance(req, dict) else None
+    if cmd == "bg_poll":
+        return _ctrl_bg_poll(req.get("bg_id"))
+    if cmd == "bg_stop":
+        return _ctrl_bg_stop(req.get("bg_id"))
     if cmd == "snapshot":
         return snapshot_kernel_state(
             req.get("path", ""), req.get("manifest", ""),
@@ -4684,14 +4736,6 @@ _IMAGE_TOOLS = {
 prompt_dict.update(_IMAGE_TOOLS)
 globals().update(_IMAGE_TOOLS)
 _ns.update(prompt_dict)
-# The RLM context facet is installed HERE, not where its import sits: it needs
-# `_seam_request`, which is defined further down the file. Installing it up
-# there raised NameError into the except and silently disabled the facet.
-try:
-    if rlm_context is not None:
-        rlm_context.install(_ns, _seam_request, _ctx_bind_entries)
-except Exception as _rlm_install_error:
-    sys.stderr.write("rlm_context install failed: %s\n" % _rlm_install_error)
 # ── process entrypoint ───────────────────────────────────────────────────
 # Everything above defines the runtime; only a process that IS the protocol
 # server may start talking on the wire. Guarding the handshake and the loop
@@ -4798,6 +4842,7 @@ if __name__ == "__main__":
                       "force-stopped if it passes %ds.]"
                       % (round(primary_ms / 1000.0), runner.bg_id, round(secondary_ms / 1000.0)))
             send_frame({"out": _join_stray(_flush_bg() + notice), "error": None, "backgrounded": True,
+                        "backgroundId": runner.bg_id,
                         "images": _frame_images(), "id": cell_id})
 # ============================================================
 # New tools: notebook_edit, checkpoints, schedule, memory, etc.

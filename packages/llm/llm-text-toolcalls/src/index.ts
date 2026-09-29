@@ -27,11 +27,11 @@
  * rules — produces no call here either and is forwarded untouched.
  *
  * ```yaml
- * - id: llm-dsml
- *   name: '@deepseek-ai/dsh-llm-dsml'
+ * - id: llm-text-toolcalls
+ *   name: '@deepseek-ai/dsh-llm-text-toolcalls'
  * ```
  *
- * @module @deepseek-ai/dsh-llm-dsml
+ * @module @deepseek-ai/dsh-llm-text-toolcalls
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -71,7 +71,7 @@ export {
 export type { CatalogFile, LearnedLiteral, RepairShape } from './catalog.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
-export const name = 'llm-dsml'
+export const name = 'llm-text-toolcalls'
 
 /** The service whose streaming waterfall this pass joins. */
 export const inject = ['llm']
@@ -158,7 +158,7 @@ export function apply(ctx: Context, config: Config): void {
     if (textOnly.has(key)) return readDsmlStream(viaText(options), tools, { reasoningRecovery })
     const source = retryOnToolRefusal(next(), () => {
       textOnly.add(key)
-      ctx.logger.info(`llm-dsml: ${options.provider}/${options.model} cannot take native tools; using the text channel`)
+      ctx.logger.info(`llm-text-toolcalls: ${options.provider}/${options.model} cannot take native tools; using the text channel`)
       return viaText(options)
     })
     return readDsmlStream(source, tools, { reasoningRecovery })

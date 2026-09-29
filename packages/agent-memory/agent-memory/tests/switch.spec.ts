@@ -24,7 +24,7 @@ const MEMORY_TOOLS = ['memory_add', 'memory_recall', 'memory_map']
 let root: string
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'dsh-agent-memory-mode-'))
+  root = await mkdtemp(join(tmpdir(), 'dsh-agent-memory-'))
 })
 
 afterEach(async () => {

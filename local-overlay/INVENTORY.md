@@ -184,9 +184,8 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 445 paths do not exist upstream, so no patch covers them and none can conflict.
+These 431 paths do not exist upstream, so no patch covers them and none can conflict.
 
-- `.agents/notes/implemented/architecture/2026-09-07-kernel-rlm-context-readback-hardening.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.zh.md`
@@ -213,6 +212,7 @@ These 445 paths do not exist upstream, so no patch covers them and none can conf
 - `.merge-port/apiproxy-and-fixtures.patch`
 - `.recon/accounts-tab.md`
 - `.recon/ds-direct-flagging.md`
+- `.recon/probe-operator.mjs`
 - `.recon/probe_fresh_identity.py`
 - `.recon/probe_fresh_identity.run.log`
 - `.recon/probe_signin_dom.py`
@@ -348,17 +348,14 @@ These 445 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/rules.json`
 - `local-overlay/verify-seam-frozen.mjs`
 - `local-overlay/verify.mjs`
-- `packages/agent-memory/agent-memory-mode/README.md`
-- `packages/agent-memory/agent-memory-mode/package.json`
-- `packages/agent-memory/agent-memory-mode/src/index.ts`
-- `packages/agent-memory/agent-memory-mode/tests/agent-memory-mode.spec.ts`
-- `packages/agent-memory/agent-memory-mode/tsconfig.json`
 - `packages/agent-memory/agent-memory/README.md`
 - `packages/agent-memory/agent-memory/package.json`
+- `packages/agent-memory/agent-memory/src/engine.ts`
 - `packages/agent-memory/agent-memory/src/index.ts`
 - `packages/agent-memory/agent-memory/src/memory.ts`
 - `packages/agent-memory/agent-memory/src/spec.ts`
 - `packages/agent-memory/agent-memory/tests/memory.spec.ts`
+- `packages/agent-memory/agent-memory/tests/switch.spec.ts`
 - `packages/agent-memory/agent-memory/tsconfig.json`
 - `packages/bundle/efai-base/README.md`
 - `packages/bundle/efai-base/cordis.patch.yml`
@@ -456,12 +453,6 @@ These 445 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/tests/seam-tools-call.spec.ts`
 - `packages/kernel/kernel-python/tests/transport.spec.ts`
 - `packages/kernel/kernel-python/tsconfig.json`
-- `packages/kernel/kernel-rlm-context/README.md`
-- `packages/kernel/kernel-rlm-context/package.json`
-- `packages/kernel/kernel-rlm-context/src/index.ts`
-- `packages/kernel/kernel-rlm-context/src/invariant.ts`
-- `packages/kernel/kernel-rlm-context/tests/kernel-rlm-context.spec.ts`
-- `packages/kernel/kernel-rlm-context/tsconfig.json`
 - `packages/kernel/kernel/README.md`
 - `packages/kernel/kernel/package.json`
 - `packages/kernel/kernel/src/index.ts`
@@ -478,32 +469,9 @@ These 445 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-kernel/package.json`
 - `packages/kernel/tool-kernel/src/index.ts`
 - `packages/kernel/tool-kernel/src/invariant.ts`
+- `packages/kernel/tool-kernel/tests/background.spec.ts`
 - `packages/kernel/tool-kernel/tests/images.spec.ts`
 - `packages/kernel/tool-kernel/tsconfig.json`
-- `packages/llm/llm-dsml/README.md`
-- `packages/llm/llm-dsml/package.json`
-- `packages/llm/llm-dsml/src/catalog.ts`
-- `packages/llm/llm-dsml/src/dsml.ts`
-- `packages/llm/llm-dsml/src/fallback.ts`
-- `packages/llm/llm-dsml/src/index.ts`
-- `packages/llm/llm-dsml/src/protocol.ts`
-- `packages/llm/llm-dsml/src/shapes.ts`
-- `packages/llm/llm-dsml/src/stream.ts`
-- `packages/llm/llm-dsml/tests/adversarial.spec.ts`
-- `packages/llm/llm-dsml/tests/catalog.spec.ts`
-- `packages/llm/llm-dsml/tests/closer-repairs.spec.ts`
-- `packages/llm/llm-dsml/tests/fallback.spec.ts`
-- `packages/llm/llm-dsml/tests/illustration.spec.ts`
-- `packages/llm/llm-dsml/tests/llm-dsml.spec.ts`
-- `packages/llm/llm-dsml/tests/orphan-block.spec.ts`
-- `packages/llm/llm-dsml/tests/shape-reporting.spec.ts`
-- `packages/llm/llm-dsml/tests/shapes.spec.ts`
-- `packages/llm/llm-dsml/tests/stripped-closers.spec.ts`
-- `packages/llm/llm-dsml/tests/structural.spec.ts`
-- `packages/llm/llm-dsml/tests/unbreakable.spec.ts`
-- `packages/llm/llm-dsml/tests/value-and-fence.spec.ts`
-- `packages/llm/llm-dsml/tests/value-markup.spec.ts`
-- `packages/llm/llm-dsml/tsconfig.json`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
 - `packages/llm/llm-kiln/src/adapter.ts`
@@ -525,17 +493,36 @@ These 445 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-system-file/src/upload-index.ts`
 - `packages/llm/llm-system-file/tests/system-file.spec.ts`
 - `packages/llm/llm-system-file/tsconfig.json`
+- `packages/llm/llm-text-toolcalls/README.md`
+- `packages/llm/llm-text-toolcalls/package.json`
+- `packages/llm/llm-text-toolcalls/src/catalog.ts`
+- `packages/llm/llm-text-toolcalls/src/dsml.ts`
+- `packages/llm/llm-text-toolcalls/src/fallback.ts`
+- `packages/llm/llm-text-toolcalls/src/index.ts`
+- `packages/llm/llm-text-toolcalls/src/protocol.ts`
+- `packages/llm/llm-text-toolcalls/src/shapes.ts`
+- `packages/llm/llm-text-toolcalls/src/stream.ts`
+- `packages/llm/llm-text-toolcalls/tests/adversarial.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/catalog.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/closer-repairs.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/fallback.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/illustration.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/llm-text-toolcalls.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/misclosed-closers.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/native-spellings.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/orphan-block.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/shape-reporting.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/shapes.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/stripped-closers.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/structural.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/unbreakable.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/value-and-fence.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/value-markup.spec.ts`
+- `packages/llm/llm-text-toolcalls/tsconfig.json`
 - `packages/llm/token-usage-lifetime/package.json`
 - `packages/llm/token-usage-lifetime/src/index.ts`
 - `packages/llm/token-usage-lifetime/tests/token-usage-lifetime.spec.ts`
 - `packages/llm/token-usage-lifetime/tsconfig.json`
-- `packages/rlm/rlm/README.md`
-- `packages/rlm/rlm/package.json`
-- `packages/rlm/rlm/src/engine.ts`
-- `packages/rlm/rlm/src/index.ts`
-- `packages/rlm/rlm/src/protocol.ts`
-- `packages/rlm/rlm/tests/engine.spec.ts`
-- `packages/rlm/rlm/tsconfig.json`
 - `packages/session/command-session-info/README.md`
 - `packages/session/command-session-info/package.json`
 - `packages/session/command-session-info/src/index.ts`
@@ -599,7 +586,6 @@ These 445 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/providers.py`
 - `python/kiln/runtime/pyproject.toml`
 - `python/kiln/runtime/requirements.txt`
-- `python/kiln/runtime/rlm_context.py`
 - `python/kiln/runtime/sha3_wasm_bg.wasm`
 - `python/kiln/runtime/sse_client.py`
 - `python/kiln/runtime/test_browser_page_pick.py`

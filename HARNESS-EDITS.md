@@ -15,7 +15,7 @@ For what the fork *is* — every plugin it adds, where each mounts, and which sw
 | Fork point | `47f943859b` | upstream merge of PR #2519, 2026-08-13 |
 | Upstream base | `00102833df` | `deepseek-harness` 0.1.7-alpha.2; recorded in `local-overlay/BASE` |
 | Upstream merge landed | `merge/upstream-0.1.7-alpha.2` | `deepseek-harness` 0.1.7-alpha.2 (3,009 commits) absorbed; the previous base was `c291e7961a` (0.1.5-rc.2) |
-| `master` | merge + 43 commits | kernel-rlm-context, tool-notebook-edit, kernel-python provider, session-recovery-context |
+| `master` | merge + 43 commits | tool-notebook-edit, kernel-python provider, session-recovery-context |
 | `upstream/master` | `00102833df` | the current base |
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
@@ -36,7 +36,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 |---|---|---|
 | Python kernel seam | `packages/kernel/**` | 44 files |
 | Kiln LLM provider registry | `packages/llm/llm-kiln` | 11 files |
-| Text-channel tool-call reader | `packages/llm/llm-dsml` | 22 files |
+| Text-channel tool-call reader | `packages/llm/llm-text-toolcalls` | 22 files |
 | System prompt as a file upload (work in progress) | `packages/llm/llm-system-file` | 10 files |
 | Python runtime (providers, `ds_direct`, WAF, browser identity, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 56 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
@@ -184,7 +184,7 @@ Seven concrete failures, in order of cost.
 
 **5. The marker convention is applied unevenly.** Rule 2 asks every Tier-2 edit to carry a marker, and most do: `DSH-FORK` appears in 109 of the 138 patched paths. The other 29 are invisible to the convention — 5 `package.json` manifests, 6 `README.i18n.yaml` files, the three `compaction-basic` README pages, one package `tsconfig.json`, the two generated catalog modules (`packages/extensions/tool-cordis/src/api-catalog.ts`, `packages/extensions/cordis-client-runner/src/client/slot-catalog.ts`), two specs, one client component (`packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`), and 8 `docs/` pages. The 29th path, `.claude/skills`, is the one file the fork deletes — a symlink, with nowhere to put a comment. Markers are not the inventory and cannot be: a grep cannot tell a marked edit from a marked file, and a diff against `upstream/master` is mostly upstream's own churn across 1,934 commits. `local-overlay/INVENTORY.md` supplies the inventory mechanically. What the 29 unmarked files cost is legibility at conflict time: the resolver reads a hunk with no stated reason and no exit condition.
 
-**6. `doc-sync` is red on five gates, and the fork packages cause two of them.** `pnpm run test:docs` fails on markdown links, translation pairing, markdown wrap, package README summaries, and the documentation-standard spec. The fork's own packages drive the last two: the sixteen READMEs under `packages/kernel/*`, `packages/rlm/*`, `packages/agent-memory/*`, `packages/client/ui-effects`, `packages/web/web-browser`, `packages/llm/llm-kiln`, `packages/fs/tool-notebook-edit`, and `packages/session/command-session-info` were written without the `## Summary` heading the summaries gate requires, and without the frontmatter, Table of Contents, and Dev Note the doc-standard spec requires. The documentation exists and is detailed; it does not carry the skeleton the gates read. The cost is that five red gates hide a sixth real breakage: a genuine documentation regression lands on top of known failures and nobody notices.
+**6. `doc-sync` is red on four gates, and the fork packages cause two of them.** `pnpm run test:docs` fails on translation pairing, markdown wrap, package README summaries, and the documentation-standard spec. The fork's own packages drive the last two: the fourteen READMEs under `packages/kernel/*`, `packages/agent-memory/*`, `packages/llm/*`, `packages/client/ui-*`, `packages/web/web-browser`, `packages/fs/tool-notebook-edit`, and `packages/session/command-session-info` were written without the `## Summary` heading the summaries gate requires, and without the frontmatter, Table of Contents, and Dev Note the doc-standard spec requires. The documentation exists and is detailed; it does not carry the skeleton the gates read. The cost is that several red gates hide a real breakage: a genuine documentation regression lands on top of known failures and nobody notices.
 
 **7. Credentials rest on `.gitignore` alone.** `ds_config.json` holds a DeepSeek login password and WAF cookie; `python/kiln/runtime/ds_sessions.json` holds live session tokens. Both are ignored, and nothing matching them is tracked today — verified. But `.gitignore` is one `git add -f`, one path rename, or one merge that drops the rule away from a published secret.
 
@@ -244,7 +244,7 @@ One line, immediately above the edit, in the file's comment syntax:
 # EXIT: upstream gains a hook-extension point a fork can register into.
 ```
 
-The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `rlm`, `fix`, `brand`. Use `all` only for a file the whole fork shares, such as a tsconfig or the lockfile. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
+The tag in parentheses is the feature: `kernel`, `kiln`, `dock`, `browser`, `memory`, `fix`, `brand`. Use `all` only for a file the whole fork shares, such as a tsconfig or the lockfile. The `EXIT:` clause names the event that deletes the edit. An edit with no exit is a permanent tax; write it down as one.
 
 The marker is what makes a conflict legible while it is being resolved: the fork's side of a hunk carries the reason it exists and the condition that retires it. It is not the inventory. `local-overlay/INVENTORY.md` is the inventory, and it is generated, so it cannot go stale the way a hand-maintained grep result does.
 
@@ -255,7 +255,7 @@ After editing an upstream-owned file, fold the edit into its patch and re-prove 
 1. **A row in a fork-owned bundle.** `packages/bundle/efai-base/cordis.patch.yml`, or `efai-web/` for the browser profile. A later bundle layer inserts rows, replaces a row's whole `config`, and switches a row off by id — everything composition can express. The profile names the bundles, and `efai/ensure-profile-bundles.mjs` keeps them there.
 2. **A new fork-owned package on a documented extension point.** Zero merge cost, forever. `efai-identity` rewrites the prompt opener on `system-prompt/assemble`; `version-route` adds an HTTP route; the roster (`tool-roster` row) filters tools per turn.
 3. **A host row, for something every agent should have.** The tools registry is layered, so a host registration reaches every preset agent. Never replace an upstream preset row: preset rows are not groups, so a patch can only restate the whole preset.
-4. **A switch decided at runtime.** A `.volatile()` field on the row that enforces it, re-read on `loader/volatile-update` — the roster for tool visibility, `agent-memory-mode` for a subsystem that must stop running. Settings edits it by row id. Never a Loader `disabled: !!js` expression: it is read once at boot, which makes the setting a restart.
+4. **A switch decided at runtime.** A `.volatile()` field on the row that enforces it, re-read on `loader/volatile-update` — the roster for tool visibility, `agent-memory` for a subsystem that must stop running. Settings edits it by row id. Never a Loader `disabled: !!js` expression: it is read once at boot, which makes the setting a restart.
 5. **A settings value.** If it varies per deployment it is `Config`, per `AGENTS.md`: *"No hardcoded tunables in plugins"*.
 6. **An upstream pull request.** For anything that is a bug, or that upstream would plausibly accept.
 7. **A recorded seam edit.** Last resort. Smallest possible hunk, marker, exit plan, register entry, patch group, and `verify-seam-frozen --record` in the same commit.
@@ -328,7 +328,7 @@ Output must be empty.
 
 ### Rule 9 — A fork package is a real package
 
-README, JSDoc on every export, tests, and an entry in the catalogs. `packages/agent-memory`, `packages/kernel`, and `packages/rlm` have no README, which keeps `doc-sync` red and hides real drift behind expected noise. A gate you have learned to ignore is not a gate.
+README, JSDoc on every export, tests, and an entry in the catalogs. `packages/agent-memory` and `packages/kernel` have no group README, which keeps `doc-sync` red and hides real drift behind expected noise. A gate you have learned to ignore is not a gate.
 
 ## The seam register
 
@@ -362,9 +362,9 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | ~~22~~ | `packages/skill/tool-skill/src/index.ts` | `kernel` | **RETIRED** — `alwaysLoadSkills` moved to `packages/skill/skill-injection`, which re-injects a pruned body from the same hook | done |
 | 23 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
 | 24 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |
-| ~~25~~ | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `rlm` | **RETIRED** — the engine mounts unconditionally in `efai-base`; `tool-roster` decides per turn whether `kernel` or `rlm` is the acting surface | done |
+| ~~25~~ | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `kernel` | **RETIRED** — every fork row moved into `efai-base`; `tool-roster` decides per turn which tools are the acting surface | done |
 | ~~26~~ | `client/ui-chat` turn-process fold (6 sources, 2 tests) | `brand` | **RETIRED** by upstream: 0.1.7-alpha.2 renders the process row for a running Turn, handles partly-loaded history, and keeps interleaved input visible with the row held open | done |
-| ~~27~~ | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | **RETIRED** — `agent-memory-mode` mounts and unmounts the engine from the live setting, in `efai-base`; `apps/cli` now declares only the two fork bundles | done |
+| ~~27~~ | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | **RETIRED** — `agent-memory` mounts and unmounts the engine from the live setting, in `efai-base`; `apps/cli` now declares only the two fork bundles | done |
 | 28 | `.agents/skills/dsh-code-review/SKILL.md`, `.agents/skills/dsh-pre-push-checks/SKILL.md` | `all` | upstream's review and pre-push skills cannot know about this fork: the tier split, the `DSH-FORK` marker, `local-overlay/`, or the `verify-fork-overlay` gate. Each carries one added section plus its marker. | Permanent fork delta: the upstream skills would need a fork-extensibility mechanism for these sections to move out. |
 | 29 | `scripts/verify-package-readme-model-experience.ts` | `all` | the fork ships package READMEs for fork-owned packages, so the audited `NO_MODEL_EXPERIENCE_SECTION` / `SENTENCE_MODEL_EXPERIENCE` allowlists must name them; without entries the gate rejects a correct README. | Upstream accepts a model-experience declaration inside each package manifest, so the allowlists stop being a central file. |
 | 30 | `client/ui-brand-official/**` (3 `README*`, `src/client/Brand.tsx`, `src/client/index.ts`, `tests/browser-plugin.client.spec.tsx`), `apps/web/tests/built-boot.expected.e2e.ts` | `brand` | the sidebar brand is the fork's in **every** build profile — upstream gates the registration behind `DSH_CLIENT_BUILD_PROFILE=official`, so an unprofiled build falls through to the shell's `DSH Local Build` label and its version badge; the name is live text carrying a specular sweep rather than the upstream name artwork, and the built-boot smoke pins that wordmark instead of the profile-dependent shell brand | A fork-owned client package owns the sidebar chrome, so the registration stops being a gate on an upstream package |
@@ -376,17 +376,17 @@ If row 4 moves to a fork-owned package and rows 9, 10, and 31 go upstream, what 
 ## Known fork debt
 
 Recorded at the v1.0.0 commit. These are real, verified gaps, not suspicions. The fork's
-own gate (`pnpm run verify-fork-overlay`) and `typecheck` are green; five `doc-sync` gates are
+own gate (`pnpm run verify-fork-overlay`) and `typecheck` are green; four `doc-sync` gates are
 **not**, and this is why.
 
 | Gate | Cause | Exit |
 |---|---|---|
-| `verify-translation-pairing` | 16 fork package READMEs have no `README.zh.md` pair, plus 4 fork docs (`python/kiln/runtime/README.ds-direct.md`, `README.vision-tools.md`, `local-overlay/README.md`, `HARNESS-EDITS.md`); 4 existing pairs are also out of sync (`README.md`, `docs/event-producer-consumer.md`, `docs/tool-catalog.md`). | Add counterparts; re-record with `--write`. |
-| `verify-package-readme-summaries` and the doc-standard spec | 16 fork package READMEs lack the `## Summary`, `## Table of Contents`, and Dev Note sections and YAML frontmatter the gates read. | Add the skeleton to all 16. |
-| `verify-md-links` | One broken relative link: the fork Agent Note `2026-09-07-kernel-rlm-context-readback-hardening.md` names a `.zh.md` sibling that does not exist. (The code-review skill's missing `#reporting-findings` anchor was fixed in the 0.1.7-alpha.2 merge: an older fork hunk had replaced upstream's last two sections instead of appending after them.) | Write the sibling. |
+| `verify-translation-pairing` | 14 fork package READMEs have no `README.zh.md` pair, plus 3 Python docs and 2 fork docs (`python/kiln/runtime/DS-DIRECT-FLAGGING.md`, `README.ds-direct.md`, `README.vision-tools.md`, `local-overlay/README.md`, `HARNESS-EDITS.md`); 4 existing pairs are also out of sync (`README.md`, `docs/capability-seams.md`, `docs/config-catalog.md`, `docs/event-producer-consumer.md`). | Add counterparts; re-record with `--write`. |
+| `verify-package-readme-summaries` and the doc-standard spec | 14 fork package READMEs lack the `## Summary`, `## Table of Contents`, and Dev Note sections and YAML frontmatter the gates read. | Add the skeleton to all 14. |
+| `verify-md-links` | Green: 2224 files checked, every relative cross-link and fragment resolves. | — |
 | `verify-md-wrap` | Hard-wrapped prose in the generated `docs/tool-catalog.md`. | Regenerate, or widen the wrap exemption. |
 
-`verify-subsystem-pages` also fails — `packages/agent-memory`, `packages/kernel`, and `packages/rlm` are fork package groups with no group `README.md` — but it is not one of the five `doc-sync` gates.
+`verify-subsystem-pages` also fails — `packages/agent-memory` and `packages/kernel` are fork package groups with no group `README.md` — but it is not one of the `doc-sync` gates.
 
 The debt is documentation-shaped: it does not affect the built harness, the mod layer, or
 any runtime behavior. It is recorded here so a future release does not mistake a red

@@ -47,6 +47,9 @@ export const zh = {
   'account.passwordPlaceholder': '密码',
   'account.testAdd': '测试并添加',
   'account.cancel': '取消',
+  // The unpinned pooled route: no single login is pinned, so it must not read
+  // as one of the logins listed around it.
+  'account.auto': '自动（任选账号）',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -90,4 +93,5 @@ export const en = {
   'account.passwordPlaceholder': 'Password',
   'account.testAdd': 'Test and add',
   'account.cancel': 'Cancel',
+  'account.auto': 'Automatic (any account)',
 } satisfies Record<ModelKey, string>

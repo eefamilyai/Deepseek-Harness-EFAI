@@ -40,7 +40,7 @@ real behavior in this repository, so none of them is theoretical.
 | 1 | Is this **composition** — a plugin to mount, a row's config to change, a row to switch off? | A row in `packages/bundle/efai-base/cordis.patch.yml`, or `efai-web/` for the browser profile. | Every fork row the harness runs. |
 | 2 | Is this **behavior** that a documented extension point can carry? | A new fork-owned package mounted by that bundle. | `efai-identity` rewrites the prompt opener on `system-prompt/assemble`; `skill-injection` is a second `agent/pre-step` listener; `token-usage-lifetime` registers its own projection unit; `ui-settings-tools` is a `settings.section` slot registration; `ui-flow-accents` is a theme override layer; `llm-kiln` shapes a request by its `purpose`. |
 | 3 | Is this something **every agent** should have? | A host row in `efai-base`. The tools registry is layered, so a host registration reaches every preset agent; a preset's own choices belong to upstream's preset editor. | `tool-kernel` is one host row serving every preset. Upstream's preset rows are not groups, so a bundle patch can only replace one wholesale — never do that. |
-| 4 | Is this a **switch** someone should be able to flip? | A `.volatile()` field on the row that enforces it, never a Loader `!!js` gate. Settings edits it by row id; react on `loader/volatile-update`. | `tool-roster`'s `kernel`/`rlm`/`enabled`; `agent-memory-mode` mounts and unmounts the engine; `kernel-python`'s `browserWindow`. |
+| 4 | Is this a **switch** someone should be able to flip? | A `.volatile()` field on the row that enforces it, never a Loader `!!js` gate. Settings edits it by row id; react on `loader/volatile-update`. | `tool-roster`'s `kernel`/`enabled`/`tools`; `agent-memory` mounts and unmounts the engine; `kernel-python`'s `browserWindow`. |
 | 5 | Is this a **value that varies per deployment**? | A `Config` field. `AGENTS.md` forbids hardcoded tunables in plugins. | Every fork package's `Config`. |
 | 6 | Is this a **bug in upstream code**, or something upstream would plausibly accept? | An **upstream PR**. Keep a local copy in `.merge-port/upstream-prs/<name>.patch` with a register row, and delete the local delta when it lands. | Seam-register rows 9 and 10. |
 | 7 | None of the above, and you can say why in one sentence. | A recorded seam edit: smallest possible hunk, `DSH-FORK` marker, `EXIT:` clause, seam-register row, `patchGroups` entry, **and** `verify-seam-frozen --record`. | 74 paths, and every one of them is a cost. |
@@ -50,7 +50,7 @@ step 4. The expression is evaluated once at boot, so gating composition on a set
 makes that setting a restart by construction — and the plugin it gates is unmounted,
 which means the switch cannot even publish itself in its own off position. Decide at
 runtime instead: filter what the model sees (`tool-roster`), or mount and unmount the
-subsystem from its own switch (`agent-memory-mode`).
+subsystem from its own switch (`agent-memory`).
 
 **A recorded seam edit is a mod, not a source change.** The working tree carries it —
 that is how the fork builds — but `patches/*.patch` is what a future release
@@ -239,7 +239,7 @@ drifts.
 
 **Add a switch.** Declare it as a `.volatile()` field on the row that enforces it,
 read it with `.get()`, and re-read it on `loader/volatile-update`: `tool-roster`
-for tool visibility, `agent-memory-mode` for a subsystem that has to actually stop
+for tool visibility, `agent-memory` for a subsystem that has to actually stop
 running. Settings edits it by row id, and a custom page reaches it with
 `ctx.configForms.get('<row id>')`. Never gate the row in YAML, and never add a
 separate settings namespace.

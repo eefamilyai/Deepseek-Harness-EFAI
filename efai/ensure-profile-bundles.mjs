@@ -128,7 +128,7 @@ function ensureProfile(name, check) {
 
 /** The row the fork's switches live on, and the package it composes. */
 const ROSTER_ROW = 'tool-roster'
-const ROSTER_PACKAGE = '@deepseek-ai/dsh-roster'
+const ROSTER_PACKAGE = '@deepseek-ai/dsh-tool-roster'
 
 /**
  * The YAML library, borrowed from the package that edits profile patches:
@@ -143,7 +143,7 @@ function loadYaml() {
  * Carry the pre-0.1.7 switch positions onto the roster row, once.
  *
  * On first boot upstream imports the removed `settings.yaml` into the profile
- * by row id. The fork's switches lived in sections named `kernel`, `rlm`, and
+ * by row id. The fork's switches lived in sections named `kernel` and
  * `tools`, which name no fork row, so that import drops them — and with them
  * every tool the operator had switched off. This writes them onto the
  * `tool-roster` row first. It runs only while `settings.yaml` is still
@@ -161,7 +161,6 @@ function migrateLegacySwitches(name, check) {
   const sections = parse(readFileSync(legacy, 'utf8')) ?? {}
   const config = {}
   if (typeof sections.kernel?.enabled === 'boolean') config.kernel = sections.kernel.enabled
-  if (typeof sections.rlm?.enabled === 'boolean') config.rlm = sections.rlm.enabled
   if (typeof sections.tools?.enabled === 'boolean') config.enabled = sections.tools.enabled
   // Only the switched-off tools carry meaning: an absent name is on.
   const off = Object.entries(sections.tools?.tools ?? {}).filter(([, on]) => on === false)
@@ -172,14 +171,14 @@ function migrateLegacySwitches(name, check) {
   const rows = doc.toJS() ?? []
   if (!Array.isArray(rows)) return `${name}: the profile patch is not a list, so the switches were not carried over`
   if (rows.some(row => row?.id === ROSTER_ROW)) return null
-  if (check) return `${name}: the kernel/rlm/tools switches are not yet on ${ROSTER_ROW}`
+  if (check) return `${name}: the kernel/tools switches are not yet on ${ROSTER_ROW}`
   const row = doc.createNode({ id: ROSTER_ROW, name: ROSTER_PACKAGE, config })
   // The initial template is an empty flow list; a block list keeps the file editable.
   if (doc.contents !== null && 'flow' in doc.contents) doc.contents.flow = false
   if (doc.contents === null) doc.contents = doc.createNode([row])
   else doc.add(row)
   writeFileSync(patchPath, doc.toString())
-  return `${name}: carried the kernel/rlm/tools switches onto ${ROSTER_ROW}`
+  return `${name}: carried the kernel/tools switches onto ${ROSTER_ROW}`
 }
 
 const args = process.argv.slice(2)

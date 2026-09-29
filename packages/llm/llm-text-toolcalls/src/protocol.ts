@@ -19,7 +19,7 @@
  * roster the model is told about, so a tool that is switched off cannot linger
  * in the prompt as an instruction to call something that no longer exists.
  *
- * @module @deepseek-ai/dsh-llm-dsml/protocol
+ * @module @deepseek-ai/dsh-llm-text-toolcalls/protocol
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'

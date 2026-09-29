@@ -69,7 +69,7 @@ For agents, follow [AGENTS.md](AGENTS.md).
 - A Python kernel that executes code cells through the kernel tools.
 - A multi-provider LLM registry with account pooling.
 - A self-hosted, text-first browser tool.
-- A notebook-edit tool and RLM context read-back.
+- A notebook-edit tool.
 
 ## Upstream
 

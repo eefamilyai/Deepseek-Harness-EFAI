@@ -30,10 +30,10 @@
  *
  * ```yaml
  * - id: tool-roster
- *   name: '@deepseek-ai/dsh-roster'
+ *   name: '@deepseek-ai/dsh-tool-roster'
  * ```
  *
- * @module @deepseek-ai/dsh-roster
+ * @module @deepseek-ai/dsh-tool-roster
  */
 
 import type { Context, Volatile } from '@deepseek-ai/cordis'
@@ -60,9 +60,6 @@ export const TOOLS_ENABLED_DEFAULT = true
 /** Default for the kernel switch: the kernel is the fork's acting surface. */
 export const KERNEL_ENABLED_DEFAULT = true
 
-/** Default for the RLM switch: the standalone kernel tool unless asked. */
-export const RLM_ENABLED_DEFAULT = false
-
 /**
  * The tool the PTC presentation transport reserves.
  *
@@ -74,27 +71,12 @@ const RUN_CODE_NAME = 'run_code'
 /** The one tool the kernel category switch owns. */
 const KERNEL_TOOL_NAME = 'kernel'
 
-/**
- * The tool the RLM engine registers.
- *
- * It and `kernel` are the two acting surfaces over the same Python namespace,
- * and exactly one of them is offered: the engine drives the REPL recursively,
- * so a model holding both would be told to act two ways at once.
- */
-const RLM_TOOL_NAME = 'rlm'
-
 /** One resolved roster: the two category switches and the per-tool overrides. */
 export interface Roster {
   /** Whether the conventional tools category is on. */
   readonly toolsEnabled: boolean
   /** Whether the kernel tool is available. */
   readonly kernelEnabled: boolean
-  /**
-   * Whether the RLM engine owns acting. On, the `rlm` tool is the kernel
-   * category's surface and the `kernel` tool is withdrawn; off, the reverse.
-   * Both require `kernelEnabled`, because the engine runs on the same seam.
-   */
-  readonly rlmEnabled: boolean
   /** Per-tool overrides; a name absent here is enabled. */
   readonly overrides: Readonly<Record<string, boolean>>
 }
@@ -107,15 +89,9 @@ export interface Roster {
 export interface Config {
   /**
    * Whether the persistent Python kernel is available to the model. Off, the
-   * `kernel` and `rlm` tools both leave the prompt; the conventional roster is
-   * unaffected.
+   * `kernel` tool leaves the prompt; the conventional roster is unaffected.
    */
   kernel: Volatile<boolean>
-  /**
-   * Whether the recursive RLM engine is the kernel category's surface instead
-   * of the standalone `kernel` tool. Requires `kernel`.
-   */
-  rlm: Volatile<boolean>
   /**
    * Whether the conventional tool roster is available. Off, every non-kernel
    * tool leaves the model's prompt and refuses to execute.
@@ -135,10 +111,6 @@ export const Config = z.object({
       + ' reading a file, editing it, searching the tree, and running a command are'
       + ' function calls inside it. Independent of the conventional tool roster.'
       + ' Applies when the model next stops generating.')
-    .volatile(),
-  rlm: z.boolean().default(RLM_ENABLED_DEFAULT)
-    .description('Offer the recursive RLM engine instead of the standalone kernel tool. Requires'
-      + ' the kernel. Applies when the model next stops generating.')
     .volatile(),
   enabled: z.boolean().default(TOOLS_ENABLED_DEFAULT)
     .description('Make the conventional tools available to the model. Turn this off to'
@@ -165,8 +137,7 @@ function normalize(toolName: string): string {
  */
 export function toolVisible(roster: Roster, toolName: string): boolean {
   if (toolName === RUN_CODE_NAME) return true
-  if (toolName === KERNEL_TOOL_NAME) return roster.kernelEnabled && !roster.rlmEnabled
-  if (toolName === RLM_TOOL_NAME) return roster.kernelEnabled && roster.rlmEnabled
+  if (toolName === KERNEL_TOOL_NAME) return roster.kernelEnabled
   if (!roster.toolsEnabled) return false
   // Keyed by the normalized name: a switch is written against a section's
   // spelling, and the registry's spelling of the same tool can differ by a dash.
@@ -204,13 +175,11 @@ export function sectionHidden(hidden: ReadonlySet<string>, sectionName: string):
  * Resolve the configured switches into one roster.
  * @param tools - the conventional-tools switch and the per-tool overrides.
  * @param kernelEnabled - the kernel switch.
- * @param rlmEnabled - the RLM switch.
  * @returns the roster those settings describe.
  */
 export function resolveRoster(
   tools: { enabled?: boolean; tools?: Record<string, boolean> } | undefined,
   kernelEnabled: boolean,
-  rlmEnabled: boolean,
 ): Roster {
   const overrides: Record<string, boolean> = {}
   for (const [tool, enabled] of Object.entries(tools?.tools ?? {})) {
@@ -219,7 +188,6 @@ export function resolveRoster(
   return {
     toolsEnabled: tools?.enabled ?? TOOLS_ENABLED_DEFAULT,
     kernelEnabled,
-    rlmEnabled,
     overrides,
   }
 }
@@ -233,7 +201,6 @@ export function resolveRoster(
 export function sameRoster(left: Roster, right: Roster): boolean {
   if (left.toolsEnabled !== right.toolsEnabled) return false
   if (left.kernelEnabled !== right.kernelEnabled) return false
-  if (left.rlmEnabled !== right.rlmEnabled) return false
   const names = new Set([...Object.keys(left.overrides), ...Object.keys(right.overrides)])
   for (const tool of names) {
     if ((left.overrides[tool] ?? true) !== (right.overrides[tool] ?? true)) return false
@@ -254,7 +221,6 @@ export function apply(ctx: Context, config: Config): void {
   const read = (): Roster => resolveRoster(
     { enabled: config.enabled.get(), tools: config.tools.get() },
     config.kernel.get(),
-    config.rlm.get(),
   )
   // `active` is the roster the model is currently working under; `pending` is
   // what the configuration says now. They diverge only between a toggle and the

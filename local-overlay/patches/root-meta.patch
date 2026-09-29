@@ -167,7 +167,7 @@ index ce6f75b18d..b5945997e4 100644
 +README.md: 89138a8ebdeaddb7c0506fd22947d69c577a8ba4
 +README.zh.md: dd0ab46b88bd8de43701b61bd1d226736848909d
 diff --git a/README.md b/README.md
-index 423bccd7d9..89138a8ebd 100644
+index 423bccd7d9..de18cdef86 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,63 +1,80 @@
@@ -269,7 +269,7 @@ index 423bccd7d9..89138a8ebd 100644
 +- A Python kernel that executes code cells through the kernel tools.
 +- A multi-provider LLM registry with account pooling.
 +- A self-hosted, text-first browser tool.
-+- A notebook-edit tool and RLM context read-back.
++- A notebook-edit tool.
 +
 +## Upstream
 +
@@ -287,7 +287,7 @@ index 423bccd7d9..89138a8ebd 100644
 -Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 +See [LICENSE](LICENSE).
 diff --git a/README.zh.md b/README.zh.md
-index c760f87e4a..dd0ab46b88 100644
+index c760f87e4a..f5b768d89e 100644
 --- a/README.zh.md
 +++ b/README.zh.md
 @@ -1,84 +1,80 @@
@@ -408,7 +408,7 @@ index c760f87e4a..dd0ab46b88 100644
 +- 通过内核工具执行代码单元的 Python 内核。
 +- 带账户池化的多提供商 LLM 注册表。
 +- 自托管的文本优先浏览器工具。
-+- 笔记本编辑工具与 RLM 上下文回读。
++- 笔记本编辑工具。
 +
 +## 上游
 +

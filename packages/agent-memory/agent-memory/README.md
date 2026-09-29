@@ -25,11 +25,36 @@ Prompt caching is positional: a prefix that changes invalidates everything after
 
 - `src/spec.ts` — the storage domain: the `nodes` and `agents` tables and the global cursor, declared with `defineDomain`.
 - `src/memory.ts` — the pure helpers (`refOf`, `summarize`, `truncate`, `renderMemoryIndex`, `nodeKey`, `agentPrefix`). No Cordis import, so they are unit-tested in isolation.
-- `src/index.ts` — the Cordis plugin: injects `storageDomain` + `systemPrompt` + `tools`, owns the `MemoryService`, and registers the three tools.
+- `src/engine.ts` — the Cordis plugin: injects `storageDomain` + `systemPrompt` + `tools`, owns the `MemoryService`, and registers the three tools.
+- `src/index.ts` — the live switch: one `.volatile()` `enabled` field, and the mount or disposal of `src/engine.ts` it drives.
 
 ## Composition
 
-The `agent-memory.enabled` toggle (default **off**) is mounted from the host base composition (`packages/bundle/base/cordis.patch.yml`) alongside the `agent-memory-mode` settings row. The mode row stays mounted in both positions so the switch can always be flipped back, and both it and the gate declare `applies: 'restart'`, because the Loader `disabled` expression is read once at boot. Memory itself survives restarts: one shared domain, keyed per agent id.
+`packages/bundle/efai-base` mounts it. The engine is not a row of its own — this package mounts it from its own live `enabled` field.
+
+```yaml
+- id: agent-memory
+  name: '@deepseek-ai/dsh-agent-memory'
+  config:
+    enabled: false
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `enabled` | `false` | Whether the engine runs. Applies immediately. |
+| `engine` | `{}` | Engine settings, passed through verbatim when the engine mounts. |
+
+`enabled` is declared `.volatile()`: Settings edits it by this row's id, the Loader commits the value without remounting the row, and `loader/volatile-update` tells the plugin to mount or dispose the engine. A composition with no settings surface still works — the composition's own `enabled` is the whole answer. Memory itself survives restarts: one shared domain, keyed per agent id.
+
+## Why the switch owns the mount
+
+Hiding a tool is enough for a tool. It is not enough here: the engine observes every tool result and writes the evidence to disk, so "off" has to mean "not running", which in Cordis means "not mounted".
+
+The decision could have been a Loader `disabled: !!js …` expression on the engine's own row, and was until 2026-09-20. That is a worse interface for two reasons. The expression is evaluated once at boot, so the setting becomes a restart; and it gates the engine's row only, which means nothing publishes the switch when the engine is off — the user would have no way back. Keeping both halves in this package fixes both.
+
+## Dev Note
+
+`sync` compares the wanted state against whether a fiber exists, so writing the value the switch already holds does nothing — an edit that changes another field of this row does not remount the engine and lose its in-memory state.
 
 ## Model Experience
 

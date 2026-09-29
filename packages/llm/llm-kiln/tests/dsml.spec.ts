@@ -123,7 +123,8 @@ describe('DsmlTranslator', () => {
   it('flushes an unterminated block as text rather than inventing its end', () => {
     const chunks = ['<tool_calls>\n<invoke name="kernel">\n<parameter name="code">rm -rf /tmp/x']
     expect(calls(chunks)).toEqual([])
-    expect(prose(chunks)).toBe('<tool_calls>\n<invoke name="kernel">\n<parameter name="code">rm -rf /tmp/x\n')
+    expect(prose(chunks)).toContain('<tool_calls>\n<invoke name="kernel">\n<parameter name="code">rm -rf /tmp/x')
+    expect(prose(chunks)).toContain('unfinished tool call')
   })
 
   it('dispatches a complete invoke whose <tool_calls> wrapper the model never closed', () => {
@@ -570,12 +571,15 @@ describe('near-misses of the taught format', () => {
     expect(prose(chunks)).toContain('unfinished tool call')
   })
 
-  it('says a wrapper around some OTHER notation ran nothing', () => {
-    // A JSON envelope inside the taught wrapper: no `<invoke>`, so every note
-    // keyed on one stayed silent and the turn ended with no stated reason.
+  it('runs a JSON envelope the taught wrapper carries', () => {
+    // The wrapper around a whole JSON arguments envelope names one real tool
+    // and hands it one complete argument object, so the call is whole and it
+    // dispatches. Refusing it was the expensive failure: the model had already
+    // said which tool and what arguments, the block ran nothing, and the turn
+    // ended with no stated reason.
     const chunks = ['<tool_calls>\n{"name": "kernel", "arguments": {"code": "1+1"}}\n</tool_calls>\n']
-    expect(calls(chunks)).toEqual([])
-    expect(prose(chunks)).toContain('nothing ran')
+    expect(calls(chunks)).toEqual([['kernel', { code: '1+1' }]])
+    expect(prose(chunks).trim()).toBe('')
   })
 
   it('stays quiet when the model is only discussing the format', () => {

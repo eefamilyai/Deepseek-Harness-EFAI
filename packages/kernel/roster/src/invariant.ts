@@ -1,13 +1,13 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-roster`.
- * @module @deepseek-ai/dsh-roster/invariant
+ * Package-owned invariant companion for `@deepseek-ai/dsh-tool-roster`.
+ * @module @deepseek-ai/dsh-tool-roster/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-roster'
+const PACKAGE_NAME = '@deepseek-ai/dsh-tool-roster'
 
 /** Cordis companion plugin name. */
 export const name = 'tool-roster-invariant'

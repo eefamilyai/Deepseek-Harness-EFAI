@@ -439,7 +439,7 @@ async function compose(config: dsmlPlugin.Config = {}): Promise<Context> {
   return ctx
 }
 
-describe('llm-dsml plugin', () => {
+describe('llm-text-toolcalls plugin', () => {
   it('reads the text channel of a provider that has a native one', async () => {
     const ctx = await compose()
     const chunks = await drain(ctx.llm.stream({

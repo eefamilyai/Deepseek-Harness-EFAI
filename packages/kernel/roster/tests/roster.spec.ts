@@ -64,7 +64,6 @@ async function mount(initial: Record<string, unknown> = {}) {
   ctx.tools.register(tool('read'))
   ctx.tools.register(tool('bash'))
   ctx.tools.register(tool('kernel', 'ran:kernel'))
-  ctx.tools.register(tool('rlm', 'ran:rlm'))
   const live = await liveConfig(ctx, { name: 'tool-roster', apply, Config }, initial)
   return { ctx, live }
 }
@@ -80,62 +79,42 @@ async function assemble(ctx: Context): Promise<{ tools: string[]; sections: stri
 
 describe('the roster is two independent categories', () => {
   it('keeps the kernel and the conventional tools separable', () => {
-    const on = resolveRoster({ enabled: true, tools: {} }, true, false)
+    const on = resolveRoster({ enabled: true, tools: {} }, true)
     expect(toolVisible(on, 'kernel')).toBe(true)
     expect(toolVisible(on, 'read')).toBe(true)
 
     // Either category alone.
-    const kernelOnly = resolveRoster({ enabled: false, tools: {} }, true, false)
+    const kernelOnly = resolveRoster({ enabled: false, tools: {} }, true)
     expect(toolVisible(kernelOnly, 'kernel')).toBe(true)
     expect(toolVisible(kernelOnly, 'read')).toBe(false)
 
-    const toolsOnly = resolveRoster({ enabled: true, tools: {} }, false, false)
+    const toolsOnly = resolveRoster({ enabled: true, tools: {} }, false)
     expect(toolVisible(toolsOnly, 'kernel')).toBe(false)
     expect(toolVisible(toolsOnly, 'read')).toBe(true)
   })
 
-  it('offers exactly one acting surface: the kernel tool, or the RLM engine', () => {
-    const kernelActing = resolveRoster({ enabled: true, tools: {} }, true, false)
-    expect(toolVisible(kernelActing, 'kernel')).toBe(true)
-    expect(toolVisible(kernelActing, 'rlm')).toBe(false)
-
-    const rlmActing = resolveRoster({ enabled: true, tools: {} }, true, true)
-    expect(toolVisible(rlmActing, 'kernel')).toBe(false)
-    expect(toolVisible(rlmActing, 'rlm')).toBe(true)
-
-    // The engine runs ON the kernel seam, so kernel-off withdraws both.
-    const kernelOff = resolveRoster({ enabled: true, tools: {} }, false, true)
-    expect(toolVisible(kernelOff, 'kernel')).toBe(false)
-    expect(toolVisible(kernelOff, 'rlm')).toBe(false)
-  })
-
-  it('counts the RLM switch when comparing two rosters', () => {
-    const base = resolveRoster({ enabled: true, tools: {} }, true, false)
-    expect(sameRoster(base, resolveRoster({ enabled: true, tools: {} }, true, true))).toBe(false)
-  })
-
   it('treats an absent per-tool entry as enabled and an explicit false as off', () => {
-    const roster = resolveRoster({ enabled: true, tools: { bash: false } }, true, false)
+    const roster = resolveRoster({ enabled: true, tools: { bash: false } }, true)
     expect(toolVisible(roster, 'read')).toBe(true)
     expect(toolVisible(roster, 'bash')).toBe(false)
   })
 
   it('never gates the PTC transport, whatever the switches say', () => {
-    const off = resolveRoster({ enabled: false, tools: {} }, false, false)
+    const off = resolveRoster({ enabled: false, tools: {} }, false)
     expect(toolVisible(off, 'run_code')).toBe(true)
   })
 
   it('compares rosters by effect, not by key order or redundant entries', () => {
-    const base = resolveRoster({ enabled: true, tools: { bash: true } }, true, false)
-    expect(sameRoster(base, resolveRoster({ enabled: true, tools: {} }, true, false))).toBe(true)
-    expect(sameRoster(base, resolveRoster({ enabled: true, tools: { bash: false } }, true, false))).toBe(false)
-    expect(sameRoster(base, resolveRoster({ enabled: true, tools: {} }, false, false))).toBe(false)
+    const base = resolveRoster({ enabled: true, tools: { bash: true } }, true)
+    expect(sameRoster(base, resolveRoster({ enabled: true, tools: {} }, true))).toBe(true)
+    expect(sameRoster(base, resolveRoster({ enabled: true, tools: { bash: false } }, true))).toBe(false)
+    expect(sameRoster(base, resolveRoster({ enabled: true, tools: {} }, false))).toBe(false)
   })
 })
 
 describe('a hidden tool loses its schema and its guidance together', () => {
   it('names the hidden tools and the sections that belong to them', () => {
-    const roster = resolveRoster({ enabled: true, tools: { bash: false } }, true, false)
+    const roster = resolveRoster({ enabled: true, tools: { bash: false } }, true)
     const hidden = hiddenToolNames(roster, ['read', 'bash', 'kernel'])
     expect([...hidden]).toEqual(['bash'])
 
@@ -148,7 +127,7 @@ describe('a hidden tool loses its schema and its guidance together', () => {
   })
 
   it('matches a dashed section against an underscored tool name', () => {
-    const roster = resolveRoster({ enabled: true, tools: { web_fetch: false } }, true, false)
+    const roster = resolveRoster({ enabled: true, tools: { web_fetch: false } }, true)
     const hidden = hiddenToolNames(roster, ['web-fetch'])
     expect(sectionHidden(hidden, 'tool:web_fetch')).toBe(true)
   })
@@ -193,34 +172,6 @@ describe('visibility is not enforcement', () => {
   })
 })
 
-describe('the acting surface follows the rlm switch', () => {
-  it('withdraws the kernel tool and offers the engine when RLM is on at boot', async () => {
-    const { ctx } = await mount({ rlm: true })
-    const assembly = await assemble(ctx)
-    expect(assembly.tools).toContain('rlm')
-    expect(assembly.tools).not.toContain('kernel')
-    expect(await run(ctx, 'kernel')).toContain('switched off in settings')
-    expect(await run(ctx, 'rlm')).toBe('ran:rlm')
-    await ctx.fiber.dispose()
-  })
-
-  it('swaps the two surfaces at the turn boundary when the switch is flipped', async () => {
-    const { ctx, live } = await mount()
-    expect(await run(ctx, 'kernel')).toBe('ran:kernel')
-    expect(await run(ctx, 'rlm')).toContain('switched off in settings')
-
-    await live.update({ rlm: true })
-    await ctx.parallel('agent/turn-stopping', { agent: subject, turn: 1, signal })
-
-    expect(await run(ctx, 'kernel')).toContain('switched off in settings')
-    expect(await run(ctx, 'rlm')).toBe('ran:rlm')
-    const assembly = await assemble(ctx)
-    expect(assembly.tools).toContain('rlm')
-    expect(assembly.tools).not.toContain('kernel')
-    await ctx.fiber.dispose()
-  })
-})
-
 describe('a change lands when the model stops generating', () => {
   it('holds a mid-turn toggle back until the turn boundary', async () => {
     const { ctx, live } = await mount()
@@ -247,12 +198,11 @@ describe('a change lands when the model stops generating', () => {
   })
 
   it('declares every switch as a live field, so Settings edits it without a remount', () => {
-    for (const field of ['kernel', 'rlm', 'enabled', 'tools'] as const) {
+    for (const field of ['kernel', 'enabled', 'tools'] as const) {
       expect(Config.dict?.[field]?.meta.volatile).toBe(true)
     }
     const defaults = Config({})
     expect(defaults.kernel.get()).toBe(true)
-    expect(defaults.rlm.get()).toBe(false)
     expect(defaults.enabled.get()).toBe(true)
     expect(defaults.tools.get()).toEqual({})
   })

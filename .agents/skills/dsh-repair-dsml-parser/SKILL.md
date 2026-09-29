@@ -1,11 +1,11 @@
 ---
 name: dsh-repair-dsml-parser
-description: Use when the DSML tool-call reader (packages/llm/llm-dsml) has stopped dispatching the agent's own calls — tool calls arrive flattened onto one line with their closers stripped, parse as prose, or draw a "no such tool" note; when the agent can no longer use its tools and must hand the operator PowerShell scripts to run instead; or when hardening the reader against a newly observed malformed shape. Covers the script-only emergency posture, tag-literal hygiene, the parser's choke points, the one-directional truncation rule, anchor-checked edits, and the verify-then-restart gate.
+description: Use when the DSML tool-call reader (packages/llm/llm-text-toolcalls) has stopped dispatching the agent's own calls — tool calls arrive flattened onto one line with their closers stripped, parse as prose, or draw a "no such tool" note; when the agent can no longer use its tools and must hand the operator PowerShell scripts to run instead; or when hardening the reader against a newly observed malformed shape. Covers the script-only emergency posture, tag-literal hygiene, the parser's choke points, the one-directional truncation rule, anchor-checked edits, and the verify-then-restart gate.
 ---
 
 # Repairing the DSML parser from inside a broken tool channel
 
-The reader at `packages/llm/llm-dsml` is what turns a model's text-channel tool-call markup into real calls. When it breaks, it breaks the agent that is trying to fix it: the agent's own tool calls are the input to the thing that is broken. This skill is the procedure for getting out of that state.
+The reader at `packages/llm/llm-text-toolcalls` is what turns a model's text-channel tool-call markup into real calls. When it breaks, it breaks the agent that is trying to fix it: the agent's own tool calls are the input to the thing that is broken. This skill is the procedure for getting out of that state.
 
 ## 1. Recognise the symptom
 
@@ -104,20 +104,20 @@ Three habits that follow:
 
 The reader's behaviour is only visible in the built artifact, so a source-level test alone does not prove the fix:
 
-1. **Typecheck** — `npx tsc --noEmit -p packages/llm/llm-dsml/tsconfig.json`. A removed call site leaves an unused private method and `noUnusedLocals` fails on it.
-2. **Tests** — `npx vitest run packages/llm/llm-dsml`. Read the count, not just the exit code; a spec file that failed to load also exits non-zero.
+1. **Typecheck** — `npx tsc --noEmit -p packages/llm/llm-text-toolcalls/tsconfig.json`. A removed call site leaves an unused private method and `noUnusedLocals` fails on it.
+2. **Tests** — `npx vitest run packages/llm/llm-text-toolcalls`. Read the count, not just the exit code; a spec file that failed to load also exits non-zero.
 3. **Build** — `pnpm run build:lib:host`. Let it finish; it takes about forty seconds.
-4. **Probe the built lib** — `node` against `packages/llm/llm-dsml/lib/index.js`. This is the one that matters: it exercises the artifact the harness actually loads, and it reports the dispatch count for the exact shape being fixed.
+4. **Probe the built lib** — `node` against `packages/llm/llm-text-toolcalls/lib/index.js`. This is the one that matters: it exercises the artifact the harness actually loads, and it reports the dispatch count for the exact shape being fixed.
 5. **Negative cases in the probe** — a single truncated invoke stays untouched, a block that kept one closer is left alone, prose is unchanged, and a repaired block names its shape. A positive result with a broken negative is not a fix.
 
 ## 8. The restart is not optional
 
-The harness loads `llm-dsml` once at boot and holds the module graph in memory. `build:lib:host` rewrites files on disk; it cannot reach into the running process.
+The harness loads `llm-text-toolcalls` once at boot and holds the module graph in memory. `build:lib:host` rewrites files on disk; it cannot reach into the running process.
 
 **A green build and a green probe still mean the operator is running the old parser.** Tell them to restart, and tell them how to confirm it took:
 
 ```powershell
-$lib = 'D:\deepseek-kernel-harness\packages\llm\llm-dsml\lib\index.js'
+$lib = 'D:\deepseek-kernel-harness\packages\llm\llm-text-toolcalls\lib\index.js'
 $libTime = (Get-Item $lib).LastWriteTime
 $newest = Get-Process node -ErrorAction SilentlyContinue |
   Sort-Object StartTime -Descending | Select-Object -First 1

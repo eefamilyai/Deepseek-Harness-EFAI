@@ -5,7 +5,8 @@
  */
 
 import type {
-  KernelCellImage, KernelExecuteRequest, KernelExecuteResult, KernelOutcome, KernelProvider,
+  KernelBackgroundPoll, KernelCellImage, KernelExecuteRequest, KernelExecuteResult, KernelOutcome,
+  KernelProvider,
 } from '@deepseek-ai/dsh-kernel'
 import { KernelAbortError, KernelChild, parseControlResult } from './child.ts'
 import type { SeamRequest } from './seam.ts'
@@ -144,8 +145,8 @@ export class KilnKernelProvider implements KernelProvider {
       const child = this.ensureChild()
       // The owning agent's shared session id is the durable-conversation key:
       // one kernel process serves every session, so `remember()`/`recall()`
-      // (and the RLM ctx_write/ctx_read bind path) must be scoped per cell,
-      // exactly like `cwd`. Without a live agent the conversation key is
+      // must be scoped per cell, exactly like `cwd`. Without a live agent the
+      // conversation key is
       // absent and the Python side falls back to standalone behavior.
       const conv = conversationOf(request.agent)
       const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
@@ -159,6 +160,9 @@ export class KilnKernelProvider implements KernelProvider {
           // checking "did this cell return a picture" reads the field, and an
           // always-present empty array would make that check meaningless.
           ...outcome.images.length > 0 ? { images: outcome.images } : {},
+          // Also absent rather than empty: the field is what tells a caller the
+          // work is still running somewhere it can still be reached.
+          ...outcome.background !== undefined ? { background: outcome.background } : {},
         }
       }
       await this.replace(child)
@@ -181,7 +185,10 @@ export class KilnKernelProvider implements KernelProvider {
     signal?: AbortSignal,
     agentCtx?: KernelExecuteRequest['agentCtx'],
     agent?: KernelExecuteRequest['agent'],
-  ): Promise<{ kind: 'ok'; output: string; images: readonly KernelCellImage[] } | { kind: Exclude<KernelOutcome, 'ok'> }> {
+  ): Promise<
+    | { kind: 'ok'; output: string; images: readonly KernelCellImage[]; background?: { id: number; timeoutMs: number } }
+    | { kind: Exclude<KernelOutcome, 'ok'> }
+  > {
     const prevHandler = child.seamHandler
     child.seamHandler = (seam: SeamRequest): void => {
       void dispatchSeam(agentCtx, agent, seam, signal).then(
@@ -216,6 +223,13 @@ export class KilnKernelProvider implements KernelProvider {
         // restart the kernel and report the loss, so a picture the model was
         // promised is gone along with the namespace that produced it.
         images: frame.images ?? [],
+        // A frame is untrusted input, so the id is only a handle when the same
+        // frame also says the cell detached; a stray number on an ordinary
+        // result must not become a followable job. The secondary budget is the
+        // cell's own stop deadline, so the caller learns how long it has.
+        ...frame.backgrounded === true && typeof frame.backgroundId === 'number'
+          ? { background: { id: frame.backgroundId, timeoutMs: secondaryOf(request) } }
+          : {},
       }
     } catch (reason) {
       return { kind: reason instanceof KernelAbortError ? reason.kind : 'cancelled' }
@@ -236,6 +250,56 @@ export class KilnKernelProvider implements KernelProvider {
     await this.serialize(async () => {
       const child = this.child
       if (child !== undefined) await this.replace(child)
+    })
+  }
+
+  /**
+   * Poll one detached cell through the kernel's control channel.
+   *
+   * The reply is whatever the child last wrote, so every field is checked
+   * before it is believed: a `running` that is not `true` and a `text` that is
+   * not a string both mean the frame did not carry what the caller needs, and
+   * an unrecognized shape is reported as an unknown cell rather than as empty
+   * output — the two are opposite facts about the work.
+   * @param id - the kernel's id for the detached cell.
+   * @returns whether the cell is known, still running, and its drained output.
+   */
+  async pollBackground(id: number): Promise<KernelBackgroundPoll> {
+    const result = await this.control({ cmd: 'bg_poll', bg_id: id })
+    if (typeof result !== 'object' || result === null) return { known: false }
+    const { known, running, status, text } = result as Record<string, unknown>
+    if (known !== true) return { known: false }
+    if (running === true) return { known: true, running: true }
+    return {
+      known: true,
+      running: false,
+      ...typeof status === 'string' ? { status } : {},
+      ...typeof text === 'string' ? { text } : {},
+    }
+  }
+
+  /**
+   * Ask one detached cell to stop. Best-effort by contract: the child raises
+   * the interrupt at a bytecode boundary, so a thread parked in an
+   * uninterruptible call may not stop until its own secondary deadline.
+   * @param id - the kernel's id for the detached cell.
+   */
+  async stopBackground(id: number): Promise<void> {
+    await this.control({ cmd: 'bg_stop', bg_id: id })
+  }
+
+  /**
+   * Send one control request and return its decoded payload.
+   *
+   * Deliberately NOT serialized itself: every caller wraps the call in
+   * {@link serialize}, and nesting the two would queue this request behind the
+   * very task that is awaiting it.
+   */
+  private async control(request: object): Promise<unknown> {
+    return this.serialize(async () => {
+      const child = this.ensureChild()
+      const id = child.sendControl(request)
+      return parseControlResult(await child.nextFrame(id))
     })
   }
 

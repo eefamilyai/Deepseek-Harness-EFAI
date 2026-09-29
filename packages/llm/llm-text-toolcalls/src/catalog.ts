@@ -78,8 +78,8 @@ export const KNOWN_SHAPES: readonly RepairShape[] = [
   },
   {
     id: 'pipe-wrapped-token',
-    saw: 'the provider special tokens, pipe-wrapped DSML',
-    fix: 'the payload is read as a keyword plus attributes and rewritten into the taught tag',
+    saw: 'the provider special tokens, pipe-wrapped DSML, with the DSML word on either side of the pipe run',
+    fix: 'the payload is read as a keyword plus attributes and rewritten into the taught tag, whichever side of the pipes the word sits on',
     example: '<｜｜DSML｜｜ tool_calls>',
   },
   {
@@ -131,12 +131,6 @@ export const KNOWN_SHAPES: readonly RepairShape[] = [
     saw: 'the taught wrapper, whole arguments, an invoke closer between them, and no invoke opener',
     fix: 'each closer bounds one call; the tool is inferred per group when exactly one declared tool owns that group own arguments',
     example: '<tool_calls><parameter name="code">1</parameter></invoke><parameter name="code">2</parameter></invoke></tool_calls>',
-  },
-  {
-    id: 'invoke-closer-as-parameter',
-    saw: 'an argument closed by the invoke closer instead of its own, so the argument never closed',
-    fix: 'the invoke closer at depth one is read as that argument end, and only when exactly one such closer exists and every argument closes',
-    example: '<invoke name="kernel"><parameter name="timeoutMs">60000</invoke>',
   },
   {
     id: 'closer-spam',

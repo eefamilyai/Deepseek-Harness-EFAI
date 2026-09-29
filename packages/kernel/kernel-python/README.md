@@ -52,10 +52,6 @@ tool_help("tools.read")     # one harness tool's schema, as the model sees it
 
 A bare harness name works too (`tool_help("read")`). With no harness attached the harness section says so explicitly rather than appearing empty — that difference is what tells a caller to fall back to the local helpers.
 
-## Relationship to RLM
-
-`kernel-python` also carries the `rlm.*` seam — the `ctx_write` / `answer` / `rlm_dump()` primitives — that `@deepseek-ai/dsh-kernel-rlm-context` reads back. The provider supplies the primitives; the read-back into agent context is a separate package.
-
 ## Model Experience
 
 Indirectly, through `@deepseek-ai/dsh-tool-kernel`, which renders a cell's captured output for the model.

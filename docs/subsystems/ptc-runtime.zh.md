@@ -242,6 +242,26 @@ registerProvider(provider: KernelProvider): () => void
 async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>
 
 /**
+ * Poll one backgrounded cell through the resolved backend.
+ *
+ * A backend that cannot follow a detached cell reports it as unknown rather
+ * than throwing: the cell is gone from that backend's point of view, which is
+ * exactly what an unknown poll means, and a caller polling in a loop must not
+ * have to tell "finished" apart from "this backend never had it".
+ * @param id - the id from {@link KernelExecuteResult.background}.
+ * @returns whether the cell is known, still running, and its drained output.
+ */
+async pollBackground(id: number): Promise<KernelBackgroundPoll>
+
+/**
+ * Ask one backgrounded cell to stop through the resolved backend. A backend
+ * without the capability is a no-op: the cell will still end at its own
+ * deadline, so refusing here would only lose the request.
+ * @param id - the id from {@link KernelExecuteResult.background}.
+ */
+async stopBackground(id: number): Promise<void>
+
+/**
  * Discard the namespace and start a fresh kernel.
  * @returns once the replacement kernel is ready.
  */

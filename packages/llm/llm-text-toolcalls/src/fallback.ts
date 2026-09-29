@@ -11,7 +11,7 @@
  * system prompt (the same format statement Kiln teaches), the tool calls and
  * results already in the history rendered as text, and no `tools` field; the
  * reader turns the text calls in the reply into real tool calls.
- * @module @deepseek-ai/dsh-llm-dsml/fallback
+ * @module @deepseek-ai/dsh-llm-text-toolcalls/fallback
  */
 
 import type { ContentBlock, GenerateOptions, LlmFailure, RequestMessage, StreamChunk } from '@deepseek-ai/dsh-llm'

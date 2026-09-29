@@ -12,9 +12,9 @@
 # by construction. The fork's switches are live config fields of the rows that
 # enforce them instead, edited from Settings by row id:
 #
-#   tool-roster: kernel / rlm / enabled / tools — filters the assembled prompt
+#   tool-roster: kernel / enabled / tools — filters the assembled prompt
 #                                   and guards execution, per turn.
-#   agent-memory-mode: enabled    — mounts and unmounts the engine itself,
+#   agent-memory: enabled         — mounts and unmounts the engine itself,
 #                                   because the engine writes to disk and hiding
 #                                   a tool would not stop it.
 #   kernel-python: browserWindow  — read when the kernel process starts.
@@ -43,8 +43,8 @@
     # and forwards everything else exactly as the adapter emitted it. Only an
     # adapter with no native tool channel (llm-kiln) TEACHES this format, and
     # only that adapter corrects the model about it.
-    - id: llm-dsml
-      name: '@deepseek-ai/dsh-llm-dsml'
+    - id: llm-text-toolcalls
+      name: '@deepseek-ai/dsh-llm-text-toolcalls'
       config:
         reasoningRecovery: true
         excludeProviders: []
@@ -122,33 +122,18 @@
     # The kernel tool stays on the host plane in every profile. The tools
     # registry is layered, so a host registration reaches every preset agent's
     # catalog, and each call resolves its own agent (`exec.agent`), so one row
-    # serves every session. `tool-roster` decides per turn which of `kernel`
-    # and `rlm` the model actually sees.
+    # serves every session. `tool-roster` decides per turn whether the model
+    # sees the `kernel` tool at all.
     - id: tool-kernel
       name: '@deepseek-ai/dsh-tool-kernel'
       config:
         timeoutMs: 180000
 
-    # RLM context-as-variable read-back: an async system-prompt/assemble
-    # listener that reads the live kernel `answer`/binds via ctx.kernel and
-    # contributes them as runtime context the agent loop already renders. The
-    # RLM engine itself reads `parseRlmDump` from this same package.
-    - id: kernel-rlm-context
-      name: '@deepseek-ai/dsh-kernel-rlm-context'
-
-    # The engine mounts unconditionally and publishes `ctx.rlm` plus the `rlm`
-    # tool. Which of the two acting surfaces the model is offered is the
-    # roster's decision, taken per turn: `rlm` when its `rlm` switch is on,
-    # `kernel` otherwise, and neither when its `kernel` switch is off — the
-    # engine runs on the same seam, so kernel-off withdraws both.
-    - id: rlm
-      name: '@deepseek-ai/dsh-rlm'
-
     # The memory switch AND its mount: the engine observes every tool result and
     # writes evidence to disk, so its off position has to be "not running",
     # which this row's plugin decides live rather than at boot.
-    - id: agent-memory-mode
-      name: '@deepseek-ai/dsh-agent-memory-mode'
+    - id: agent-memory
+      name: '@deepseek-ai/dsh-agent-memory'
       config:
         enabled: false
 
@@ -186,8 +171,8 @@
     - id: web-browser
       name: '@deepseek-ai/dsh-web-browser'
 
-    # The runtime roster. It owns the kernel, RLM, and conventional-tool
-    # switches as live config fields, and the turn boundary that holds a change
-    # back until the model stops generating.
+    # The runtime roster. It owns the kernel and conventional-tool switches as
+    # live config fields, and the turn boundary that holds a change back until
+    # the model stops generating.
     - id: tool-roster
-      name: '@deepseek-ai/dsh-roster'
+      name: '@deepseek-ai/dsh-tool-roster'

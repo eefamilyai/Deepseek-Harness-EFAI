@@ -13,13 +13,20 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { KernelExecuteRequest, KernelExecuteResult, KernelProvider } from './types.ts'
+import type {
+  KernelBackgroundPoll,
+  KernelExecuteRequest,
+  KernelExecuteResult,
+  KernelProvider,
+} from './types.ts'
 import { KernelError } from './types.ts'
 
 export { KernelError } from './types.ts'
 export type {
   ImageMediaType,
   KernelAgent,
+  KernelBackground,
+  KernelBackgroundPoll,
   KernelCellImage,
   KernelErrorCode,
   KernelExecuteRequest,
@@ -125,6 +132,32 @@ export class KernelRuntime extends Service {
       // (fs/shell/web/…) through the same request the tool layer already fills.
       ...request.agentCtx !== undefined ? { agentCtx: request.agentCtx } : {},
     }, signal)
+  }
+
+  /**
+   * Poll one backgrounded cell through the resolved backend.
+   *
+   * A backend that cannot follow a detached cell reports it as unknown rather
+   * than throwing: the cell is gone from that backend's point of view, which is
+   * exactly what an unknown poll means, and a caller polling in a loop must not
+   * have to tell "finished" apart from "this backend never had it".
+   * @param id - the id from {@link KernelExecuteResult.background}.
+   * @returns whether the cell is known, still running, and its drained output.
+   */
+  async pollBackground(id: number): Promise<KernelBackgroundPoll> {
+    const poll = this.resolve().pollBackground
+    return poll === undefined ? { known: false } : poll.call(this.resolve(), id)
+  }
+
+  /**
+   * Ask one backgrounded cell to stop through the resolved backend. A backend
+   * without the capability is a no-op: the cell will still end at its own
+   * deadline, so refusing here would only lose the request.
+   * @param id - the id from {@link KernelExecuteResult.background}.
+   */
+  async stopBackground(id: number): Promise<void> {
+    const stop = this.resolve().stopBackground
+    if (stop !== undefined) await stop.call(this.resolve(), id)
   }
 
   /**

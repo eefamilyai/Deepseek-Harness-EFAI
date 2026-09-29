@@ -844,6 +844,9 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   KernelProvider: 'kernel backend contract is owned by packages/kernel/kernel/src/types.ts',
   KernelExecuteRequest: 'kernel seam input is owned by packages/kernel/kernel/src/types.ts',
   KernelExecuteResult: 'kernel seam result is owned by packages/kernel/kernel/src/types.ts',
+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the fork's kernel provider exposes
+  // background cell polling, so the projector must classify the poll result beside the other kernel seam types.
+  KernelBackgroundPoll: 'kernel background poll result is owned by packages/kernel/kernel/src/types.ts',
   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',

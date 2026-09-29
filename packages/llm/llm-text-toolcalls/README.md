@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-llm-dsml
+# @deepseek-ai/dsh-llm-text-toolcalls
 
 The **text-channel tool-call reader**, for every provider and every model.
 
@@ -52,8 +52,8 @@ The pass answers that refusal instead of forwarding it. It sends the request aga
 ## Composition
 
 ```yaml
-- id: llm-dsml
-  name: '@deepseek-ai/dsh-llm-dsml'
+- id: llm-text-toolcalls
+  name: '@deepseek-ai/dsh-llm-text-toolcalls'
   config:
     reasoningRecovery: true   # run a call the model left at the end of its thinking
     excludeProviders: []      # route names to leave untouched

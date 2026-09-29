@@ -22,7 +22,7 @@
  * neither repeat nor be reused, so this pass mints its OWN indices and maps the
  * provider's onto them rather than trying to edit them in place.
  *
- * @module @deepseek-ai/dsh-llm-dsml/stream
+ * @module @deepseek-ai/dsh-llm-text-toolcalls/stream
  */
 
 import { randomUUID } from 'node:crypto'

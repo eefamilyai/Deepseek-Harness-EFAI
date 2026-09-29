@@ -23,8 +23,26 @@ import type { AttachmentStore, ImageAttachmentRef, ImageMediaType } from '@deeps
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, GenericResultView, ToolResult } from '@deepseek-ai/dsh-tools'
-import type { KernelCellImage } from '@deepseek-ai/dsh-kernel'
+import type { KernelBackground, KernelBackgroundPoll, KernelCellImage } from '@deepseek-ai/dsh-kernel'
+import type { JobHandle, JobHooks, JobId, JobOutcome, JobSpec } from '@deepseek-ai/dsh-jobs'
+import type {} from '@deepseek-ai/dsh-jobs/view'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+
+/**
+ * Name the `kernel` producer kind in the background-job registry.
+ *
+ * `@deepseek-ai/dsh-jobs` is upstream-owned, so the fork cannot add its own kind
+ * there. The seam documents declaration merging as the way a producer names
+ * itself, and this fork-owned package is where the `kernel` producer lives: the
+ * merge rides this package's own declarations, so a composition that loads this
+ * tool beside the registry typechecks without touching either upstream file.
+ */
+declare module '@deepseek-ai/dsh-jobs/view' {
+  interface JobKindMap {
+    /** A Python cell that overran its primary budget and kept running. */
+    kernel: 'kernel'
+  }
+}
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-kernel'
@@ -65,6 +83,15 @@ export const DEFAULT_MAX_TIMEOUT_MS = 600_000
  */
 export const DEFAULT_BACKGROUND_TIMEOUT_MS = 1_800_000
 
+/**
+ * Default interval (ms) between polls of a cell that outlived its primary
+ * budget. A poll is a control round-trip through the kernel's serialized queue,
+ * so this is deliberately coarser than any interactive cadence: the cell is a
+ * long job, and a tighter loop would spend the queue on asking rather than on
+ * running.
+ */
+export const DEFAULT_BACKGROUND_POLL_MS = 1_000
+
 /** Plugin config: the per-cell budget and the output cap. */
 export interface Config {
   /** PRIMARY cooperative budget (ms) for one cell; on expiry the cell backgrounds. Defaults to 180000. */
@@ -75,6 +102,8 @@ export interface Config {
   maxTimeoutMs?: number
   /** SECONDARY budget (ms): when a backgrounded cell is force-stopped. Defaults to 1800000. */
   backgroundTimeoutMs?: number
+  /** Interval (ms) between polls of a cell that outlived its primary budget. Defaults to 1000. */
+  backgroundPollMs?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -82,6 +111,7 @@ export const Config: z<Config> = z.object({
   maxOutputChars: z.number().step(1).min(1).default(DEFAULT_MAX_OUTPUT_CHARS),
   maxTimeoutMs: z.number().step(1).min(1).default(DEFAULT_MAX_TIMEOUT_MS),
   backgroundTimeoutMs: z.number().step(1).min(1).default(DEFAULT_BACKGROUND_TIMEOUT_MS),
+  backgroundPollMs: z.number().step(1).min(1).default(DEFAULT_BACKGROUND_POLL_MS),
 })
 
 /** Complete config after schemastery applies every field default. */
@@ -265,6 +295,15 @@ export function formatImageNote(image: KernelValueImage): string {
  */
 export function kernelContent(value: KernelOutcomeValue): ContentBlock[] {
   const blocks: ContentBlock[] = [{ type: 'text', text: formatKernelOutput(value.output) }]
+  // A cell that outlived its primary budget is still running, and the id below
+  // is the only handle on it. Without the line the model reads a notice that
+  // work continues and has nothing to collect it with.
+  if (value.jobId !== undefined) {
+    blocks.push({
+      type: 'text',
+      text: `RUNNING IN THE BACKGROUND: background job ${value.jobId}. Collect its output with job_output.`,
+    })
+  }
   for (const note of value.imageNotes) {
     blocks.push({ type: 'text', text: note })
   }
@@ -282,6 +321,12 @@ export interface KernelOutcomeValue {
   restarted: boolean
   images: KernelValueImage[]
   imageNotes: string[]
+  /**
+   * Background-job id, present when the cell overran its primary budget and the
+   * registry accepted the job. Absent for an ordinary cell, and also absent when
+   * the cell detached but no job could be started — the output text says so.
+   */
+  jobId?: string
 }
 
 /**
@@ -346,6 +391,111 @@ export function formatKernelOutput(output: string): string {
       + ' result you did not see.)'
   }
   return output
+}
+
+/** One line naming the cell in the background job's model-facing label. */
+export function cellLabel(code: string): string {
+  const [first = ''] = code.split('\n')
+  const line = first.trim().length === 0 ? 'python cell' : first.trim()
+  return line.length <= 120 ? line : `${line.slice(0, 119)}\u2026`
+}
+
+/**
+ * Attach a cell that outlived its primary budget to the background-job
+ * registry, so its output stays reachable with `job_output`.
+ *
+ * The kernel keeps the cell running either way; what this buys is a durable id
+ * for it. Without one the output arrives only prepended to some later
+ * foreground cell's frame — reachable, but tied to whichever cell happens to
+ * run next rather than to the work that produced it.
+ *
+ * Best-effort by contract: a registry that refuses the job (no controller
+ * serving this owner, or the per-owner limit) must not swallow the backgrounded
+ * notice the kernel already produced, so a refusal comes back as a note rather
+ * than a throw.
+ *
+ * No pull source is declared. The registry's pump cadence is fixed and would
+ * poll the kernel at a rate its serialized queue cannot use; this owns its own
+ * timer and appends each drained chunk instead.
+ * @param ctx - the plugin context, read for an optionally-present job registry.
+ * @param background - the handle the kernel returned for the detached cell.
+ * @param code - the cell source, used as the job label.
+ * @param pollMs - interval between polls of the detached cell.
+ * @param owner - the owning session, when the call carried an agent.
+ * @returns the registry-issued job id, or a note saying why there is none.
+ */
+export function attachBackgroundCell(
+  ctx: Context,
+  background: KernelBackground,
+  code: string,
+  pollMs: number,
+  owner: JobSpec['owner'],
+): { id: JobId } | { note: string } {
+  // Optional on purpose: the kernel tool must still run in a composition that
+  // loads no job registry, so this looks the service up rather than requiring it.
+  const jobs = ctx.get('jobs')
+  if (jobs === undefined) return { note: 'no background-job registry is loaded in this composition' }
+  try {
+    const id = jobs.start({
+      kind: 'kernel',
+      label: cellLabel(code),
+      ...owner === undefined ? {} : { owner },
+      run(handle: JobHandle): JobHooks {
+        let settled = false
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let finish!: (outcome: JobOutcome) => void
+        const done = new Promise<JobOutcome>((resolve) => { finish = resolve })
+        const settle = (outcome: JobOutcome): void => {
+          if (settled) return
+          settled = true
+          if (timer !== undefined) clearTimeout(timer)
+          finish(outcome)
+        }
+        const tick = async (): Promise<void> => {
+          if (settled) return
+          let poll: KernelBackgroundPoll
+          try {
+            poll = await ctx.kernel.pollBackground(background.id)
+          } catch (error: unknown) {
+            settle({ status: 'failed', detail: error instanceof Error ? error.message : String(error) })
+            return
+          }
+          if (settled) return
+          // An id the kernel no longer holds is terminal, never a retry: the
+          // cell finished and was drained, or the kernel restarted and lost it.
+          if (!poll.known) {
+            settle({ status: 'failed', detail: 'the kernel no longer holds this cell' })
+            return
+          }
+          if (poll.running === true) {
+            timer = setTimeout(() => { void tick() }, pollMs)
+            return
+          }
+          if (poll.text !== undefined && poll.text.length > 0) handle.append(poll.text)
+          const stopped = poll.status !== undefined && poll.status !== 'finished'
+          settle({
+            status: stopped ? 'killed' : 'completed',
+            ...poll.status === undefined ? {} : { detail: poll.status },
+          })
+        }
+        handle.updateProgress(`running in the kernel (cell #${background.id})`)
+        timer = setTimeout(() => { void tick() }, pollMs)
+        return {
+          cancel(reason?: string): void {
+            // Settle first: the job is done from the registry's point of view
+            // the moment the model asks. The kernel's own interrupt is
+            // best-effort, so waiting on it could hold the ring open forever.
+            settle({ status: 'killed', ...reason === undefined ? {} : { detail: reason } })
+            void ctx.kernel.stopBackground(background.id)
+          },
+          done,
+        }
+      },
+    })
+    return { id }
+  } catch (error: unknown) {
+    return { note: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 /** Pending-call presentation: a generic card holding the cell source. */
@@ -503,6 +653,7 @@ export function apply(ctx: Context, config: Config): void {
           restarted: { type: 'boolean', required: true },
           images: { type: 'array', items: IMAGE_VALUE_SCHEMA, required: true },
           imageNotes: { type: 'array', items: { type: 'string' }, required: true },
+          jobId: { type: 'string' },
         },
       },
       render: (_args, value) => kernelContent(value),
@@ -539,12 +690,23 @@ export function apply(ctx: Context, config: Config): void {
       // replay as a broken picture for the rest of the session.
       const { refs, notes } = await admitCellImages(ctx.attachments, result.images ?? [], exec.signal)
       const images = refs.map((ref, index) => valueImageFrom(ref, result.images?.[index]?.note))
+      // A cell that overran its primary budget is still running. Attaching it to
+      // a background job is what keeps its output collectable after this turn;
+      // a refusal becomes a note beside the cell's own output, never a lost cell.
+      const attached = result.background === undefined
+        ? undefined
+        : attachBackgroundCell(ctx, result.background, input.code, resolved.backgroundPollMs, exec.agent?.id)
+      const refusal = attached !== undefined && 'note' in attached ? attached.note : undefined
+      const body = refusal === undefined
+        ? result.output
+        : `${result.output}\n\nNOTE: this cell is still running in the kernel, but it could not be attached to a background job (${refusal}); its output will arrive with a later cell.`
       return {
-        output: capOutput(result.output, resolved.maxOutputChars),
+        output: capOutput(body, resolved.maxOutputChars),
         outcome: result.outcome,
         restarted: result.restarted,
         images,
         imageNotes: notes,
+        ...attached !== undefined && 'id' in attached ? { jobId: attached.id } : {},
       }
     },
     presentCall: presentKernelCall,

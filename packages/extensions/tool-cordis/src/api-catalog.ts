@@ -1355,6 +1355,17 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the captured output and how the cell ended.',
       },
       {
+        signature: 'async pollBackground(id: number): Promise<KernelBackgroundPoll>',
+        description: 'Poll one backgrounded cell through the resolved backend.\n\nA backend that cannot follow a detached cell reports it as unknown rather than throwing: the cell is gone from that backend\'s point of view, which is exactly what an unknown poll means, and a caller polling in a loop must not have to tell "finished" apart from "this backend never had it".',
+        parameters: [{ name: 'id', description: 'the id from {@link KernelExecuteResult.background}.' }],
+        returns: 'whether the cell is known, still running, and its drained output.',
+      },
+      {
+        signature: 'async stopBackground(id: number): Promise<void>',
+        description: 'Ask one backgrounded cell to stop through the resolved backend. A backend without the capability is a no-op: the cell will still end at its own deadline, so refusing here would only lose the request.',
+        parameters: [{ name: 'id', description: 'the id from {@link KernelExecuteResult.background}.' }],
+      },
+      {
         signature: 'async restart(): Promise<void>',
         description: 'Discard the namespace and start a fresh kernel.',
         parameters: [],
@@ -5417,12 +5428,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface KernelAgent {\n    readonly id: string;\n    readonly session: {\n        readonly id: string;\n    };\n}',
   },
   {
+    name: 'KernelBackground',
+    declaration: 'export interface KernelBackground {\n    readonly id: number;\n    readonly timeoutMs: number;\n}',
+  },
+  {
+    name: 'KernelBackgroundPoll',
+    declaration: 'export interface KernelBackgroundPoll {\n    readonly known: boolean;\n    readonly running?: boolean;\n    readonly status?: string;\n    readonly text?: string;\n}',
+  },
+  {
     name: 'KernelExecuteRequest',
     declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n    readonly agent?: KernelAgent;\n}',
   },
   {
     name: 'KernelExecuteResult',
-    declaration: 'export interface KernelExecuteResult {\n    readonly output: string;\n    readonly outcome: KernelOutcome;\n    readonly restarted: boolean;\n    readonly images?: readonly KernelCellImage[];\n}',
+    declaration: 'export interface KernelExecuteResult {\n    readonly output: string;\n    readonly outcome: KernelOutcome;\n    readonly restarted: boolean;\n    readonly images?: readonly KernelCellImage[];\n    readonly background?: KernelBackground;\n}',
   },
   {
     name: 'KernelOutcome',
@@ -5430,7 +5449,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KernelProvider',
-    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n    busy?(): boolean;\n}',
+    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n    busy?(): boolean;\n    pollBackground?(id: number): Promise<KernelBackgroundPoll>;\n    stopBackground?(id: number): Promise<void>;\n}',
   },
   {
     name: 'KvFacet',

@@ -1,18 +1,16 @@
 # @deepseek-ai/dsh-client-ui-settings-tools
 
-The **Tools** settings section: the three switches upstream's presets cannot
+The **Tools** settings section: the two switches upstream's presets cannot
 express, rendered with the classic sliding-circle `Switch` primitive.
 
 ## What it renders
 
 1. **Kernel** — the persistent Python namespace.
-2. **RLM engine** — the recursive engine in place of the standalone kernel
-   tool; disabled while the kernel is off, because the engine runs on it.
-3. **Conventional tools** — the category master switch, which leaves the kernel
+2. **Conventional tools** — the category master switch, which leaves the kernel
    as the only way to act.
 
-All three are live fields of the `tool-roster` row (`kernel`, `rlm`,
-`enabled`), read and written through that row's config form
+Both are live fields of the `tool-roster` row (`kernel`, `enabled`), read and
+written through that row's config form
 (`ctx.configForms.get('tool-roster')`). The row keeps them off upstream's
 generated settings pages, so this section is their one surface.
 

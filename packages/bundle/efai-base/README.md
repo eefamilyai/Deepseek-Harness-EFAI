@@ -1,5 +1,5 @@
 ---
-description: "The fork's shared rows as a profile bundle: the identity opener, Kiln routes, the kernel and RLM stack, durable memory, the browser, and the runtime tool roster, stacked over dsh-base."
+description: "The fork's shared rows as a profile bundle: the identity opener, Kiln routes, the kernel stack, durable memory, the browser, and the runtime tool roster, stacked over dsh-base."
 kind: "package-reference"
 ---
 
@@ -26,14 +26,14 @@ Every package a row names must be a `dependencies` entry of this manifest. The p
 <a id="what-it-mounts"></a>
 ## What it mounts
 
-Rows grouped by subject: the identity opener (`efai-identity`), the LLM layer (`llm-dsml`, `llm-kiln`), context economy and post-compaction grounding (`output-masking`, `session-recovery-context`), the acting surface (`kernel`, `kernel-python`, `tool-kernel`, `kernel-rlm-context`, `rlm`), durable memory (`agent-memory-mode`), the session-info command, upstream's `tool-str-replace-editor`, the self-hosted browser (`web-browser`), and the runtime roster (`tool-roster`), whose live fields carry the kernel and RLM switches.
+Rows grouped by subject: the identity opener (`efai-identity`), the LLM layer (`llm-text-toolcalls`, `llm-kiln`), context economy and post-compaction grounding (`output-masking`, `session-recovery-context`), the acting surface (`kernel`, `kernel-python`, `tool-kernel`), durable memory (`agent-memory`), the session-info command, upstream's `tool-str-replace-editor`, the self-hosted browser (`web-browser`), and the runtime roster (`tool-roster`), whose live fields carry the kernel and conventional-tool switches.
 
 The file itself documents each row. Read it rather than this list, which cannot stay current on its own.
 
 <a id="why-no-row-is-gated-on-a-setting"></a>
 ## Why no row is gated on a setting
 
-A Loader `disabled: !!js …` expression is evaluated once at boot. Gating a row on a settings flag therefore makes that flag a restart, and unmounts the very plugin that would publish the switch in its off position. The three switches this fork ships decide at runtime instead: `tool-roster` filters the assembled prompt and guards execution per turn for `kernel.enabled` and `rlm.enabled`, and `agent-memory-mode` mounts and unmounts the memory engine itself, because that engine writes to disk and a hidden tool would not stop it.
+A Loader `disabled: !!js …` expression is evaluated once at boot. Gating a row on a settings flag therefore makes that flag a restart, and unmounts the very plugin that would publish the switch in its off position. The two switches this fork ships decide at runtime instead: `tool-roster` filters the assembled prompt and guards execution per turn for `kernel.enabled` and the conventional-tool switches, and `agent-memory` mounts and unmounts the memory engine itself, because that engine writes to disk and a hidden tool would not stop it.
 
 <a id="dev-note"></a>
 ## Dev Note

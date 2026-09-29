@@ -1,7 +1,7 @@
 /**
- * The Tools settings section: the kernel, RLM, and conventional-tool switches.
+ * The Tools settings section: the kernel and conventional-tool switches.
  *
- * All three are live fields of the `tool-roster` row, read and written through
+ * Both are live fields of the `tool-roster` row, read and written through
  * that row's config form. Choosing individual tools for an agent is the preset
  * editor's job, so this section only carries what a preset cannot express: the
  * kernel lives on the host plane in every preset, and the conventional-tools
@@ -22,8 +22,6 @@ import css from './ToolsSection.module.css'
 export interface RosterFields {
   /** Whether the kernel tool is available. */
   kernel?: boolean
-  /** Whether the RLM engine replaces the standalone kernel tool. */
-  rlm?: boolean
   /** Whether the conventional tool category is available. */
   enabled?: boolean
 }
@@ -31,7 +29,6 @@ export interface RosterFields {
 /** The copy each switch renders, keyed by the field it writes. */
 const ROW_COPY = {
   kernel: { label: 'tools.kernel.label', hint: 'tools.kernel.hint' },
-  rlm: { label: 'tools.rlm.label', hint: 'tools.rlm.hint' },
   enabled: { label: 'tools.category.label', hint: 'tools.category.hint' },
 } as const satisfies Record<keyof RosterFields, { label: ToolsKey; hint: ToolsKey }>
 
@@ -65,7 +62,6 @@ export function ToolsSection({ t, form }: ToolsSectionComponentProps) {
   const value = snapshot.value
   const ready = snapshot.status === 'ready' && value !== undefined
   const kernelOn = value?.kernel ?? true
-  const rlmOn = value?.rlm ?? false
   const categoryOn = value?.enabled ?? true
   const busy = pending || !ready || !snapshot.writable
 
@@ -93,7 +89,6 @@ export function ToolsSection({ t, form }: ToolsSectionComponentProps) {
 
       <div className={css.group}>
         {row('kernel', kernelOn, busy)}
-        {row('rlm', rlmOn, busy || !kernelOn)}
         {row('enabled', categoryOn, busy)}
       </div>
 

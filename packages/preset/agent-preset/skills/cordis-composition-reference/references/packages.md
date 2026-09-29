@@ -15,7 +15,6 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-agent-memory` | yes | Durable, cache-friendly agent memory: a bounded prompt index plus on-disk evidence recalled by ref |
-| `@deepseek-ai/dsh-agent-memory-mode` | yes | The agent-memory on/off switch: one setting deciding whether the durable memory engine mounts |
 
 ## api
 
@@ -291,9 +290,8 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-kernel` | yes | Persistent Python kernel capability seam (ctx.kernel) for the DeepSeek Harness |
 | `@deepseek-ai/dsh-kernel-python` | yes | Kiln-backed persistent Python kernel provider for the DeepSeek Harness kernel seam (ctx.kernel) |
-| `@deepseek-ai/dsh-kernel-rlm-context` | yes | RLM context-as-variable agent-loop seam: reads the Kiln kernel answer/binds and contributes them as runtime context (local overlay) |
-| `@deepseek-ai/dsh-roster` | yes | Runtime tool roster: which tools the model may see and call, decided per turn instead of at boot |
 | `@deepseek-ai/dsh-tool-kernel` | yes | Model-facing kernel tool: run Python in a persistent namespace over the DeepSeek Harness kernel seam (ctx.kernel) |
+| `@deepseek-ai/dsh-tool-roster` | yes | Runtime tool roster: which tools the model may see and call, decided per turn instead of at boot |
 
 ## llm
 
@@ -302,10 +300,10 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-deepseek-llm-api-extensions` | no | Additive request-field registry for the official DeepSeek LLM API adapter |
 | `@deepseek-ai/dsh-llm` | no | Provider-neutral LLM service interface for the DeepSeek Harness |
 | `@deepseek-ai/dsh-llm-deepseek` | yes | DeepSeek Messages adapter |
-| `@deepseek-ai/dsh-llm-dsml` | yes | Provider-neutral DSML tool-call reader: parses text-channel tool calls out of any adapter's stream for the DeepSeek Harness |
 | `@deepseek-ai/dsh-llm-kiln` | yes | Kiln multi-provider LLM adapter (16 presets plus ds_direct, DeepSeek's free web session) for the DeepSeek Harness |
 | `@deepseek-ai/dsh-llm-pi-ai` | yes | pi-ai-backed DeepSeek adapter for the DeepSeek Harness LLM seam (design-verification twin of dsh-llm-deepseek) |
 | `@deepseek-ai/dsh-llm-retry` | yes | Provider-routed LLM request retry policy for the DeepSeek Harness |
+| `@deepseek-ai/dsh-llm-text-toolcalls` | yes | Provider-neutral DSML tool-call reader: parses text-channel tool calls out of any adapter's stream for the DeepSeek Harness |
 | `@deepseek-ai/dsh-plugin-package-inventory-deepseek` | yes | Active Loader-backed plugin package inventory for official DeepSeek LLM API requests |
 | `@deepseek-ai/dsh-token-meter` | yes | Replay-aware token measurement service (ctx.tokenMeter) for the DeepSeek Harness |
 | `@deepseek-ai/dsh-token-usage-lifetime` | no | Lifetime token-usage projection: what a session has spent since it began, across every compaction |
@@ -344,12 +342,6 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-ptc-runtime-node` | yes | Sandboxed Node process implementation of the DeepSeek Harness PTC execution capability |
-
-## rlm
-
-| Package | Config | Description |
-|---|---|---|
-| `@deepseek-ai/dsh-rlm` | yes | First-party Recursive Language Model engine: a recursive loop driving the harness LLM and the persistent Python kernel as a REPL |
 
 ## runtime-diagnostics
 

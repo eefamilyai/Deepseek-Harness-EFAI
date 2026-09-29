@@ -1,4 +1,4 @@
-# @deepseek-ai/dsh-roster
+# @deepseek-ai/dsh-tool-roster
 
 The **runtime tool roster**: which tools the model may see and call, decided per
 turn instead of once at boot.
@@ -7,7 +7,7 @@ Two independent categories, both live config fields of this row:
 
 | Category | Field | What it owns |
 |---|---|---|
-| Kernel | `kernel`, `rlm` | the acting surface over the persistent Python namespace: the `kernel` tool, or the `rlm` engine in its place |
+| Kernel | `kernel` | the acting surface over the persistent Python namespace |
 | Tools | `enabled`, `tools.<name>` | the conventional roster |
 
 Either can be switched off alone, and both can be on at once.
@@ -47,14 +47,13 @@ Every field is declared `.volatile()`, so Settings edits it by this row's id
 without remounting it, then emits `loader/volatile-update`. The plugin re-reads
 its fields into PENDING there; the turn boundary promotes it. The row keeps its
 fields off upstream's generated pages because the fork's Tools section
-(`@deepseek-ai/dsh-client-ui-settings-tools`) renders the three switches.
+(`@deepseek-ai/dsh-client-ui-settings-tools`) renders the switches.
 
 ## Settings
 
 | Field | Default | Applies |
 |---|---|---|
 | `kernel` | `true` | live, at the end of the turn in flight |
-| `rlm` | `false` | live, at the end of the turn in flight |
 | `enabled` | `true` | live, at the end of the turn in flight |
 | `tools.<name>` | `true` | live, at the end of the turn in flight |
 

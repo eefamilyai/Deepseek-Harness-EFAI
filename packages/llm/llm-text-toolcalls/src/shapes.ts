@@ -30,7 +30,7 @@
  *
  * None of the four is a spelling rule, so none needs extending when a new
  * spelling appears. That is the whole point.
- * @module @deepseek-ai/dsh-llm-dsml/shapes
+ * @module @deepseek-ai/dsh-llm-text-toolcalls/shapes
  */
 
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'

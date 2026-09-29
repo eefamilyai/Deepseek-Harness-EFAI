@@ -21,7 +21,7 @@
       "path": "../llm"
     },
     {
-      "path": "../llm-dsml"
+      "path": "../llm-text-toolcalls"
     },
     {
       "path": "../../attachment/attachment"
