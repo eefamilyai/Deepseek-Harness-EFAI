@@ -145,3 +145,34 @@ still the best explanation for "mutes faster than ever", because it multiplied
      exercised it.
   3. Wall-clock spread: these soaks ran in ~20 min. A real day of use at a
      human pace is a different distribution even at the same total volume.
+
+## CONCURRENCY - the pool-from-one-IP axis, partially tested
+
+A third soak drove THREE concurrent clients on the SAME account (`_stress.py`),
+3 workers x 80 turns at ~36 KB/turn:
+
+  * 240 turns, 8,800,533 bytes (8.4 MB), 236 HTTP 200.
+  * ZERO mutes. No biz_code, no auth verdict, no ref-file verdict.
+
+That also exercises the "several logins for one identity inside a second"
+pattern ds_identity warns about: all three workers logged in as the same
+account at start. It did not mute.
+
+One transient was observed and NOT reproduced: two of the three workers died
+at their last turns (79-80) with `TypeError: 'NoneType' object is not
+subscriptable`. Two clean re-runs of the identical config produced zero
+tracebacks, so it is a timing-dependent race, not a deterministic defect. It is
+recorded here rather than fixed, because a fix for a crash that cannot be
+reproduced cannot be verified. Worth a look if it recurs: the completion path,
+under concurrent clients on one account.
+
+## TOTAL EVIDENCE
+
+Across four runs the account absorbed roughly 1000 turns and >11 MB with no
+mute: 400 turns/29 B, 300 turns/8.8 KB (2.6 MB), 240 turns/36 KB concurrent
+(8.4 MB), plus validation and re-runs. The account never muted.
+
+Combined with the eager re-login regression this session removed - which
+multiplied /users/login traffic on exactly the turns DeepSeek was already
+refusing - the working conclusion is that the login storm was the real
+amplifier, and nothing else in the tested request path accumulates.
