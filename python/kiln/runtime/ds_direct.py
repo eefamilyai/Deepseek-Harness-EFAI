@@ -2777,6 +2777,29 @@ def _is_auth_verdict(code, msg):
     return bool(msg) and bool(_AUTH_MSG_RE.search(str(msg)))
 
 
+def _auth_verdict_in(raw_lines):
+    """The bearer-token verdict carried by a raw body, or None.
+
+    `_is_auth_verdict` reads a parsed code/msg pair, but a completion body is raw
+    lines — some SSE-framed (`data: {...}`), some a bare JSON object. Pull the
+    pair out of whichever line parses. Only a parsed OBJECT counts: the raw lines
+    also carry the model's own streamed prose, and matching the message text
+    against those would let an answer that merely discusses a dead token be read
+    as one.
+    """
+    for line in raw_lines or ():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", "ignore")
+        text = line[5:].strip() if isinstance(line, str) and line.startswith("data:") else line
+        try:
+            obj = json.loads(text)
+        except Exception:
+            continue
+        if isinstance(obj, dict) and _is_auth_verdict(obj.get("code"), obj.get("msg")):
+            return str(obj.get("msg") or obj.get("code"))
+    return None
+
+
 def _retry_kind(msg):
     """Classify a DeepSeek error as a transient one worth resending, or not.
 
@@ -3071,6 +3094,7 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
     # A compacted transcript re-primes a fresh chat from the first attempt.
     force_new = compacted
     heal = 0                                       # counts empty/stale self-heals (capped)
+    auth_tries = 0                                 # mid-stream dead-token re-logins (capped)
     busy_tries = 0                                 # "server is busy" retries
     rate_tries = 0                                 # "rate limited" retries (counted apart:
                                                    # they wait 36x longer, so one shared cap
@@ -3213,6 +3237,21 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
             print(f"[ds_direct] server error: {server_error}", file=_sys.stderr, flush=True)
             _persist_cookies(client)
             return
+        # A dead bearer token can surface HERE, not at the pow step: the
+        # completion POST is a separate request, so a token that dies between the
+        # two arrives in this body as
+        # {"code":40003,"msg":"Authorization Failed (invalid token)"}. Classify it
+        # as the credential failure it is — read as an "empty response" it never
+        # runs the re-login retry, which is the same hand-relogin failure the pow
+        # fix removed, one request later.
+        if not yielded:
+            verdict = _auth_verdict_in(raw_sink)
+            if verdict:
+                if auth_tries < 3 and client.login():
+                    auth_tries += 1
+                    continue                  # fresh token — retry the SAME chat
+                raise _AuthExpired(
+                    "DeepSeek refused the bearer token: %s" % verdict)
         # A dead SESSION (not just a stale parent): HTTP 200 whose body says the
         # chat_session_id is unknown — typical right after a token/account swap,
         # when the old session ids no longer resolve. Drop it and open a fresh
