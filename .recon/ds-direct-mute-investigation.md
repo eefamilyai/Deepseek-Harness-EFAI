@@ -1,4 +1,4 @@
-﻿# ds-direct mute-rate investigation
+# ds-direct mute-rate investigation
 
 Job: why the harness's requests to chat.deepseek.com earn account mutes faster
 than a real browser does. Evidence gathered 2026-09-29 with a real desktop
@@ -176,3 +176,33 @@ Combined with the eager re-login regression this session removed - which
 multiplied /users/login traffic on exactly the turns DeepSeek was already
 refusing - the working conclusion is that the login storm was the real
 amplifier, and nothing else in the tested request path accumulates.
+
+## SURFACE 4 - the UPLOAD path had the same nested-verdict defect
+
+Found live while exercising the one axis the soaks never touched: an upload on
+the vision surface returned biz_code 7 "rate limit reached" nested at
+`data.biz_code`, which `upload_file` flattened into "upload returned no file id".
+
+The function read only the TOP-LEVEL `code`, then jumped straight to `biz_data`.
+A nested refusal fell past every check, so a rate limit, a full attachment list,
+and a mute all produced that one identical string. Same dead end the completion
+path already fixed, on a third surface - and it hid a real server-side throttle
+appearing on the endpoint.
+
+Fixed in 7f71823f5f: the upload path reads the nested verdict through the same
+readers and raises the same types (_Muted, _ContextFull, plain RuntimeError with
+no retry), and `upload_files` re-raises an account-level verdict instead of
+swallowing it into a per-file error string. `biz_code 7` gets no tailored remedy
+- per the standing rule it is received and fails, and one sample establishes
+nothing beyond "slow down".
+
+## STATUS OF THE OBJECTIVE
+
+The objective was to drive the account to a mute, diagnose the accumulation, and
+fix it. It did not mute: ~1000 turns and >11 MB across four runs, four separate
+shapes of load. The accumulating cause therefore remains UNCONFIRMED and the
+mute cannot be claimed fixed.
+
+What is established: the login storm is the only accumulation the evidence
+supports, and it is gone; nothing else on the request path drifts over 1000
+turns; and verdict handling is now consistent across chat, vision, and upload.
