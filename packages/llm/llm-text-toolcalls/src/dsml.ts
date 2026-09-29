@@ -723,6 +723,75 @@ const LEADING_PARAMETER = new RegExp(`^\\s*<parameter\\s+(?:${ATTRIBUTE_RUN})>`,
 const BARE_FRAME = /<\/?[_▁]*calls?\s*\/?>/gi
 
 /**
+ * The calls-envelope word, in ANY spelling a model reaches for.
+ *
+ * The taught wrapper has two spellings and this reader knew both. A model that
+ * invents a third -- a plural, a space, or a bare stem -- was writing the same
+ * envelope, and because the vocabulary was a list the tag it invented survived
+ * every rule and reached the user as wire protocol. The envelope word is read
+ * as a FAMILY instead: separators are not part of the name, so the underscore,
+ * hyphen, and space spellings are one word, and the word is a stem plus the
+ * call noun.
+ */
+const FUZZY_WRAPPER = /<(\/?)\s*([A-Za-z_][\w\s-]*?)\s*>/g
+
+/** The same matcher, anchored to the front of a line -- the only place a tag delimits. */
+const LEADING_WRAPPER = /^[ \t]*<(\/?)\s*([A-Za-z_][\w\s-]*?)\s*>/
+
+/**
+ * Whether a tag name is the calls-envelope word under any separator spelling.
+ *
+ * Separators carry no meaning here, so they come out before the comparison:
+ * the underscore, hyphen, and space spellings of the word all flatten to the
+ * same letters. What is left is a stem plus the call noun, which is the family
+ * rather than a list of the spellings someone already met.
+ * @param raw - the tag name exactly as the model wrote it.
+ * @returns true when the name is an envelope word.
+ */
+function isCallsWord(raw: string): boolean {
+  const flat = raw.toLowerCase().replace(/[\s_\u2581-]+/g, '')
+  return /^(?:(?:tool|function)s?)?calls?$/.test(flat) || /^(?:tool|function)s?$/.test(flat)
+}
+
+/**
+ * Whether a stretch of a line is nothing but calls-envelope tags.
+ *
+ * This is what lets an invented wrapper sit on the SAME line as the opener it
+ * wraps. The test is structural -- every tag present must be the envelope word,
+ * and removing them must leave no content -- so a tag naming an argument, or
+ * any real text, keeps the stretch out of delimiter position.
+ * @param text - the text ahead of an opener on its own line.
+ * @returns true when only envelope tags and whitespace are there.
+ */
+function isWrapperOnly(text: string): boolean {
+  const tags = [...text.matchAll(FUZZY_WRAPPER)]
+  if (tags.length === 0) return false
+  if (!tags.every(match => isCallsWord(match[2] ?? ''))) return false
+  return text.replace(FUZZY_WRAPPER, '').trim().length === 0
+}
+
+/**
+ * Remove the calls-envelope tags a line LEADS with.
+ *
+ * A wrapper in delimiter position is framing in front of whatever the model
+ * wrote, and the text behind it is the model's own -- so the tags come off and
+ * the text stays. A tag anywhere else on the line is not a delimiter, so the
+ * line is returned untouched; that is what keeps a sentence mentioning the
+ * format intact.
+ * @param line - one line of channel text.
+ * @returns the line with its leading envelope removed, or the line unchanged.
+ */
+function stripWrapperFrames(line: string): string {
+  let out = line
+  for (;;) {
+    const lead = LEADING_WRAPPER.exec(out)
+    if (lead === null || !isCallsWord(lead[2] ?? '')) return out
+    out = out.slice(0, lead.index) + out.slice(lead.index + lead[0].length)
+  }
+}
+
+
+/**
  * Tool-call markup of the model's own: an invoke or wrapper tag either way up,
  * or a native token left unresolved because it named nothing real.
  *
@@ -1107,7 +1176,17 @@ function firstOpener(rest: string): { readonly index: number; readonly closer: s
   // line, but no spelling is unambiguous as a DELIMITER: only position says
   // which of the two a token is. Whitespace ahead of an opener is not text, so
   // an indented, quoted, or listed call still opens.
-  const lead = candidates.filter(candidate => rest.slice(0, candidate.index).trim().length === 0)
+  // DSH-FORK(fix): a calls-envelope tag this reader has no rule for may sit on
+  // the SAME line as the opener it wraps, and demanding pure whitespace ahead of
+  // the opener made that whole line prose -- so the call never ran and its
+  // arguments reached the user as text. The position test is unchanged for
+  // everything else: the stretch ahead of the opener must be empty, or nothing
+  // but envelope tags.
+  // EXIT: upstream accepts an unrecognised wrapper ahead of an opener.
+  const lead = candidates.filter(candidate => {
+    const before = rest.slice(0, candidate.index)
+    return before.trim().length === 0 || isWrapperOnly(before)
+  })
   if (lead.length === 0) return undefined
   return lead.reduce((best, candidate) => candidate.index < best.index ? candidate : best)
 }
@@ -1990,7 +2069,15 @@ export class DsmlTranslator {
     // exists to prevent. A line carrying any real text is passed through
     // untouched, so prose is never rewritten to strip it.
     if (isBareMarkup(line)) return
-    events.push({ kind: 'text', text: `${line}\n` })
+    // DSH-FORK(fix): a line that LEADS with a calls-envelope tag this reader has
+    // no rule for is framing in front of whatever the model wrote, not part of
+    // it. A wrapper in delimiter position is framing whether or not text follows
+    // it on the line, and leaving it in put the tag itself in front of the user.
+    // EXIT: upstream strips an unrecognised wrapper from a tag-led line.
+    const unframed = stripWrapperFrames(line)
+    if (unframed !== line) this.shapes.add('bare-frame')
+    if (unframed.trim().length === 0) return
+    events.push({ kind: 'text', text: `${unframed}\n` })
   }
 
   /** Keep a read call until the next line either confirms it or contradicts it. */
@@ -2168,9 +2255,19 @@ export class DsmlTranslator {
         if (opener === undefined) break
         if (opener.index > 0) {
           const lead = rest.slice(0, opener.index)
-          const cleaned = lead.replace(ORPHAN_CLOSE, '')
-          if (cleaned !== lead) this.shapes.add('orphan-closer')
-          events.push({ kind: 'text', text: cleaned })
+          // DSH-FORK(fix): the stretch ahead of an opener may be the calls
+          // envelope itself, written on the SAME line as the call it wraps.
+          // Emitting it put the wrapper's own tag in front of the user while the
+          // call ran behind it, which is the leak the wrapper rules exist to
+          // prevent. Framing ahead of a delimiter is dropped, never shown.
+          // EXIT: upstream drops an unrecognised wrapper ahead of an opener.
+          if (isWrapperOnly(lead)) {
+            this.shapes.add('bare-frame')
+          } else {
+            const cleaned = lead.replace(ORPHAN_CLOSE, '')
+            if (cleaned !== lead) this.shapes.add('orphan-closer')
+            events.push({ kind: 'text', text: cleaned })
+          }
         }
         this.block = { lines: [], closer: opener.closer }
         this.blockParams = 0
@@ -2606,6 +2703,39 @@ export function closerRun(text: string): number {
     if (line.trim().length === 0) continue
     if (CLOSER_ONLY_LINE.test(line)) run += 1
     else run = 0
+  }
+  return run
+}
+
+/**
+ * The length of the run of STRUCTURAL-ONLY lines at the tail of the text.
+ *
+ * {@link closerRun} answers a narrower question -- how many closers in a row --
+ * and a model stuck on OPENERS writes the identical pathology in a shape that
+ * test cannot see: a run of pipe-wrapped argument openers carries no closing tag
+ * anywhere, so every line reset the count and the loop streamed on. The signal
+ * is not which tag it is. It is that line after line carries nothing but markup,
+ * which is a model repeating structure rather than writing a call.
+ *
+ * A line is counted once per tag it carries, so one line holding twenty spammed
+ * tokens is the same signal as twenty lines holding one each, and blank lines
+ * are skipped rather than resetting the run so a spread-out loop still reads as
+ * one. Any line carrying real content resets it, which is what keeps a
+ * well-formed block -- whose argument values are content -- from ever reaching
+ * the threshold.
+ * @param text - the tail of the channel text, complete lines only.
+ * @returns how many structural tokens the trailing run carries.
+ */
+export function glitchRun(text: string): number {
+  let run = 0
+  for (const line of text.split('\n')) {
+    if (line.trim().length === 0) continue
+    if (!isBareMarkup(line)) {
+      run = 0
+      continue
+    }
+    const tokens = line.match(FRAME_TAG)
+    run += tokens === null ? 1 : Math.max(1, tokens.length)
   }
   return run
 }

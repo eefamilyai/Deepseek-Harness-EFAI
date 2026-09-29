@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
 import type { StreamChunk, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { DsmlTranslator, readDsmlStream, toolIndex } from '../src/index.ts'
 import type { DsmlEvent } from '../src/index.ts'
-import { GLITCH_RUN_DEFAULT, closerRun } from '../src/dsml.ts'
+import { GLITCH_RUN_DEFAULT, closerRun, glitchRun } from '../src/dsml.ts'
 
 const LT = String.fromCharCode(60)
 const GT = String.fromCharCode(62)
@@ -31,6 +31,12 @@ const IO = LT + 'invoke '
 const IC = LT + SL + 'invoke' + GT
 const CO = LT + 'tool_calls' + GT
 const CC = LT + SL + 'tool_calls' + GT
+const PIPE = String.fromCharCode(0xFF5C)
+
+/** One pipe-wrapped native token: the spelling a spammed run arrives in. */
+function wrapped(name: string): string {
+  return LT + PIPE + PIPE + name + PIPE + PIPE + GT
+}
 
 const KERNEL: ToolSchema = {
   name: 'kernel',
@@ -266,5 +272,120 @@ describe('an argument value that quotes the format', () => {
     const block = [CO, IO + 'name="kernel"' + GT, argument('code', quoted), IC, CC, ''].join('\n')
     expect(calls(block)).toEqual([{ name: 'kernel', arguments: { code: quoted } }])
   })
+})
 
+describe('a run of structural tokens with nothing between them', () => {
+  /** A pipe-wrapped argument opener: the token a stuck model repeats, with no closer anywhere. */
+  const spamLine = wrapped(' parameter name="code"') + '\n'
+
+  it('counts a run of OPENERS, which no closer-only test can see', () => {
+    expect(glitchRun(spamLine.repeat(6))).toBe(6)
+    expect(closerRun(spamLine.repeat(6))).toBe(0)
+  })
+
+  it('counts every token on one long line', () => {
+    expect(glitchRun((LT + 'parameter' + GT).repeat(20))).toBe(20)
+    expect(glitchRun(spamLine.repeat(4).trim())).toBe(4)
+  })
+
+  it('resets on any line carrying real content', () => {
+    expect(glitchRun(spamLine.repeat(4) + 'print(1)\n')).toBe(0)
+    expect(glitchRun('hello\nworld\n')).toBe(0)
+  })
+
+  it('skips blank lines rather than resetting', () => {
+    expect(glitchRun((spamLine + '\n').repeat(4))).toBe(4)
+  })
+
+  it('leaves a well-formed block alone', () => {
+    const good = [CO, IO + 'name="kernel"' + GT, argument('code', 'print(1)'), IC, CC, ''].join('\n')
+    expect(glitchRun(good)).toBeLessThan(GLITCH_RUN_DEFAULT)
+  })
+})
+
+describe('structural spam cuts the turn and still runs the call', () => {
+  const spam = (wrapped(' parameter name="code"') + '\n').repeat(20)
+  const good = [CO, IO + 'name="kernel"' + GT, argument('code', 'print(1)'), IC, CC, ''].join('\n')
+
+  it('runs the call written before an OPENER run starts', async () => {
+    const chunks = await drain(readDsmlStream(provider([
+      ...textBlock(0, good + spam),
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]), KERNEL_TOOLS))
+    expect(chunks.filter(chunk => chunk.type === 'block-end' && chunk.block.type === 'tool-call')).toHaveLength(1)
+    expect(blockedText(chunks)).toContain('repeated structural closers')
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'tool-calls' } })
+  })
+
+  it('ends a turn that was nothing but the run', async () => {
+    const chunks = await drain(readDsmlStream(provider([
+      ...textBlock(0, spam),
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]), KERNEL_TOOLS))
+    expect(chunks.filter(chunk => chunk.type === 'block-end' && chunk.block.type === 'tool-call')).toHaveLength(0)
+    expect(blockedText(chunks)).toContain('repeated structural closers')
+    expect(chunks.at(-1)).toEqual({ type: 'finish', reason: { kind: 'stop' } })
+  })
+
+  it('stops PULLING the provider rather than reading on and discarding', async () => {
+    let pulled = 0
+    const trailer = Array.from({ length: 50 }, (_, index): StreamChunk =>
+      ({ type: 'text-delta', index: 1, text: 'MORE-' + index + '\n' }))
+    async function* counted(): AsyncIterable<StreamChunk> {
+      const chunks: StreamChunk[] = [
+        ...textBlock(0, good + spam),
+        ...trailer,
+        { type: 'finish', reason: { kind: 'stop' } },
+      ]
+      for (const chunk of chunks) {
+        pulled += 1
+        yield chunk
+      }
+    }
+    await drain(readDsmlStream(counted(), KERNEL_TOOLS))
+    expect(pulled).toBeLessThan(60)
+  })
+})
+
+describe('a wrapper this reader has no rule for', () => {
+  const tag = (name: string): string => LT + name + GT
+
+  it('absorbs an invented envelope word', () => {
+    const block = [
+      tag('envelope'), IO + 'name="kernel"' + GT, argument('code', 'print(1)'), IC, tag(SL + 'envelope'), '',
+    ].join('\n')
+    expect(calls(block)).toEqual([{ name: 'kernel', arguments: { code: 'print(1)' } }])
+  })
+
+  it('reads a wrapper written on the SAME line as the call it wraps', () => {
+    for (const word of ['tools', 'tool calls', 'toolcall', 'functions']) {
+      const block = tag(word) + IO + 'name="kernel"' + GT + '\n' + argument('code', 'print(1)') + '\n' + IC + '\n'
+      expect(calls(block)).toEqual([{ name: 'kernel', arguments: { code: 'print(1)' } }])
+    }
+  })
+
+  it('never shows the wrapper it absorbed', () => {
+    for (const text of [
+      tag('tools') + IO + 'name="kernel"' + GT + '\n' + argument('code', 'print(1)') + '\n' + IC + '\n',
+      [tag('tools'), '', 'Edited files', '', tag(SL + 'tools'), ''].join('\n'),
+      tag('tools') + 'Edited files\n' + tag(SL + 'tools') + '\n',
+      [CO, IO + 'name="kernel"' + GT, argument('code', 'print(1)'), IC, tag('tools'), ''].join('\n'),
+    ]) {
+      const visible = run(text).events
+        .filter((event): event is Extract<DsmlEvent, { kind: 'text' }> => event.kind === 'text')
+        .map(event => event.text)
+        .join('')
+      expect(visible).not.toContain(LT)
+    }
+  })
+
+  it('leaves a sentence that merely mentions the format byte-identical', () => {
+    const sentence = 'The harness reads a ' + CO + ' block. Nothing else runs.'
+    expect(run(sentence).events).toEqual([{ kind: 'text', text: sentence + '\n' }])
+  })
+
+  it('leaves a tag mentioned mid-sentence alone', () => {
+    const line = 'Edited files ' + tag('tools')
+    expect(run(line + '\n').events).toEqual([{ kind: 'text', text: line + '\n' }])
+  })
 })

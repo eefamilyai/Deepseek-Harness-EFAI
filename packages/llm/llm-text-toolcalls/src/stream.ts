@@ -28,7 +28,7 @@
 import { randomUUID } from 'node:crypto'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlockType, FinishReason, StreamChunk, ToolSchema } from '@deepseek-ai/dsh-llm'
-import { closerRun, DsmlTranslator, GLITCH_RUN_DEFAULT, trailingReasoningCalls } from './dsml.ts'
+import { DsmlTranslator, GLITCH_RUN_DEFAULT, glitchRun, trailingReasoningCalls } from './dsml.ts'
 import type { DsmlEvent, DsmlOptions } from './dsml.ts'
 import { bumpShapes } from './catalog.ts'
 
@@ -147,6 +147,41 @@ class DsmlStreamReader {
   }
 
   /**
+   * Whether this pass cut the provider stream short.
+   *
+   * The owner of the stream asks this after every chunk: true means stop
+   * pulling, because the generation the provider is still producing is the loop
+   * this pass just refused.
+   * @returns true once a structural-spam run ended the turn.
+   */
+  stopped(): boolean {
+    return this.halted
+  }
+
+  /**
+   * The terminal chunk for a stream this pass cut short.
+   *
+   * {@link close} cannot serve here: a stream that stopped without its terminal
+   * chunk is a protocol failure, and its recovered calls must not dispatch. This
+   * one IS the terminal chunk, so the call written before the spam is read and
+   * run -- which is what makes the cut a repair rather than a lost turn.
+   *
+   * The reason is the whole of what happens next. A turn that produced a call is
+   * a tool-calls turn, so the call runs and the model continues from its result.
+   * A turn that produced none is `stop`: the note already told the model what it
+   * did, and inventing a call to keep the loop alive would run something the
+   * model never finished asking for.
+   * @returns the flush, the note already emitted, and the finish.
+   */
+  *halt(): Generator<StreamChunk> {
+    yield* this.flush(false)
+    yield* this.closeText()
+    this.record()
+    const reason: FinishReason = this.calls > 0 ? { kind: 'tool-calls' } : { kind: 'stop' }
+    yield { type: 'finish', reason }
+  }
+
+  /**
    * Write this turn's repairs to the catalogue, once, at the turn's end.
    *
    * Best-effort and silent: `bumpShapes` returns false for every failure and
@@ -182,10 +217,14 @@ class DsmlStreamReader {
     // than streaming the spam the reader just refused.
     if (this.halted) return
     for (const event of source.translator.push(chunk.text)) yield* this.emit(event)
-    // A run of closer-only lines is the model stuck, not a call: stop emitting
-    // text for this turn and say so once, so the next turn can start clean.
+    // DSH-FORK(fix): a run of STRUCTURAL-ONLY lines is the model stuck, not a
+    // call -- and a model looping on OPENERS writes the same pathology in a
+    // shape the closer-only test could not see, so the loop streamed on.
+    // Stop emitting text for this turn and say so once, so the next turn can
+    // start clean; the caller stops pulling the provider on `stopped()`.
+    // EXIT: upstream detects structural spam in any spelling.
     this.tail = (this.tail + chunk.text).slice(-4000)
-    if (closerRun(this.tail) >= GLITCH_RUN_DEFAULT) {
+    if (glitchRun(this.tail) >= GLITCH_RUN_DEFAULT) {
       this.halted = true
       this.repaired.add('closer-spam')
       yield* this.text(GLITCH_NOTE)
@@ -333,6 +372,15 @@ export function readDsmlStream(
     for await (const chunk of source) {
       if (chunk.type === 'finish') finished = true
       yield* reader.read(chunk)
+      // DSH-FORK(fix): the reader cut the turn at a structural-spam run. Leaving
+      // the loop is what actually ends the generation -- the provider stops
+      // being pulled at all -- and this pass then owes the caller the terminal
+      // chunk the provider will never send.
+      // EXIT: upstream stops reading a provider stream mid-turn.
+      if (reader.stopped() && !finished) {
+        yield* reader.halt()
+        return
+      }
     }
     // A stream that stopped without its terminal chunk is already a protocol
     // failure the invariant layer reports; flushing here keeps this pass from
