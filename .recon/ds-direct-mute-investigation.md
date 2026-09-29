@@ -66,3 +66,82 @@ The WAF challenge path (`x-amzn-waf-action: challenge` was observed on the
 document load). Whether one `aws-waf-token` is replayed across accounts, or held
 for too long, is untested - it is the most plausible remaining account-level
 correlation signal and the next thing to measure if mutes persist.
+
+## ADDENDUM - the cumulative reframe (hundreds of turns, not a static header)
+
+Operator correction: the mute arrives after HUNDREDS of back-and-forth turns, and
+that is already more than usual. That falsifies the static-header framing - a
+header mismatch would mute on turn 1 - and points at something that accumulates.
+
+Measured with a dedicated soak against deepseek.ee.1+mutetest@gmail.com
+(`_soak.py`, telemetry in `_soak.jsonl`):
+
+  * per-turn request footprint is LEAN and does NOT grow:
+    create_pow_challenge -> /query -> /completion, exactly 3 requests;
+  * prompt length is FLAT at 29 bytes - the harness threads via
+    parent_message_id and sends only the new message;
+  * one chat session throughout; no re-priming, no fresh chats;
+  * sustained rate ~16 turns/min (~960/hour).
+
+`_prompt_for` verified separately: threaded (parent captured) the prompt stays
+flat at ~1,324 bytes from 1 to 500 conversation turns; only when parent was NOT
+captured does it fall back to dumping the transcript (up to 47 KB). The
+`sent` counter is written only on a yielding turn, and every non-yielding path
+raises first, so it cannot stall into a permanent full-transcript resend.
+
+So nothing in the wire shape is wrong PER TURN. The anomaly is the QUANTITY:
+~960 turns/hour is not a thing a browser does, and account-level moderation
+reads sustained volume. Combined with the eager re-login regression this
+session removed (each unrecognised biz_code posted another /users/login), the
+likeliest explanation for "mutes faster than ever" is the login storm
+amplifying the volume signal, not a bad header.
+
+## UNRESOLVED
+
+  * `hif-dliq.deepseek.com` has NO IPv4 A record on this network (AAAA only), so
+    curl_cffi cannot resolve it; `hif-leim.deepseek.com` resolves and mints
+    normally. The completion call carries `x-hif-leim` but not `x-hif-dliq`.
+    Whether a real browser sends BOTH on /chat/completion is unconfirmed - the
+    Chrome probe could not reach an authenticated completion.
+  * The soak calls `open_completion` directly, so it exercises the wire path but
+    not `stream()` -> `_prompt_for` -> compaction/tool-result machinery. If
+    production builds a growing prompt, this soak would not see it.
+
+## OUTCOME - 700 turns, no mute reproduced
+
+Two soaks against deepseek.ee.1+mutetest@gmail.com, telemetry captured per turn
+(request paths, prompt bytes, cumulative bytes, session id, all four verdict
+readers):
+
+  * COUNT soak  - 400 turns, 3 requests each, 29 B/turn. Zero verdicts.
+  * VOLUME soak - 300 turns at ~8.8 KB/turn (realistic tool-output payload),
+                  2,598,000 bytes cumulative. Zero verdicts.
+
+Total 700 consecutive turns / 2.6 MB and the account never muted. Both soaks
+held one chat session throughout, sent exactly create_pow_challenge -> /query ->
+/completion per turn, and showed no drift in request count, prompt size, or
+session identity.
+
+What this does and does not show:
+
+  * It does NOT prove the mute is fixed. A mute that needs more than 2.6 MB, or
+    wall-clock days, or a trigger not exercised here (vision turns, file
+    uploads, account switching, the parallel-agent pool) would not appear.
+  * It DOES show that nothing in the ordinary single-account turn loop
+    accumulates into a mute on the timescale tested - no header drift, no
+    prompt growth, no session churn, no request amplification.
+
+The three defects this session did find and fix stand on their own evidence:
+the eager re-login regression (behaviour), the ungranted high-entropy hints
+(header), and the missing accept-language (hygiene). The re-login regression is
+still the best explanation for "mutes faster than ever", because it multiplied
+/users/login traffic on exactly the turns DeepSeek was already refusing.
+
+## NEXT - the untested axes
+
+  1. Vision turns and file uploads (different endpoints, x-hif scoping).
+  2. The parallel-agent pool: several accounts driven concurrently from ONE IP
+     is the correlation an account-level mute would key on, and no soak here
+     exercised it.
+  3. Wall-clock spread: these soaks ran in ~20 min. A real day of use at a
+     human pace is a different distribution even at the same total volume.
