@@ -23,6 +23,16 @@ const TOOLS = [
   { name: 'get_goal', description: 'Read the goal.', parameters: { type: 'object', properties: {}, required: [] } },
   { name: 'list_agents', description: 'List agents.', parameters: { type: 'object', properties: { scope: { type: 'string' } }, required: [] } },
   { name: 'read', description: 'Read a file.', parameters: { type: 'object', properties: { file_path: { type: 'string' } }, required: ['file_path'] } },
+  {
+    name: 'kernel',
+    description: 'Run Python.',
+    parameters: { type: 'object', properties: { code: { type: 'string' }, timeout_ms: { type: 'integer' } }, required: ['code'] },
+  },
+  {
+    name: 'subagent',
+    description: 'Delegate a task.',
+    parameters: { type: 'object', properties: { description: { type: 'string' }, prompt: { type: 'string' } }, required: ['description', 'prompt'] },
+  },
 ]
 
 const INDEX = new Map(TOOLS.map(tool => [tool.name, tool]))
@@ -129,6 +139,27 @@ describe('structural salvage', () => {
       open('parameter', 'name="limit"') + '20' + '\n' +
       shut('invoke') + shut('tool_calls')
     expect(callsOf(block)).toEqual([])
+  })
+
+  // The pasted shape that carries TWO tools and a stray invoke closer between
+  // them: kernel's own arguments first, then the closer, then subagent's. The
+  // closer is read as the group boundary it plainly is, so the run splits where
+  // the model meant it to rather than inside an argument.
+  it('splits a two-tool span at the stray invoke closer between their arguments', () => {
+    const block =
+      open('tool_calls') + ' ' +
+      open('parameter', 'name="code"') + '# Verify parser modules\nimport py_compile' + shut('parameter') + ' ' +
+      open('parameter', 'name="timeout_ms"') + '120000' + shut('parameter') + ' ' +
+      shut('invoke') + ' ' +
+      open('parameter', 'name="description"') + 'Port DSML reader from TypeScript reference to Python' + shut('parameter') + ' ' +
+      open('parameter', 'name="prompt"') + 'You are porting a TypeScript module to Python.' + shut('parameter')
+
+    const calls = callsOf(block)
+    expect(calls.map(call => call.name)).toEqual(['kernel', 'subagent'])
+    expect(calls[0]?.args.code).toContain('py_compile')
+    expect(calls[0]?.args.timeout_ms).toBe(120000)
+    expect(calls[1]?.args.description).toContain('Port DSML reader')
+    expect(calls[1]?.args.prompt).toContain('porting a TypeScript module')
   })
 
   // Two groups is what makes a span a composition rather than a single call.
