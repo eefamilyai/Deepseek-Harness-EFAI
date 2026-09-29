@@ -402,6 +402,30 @@ check("the retry's refusal did not open a third chat",
       len(vc2.opened) == 2, repr(vc2.opened))
 
 
+# ── the ACCUMULATION property: many refusals, still zero logins ──────
+# The mute this fix removes was not a per-turn event -- it was a burst. One
+# eager /users/login per refused turn, repeated across a session, is what the
+# anti-abuse stack reads as an account being hammered. A single-turn check
+# cannot see that: it passes even if the tenth turn starts logging in. So drive
+# a run of refusals and assert the TOTAL stays zero. If any future change makes
+# the refusal path re-authenticate, this count is what catches it.
+REFUSAL_RUN = 25
+_run_logins = 0
+_run_opened = 0
+for _i in range(REFUSAL_RUN):
+    _ev, _err, _cl = drive(responses=[FakeResponse(lines=[BIZ_SSE])])
+    _run_logins += _cl.logins
+    _run_opened += len(_cl.opened)
+check("%d consecutive refusals attempt ZERO logins in total" % REFUSAL_RUN,
+      _run_logins == 0,
+      "logins=%d over %d refusals -- an eager login here is the login storm "
+      "that escalates a throttle into a mute" % (_run_logins, REFUSAL_RUN))
+check("%d consecutive refusals each send exactly ONE request" % REFUSAL_RUN,
+      _run_opened == REFUSAL_RUN,
+      "opened=%d for %d refusals -- more than one means a resend"
+      % (_run_opened, REFUSAL_RUN))
+
+
 print()
 if FAILS:
     print("%d FAILED: %s" % (len(FAILS), ", ".join(FAILS)))
