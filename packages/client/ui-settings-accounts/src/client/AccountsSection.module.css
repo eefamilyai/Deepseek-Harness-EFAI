@@ -85,6 +85,11 @@
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
   background: var(--dsw-alias-bg-layer-3);
+  /* The card is an elevated surface and the log below scrolls inside it, so the
+     pair is rebound here and inherits into the scroller (see ui-theme
+     styles/scrollbar.css for the rebinding contract). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .cardHead {
