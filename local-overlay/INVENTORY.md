@@ -184,7 +184,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 431 paths do not exist upstream, so no patch covers them and none can conflict.
+These 436 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -212,12 +212,15 @@ These 431 paths do not exist upstream, so no patch covers them and none can conf
 - `.merge-port/apiproxy-and-fixtures.patch`
 - `.recon/accounts-tab.md`
 - `.recon/ds-direct-flagging.md`
+- `.recon/dsml-parser-repair.md`
 - `.recon/probe-operator.mjs`
+- `.recon/probe-salvage-built.mjs`
 - `.recon/probe_fresh_identity.py`
 - `.recon/probe_fresh_identity.run.log`
 - `.recon/probe_signin_dom.py`
 - `.recon/probe_two_accounts.py`
 - `.recon/probe_waf_boundary.py`
+- `.recon/trace-shape-b.mjs`
 - `.recon/zz-full-out.txt`
 - `.recon/zz-full-out3.txt`
 - `.recon/zz-probe-out.txt`
@@ -500,6 +503,7 @@ These 431 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-text-toolcalls/src/fallback.ts`
 - `packages/llm/llm-text-toolcalls/src/index.ts`
 - `packages/llm/llm-text-toolcalls/src/protocol.ts`
+- `packages/llm/llm-text-toolcalls/src/salvage.ts`
 - `packages/llm/llm-text-toolcalls/src/shapes.ts`
 - `packages/llm/llm-text-toolcalls/src/stream.ts`
 - `packages/llm/llm-text-toolcalls/tests/adversarial.spec.ts`
@@ -511,6 +515,7 @@ These 431 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-text-toolcalls/tests/misclosed-closers.spec.ts`
 - `packages/llm/llm-text-toolcalls/tests/native-spellings.spec.ts`
 - `packages/llm/llm-text-toolcalls/tests/orphan-block.spec.ts`
+- `packages/llm/llm-text-toolcalls/tests/salvage.spec.ts`
 - `packages/llm/llm-text-toolcalls/tests/shape-reporting.spec.ts`
 - `packages/llm/llm-text-toolcalls/tests/shapes.spec.ts`
 - `packages/llm/llm-text-toolcalls/tests/stripped-closers.spec.ts`
