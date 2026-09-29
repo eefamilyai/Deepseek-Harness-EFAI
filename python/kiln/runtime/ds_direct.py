@@ -3481,32 +3481,54 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
     picker, so depending on it is depending on something already retired.
     """
     st = _vision_session(client)
-    r = client.open_completion(st["sid"], prompt, thinking=False, search=False,
-                               model_type="default",
-                               parent_message_id=st.get("parent"),
-                               ref_file_ids=ref_ids)
-    if r.status_code in (401, 403):
-        raise _AuthExpired()
-    if r.status_code == 404:
-        raise _SessionStale("the vision chat no longer exists")
+
+    def _send(parent):
+        return client.open_completion(st["sid"], prompt, thinking=False, search=False,
+                                      model_type="default",
+                                      parent_message_id=parent,
+                                      ref_file_ids=ref_ids)
+
+    def _classify(r):
+        """Raise for the two refusals an HTTP status alone cannot be trusted to
+        name. Applied to EVERY response, including the retry's: a fresh turn in
+        the same chat can come back 401 just as easily as the first attempt can."""
+        if r.status_code in (401, 403):
+            raise _AuthExpired()
+        if r.status_code == 404:
+            raise _SessionStale("the vision chat no longer exists")
+
+    r = _send(st.get("parent"))
+    _classify(r)
     if r.status_code in (400, 422):
         # Nearly always a rejected parent_message_id. Start a fresh turn in the
         # SAME chat before giving up on it.
         with _session_lock:
             st["parent"] = None
             _save_sessions()
-        r = client.open_completion(st["sid"], prompt, thinking=False, search=False,
-                                   model_type="default", ref_file_ids=ref_ids)
+        r = _send(None)
+        _classify(r)
     if r.status_code != 200:
         raise RuntimeError(f"DeepSeek vision {r.status_code}: {r.text[:180]}")
 
+    raw_sink = []
     parts = []
-    for kind, text in _parse(r, cancelled or (lambda: False)):
+    for kind, text in _parse(r, cancelled or (lambda: False), raw_sink):
         if kind == "content":
             parts.append(text)
     _persist_cookies(client)
     body = "".join(parts).strip()
     if not body:
+        # A dead bearer token arrives HERE, not at the status: the completion POST
+        # answers HTTP 200 with {"code":40003,"msg":"Authorization Failed
+        # (invalid token)"} and streams no frames, so the body is empty and the
+        # real cause sits in the raw lines. Reported as "the vision model
+        # returned nothing" it is a plain RuntimeError, and the caller's retry
+        # catches only _AuthExpired — so the built-in re-login never ran and the
+        # attachment failed until the operator relogged in by hand. Same class as
+        # the pow and stream paths, one request surface over.
+        verdict = _auth_verdict_in(raw_sink)
+        if verdict:
+            raise _AuthExpired("DeepSeek refused the bearer token: %s" % verdict)
         raise RuntimeError("the vision model returned nothing")
     return body
 
