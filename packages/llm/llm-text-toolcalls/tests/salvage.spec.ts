@@ -172,3 +172,141 @@ describe('structural salvage', () => {
     expect(callsOf(block).map(call => call.name)).toEqual(['get_goal', 'list_agents'])
   })
 })
+
+
+// The three shapes the operator pasted, plus the pipe-frame leak. Each case is
+// built from character codes: this file must never carry a literal closer in its
+// own source, because the reader under test is what has to survive one.
+describe('the operator\'s shapes and the pipe-frame leak', () => {
+  const PIPE = String.fromCharCode(0xFF5C)
+  const RUN = PIPE + PIPE
+
+  // Three invokes back to back where every argument is closed by the INVOKE
+  // closer rather than its own. Nothing in the text distinguishes one such call
+  // from a truncation, so the evidence is the GROUP COUNT: three whole groups is
+  // a sequence the model finished composing.
+  it('runs three invokes whose arguments all end at the invoke closer', () => {
+    const block =
+      open('tool_calls') + '\n' +
+      open('invoke', 'name="read"') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'D:/a.ts\n' +
+                  shut('invoke') + '\n' +
+      open('invoke', 'name="read"') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'D:/b.ts\n' +
+                  shut('invoke') + '\n' +
+      open('invoke', 'name="read"') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'D:/c.ts\n' +
+      shut('invoke') + '\n' +
+      shut('tool_calls')
+    expect(callsOf(block).map(call => call.name)).toEqual(['read', 'read', 'read'])
+  })
+
+  // One invoke, its one argument never closed, and the block ends. Nothing says
+  // whether the model finished or the stream stopped, so it is refused.
+  it('refuses a single invoke whose only argument never closed', () => {
+    const block =
+      open('tool_calls') + '\n' +
+      open('invoke', 'name="read"') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'D:/x.ts\n' +
+      shut('invoke') + '\n' +
+      shut('tool_calls')
+    expect(callsOf(block)).toEqual([])
+  })
+
+  // An invented wrapper and invented tag names. Nothing in the roster declares
+  // them, so nothing runs -- but they are shown as written, not as wire protocol.
+  it('refuses invented tag vocabulary without leaking a pipe token', () => {
+    const block =
+      open('batch') + '\n' + open('op') + '\n' + open('slot') + '\n' + 'D:/x.ts\n' +
+      shut('slot') + '\n' + shut('op') + '\n' + shut('batch')
+    expect(callsOf(block)).toEqual([])
+    expect(proseOf(block)).toContain('D:/x.ts')
+  })
+
+  // A pipe-wrapped frame with no angle brackets is wire protocol, not text the
+  // model chose to write. It carries nothing, so it is dropped wherever it
+  // appears -- in a sentence, and inside a fence.
+  it('drops a bare pipe-wrapped frame in prose and inside a fence', () => {
+    const block =
+      'here is a token ' + RUN + 'DSML' + RUN + ' and a closer\n' +
+      '```\n' + RUN + 'DSML' + RUN + '\n```\n'
+    expect(callsOf(block)).toEqual([])
+    expect(proseOf(block)).not.toContain(PIPE)
+  })
+})
+
+// Every shape here reaches the refusal path, and the ONE thing that must hold on
+// that path is that the user never sees wire protocol. The three refusals differ
+// in WHY they refuse -- a truncation, a wrapper closer landing on the last
+// argument, and an explanation between two calls -- and one shape dispatches.
+// A refusal is not a licence to show tags: the note that follows names the
+// mistake in words, and the framing is stripped before anything is displayed.
+describe('a refused block never shows its framing', () => {
+  // The wrapper closer lands straight on the last argument, so there is no
+  // boundary after it. Byte for byte this is what a truncation looks like, and
+  // nothing in the text says the model finished, so it is refused.
+  it('refuses a wrapper closer that ends the last argument', () => {
+    const block =
+      open('tool_calls') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'a.py\n' +
+                  shut('invoke') + '\n' +
+      open('parameter', 'name="offset"') + '\n' + '370\n' +
+                  shut('invoke') + '\n' +
+      open('parameter', 'name="limit"') + '\n' + '40\n' +
+      shut('tool_calls')
+    expect(callsOf(block)).toEqual([])
+    const prose = proseOf(block)
+    expect(prose).not.toContain('tool_calls')
+    expect(prose).not.toContain('parameter')
+    expect(prose).not.toContain('invoke')
+  })
+
+  // The stream simply stopped mid-argument. Same reading, same refusal.
+  it('refuses a block truncated mid-argument and shows none of its tags', () => {
+    const block =
+      open('tool_calls') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'a.py\n' +
+                  shut('invoke') + '\n' +
+      open('parameter', 'name="offset"') + '\n' + '3'
+    expect(callsOf(block)).toEqual([])
+    const prose = proseOf(block)
+    expect(prose).not.toContain('tool_calls')
+    expect(prose).not.toContain('parameter')
+  })
+
+  // An explanation between two calls. The span carries language, so it is an
+  // explanation rather than a composition, and running the call it describes
+  // would be the one outcome worse than refusing it. The sentence the model
+  // wrote survives; the framing around it does not.
+  it('refuses a span carrying an explanation, keeping the sentence and dropping the tags', () => {
+    const block =
+      open('tool_calls') + '\n' +
+      open('parameter', 'name="file_path"') + '\n' + 'a.py\n' +
+                  shut('invoke') + '\n' +
+      'Edited files and verifying before continuing.' + '\n' +
+      open('parameter', 'name="limit"') + '\n' + '40\n' +
+      shut('tool_calls')
+    expect(callsOf(block)).toEqual([])
+    const prose = proseOf(block)
+    expect(prose).toContain('Edited files and verifying before continuing.')
+    expect(prose).not.toContain('tool_calls')
+    expect(prose).not.toContain('parameter')
+  })
+})
+
+// A wrapper word inside a sentence is a mention, not a delimiter. Reading it as
+// one opened a block that never closed, swallowed the rest of the line, and
+// handed the sentence back with the tag cut out of it -- the user's prose
+// rewritten by the reader that exists to protect it.
+describe('a wrapper mentioned inside a sentence is prose', () => {
+  it('leaves a mid-line wrapper mention exactly as written', () => {
+    const sentence = 'The harness reads a ' + open('tool_calls') + ' block. Nothing else runs.'
+    expect(proseOf(sentence + '\n')).toBe(sentence + '\n')
+    expect(callsOf(sentence + '\n')).toEqual([])
+  })
+
+  it('leaves any mid-line tag mention exactly as written', () => {
+    const sentence = 'The harness reads a ' + open('widget') + ' block. Nothing else runs.'
+    expect(proseOf(sentence + '\n')).toBe(sentence + '\n')
+  })
+})

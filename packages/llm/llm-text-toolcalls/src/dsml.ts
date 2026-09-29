@@ -544,6 +544,60 @@ function emptyEnvelope(body: string): boolean {
 const PIPES = '[|\\uFF5C]'
 
 /**
+ * Every tag token in a piece of text, whatever tag it turns out to be.
+ *
+ * Deliberately not a list of this format's tag names. The reader's vocabulary
+ * is what a refused block was refused FOR, and a model that invents a wrapper
+ * around a call proves the vocabulary is not fixed. Any tag is framing; what a
+ * tag MEANT was decided before this ever runs.
+ */
+const FRAME_TAG = new RegExp('<[^>]*>', 'g')
+
+/** A run of the vertical bars a provider wraps its own tokens in. */
+const FRAME_PIPE = new RegExp(PIPES + '+', 'g')
+
+/** Whether `text` carries any tag or pipe token at all. */
+const HAS_FRAME = new RegExp('<[^>]*>|' + PIPES)
+
+/**
+ * A block with its framing removed, keeping whatever real text it carried.
+ *
+ * The reader's tags are wire protocol, never the model's answer, so a refused
+ * block is stripped before any of it is shown. Text the block carried between
+ * its tags is the model's own writing and survives the strip, so this removes
+ * framing without deleting prose.
+ * @param body - the block as the model wrote it.
+ * @returns the block's text with every tag and pipe token removed.
+ */
+function deFramed(body: string): string {
+  return body
+    .replace(FRAME_PIPE, '')
+    .split('\n')
+    // A line a tag does not LEAD is prose that merely mentions the format,
+    // and stripping there would edit the model's own sentence. Only a
+    // tag-led line is markup, so only that line loses its tags.
+    .map(line => (line.trimStart().startsWith('<') ? line.replace(FRAME_TAG, '').trim() : line))
+    .filter(line => line.trim().length > 0)
+    .join('\n')
+    .trim()
+}
+
+/**
+ * Whether a line is nothing but markup, and so framing rather than prose.
+ *
+ * A line carrying any real text is left exactly as written; only a line whose
+ * whole content is tags or pipe tokens is dropped. That is the line a model
+ * writes when it invents a wrapper this reader has no rule for, and there is
+ * nothing in it to display.
+ * @param line - one line of the answer.
+ * @returns true when the line has no content beyond markup.
+ */
+function isBareMarkup(line: string): boolean {
+  if (!HAS_FRAME.test(line)) return false
+  return deFramed(line).length === 0
+}
+
+/**
  * DeepSeek's `system_reminder` framing, echoed back into visible output.
  *
  * The free-web model recites the system prompt it was handed, wrapped in a
@@ -599,6 +653,7 @@ const DSML_KEYWORD = /^([A-Za-z_▁][\w▁.-]*)\s*(=?)/
  * requires the pipe run, so the two forms never collide.
  */
 const DSML_WRAP = /<\/?DSML\s*\/?>/gi
+const BARE_FRAME_DSML = /[\uFF5C|]+\s*DSML\s*[\uFF5C|]+/gi
 
 /**
  * A taught tag opener that begins INSIDE the previous attribute's quoted value.
@@ -1035,23 +1090,26 @@ interface OpenBlock {
  * @returns the opener position and its closing tag, or undefined for prose.
  */
 function firstOpener(rest: string): { readonly index: number; readonly closer: string } | undefined {
+  const candidates: { readonly index: number; readonly closer: string }[] = []
   const wrapped = rest.indexOf(TOOL_CALLS_OPEN)
-  const functional = rest.indexOf(FUNCTION_CALLS_OPEN)
-  const bare = rest.search(INVOKE_OPENER)
-  const candidates: { index: number; closer: string }[] = []
   if (wrapped !== -1) candidates.push({ index: wrapped, closer: TOOL_CALLS_CLOSE })
+  const functional = rest.indexOf(FUNCTION_CALLS_OPEN)
   if (functional !== -1) candidates.push({ index: functional, closer: FUNCTION_CALLS_CLOSE })
-  // A bare invoke is the one ambiguous opener, and it is the one an
-  // explanation writes inside a sentence. Treating a mention as a delimiter
-  // swallowed the rest of the answer, so it opens a block only as the
-  // line's own content -- the same line-leading test this file already
-  // applies to the framing tag and to a lone parameter. The taught wrappers
-  // above are unambiguous and stay readable anywhere on the line.
-  if (bare !== -1 && rest.slice(0, bare).trim().length === 0) {
-    candidates.push({ index: bare, closer: '</invoke>' })
-  }
-  if (candidates.length === 0) return undefined
-  return candidates.reduce((best, candidate) => candidate.index < best.index ? candidate : best)
+  const bare = rest.search(INVOKE_OPENER)
+  if (bare !== -1) candidates.push({ index: bare, closer: '</invoke>' })
+  // A tag is a DELIMITER only where a delimiter can stand. Every opener is
+  // therefore read the same way: it must be the line's own content, with
+  // nothing but whitespace ahead of it. A wrapper written INSIDE a sentence --
+  // `The harness reads a <tool_calls> block` -- is prose about the format,
+  // and opening a block on it swallowed the rest of the line and handed the
+  // sentence back with the tag cut out of it. The taught wrappers are
+  // unambiguous as SPELLINGS, which is why they were once read anywhere on the
+  // line, but no spelling is unambiguous as a DELIMITER: only position says
+  // which of the two a token is. Whitespace ahead of an opener is not text, so
+  // an indented, quoted, or listed call still opens.
+  const lead = candidates.filter(candidate => rest.slice(0, candidate.index).trim().length === 0)
+  if (lead.length === 0) return undefined
+  return lead.reduce((best, candidate) => candidate.index < best.index ? candidate : best)
 }
 
 /**
@@ -1478,8 +1536,12 @@ export class DsmlTranslator {
 
     if (word.startsWith('invoke')) {
       if (closing || (selfClosed && rest.length === 0)) return '</invoke>'
-      const name = attributes(rest).get('name')?.trim() ?? ''
-      if (name.length === 0 || !this.tools.has(name)) return whole
+      // Declared or not, the token becomes the TAUGHT spelling. An undeclared
+      // name has to stay visible, and the taught spelling is how this reader
+      // already keeps a name it cannot place visible -- it draws the
+      // no-such-tool note. Returning the token itself keeps it visible as
+      // provider framing instead, which is how a raw pipe token reached the
+      // user.
       return selfClosed ? `<invoke ${rest}></invoke>` : `<invoke ${rest}>`
     }
 
@@ -1489,7 +1551,14 @@ export class DsmlTranslator {
     // unlabelled-body path, and handed the tool the tag text as its argument.
     if (word.startsWith('param')) {
       if (closing) return '</parameter>'
-      return attributes(rest).has('name') ? `<parameter ${rest}>` : whole
+      // The word itself says this is a parameter tag, so the only thing that
+      // can be missing is the attribute run. Re-emit the taught opener with
+      // whatever attributes survived and let the argument reader pair it with
+      // the closer that follows. Returning the token unchanged here identified
+      // the call without absorbing it: that closer was left with no opener, so
+      // unfinished() read the invoke as cut off mid-write, AND the raw pipe
+      // token reached the user.
+      return `<parameter ${rest}>`
     }
 
     // The tool named as the keyword itself. Checked after the reserved words so
@@ -1504,16 +1573,37 @@ export class DsmlTranslator {
     // both `</｜｜DSML｜｜>` and `<｜｜DSML｜｜/>` close it.
     if (keyword.length === 0) {
       if (closing || selfClosed) return '</invoke>'
-      const name = attributes(body).get('name')?.trim() ?? ''
-      if (name.length > 0 && this.tools.has(name)) return `<invoke ${body}>`
+      // A `parameter` token whose `name` keyword was eaten on the wire --
+      // `<｜｜DSML｜｜ parameter="pattern">`. The keyword reader saw
+      // `parameter` followed by `=`, read that as an attribute, and left the
+      // keyword empty. But no slot in this format is called `parameter`, so
+      // the word can only be the tag itself; the `=` is the tail of the
+      // `name=` that went missing. The token is rebuilt in the taught
+      // spelling rather than handed through raw.
+      const broken = /^[_\u2581]*param(?:eter)?\s*=/.exec(body)
+      if (broken !== null) return `<parameter name=${body.slice(broken[0].length)}>`
       // An envelope carrying NOTHING — no keyword, no attributes — names no tool
       // and frames nothing, so it goes the way every other information-free
       // frame token does. Returning it verbatim was not a conservative choice
       // here: one live turn emitted 4074 of these back to back after a refused
-      // call, and every one reached the user as a literal `<｜｜DSML｜｜>`.
+      // call, and every one reached the user as a literal pipe token.
       if (body.length === 0) return ''
+      // An envelope that NAMES something becomes the taught <invoke> spelling
+      // whether or not this request declared the name. Declared, that is the
+      // call. Undeclared -- including EVERY envelope on a toolless request,
+      // whose empty roster fails a declared check by construction -- the
+      // taught spelling is what carries it to the reader's no-such-tool note.
+      return `<invoke ${body}>`
     }
-    return whole
+    // A keyword that is neither a structural word nor a declared tool. The token
+    // still NAMES something, so it is re-emitted in the taught spelling and
+    // classified later against the roster: a name this request declares is a call,
+    // and one it does not still reaches the reader's no-such-tool note. Handing
+    // the raw pipe token through instead is what put it on the screen.
+    if (closing) return '</invoke>'
+    const open = `<invoke name="${keyword}"`
+    const tail = rest.length > 0 ? ` ${rest}>` : '>'
+    return selfClosed ? `${open}${tail}</invoke>` : `${open}${tail}`
   }
 
   /**
@@ -1535,6 +1625,10 @@ export class DsmlTranslator {
     // below is the call. Dropping it keeps the wrapper from surfacing as prose
     // around a call that did run.
     out = out.replace(DSML_WRAP, '')
+    // A pipe-wrapped frame with no angle brackets: the same information-free
+    // framing as DSML_WRAP, just wearing the model's own token separators.
+    if (BARE_FRAME_DSML.test(out)) this.shapes.add('bare-frame')
+    out = out.replace(BARE_FRAME_DSML, '')
     // The taught tags written with `=` instead of ` name=` — see EQUALS_TAG.
     out = out.replace(EQUALS_TAG, (_whole, tag: string, name: string, slash: string) => {
       this.shapes.add('equals-tag')
@@ -1551,7 +1645,12 @@ export class DsmlTranslator {
     }
     if (this.namedOpen !== undefined && this.namedClose !== undefined) {
       out = out.replace(this.namedOpen, (whole, name: string, run: string) => {
-        if (!this.tools.has(name)) return whole
+        // Declared or not, a tag written with a tool's name becomes the taught
+        // invoke spelling. An undeclared name has to stay visible, and the taught
+        // spelling is how this reader already keeps a name it cannot place visible
+        // -- it draws the no-such-tool note. Returning the token unchanged keeps it
+        // visible as provider framing instead, which is how a raw tag reached the
+        // user.
         this.shapes.add('tool-named-tag')
         // `<read_file path="x" />` self-closes: the whole call is on this line,
         // so it gets its own `</invoke>` immediately.
@@ -1885,6 +1984,12 @@ export class DsmlTranslator {
       return
     }
     this.releasePending(events)
+    // A line that is NOTHING but markup is framing, not prose: the model wrote
+    // a wrapper this reader has no rule for, and the pass below may still read
+    // a call out of it. Showing the user that tag is the leak this reader
+    // exists to prevent. A line carrying any real text is passed through
+    // untouched, so prose is never rewritten to strip it.
+    if (isBareMarkup(line)) return
     events.push({ kind: 'text', text: `${line}\n` })
   }
 
@@ -1987,7 +2092,24 @@ export class DsmlTranslator {
     // exactly the text that would otherwise parse as a real block.
     const fence = this.fence
     if (fence !== undefined) {
-      events.push({ kind: 'text', text: `${stripped}\n` })
+      // Inside a fence the model is DISPLAYING text, so it is shown as
+      // written -- except for provider framing that carries nothing to
+      // display. A bare pipe token names nothing and frames nothing: it is
+      // wire protocol, not text the model chose to write, and showing it is
+      // showing the transport.
+      const shown = stripped.replace(DSML_TOKEN, (whole, slash: string, payload: string) => {
+        const body = (payload ?? '').trim().replace(/\/\s*$/, '').trim()
+        // Provider framing carries nothing to display, so inside a fence it is
+        // still rewritten into the taught spelling rather than shown as wire
+        // protocol. A token naming nothing is dropped; one naming something
+        // becomes the markup the model would have written itself.
+        return body.length === 0 ? '' : this.nativeToken(whole, slash === '/', payload)
+      })
+      // A pipe-wrapped frame with no angle brackets never matches
+      // DSML_TOKEN, so it survives every other rule and reaches the user
+      // as wire protocol. It carries nothing to display, so it goes here too.
+      .replace(BARE_FRAME_DSML, '')
+      events.push({ kind: 'text', text: `${shown}\n` })
       if (closesFence(stripped, fence)) this.fence = undefined
       return
     }
@@ -2015,16 +2137,21 @@ export class DsmlTranslator {
     // argument value. Applying the rule there dropped the closing fence of a
     // fenced argument, which left the invoke without its closer and lost the
     // whole call.
+    const visible = restoreStrippedClosers(learned)
+    if (visible !== learned) this.shapes.add('closer-stripped')
+    // Native framing is rewritten BEFORE the code-span rule can show a line
+    // verbatim. An information-free pipe token carries nothing and is not the
+    // model quoting the format; handing it to the span rule untouched is what
+    // put a literal token in front of the user.
+    const framed = this.normalizeNative(visible)
     if (this.block === undefined) {
-      const bare = outsideSpans(learned)
-      if (bare !== learned && !ANY_MARKUP.test(bare)) {
-        events.push({ kind: 'text', text: `${learned}\n` })
+      const bare = outsideSpans(framed)
+      if (bare !== framed && !ANY_MARKUP.test(bare)) {
+        events.push({ kind: 'text', text: `${framed}\n` })
         return
       }
     }
-    const visible = restoreStrippedClosers(learned)
-    if (visible !== learned) this.shapes.add('closer-stripped')
-    let rest = this.normalizeNative(visible)
+    let rest = framed
     // A stray taught closer reaching prose is structure, not content: drop it
     // and remember the exact token, so the next occurrence is rewritten before
     // the parse rather than stripped during it.
@@ -2298,7 +2425,15 @@ export class DsmlTranslator {
         events.push(...salvaged.map(call => ({ kind: 'tool-call' as const, name: call.name, arguments: call.arguments })))
         return
       }
-      events.push({ kind: 'text', text: `${raw}\n${this.blockNote(raw, named, unknown)}` })
+      // A refused block is still framing. Its tags are the model's wire
+      // protocol, not its answer, so they are stripped before anything is
+      // shown; whatever real prose the block carried survives the strip and is
+      // still displayed. The note that follows names the mistake in words, so
+      // the model is told what went wrong without the user ever seeing a tag.
+      const shown = deFramed(raw)
+      if (shown.length > 0) events.push({ kind: 'text', text: `${shown}\n` })
+      const note = this.blockNote(raw, named, unknown)
+      if (note.length > 0) events.push({ kind: 'text', text: note })
       return
     }
     events.push(...produced)
