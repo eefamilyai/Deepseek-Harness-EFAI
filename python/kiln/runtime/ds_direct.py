@@ -1458,9 +1458,21 @@ class _Client:
                                headers=self._headers(), json={"target_path": target_path},
                                impersonate=IMPERSONATE, timeout=60)
             try:
-                return r.json()["data"]["biz_data"]["challenge"]
-            except (KeyError, TypeError, ValueError, AttributeError):
+                payload = r.json()
+            except (ValueError, TypeError):
+                payload = None
+            try:
+                return payload["data"]["biz_data"]["challenge"]
+            except (KeyError, TypeError, AttributeError):
                 pass
+            # A 200 carrying an auth verdict is a dead token, not a missing
+            # challenge. Name it as such so the caller's re-login retry runs
+            # instead of the turn failing on an error nobody can act on.
+            if isinstance(payload, dict) and _is_auth_verdict(
+                    payload.get("code"), payload.get("msg")):
+                raise _AuthExpired(
+                    "DeepSeek refused the bearer token: %s"
+                    % (payload.get("msg") or payload.get("code")))
             if attempt == 0 and ds_waf is not None and _waf_intercepted(r):
                 # A stale `aws-waf-token` keeps the page loading while this route
                 # still refuses it, so take a freshly solved token and retry.
@@ -1541,7 +1553,11 @@ class _Client:
         code = payload.get("code")
         if code not in (None, 0):
             msg = payload.get("msg") or "unknown error"
-            if str(code) in ("40300", "40001") or "AUTH" in str(msg).upper():
+            # 40300 (MISSING_HEADER) is the pow-header refusal this path has
+            # always answered with a fresh login; 40001/40003 are the token
+            # verdicts. Both mean "re-authenticate and retry", so they share the
+            # one predicate rather than a second copy of the code list.
+            if str(code) == "40300" or _is_auth_verdict(code, msg):
                 raise _AuthExpired()
             raise RuntimeError(f"DeepSeek refused the upload: {msg} (code {code})")
 
@@ -2734,6 +2750,31 @@ _DEVICE_RISK_RE = re.compile(r"RISK_DEVICE|DEVICE_DETECTED|device.{0,12}risk", r
 def _is_device_risk(msg):
     """True when DeepSeek refused the login because it distrusts this device."""
     return bool(msg) and bool(_DEVICE_RISK_RE.search(str(msg)))
+
+
+# DeepSeek reports a dead bearer token inside an HTTP 200 body, not as a 401:
+# {"code":40003,"msg":"Authorization Failed (invalid token)"}. A caller that
+# reads only the HTTP status sees a success, blames the route it called
+# ("returned no challenge") and raises a plain RuntimeError -- which the
+# re-login retry catches only as _AuthExpired, so the turn failed and the
+# operator had to relogin by hand. 40001 and 40003 are the token verdicts; the
+# message text is matched too because the numeric code has drifted before.
+_AUTH_CODES = frozenset({"40001", "40003"})
+_AUTH_MSG_RE = re.compile(
+    r"Authorization Failed|invalid token|token.{0,16}(?:expired|invalid)", re.I)
+
+
+def _is_auth_verdict(code, msg):
+    """True when DeepSeek's JSON verdict says the bearer token is dead.
+
+    Kept separate from the HTTP status on purpose: the verdict arrives in a 200
+    body, so the status cannot tell it apart from a real answer. Callers raise
+    _AuthExpired for it, which is what makes the existing login-and-retry path
+    run instead of surfacing a failure the operator must fix manually.
+    """
+    if code is not None and str(code) in _AUTH_CODES:
+        return True
+    return bool(msg) and bool(_AUTH_MSG_RE.search(str(msg)))
 
 
 def _retry_kind(msg):

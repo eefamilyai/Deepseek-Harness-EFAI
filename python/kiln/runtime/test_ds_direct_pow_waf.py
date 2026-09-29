@@ -203,6 +203,71 @@ finally:
     ds.ds_waf = saved_waf
 
 
+# ── a dead token arrives inside a 200 body, not as a 401 ─────────────────────
+# DeepSeek answers `/chat/create_pow_challenge` with HTTP 200 and
+# {"code":40003,"msg":"Authorization Failed (invalid token)"}. Reading only the
+# status finds a success and no `challenge`, so the old code raised a plain
+# RuntimeError that the re-login retry never caught — the turn failed and the
+# operator had to relogin by hand. The verdict has to be classified as an auth
+# failure so the existing login-and-retry path runs.
+
+check("40003 with the Authorization Failed message is an auth verdict",
+      ds._is_auth_verdict(40003, "Authorization Failed (invalid token)"))
+check("40001 is an auth verdict", ds._is_auth_verdict(40001, ""))
+check("the code alone is enough, message or not",
+      ds._is_auth_verdict("40003", None))
+check("a dead-token message without the code is still an auth verdict",
+      ds._is_auth_verdict(None, "Authorization Failed (invalid token)"))
+check("an invalid-token message without the code is still an auth verdict",
+      ds._is_auth_verdict(None, "invalid token"))
+check("an unrelated code is not an auth verdict",
+      not ds._is_auth_verdict(40300, "MISSING_HEADER"))
+check("a missing code and message is not an auth verdict",
+      not ds._is_auth_verdict(None, None))
+
+AUTH_200 = dict(
+    status_code=200, headers={},
+    body={"code": 40003, "msg": "Authorization Failed (invalid token)", "data": None},
+    text='{"code":40003,"msg":"Authorization Failed (invalid token)","data":null}',
+)
+
+client = client_with([FakeResponse(**AUTH_200)])
+try:
+    client._pow("/api/v0/file/upload_file")
+    check("a 200 carrying an auth verdict raises rather than returning", False)
+except ds._AuthExpired as e:
+    check("a 200 carrying an auth verdict raises _AuthExpired", True)
+    check("the auth failure names the token, not the missing challenge",
+          "bearer token" in str(e) and "no challenge" not in str(e))
+except RuntimeError as e:
+    check("a 200 carrying an auth verdict raises _AuthExpired", False)
+    print(f"      (it raised RuntimeError: {e})")
+
+# The same verdict must not be mistaken for a transient blip: a caller that
+# treats it as transient never re-logs-in and the token stays dead.
+client = client_with([FakeResponse(**AUTH_200)])
+try:
+    client._pow()
+except ds._AuthExpired:
+    check("an unrecognized 200 with no auth code is still transient", True)
+except RuntimeError:
+    pass
+else:
+    check("a 200 with a non-auth body does not raise _AuthExpired",
+          not ds._is_auth_verdict(0, "ok"))
+
+client = client_with([FakeResponse(200, body={"code": 0, "msg": "ok",
+                                              "data": {"biz_data": {}}})])
+try:
+    client._pow()
+    check("a 200 with an empty biz_data is transient, not auth", False)
+except ds._AuthExpired:
+    check("a 200 with an empty biz_data is transient, not auth", False)
+except RuntimeError as e:
+    check("a 200 with an empty biz_data is transient, not auth",
+          not isinstance(e, ds._AuthExpired))
+
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} check(s) failed:")
