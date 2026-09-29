@@ -26,7 +26,7 @@
  */
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, Input } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, Input } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import css from './AccountsSection.module.css'
@@ -271,6 +271,11 @@ export function AccountsSection({
   const [rows, setRows] = useState<readonly AccountsSectionAccount[]>()
   const [rowsFailure, setRowsFailure] = useState<Failure>()
   const [expanded, setExpanded] = useState<readonly string[]>([])
+  // Rows the operator has explicitly marked to lose their browser profile with
+  // the removal. Kept per row and defaulting to empty: deleting a profile cannot
+  // be undone, so it is only ever the answer to a deliberate tick, never a
+  // default the confirmation dialog can imply.
+  const [purgeIds, setPurgeIds] = useState<readonly string[]>([])
   const [busy, setBusy] = useState<{ id: string; op: RepairKind }>()
   const [outcome, setOutcome] = useState<string>()
 
@@ -438,14 +443,20 @@ export function AccountsSection({
    * its slug is the only handle, and the same slug names its identity record and
    * its profile directory.
    *
-   * The confirmation is a browser `confirm` because this is destructive and
-   * irreversible. It also carries the purge choice: removing the config slot is
-   * reversible by adding the login again, but deleting the browser profile is
-   * not, so the two are separate answers rather than one destructive default.
+   * The confirmation is a browser `confirm` because the removal is destructive.
+   * It does NOT carry the purge choice: a dialog button answers "go ahead", and
+   * reading its OK as "and delete the browser profile too" is exactly how an
+   * irreversible deletion becomes the default. The purge answer is the row's own
+   * tick, set deliberately before Remove is pressed -- so a cancelled dialog
+   * cancels the removal, and a bare OK removes only the config slot.
    */
   const remove = useCallback(async (account: AccountsSectionAccount): Promise<void> => {
     if (provider === undefined) return
-    const wantsPurge = window.confirm(`${t('accounts.remove.confirm')}\n\n${t('accounts.remove.purgeHint')}`)
+    const wantsPurge = purgeIds.includes(account.id)
+    const prompt = wantsPurge
+      ? `${t('accounts.remove.confirm')}\n\n${t('accounts.remove.purgeHint')}`
+      : t('accounts.remove.confirm')
+    if (!window.confirm(prompt)) return
     setBusy({ id: account.id, op: 'remove' })
     setOutcome(undefined)
     let result: AccountsSectionOpResult
@@ -462,8 +473,11 @@ export function AccountsSection({
     }
     setBusy(undefined)
     setOutcome(result.ok ? t('accounts.remove.ok') : result.message ?? t('accounts.list.loadError'))
+    // The row is gone, so its purge answer no longer means anything; keeping it
+    // would silently pre-arm the next row that reused the id.
+    setPurgeIds((previous) => previous.filter((id) => id !== account.id))
     await Promise.all([loadRows(provider), poll()])
-  }, [provider, removeAccount, loadRows, poll, t])
+  }, [provider, removeAccount, loadRows, poll, t, purgeIds])
 
   return (
     <div className={css.section}>
@@ -673,6 +687,16 @@ export function AccountsSection({
                             ))}
                           </div>
                         )}
+                      <Checkbox
+                        checked={purgeIds.includes(row.id)}
+                        onChange={(next) => {
+                          setPurgeIds((previous) => next
+                            ? (previous.includes(row.id) ? previous : [...previous, row.id])
+                            : previous.filter((id) => id !== row.id))
+                        }}
+                        label={t('accounts.remove.purge')}
+                        title={t('accounts.remove.purgeHint')}
+                      />
                     </div>
                   )}
                 </div>
