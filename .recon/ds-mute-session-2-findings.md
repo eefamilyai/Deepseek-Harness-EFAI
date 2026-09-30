@@ -3188,3 +3188,268 @@ account with the wire journal on, reproduced more than once. `t1` is the only
 account that has produced this shape once; it is muted until 10-03 16:40 UTC, so
 the same test on the same account cannot run until then. A different account run
 through the same profile is the available substitute.
+
+
+---
+
+## 44. A CLOSED LEAD WAS NEARLY RE-OPENED - AND THE GUARD FOR THAT
+
+### 44.1 What happened
+
+Round 52 opened with what looked like a fresh and strong finding: the live probe's
+debug output showed
+
+    ds_hif: refresh from hif-dliq.deepseek.com failed (DNSError: Could not resolve host)
+
+and `ds_hif.headers()` returns exactly one header where the module knows of two:
+
+    x-hif-leim   len=73   BL+yRuowfz+oUrQQvH2a7txQBtPZxe1jHXLsczNW...
+    x-hif-dliq   absent
+
+The journal agrees: `x-hif-leim` 598 uses, `x-hif-dliq` **zero**. A named
+anti-abuse header that is never sent, and a host that does not resolve - on its
+face a better lead than anything in sections 37-43.
+
+**It is already closed.** `.recon/ds-direct-mute-investigation.md` investigated it
+and reached the right conclusion:
+
+    hif-dliq.deepseek.com has NO IPv4 A record on this network (AAAA only), so
+    curl_cffi cannot resolve it ... So this is an environmental divergence, not
+    a code defect, and it is not fixable from here without an IPv6-capable route.
+
+and, more decisively:
+
+    x-hif-dliq cannot be minted on this IPv4-only network and is OMITTED rather
+    than replayed stale, which is the better of the two failure modes and cannot
+    produce account-level moderation.
+
+`ds-mute-findings-summary.md` carries the same line: *"It is omitted, not replayed
+stale ... a missing header cannot produce account moderation."*
+
+So the round produced no new finding, and the honest record says so.
+
+### 44.2 The one detail that was genuinely unchecked, and it checks out
+
+The prior doc left exactly one thing UNRESOLVED:
+
+    Whether a real browser sends BOTH on /chat/completion is unconfirmed - the
+    Chrome probe could not reach an authenticated completion.
+
+That is still unresolved, and it cannot be resolved from here: it needs an
+authenticated browser session, which means using a real account, which is not
+something this investigation should do to the operator's accounts.
+
+The related question - whether `x-hif-request` is a **third request header** we
+omit - was checked and is not: `x-hif-request` appears in the recon material only
+alongside `x-hif-ttl`, both of which are the `hif-*` **endpoint's own response
+headers** (the TTL the server states for the minted value), not headers the chat
+client sends. `ds_hif` names no such request header, and the journal has never
+recorded one. The live header set is exactly `{x-hif-leim}`, which is what the
+module intends.
+
+### 44.3 The guard
+
+This is the third time in this investigation that effort went into something the
+`.recon` tree already answered - the first two were caught by measurement, this
+one by reading. The convention `AGENTS.local.md` already prescribes is the fix,
+and it was not followed at the start of the round:
+
+    BEFORE opening any new lead, search .recon for the subject first.
+
+Concretely, for this investigation the check is one call:
+
+    grep "dliq|hif|stale|cookie|header" .recon/*.md
+
+3216 `x-hif-*` mentions already exist across the `.recon` tree. A lead that is
+genuinely new will not be the first mention of its own subject.
+
+### 44.4 Where the objective actually stands
+
+The goal is to identify the accumulating cause and fix it. After 43 sections:
+
+    FALSIFIED BY MEASUREMENT
+      chat length, byte volume, system-prompt resends, aggregate pool activity
+      the WAF-burst shape (4 identical sequences, 1 muted)
+      every client-side header (the refused request is byte-identical to a
+        served one except the per-request PoW)
+      the pause-before-mute story on 6 of 7 mutes
+      device rotation, login bursts, cross-process token propagation
+
+    REAL DEFECTS FOUND AND FIXED
+      FIX 17: a mute was retried as TRANSPORT, 10 requests per refusal, and
+              escalated 72 h to 216 h (measured on jw1)
+
+    REAL DEFECTS FOUND, NOT DEMONSTRATED TO CAUSE A MUTE
+      the lease-window stale token (sections 38-39)
+
+    STILL UNIDENTIFIED
+      what actually decides a mute. The evidence says it is not the request:
+      the muted request was identical to one the server answered normally
+      five minutes earlier.
+
+The honest summary is that the *symptom* is understood far better than the
+*cause*, and the one fix that survives measurement is FIX 17 - which does not
+prevent a mute but stops a mute from being escalated into a nine-day one.
+
+
+---
+
+## 45. CORRECTION TO 44.2: THE BROWSER DOES SEND BOTH hif HEADERS
+
+### 45.1 Section 44 was wrong, and the answer was already on disk
+
+Section 44.2 said the question *"whether a real browser sends BOTH on
+/chat/completion"* was **"still unresolved, and it cannot be resolved from
+here."** That is false. The capture that answers it is in the same `.recon` tree
+section 44 was reading.
+
+`session-9be5b830.jsonl` contains a real browser's authenticated capture. It
+prints a header-frequency table, then a representative completion with full
+header values:
+
+    x-hif-dliq      5
+    x-hif-leim     35          (of 47 captured requests)
+
+and the representative POST, explicitly labelled:
+
+    === a representative POST (completion) - full headers ===
+    url: https://chat.deepseek.com/api/v0/chat/completion
+    ...
+    x-device-id: 54b12f3c-7918-4bb8-ab56-7debe7cdd68d
+    x-device-model:
+    x-ds-pow-response: eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6...
+    x-hif-dliq: zKkMWZB0KhynCvcCjQ9j8CImF3YSVCZpeCFwptbxI87/I4oy4FbEKs4=.Rwk19Z85grs8wiJd
+    x-hif-leim: 4OBuw315ohIDyxweIpBN/CHN35/HSApLcT1AP5pyW7b3Pkqqf49/n8U=.DbEA57PPx49r2Lyy
+
+**Both headers, on the completion call, with values in the documented
+`<base64 ciphertext+tag>.<base64 iv>` shape.** The unresolved question is
+resolved, and the answer is yes.
+
+### 45.2 So the omission IS a real divergence, not only a limitation
+
+The prior doc reached the right *operational* conclusion - dliq cannot be minted
+on this IPv4-only host, and omitting is better than replaying stale - but its
+framing was too generous in one respect. Section 44 repeated that framing:
+
+    x-hif-dliq ... is OMITTED rather than replayed stale, which is the better
+    of the two failure modes and cannot produce account-level moderation
+
+The comparative half is right. The absolute half is not: **a request without
+dliq is not the request a browser sends.** The browser sends both. So the harness
+presents a completion whose header set differs from a real client's by one
+anti-abuse envelope, on every request, always in the same direction.
+
+Whether that matters is unknown, and this section does not claim it does. What it
+corrects is the record: the divergence is real and known, not hypothetical.
+
+### 45.3 Why it still cannot be fixed from here
+
+Unchanged from the prior finding, and verified again this round:
+
+    hif-leim.deepseek.com   RESOLVES  -> 2600:9000:2715:0:3d00:c8:4:9d02, 3.173.21.63
+    hif-dliq.deepseek.com   FAILS locally (gaierror)
+    via 1.1.1.1:            hif-dliq has AAAA records ONLY
+                            (2600:9000:2717/2715/2716:0:3d00:c8:4:9d02)
+    hif-leim via 1.1.1.1:   d30r5fqlixgje6.cloudfront.net, with an IPv4 A record
+
+So `hif-dliq` is IPv6-only and this host has no IPv6 default route. The header
+cannot be minted here by any code change; it needs an IPv6-capable network path.
+That is an environmental fact, not a defect to patch.
+
+### 45.4 Method note - the third self-correction, and the cheapest
+
+Sections 37.4, 38.3 and now 44.2/45 are the same mistake in three costumes:
+**asserting a conclusion before checking the material that already answers it.**
+37.4 and 38.3 were caught by running a test. This one was caught by grepping the
+tree I was already reading - and the answer had been sitting in the capture the
+whole time, 470 occurrences of `x-hif-dliq` deep.
+
+The guard section 44.3 proposed is the right one and this section is its second
+demonstration: **search `.recon` before writing a claim about what is unresolved.**
+A question marked UNRESOLVED in one document may have been answered by a capture
+recorded in another.
+
+
+---
+
+## 46. `x-hif-dliq`: CONFIRMED SENT BY THE BROWSER, CONFIRMED STATIC, AND WE SEND NONE
+
+Section 45 corrected the record. This section states what the capture actually
+proves, now that the numbers have been read properly instead of skimmed.
+
+### 46.1 The confirmed facts
+
+From the authenticated browser capture in `.recon/session-9be5b830.jsonl`:
+
+    browser completions carrying x-hif-dliq : 5 of 5
+    browser completions carrying x-hif-leim : 5 of 5
+    distinct x-hif-dliq values               : 1
+    distinct x-hif-leim values               : 3
+    x-hif-dliq request value, len            : 73  (sha256 prefix eb76c5add75ef0d3)
+    dliq's own GET to hif-dliq.deepseek.com/query : status=0  (never completed, 8 attempts)
+
+Three things follow, and each is a correction to something stated earlier in this
+document:
+
+1. **The browser sends both.** Section 44.2 called this unconfirmed and
+   unresolvable. It is confirmed, in a capture that was already on disk.
+2. **`x-hif-dliq` is STATIC.** One value across every completion in the capture,
+   spanning ~40 minutes, while `x-hif-leim` rotated three times in the same
+   window. The prior doc said *"likely from local storage / a one-time fetch"* -
+   that reading holds.
+3. **The browser cannot fetch dliq either.** All eight of its own
+   `hif-dliq.deepseek.com/query` attempts returned `status=0`. So the browser is
+   not renewing dliq on the TTL; it holds one long-lived value and replays it.
+
+### 46.2 What the harness sends, verified this round
+
+    ds_hif.ENDPOINTS              : ("x-hif-leim", hif-leim), ("x-hif-dliq", hif-dliq)
+    ds_hif.headers({})            : {"x-hif-leim": <73 chars>}      <- one header
+    ds_hif.status({})             : leim "cached", dliq "absent"
+    journal, entire 2553 entries  : x-hif-leim 598 uses, x-hif-dliq 0 uses
+    ds_config.json, right now     : NO top-level "headers"; every account's
+                                    "headers" key is EMPTY
+
+So the position is: the browser sends a static dliq on every completion; the
+harness sends none, and cannot mint one because the host is IPv6-only and this
+machine has no IPv6 route.
+
+### 46.3 Why this is a real divergence and still not a fixable defect here
+
+It is a divergence - the request shape differs from a browser's on every
+completion, always the same way. It is not fixable from this host by any code
+change, because minting requires reaching an IPv6-only host.
+
+There is one theoretical route: **capture a dliq value once and replay it
+statically, the way the browser does.** The evidence supports that it would be
+*shape*-correct - dliq really is static, and the browser itself replays one value
+for at least 40 minutes. What the evidence does NOT support is that it would be
+*correct*: the value is bound to a browser session and an account, and replaying
+a foreign value from a different account's capture is exactly the "frozen capture
+is a sharper signal than nothing" failure `ds_hif`'s own docstring warns about.
+
+So this is recorded as a **known, characterised divergence**, not as a fix. It
+would need a fresh dliq from a live session on the account in question, which
+means an authenticated browser on that account - an operator action, not
+something this investigation should do to the accounts.
+
+### 46.4 Whether it can cause a mute: still unknown, and the prior claim was an assertion
+
+`ds-mute-findings-summary.md` states *"a missing header cannot produce account
+moderation."* That is an assertion, not a measurement, and this document has been
+burned three times already by exactly that move. The accurate statement is:
+
+    a missing header is a stable, always-same-direction difference from a real
+    browser, on every completion. No measurement in this investigation shows it
+    causing a verdict, and none shows it cannot.
+
+The two facts that make it *less* likely to be the accumulating cause: it is
+present from the very first request (so it cannot explain "mutes after hundreds
+of turns rather than immediately"), and it is uniform across every account,
+including ones never muted.
+
+### 46.5 Round outcome
+
+No new defect and no new fix. The round's value is that the record is now correct
+on a point it previously got wrong in both directions: section 44 wrongly called
+the question unanswerable, and the prior doc wrongly called the answer harmless.
