@@ -2895,3 +2895,131 @@ the lease. The test took four minutes and falsified the claim. That is the secon
 time in this document that an untested structural inference was wrong (the first
 was 37.4's "naked GET"), and both were caught by running the thing instead of
 reading it.
+
+
+---
+
+## 40. THE SYSTEM-PROMPT SOAK RAN TO COMPLETION: 240 TURNS, ZERO MUTES
+
+Accumulator 3 was the last one still standing. Sections 33-35 established that
+`_system_due` re-sends the system prompt every `KILN_DS_SYSTEM_EVERY` turns
+(default 8), that the resend really appears on the wire, and that no earlier soak
+had ever sent a system message at all - so every earlier "no mute" result was
+silent about this path. `_syssoak.py` was built to exercise it with a real
+1,883-character system prompt in the request body.
+
+It has now finished:
+
+    turns completed      : 240 / 240
+    system sends         : 30
+    resend cadence       : exactly 8, every time (deltas = {8})
+    mutes                : 0
+    errors               : 0
+    verdicts seen        : {None}  - not one non-null verdict in the run
+
+Two pauses, both fully explained by the retry ladder and neither followed by a
+mute:
+
+    3.1 min    00:59:06 -> 01:02:15
+    24.3 min   01:03:50 -> 01:28:05
+
+The 24.3-minute one is `RATE_MAX_TRIES` laddering - a rate-limit window parks one
+turn and resends every `DS_RATE_WAIT` (180 s), so ~24 min is eight rungs of a
+ladder the connector is *waiting* on, not load it is adding. The soak resumed at
+turn ~190 and ran clean to 240.
+
+### What this closes
+
+The system-prompt resend cannot be the accumulating cause. Over 240 turns the
+account sent 30 copies of a ~1.9 KB system prompt - roughly 57 KB in total, all
+of it into ONE server-side chat, alongside ~240 normal turns - and drew no
+verdict. That is a small fraction of the traffic `v` carried unmuted (1,012,776
+characters) and of what `f` was muted at (178,481).
+
+It also independently reproduces the rate-limit finding: the ladder is a wait,
+not an amplifier. 0.33 req/min during the window, then straight back to normal.
+
+### Accumulator scoreboard, final
+
+    1. chat length            FALSIFIED   397 turns in ONE chat, parent 12->830, no mute
+    2. byte volume            FALSIFIED   v held 1,012,776 chars unmuted; f muted at 178,481
+    3. system-prompt resends  FALSIFIED   this section: 240 turns, 30 sends, 0 mutes
+    4. aggregate pool activity FALSIFIED  6 of 8 mute windows at the random baseline
+
+All four named accumulators are now falsified by measurement rather than by
+argument. The cause of a mute remains unidentified, and the two defects this
+document *has* established - retrying a mute as TRANSPORT (section 17) and
+presenting a stale token inside a lease window (sections 38-39) - are both real
+and neither is demonstrated to cause one.
+
+
+---
+
+## 41. THE MUTED REQUEST IS SHAPE-IDENTICAL TO THE SERVED ONE
+
+### 41.1 The comparison
+
+t1's last two completion requests are 5 minutes 16 seconds apart. The first was
+served a real answer; the second was refused with the mute verdict. Every field
+the journal captures:
+
+    field                served 00:40:56        refused 00:46:12
+    -------------------  ---------------------  ---------------------
+    path                 /api/v0/chat/completion /api/v0/chat/completion
+    body_bytes           245                     245
+    header count         25                      25
+    stream               True                    True
+    authorization         afa0b46406              afa0b46406
+    aws-waf-token fp     68bf16cf13              68bf16cf13
+    ds_session_id fp     2e70199336              2e70199336
+    server answer        text/event-stream       application/json   <-- ONLY DIFFERENCE
+
+Same token, same WAF clearance, same session cookie, same request body size, same
+header set, same streaming flag. **The client sent the same request twice and got
+two different answers.**
+
+### 41.2 What this rules out
+
+Whatever the mute was based on, it was **not a difference in this client's
+request shape**. Every client-side hypothesis that would predict a distinguishable
+"bad" request - a stale cookie, a wrong header, a malformed body, a missing
+fingerprint - has to explain why the identical request was served six minutes
+earlier. This is the cleanest single piece of evidence in the whole document, and
+it is evidence *against* the client-side framing the investigation started from.
+
+It also means a mute cannot be diagnosed by inspecting the request that receives
+it. The information that decides it is not in that request.
+
+### 41.3 It corroborates the 6-minute lag from 37.2
+
+Section 37.2 established that `mute_until` back-computes to 00:40 while the
+refusal was first observed at 00:46:12, and that the account was still served at
+00:40:57. Section 41 shows the 00:46:12 request was not the cause but merely the
+first request *after* the decision had already been made server-side.
+
+So the sequence is:
+
+    00:40:55  the burst minute - WAF challenge, re-login  (the clock starts here)
+    00:40:57  completion SERVED                        (decision not yet in effect)
+    00:46:12  completion REFUSED, request identical to the served one
+
+The verdict was computed during (or about) the burst minute and enforced ~5-6
+minutes later, on whatever request came next. The connector did nothing different
+in between.
+
+### 41.4 The honest limit
+
+This is one account, one pair of requests. It narrows the search space - the
+discriminator is server-side state, not request shape - but it does not identify
+the discriminator. What it does do is close the line of investigation this
+document opened with: the operator's *"some header or something sent mustve been
+wrong"* cannot be true of the request that was muted, because that request was
+byte-for-byte the same as one the server answered normally.
+
+### 41.5 A note on idle gaps
+
+The largest gap on t1 before its mute was 59.5 min (20:34 -> 21:33), and the mute
+came 24 min after a 46.5-min gap (23:35 -> 00:21). The 90-min `IDLE_RESUME_S`
+threshold was never reached on this account, so t1 contributes no evidence either
+way about the long-idle-resume hypothesis - that stands as recorded in section 28
+(every resume after 90+ min idle was clean).
