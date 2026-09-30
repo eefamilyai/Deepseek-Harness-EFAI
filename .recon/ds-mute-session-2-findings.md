@@ -2355,3 +2355,36 @@ What remains is the shape section 25.4 left open and this section strengthens:
 the verdicts arrive in windows that are indistinguishable from quiet windows, so
 the trigger is not proportional to anything this machine sends. The one
 exception is the escalation, and that one has a mechanism and a fix.
+
+## 32. Exactly which fixes are live, and the one restart that activates the rest
+
+### 32.1 The measurement
+
+The running `provider_bridge.py` started at **09-30 19:41:49**. `ds_direct.py` was last modified at **09-30 21:24:27** -- 1 h 43 m *later*. Python caches an imported module for the life of the process, so the bridge is executing the source as it stood at 19:41:49, not what is on disk now.
+
+| fix | landed | live in the running bridge? |
+| --- | --- | --- |
+| FIX 1-10 | before 19:41:49 | **yes** |
+| FIX 11 (`ds_wirelog.on`) | marker created 20:34:06 | **no** -- `enabled()` cached `False` |
+| FIX 12 (mute ledger) | 20:35:58 | **no** |
+| FIX 14 (state merge) | 21:18:31 | **no** |
+| FIX 15 (last_prompt bound) | 21:25:11 | **no** |
+| FIX 16 (journal rotation) | 21:26:01 | **no** |
+
+So the protections the soaks have been demonstrating run in the *soaks' own processes*, which import the current source fresh. The bridge -- the process that serves this agent, and the one whose account was muted -- is running code from before FIX 12.
+
+### 32.2 Why this matters, concretely
+
+1. **FIX 11 is off** (section 30), so this agent's own request path is unjournaled. A mute against the agent's route would arrive with no preamble.
+2. **FIX 12 is off**, so the bridge's account pool does not yet skip an account the ledger knows is muted. The next selection can still hand work to a benched account.
+3. **FIX 14 is off**, so the bridge can clobber a mute another process recorded.
+
+None of these has been triggered since 19:41 -- no mute has been issued to this account in that window -- so this is a latent gap rather than an active failure.
+
+### 32.3 The request
+
+**Restart `provider_bridge.py`.** One restart activates FIX 1-16 and turns the wire journal on for the agent's own path.
+
+FIX 17 needs no restart of the bridge: it is TypeScript, already bundled into `packages/llm/llm-kiln/lib/index.js`, and takes effect when the harness next loads that package.
+
+This is left to the operator deliberately. The bridge is the route this agent is currently running through: terminating it mid-turn would end the session doing the investigating, the same reasoning recorded in section 30.4.
