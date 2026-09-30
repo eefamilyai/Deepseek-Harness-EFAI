@@ -3523,6 +3523,27 @@ def _sleep_cancellable(secs, cancelled, step=0.5):
 # turn after a restart would never see the gap, however long it was. Best-effort --
 # losing the file restores the previous behaviour, which is not worse.
 IDLE_RESUME_S = RATE_MAX_TRIES * DS_RATE_WAIT + 1800.0      # 5400 s = 90 min
+
+
+def _preempt_is_fresh(cancelled_at, now=None):
+    """Whether a recorded cancel is recent enough to still send `preempt:true`.
+
+    `was_cancelled` arms a one-shot preempt on the NEXT turn, so that a user who
+    stops a generation makes the following send kill the server-side generation
+    still running. That is only a real browser behaviour in the moment: after a
+    long pause the page is freshly loaded and no stale generation exists, so
+    `preempt:true` becomes a request shape the website does not produce.
+
+    Unknown age counts as fresh -- an entry written before this stamp existed
+    must keep the behaviour it had, since losing the flag is the worse failure.
+    """
+    if cancelled_at is None:
+        return True
+    try:
+        age = (time.time() if now is None else now) - float(cancelled_at)
+    except (TypeError, ValueError):
+        return True
+    return age < IDLE_RESUME_S
 _LAST_TURN_FILE = os.path.join(
     os.environ.get("KILN_STATE_DIR") or _DIR, "ds_last_turn.json")
 _last_turn_lock = threading.Lock()
@@ -3671,9 +3692,19 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
         prev_sent = int(st.get("sent") or 0)
         prev_prompt = st.get("last_prompt")
         prev_sid = st.get("sid")
+        # One-shot, and honoured only while FRESH. After a long pause the browser
+        # is a freshly loaded page, not a page mid-cancel, so `preempt:true` on the
+        # first request back is a shape the website does not produce. Same
+        # idle-gap threshold as `_resume_hygiene`, so both guards agree.
+        cancelled_at = st.pop("was_cancelled_at", None)
         if st.pop("was_cancelled", False):
-            need_preempt = True
-            config.dbg("ds_direct: was_cancelled flag found for %s → need_preempt=True", key)
+            if _preempt_is_fresh(cancelled_at):
+                need_preempt = True
+                config.dbg("ds_direct: was_cancelled flag found for %s -> need_preempt=True", key)
+            else:
+                stale_min = (time.time() - float(cancelled_at)) / 60.0
+                config.dbg("ds_direct: was_cancelled flag is %.0f min stale for %s -- ignored",
+                           stale_min, key)
             _save_sessions()
     full_prompt = _full_conversation_prompt(messages)
     # A transcript that SHRANK since we last threaded it was rewritten by the
@@ -3885,6 +3916,9 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                 with _session_lock:
                     st = _sessions.get(key) or {}
                     st["was_cancelled"] = True
+                    # Stamped so the next turn can tell "just cancelled" from
+                    # "cancelled, then the machine sat idle overnight".
+                    st["was_cancelled_at"] = time.time()
                     _sessions[key] = st
                     _save_sessions()
 

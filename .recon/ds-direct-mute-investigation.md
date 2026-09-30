@@ -979,3 +979,51 @@ entirely -- so no events are yielded, `yielded` stays False, and the
 correct; the gap was only the `hint` variant.
 
 `test_ds_direct_hint_mute.py`: 23 checks. All 15 suites green.
+
+## A SECOND PIECE OF STALE STATE SURVIVES THE SAME PAUSE (round 33)
+
+Found by looking for the SAME SHAPE as the resume-cookie defect rather than for
+new evidence: `_resume_hygiene` exists because state that made sense before a
+pause should not be replayed after one. `was_cancelled` is a second instance.
+
+WHAT IT IS FOR. When the user stops a generation, the next send carries
+`preempt:true` so DeepSeek kills the server-side generation still running
+instead of queueing our new prompt behind it. That is a real browser behaviour --
+in the moment it happens.
+
+THE DEFECT. The flag is PERSISTED (`st["was_cancelled"] = True`, then
+`_save_sessions()`) and popped on the NEXT turn however far away that is. A
+cancel followed by an overnight pause therefore still sent `preempt:true` on the
+first request back. By then the stale generation is long finished and the page is
+a freshly loaded one, which is not a state that sends preempt at all. So the
+first request after a long pause carried a body field the website would not
+produce -- the same shape as the session cookie the resume guard already drops on
+the same pause.
+
+FIX. The cancel is now STAMPED when recorded, and honoured only while fresh:
+
+    def _preempt_is_fresh(cancelled_at, now=None):
+        if cancelled_at is None:
+            return True                      # no stamp: keep the old behaviour
+        age = (time.time() if now is None else now) - float(cancelled_at)
+        return age < IDLE_RESUME_S
+
+It reuses `IDLE_RESUME_S` on purpose: both guards are about the same thing -- the
+first request after a long pause should not carry state that only made sense
+before it -- so they must not drift apart. Unknown age counts as FRESH, because
+an entry written before the stamp existed must keep the behaviour it had, and
+losing the flag is the worse failure (a live server generation queues behind
+ours).
+
+WHY IT IS A HELPER. The first version was three inline lines inside
+`_stream_with`, which nothing could reach without constructing a client and
+driving a whole turn -- so the threshold went untested. That is the same mistake
+the IDLE_RESUME_S work already paid for once. Extracted so the decision is
+testable; `test_ds_direct_preempt_freshness.py`, 18 checks.
+
+CLASSIFICATION: a PRECAUTION, not a measured mute cause -- recorded as such. It
+cannot be evidenced from the existing logs because the flag's value is never
+logged. It is fixed because it is the same defect shape as one already fixed, and
+because it is cheap and safe.
+
+All 16 kiln suites green.
