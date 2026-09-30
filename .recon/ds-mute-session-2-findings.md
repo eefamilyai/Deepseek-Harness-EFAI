@@ -1504,3 +1504,71 @@ It is also a limit on what can be recovered: any mute that occurred before
 2026-09-29 17:48:56 and surfaced as "no challenge" left **no `mute_until`** to
 read, so those penalties cannot be back-computed. Their number is unknown and
 unknowable from these logs.
+
+
+---
+
+# 23. FIX 3 verified LIVE — the first real exercise of `_resume_hygiene`
+
+Section 17.2 established that FIX 3 *was* running in the soaks. This is it
+actually firing.
+
+## 23.1 What happened
+
+The t2 soak takes a deliberate walk-away with probability 0.04 per turn, and at
+turn 29 it drew one. It slept **95.8 minutes** (20:06:28 -> 21:42:18), which
+crosses `IDLE_RESUME_S = 5400 s` (90 min). On the next turn:
+
+```
+[ds_direct] ds_direct: deepseek.ee.1+t2@gmail.com resumed after 96 min idle
+            -- dropped the stale ds_session_id (it named a session the server
+            had rejected)
+```
+
+That is the fix doing exactly what it was written to do, and it is the **first
+time any of these guards has been exercised by real traffic** rather than by a
+unit test. The gap (95.8 min) exceeding the threshold (90 min) is the condition
+the unit suite asserts synthetically; this is the same condition arising on its
+own.
+
+## 23.2 Why this is worth more than the unit tests
+
+`test_ds_direct_resume_hygiene.py` proves the logic given a fabricated gap. What
+it cannot prove is that the gap *occurs in practice* and that the surrounding
+machinery — the persisted `ds_last_turn.json` clock, the pool, the real jar —
+cooperates. Two things had to be true at once for this to fire:
+
+1. the persisted clock must have survived the gap (FIX 14 territory — a clobber
+   would have erased t2's entry and `prev` would have been `None`);
+2. the jar must actually have held a `ds_session_id` to drop.
+
+Both held. The soak continued to turn 55 with no mute.
+
+## 23.3 The fast soak
+
+`_fastsoak.py` (new) drives 400 turns at 5-15 s with **no walk-aways**, because
+the objective asks for *hundreds of consecutive turns* and neither existing soak
+can reach that in useful time: the t1 human-pace soak waits 180-600 s per turn
+(9 turns in 100 minutes), and the t2 soak spends an expected ~19 hours of its 300
+turns asleep.
+
+It reuses the verified mute-capture design exactly: catch `_Muted` **by type**,
+run all four verdict readers, let `ds_wirelog.verdict()` write the verdict with
+its preamble, and **stop** (`return 3`) rather than hammering.
+
+**Result so far: 200 of 400 turns on t1, 0 mutes, 1 transient error** — a single
+`curl: (56) Connection was reset`, which is a transport blip and not a verdict.
+No rate-limiting at 5-15 s spacing.
+
+A logging bug was found and fixed during the smoke test: `sid_for` defaulted
+`model_type` to `None`, but `stream()` keys sessions as `<conv>#default`, so
+every row logged `sid: null` — an objective-required field silently empty. The
+fix is a one-word default change, and it is recorded here because it is the same
+class as FIX 12 and FIX 14: a value that existed and was discarded.
+
+## 23.4 Honest status
+
+**No mute has occurred on t1 or t2.** 55 turns (t2) and 200+ turns (t1), zero
+mutes. The instrumentation is verified, FIX 3 is verified live, and the fast soak
+is now generating the volume the objective asks for. What remains is the event
+itself.
