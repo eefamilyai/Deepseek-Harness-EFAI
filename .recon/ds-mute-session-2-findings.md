@@ -2215,3 +2215,80 @@ account's login could predate its journal. This is evidence against the login
 burst as a *sufficient* trigger, not a proof of absence. It is, however, the
 opposite of what the hypothesis predicts: the heavily-logged-in accounts are the
 clean ones.
+
+## 30. FIX 11 is not live: the agent's own path has never been journaled
+
+This is the most consequential gap found since FIX 1, and it is an operational
+fact rather than a code defect.
+
+### 30.1 The measurement
+
+Splitting every request in `ds_wirelog.jsonl` at the bridge's start time:
+
+| window | accounts present |
+| --- | --- |
+| **before** 09-30 19:41:49 | `v` -- 176 requests |
+| **after** 09-30 19:41:49 | `t1` -- 911, `t2` -- 153 |
+
+And per account, for the two accounts the agent actually ran on:
+
+| account | before 19:41 | after 19:41 |
+| --- | --- | --- |
+| `j1` (served the agent 14:52-20:00) | **0** | **0** |
+| `v` (served the agent from 20:11) | 176 | **0** |
+
+**Zero requests from the agent's own provider route have been journaled since the
+bridge started.** `j1` has no journal entries at all.
+
+### 30.2 Why -- and the marker file says so itself
+
+`ds_wirelog.enabled()` caches its answer in a module global:
+
+    _ON = None
+    def enabled():
+        global _ON
+        if _ON is None:
+            ... resolve env var or marker ...
+        return _ON
+
+The current bridge started at **19:41:49**. `ds_wirelog.on` was created at
+**20:34:06** -- 52.3 minutes later. The bridge resolved `_ON = False` on its first
+call and kept that value for the life of the process. The marker's own closing
+paragraph states the consequence exactly:
+
+> A process must (re)load the module to resolve the flag: `enabled()` caches on
+> first call, and provider_bridge caches its modules. **A bridge already running
+> when this file was created keeps journaling OFF until it is restarted.**
+
+So the account under investigation -- the one that actually serves this agent --
+is the one account whose requests are invisible. That is precisely backwards, and
+it is the situation FIX 11 was written to fix. FIX 11 is correct; it simply has
+not taken effect, because it needs a process restart rather than a code change.
+
+### 30.3 What this does and does not invalidate
+
+**Not invalidated.** Every soak measurement stands: the soaks set
+`KILN_DS_WIRELOG=1` in their own environment and journal correctly to their own
+state dir. Sections 26 and 27 -- the delta wire, the three falsified
+accumulators, the 6-for-6 resend correlation -- are all from soak or pre-marker
+data and are unaffected.
+
+**Weakened.** Any claim about the *agent's* own request shape rests on the 176
+`v` entries from **before** 19:41, which came from an older process that did have
+the journal on. Those are valid, but they describe the pre-bridge path. After
+19:41 the agent's traffic is unobserved.
+
+**The specific gap:** if a mute is issued against the agent's own route, there
+will be no journal preamble to read. `ds_muted.json` and the verdict readers
+still record the verdict itself, so a mute is not invisible -- but the 80-entry
+request preamble that would show *what preceded it* will not exist.
+
+### 30.4 The remedy is a restart, and it is the operator's call
+
+No code change is needed. `provider_bridge.py` must be restarted so it reloads
+`ds_wirelog` and resolves `_ON = True` from the marker.
+
+This is deliberately **not** something done here: the bridge is the route this
+agent is currently running through, so terminating it mid-turn would end the
+session that is doing the investigating. The operator has restarted the harness
+before for exactly this kind of change, and this note is the request.
