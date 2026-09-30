@@ -1213,3 +1213,51 @@ and the one mute with a recoverable issue instant was issued 14 minutes BEFORE
 its burst began. Retrying is a consequence of a mute, never its cause.
 
 PROBE: `_discover.py` (burst vs observation), `_fixcheck.py` (pre/post the fix).
+
+## THREE MORE MUTES, EACH ON A DIFFERENT ACCOUNT, EACH WITH ITS OWN BURST (round 33)
+
+Attribution was the missing step. The retry burst that precedes a mute names the
+account it was retrying, via the `provider` field:
+
+    mute observed 09:20:57Z   10 retries   parserfix@gmail.com
+    mute observed 11:31:19Z    5 retries   jw1@gmail.com
+    mute observed 13:02:53Z    5 retries   7@gmail.com
+
+Three DIFFERENT accounts, none of them the `v`/`f`/`hunt` trio catalogued
+earlier. So these are three additional mutes that were never in the operator's
+banners, and the burst-then-verdict pattern repeats independently on each. A
+pattern that reproduces on three unrelated accounts is a mechanism, not a
+coincidence of one chat.
+
+The mechanism, stated once:
+
+  1. DeepSeek mutes an account and issues the verdict at some instant T.
+  2. The verdict is delivered ASYNCHRONOUSLY -- observed 15 min and 95 min later
+     in the two cases where the issue instant is recoverable.
+  3. When it finally arrives it is a bare JSON envelope with no `event:` framing,
+     so before 7d6888732c `_parse` yielded nothing and the turn looked like an
+     EMPTY RESPONSE.
+  4. The harness retried that "empty response" under its own policy --
+     5 to 10 fresh requests, each one aimed at an account DeepSeek had already
+     refused.
+  5. The last of those requests carried the verdict back, and the burst stopped.
+
+So: mutes cause retries. The retries do not cause mutes. The storm hypothesis is
+backwards, and this is the third independent line of evidence saying so.
+
+THE INTERRUPTED-TURN ANGLE, AND ITS LIMIT. Only 8 `turn/end reason=interrupted`
+events exist in the whole history, and two fall 3 and 9 minutes before issue
+instant A, in sessions `7cff4905` and `9be5b830`. Under a uniform-rate
+assumption that is p~0.001. RECORDED BUT NOT CLAIMED: the window was chosen after
+seeing the data, many features have been tested, and 8 events cannot support a
+conclusion. It is noted as the one remaining lead worth a larger sample, not as a
+finding. Nothing was changed on the strength of it.
+
+HONEST STATE OF THE INVESTIGATION. The mute is asynchronous, fixed-duration (72 h
+and 216 h both confirmed), and delivered late. What ISSUES it is not visible in
+any local artifact: the issue instants fall both during activity and during
+idleness, no local request correlates, no storm precedes it, and the only
+verdict-side pattern -- the retry burst -- is a consequence. The concrete
+defects found and fixed along the way are real and each is independently tested;
+the accumulating cause behind the mute itself has not been identified from the
+available evidence, and inventing one would be worse than saying so.
