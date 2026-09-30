@@ -43,6 +43,18 @@ def read_lines():
 
 def main():
     root = tempfile.mkdtemp(prefix="ds-wirelog-test-")
+    # The operator may have switched the journal on for this machine. `enabled()`
+    # reads the marker, so "off by default" is untestable while one exists. Hide
+    # it for the run and restore it in `finally` -- never delete it, and never
+    # leave it hidden.
+    real_marker = os.path.join(os.path.dirname(os.path.abspath(wl.__file__)),
+                               "ds_wirelog.on")
+    stashed = real_marker + ".suitebak"
+    hid_marker = False
+    if os.path.exists(real_marker):
+        os.replace(real_marker, stashed)
+        hid_marker = True
+        wl._ON = None
     try:
         # --- enabled resolution -------------------------------------------------
         print("enabled resolution")
@@ -64,12 +76,17 @@ def main():
         reset(os.path.join(root, "b"))
         marker = os.path.join(os.path.dirname(os.path.abspath(wl.__file__)),
                               "ds_wirelog.on")
+        # Save/restore, never clobber. This marker is an OPERATOR SWITCH: a real
+        # one may already exist on the machine, and removing it in `finally`
+        # turned the wire journal off for every process started afterwards. Only
+        # a marker THIS test created may be removed.
+        had_marker = os.path.exists(marker)
         try:
             open(marker, "w").close()
             wl._ON = None
             check("on via ds_wirelog.on marker", wl.enabled())
         finally:
-            if os.path.exists(marker):
+            if not had_marker and os.path.exists(marker):
                 os.remove(marker)
             wl._ON = None
 
@@ -292,6 +309,9 @@ def main():
         shutil.rmtree(root, ignore_errors=True)
         os.environ.pop("KILN_DS_WIRELOG", None)
         os.environ.pop("KILN_STATE_DIR", None)
+        if hid_marker and os.path.exists(stashed):
+            os.replace(stashed, real_marker)
+        wl._ON = None
 
     failed = [c for c in CHECKS if not c[1]]
     print("\n%d check(s), %d failed" % (len(CHECKS), len(failed)))

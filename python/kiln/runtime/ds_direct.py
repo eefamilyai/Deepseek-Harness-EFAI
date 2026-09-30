@@ -909,8 +909,21 @@ def _account_order(key, pinned=None):
         sticky = _next_account_id()
     if sticky in ids:
         i = ids.index(sticky)
-        return ids[i:] + ids[:i]
-    return ids
+        order = ids[i:] + ids[:i]
+    else:
+        order = list(ids)
+    # A muted account sorts LAST rather than being removed. It is not healthy, so
+    # it must not be preferred -- but if the whole pool is muted the caller still
+    # gets a real verdict instead of "no accounts configured", which would hide
+    # the one fact worth reporting. A PINNED account is an explicit instruction
+    # and is left where it is, mute or not.
+    now = time.time()
+    preferred = [a for a in order if a == pinned or not _muted_now(a, now)]
+    benched = [a for a in order if a != pinned and _muted_now(a, now)]
+    if benched:
+        config.dbg("ds_direct: %d account(s) muted, deprioritised: %s"
+                   % (len(benched), ", ".join(benched)))
+    return preferred + benched
 
 
 def configured():
@@ -1737,6 +1750,8 @@ class _Client:
             # DeepSeek has plainly told us it will not serve.
             muted = _mute_of(payload)
             if muted:
+                _note_mute(getattr(self.account, "id", None),
+                           _mute_until_of(payload))
                 ds_wirelog.verdict("mute", muted,
                                    account=getattr(self.account, "id", None))
                 raise _Muted(
@@ -1825,6 +1840,8 @@ class _Client:
         # gets "muted" rather than "refused the upload".
         muted = _mute_of(payload)
         if muted:
+            _note_mute(getattr(self.account, "id", None),
+                       _mute_until_of(payload))
             ds_wirelog.verdict("mute", muted,
                                account=getattr(self.account, "id", None))
             raise _Muted(
@@ -3225,6 +3242,133 @@ def _mute_verdict(code, msg, biz_data=None):
     return bool(msg) and bool(_MUTE_MSG_RE.search(str(msg)))
 
 
+# ─── The mute ledger ──────────────────────────────────────────────────────────
+#
+# `mute_until` is the ONLY second-precision timestamp DeepSeek gives us for a
+# moderation verdict, and until this existed it was formatted to a minute and
+# dropped. Two consequences were both live: a post-mortem could not place the
+# issue instant more precisely than the minute, and the pool kept selecting an
+# account it already knew was refused.
+#
+# Persisted, like `ds_last_turn.json`, because a mute outlives the process by
+# days: the bridge is restarted far more often than a 72 h penalty expires, so an
+# in-memory map would forget a verdict it had already been told.
+#
+# Best-effort throughout. Losing this file costs a wasted request, which is the
+# behaviour that existed before it -- never a failed turn.
+_MUTE_STATE_FILE = os.path.join(
+    os.environ.get("KILN_STATE_DIR") or _DIR, "ds_muted.json")
+_mute_lock = threading.Lock()
+
+
+def _load_muted():
+    """account id -> mute_until epoch, or {} when absent/corrupt."""
+    try:
+        with open(_MUTE_STATE_FILE, "r", encoding="utf-8") as f:
+            doc = json.load(f)
+    except Exception:  # noqa: BLE001 -- absent or corrupt is not fatal
+        return {}
+    out = {}
+    for k, v in (doc or {}).items():
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            continue
+        if v > 0:
+            out[str(k)] = v
+    return out
+
+
+_muted_until = _load_muted()
+
+
+def _save_muted():
+    try:
+        _atomic_json(_MUTE_STATE_FILE, dict(_muted_until))
+    except Exception:  # noqa: BLE001 -- persistence must never break a turn
+        pass
+
+
+def _note_mute(acct_id, until):
+    """Record that `acct_id` is refused until epoch `until`.
+
+    Called at every site that raises `_Muted`, so the ledger cannot drift from
+    the verdicts the connector actually saw.
+    """
+    try:
+        until = float(until)
+    except (TypeError, ValueError):
+        return
+    if not acct_id or until <= 0:
+        return
+    with _mute_lock:
+        prev = _muted_until.get(acct_id)
+        # Keep the LATER expiry. A second verdict for the same account can only
+        # arrive from a retry against a verdict already in hand, and the server
+        # was measured never to move `until` -- but if it ever escalates, the
+        # longer penalty is the safe one to remember.
+        if prev is None or until > prev:
+            _muted_until[acct_id] = until
+            _save_muted()
+
+
+def _muted_now(acct_id, now=None):
+    """Whether `acct_id` is currently serving a mute, pruning stale entries.
+
+    An expired entry is dropped and the file rewritten, so the ledger does not
+    grow without bound and an account comes back the moment its penalty lapses.
+    """
+    now = time.time() if now is None else now
+    with _mute_lock:
+        until = _muted_until.get(acct_id)
+        if until is None:
+            return False
+        if until <= now:
+            del _muted_until[acct_id]
+            _save_muted()
+            return False
+        return True
+
+
+def _mute_until_of(obj):
+    """The raw `mute_until` epoch in a PARSED envelope, or None.
+
+    The machine-readable twin of `_mute_of`: same nested path, same three tells,
+    but it returns the FLOAT instead of a formatted string. Kept separate rather
+    than widening `_mute_of`'s return, because five call sites and their tests
+    depend on that function returning a message.
+    """
+    if not isinstance(obj, dict):
+        return None
+    data = obj.get("data")
+    if not isinstance(data, dict):
+        return None
+    if not _mute_verdict(data.get("biz_code"), data.get("biz_msg"),
+                         data.get("biz_data")):
+        return None
+    biz = data.get("biz_data")
+    until = biz.get("mute_until") if isinstance(biz, dict) else None
+    if isinstance(until, (int, float)) and not isinstance(until, bool) and until > 0:
+        return float(until)
+    return None
+
+
+def _mute_until_in(raw_lines):
+    """The raw `mute_until` epoch carried by a raw body, or None."""
+    for line in raw_lines or ():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", "ignore")
+        text = line[5:].strip() if isinstance(line, str) and line.startswith("data:") else line
+        try:
+            obj = json.loads(text)
+        except Exception:
+            continue
+        until = _mute_until_of(obj)
+        if until is not None:
+            return until
+    return None
+
+
 def _mute_of(obj):
     """The mute message in a PARSED response envelope, or None.
 
@@ -3973,6 +4117,9 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
             # already refused, and the operator sees prose instead of the verdict.
             # Read with the same three tells every other mute site uses.
             if _mute_verdict(None, server_error, None):
+                # This route carries the wording but no envelope, so there is no
+                # `mute_until` to record. The ledger still cannot bench the account
+                # for a bounded time, but the operator gets the verdict either way.
                 _persist_cookies(client)
                 ds_wirelog.verdict("mute", server_error,
                                    account=getattr(client.account, "id", None))
@@ -4000,6 +4147,8 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
             # told us it will not serve.
             muted = _mute_verdict_in(raw_sink)
             if muted:
+                _note_mute(getattr(client.account, "id", None),
+                           _mute_until_in(raw_sink))
                 _persist_cookies(client)
                 ds_wirelog.verdict("mute", muted,
                                    account=getattr(client.account, "id", None))
@@ -4359,6 +4508,8 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
         # DeepSeek has already refused.
         muted = _mute_verdict_in(raw_sink)
         if muted:
+            _note_mute(getattr(client.account, "id", None),
+                       _mute_until_in(raw_sink))
             ds_wirelog.verdict("mute", muted,
                                account=getattr(client.account, "id", None))
             raise _Muted(
