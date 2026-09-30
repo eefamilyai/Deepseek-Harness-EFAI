@@ -1965,12 +1965,68 @@ def _load_sessions():
 _sessions = _load_sessions()
 
 
+# `last_prompt` has exactly ONE reader -- `_turn_usage`, which measures the common
+# prefix between the previous turn's prompt and this one to estimate the prompt
+# cache read. `_common_prefix_len` is bounded by `min(len(a), len(b))`, so keeping
+# a PREFIX is exactly equivalent for every common prefix up to the cap; above it
+# only a reported usage number is understated, never anything sent.
+#
+# Unbounded, it was the entire reason this file reached 46 MB: `last_prompt` was
+# 43.46 MB of a 46.69 MB file, median 176 KB and max ~1 MB per entry, rewritten
+# atomically on every turn. The entry COUNT also grows without bound (one per kiln
+# conversation), so a per-entry cap alone would not bound the file -- hence the
+# most-recently-used retention below.
+_LAST_PROMPT_CAP = 262144          # 256 Ki characters, ~64k English tokens
+_LAST_PROMPT_KEEP = 40             # most-recently-used entries that retain one
+
+
+def _prune_last_prompts(sessions):
+    """Bound `last_prompt`: a capped prefix, kept only for the active entries.
+
+    Mutates `sessions` in place and returns it. The mapping fields (`sid`,
+    `parent`, `sent`, `account`) are never touched, so a pruned entry still
+    resumes the SAME DeepSeek chat; the sole cost is one turn whose reported
+    cache-read is understated, after which the prompt is stored again. That makes
+    this self-healing rather than lossy.
+
+    TRUNCATES as well as drops, and that is not redundant with the cap applied at
+    the write site. Only this function sees every entry on every save, so it is
+    the one place that can shrink a file which is ALREADY oversized -- the 46 MB
+    that prompted this fix was written before any cap existed, and an entry set by
+    any other path would bypass a write-site-only cap. Enforcing it here means the
+    first save after this ships reclaims the space.
+    """
+    stamped = []
+    for key, st in sessions.items():
+        if not isinstance(st, dict) or "last_prompt" not in st:
+            continue
+        try:
+            ts = float(st.get("_seen") or 0)
+        except (TypeError, ValueError):
+            ts = 0.0
+        stamped.append((ts, key))
+    # An entry with no stamp sorts last, so a legacy record is pruned before one
+    # this process has actually touched.
+    stamped.sort(key=lambda r: (r[0], r[1]), reverse=True)
+    for rank, (_, key) in enumerate(stamped):
+        st = sessions.get(key)
+        if not isinstance(st, dict):
+            continue
+        if rank >= _LAST_PROMPT_KEEP:
+            st.pop("last_prompt", None)
+            continue
+        prompt = st.get("last_prompt")
+        if isinstance(prompt, str) and len(prompt) > _LAST_PROMPT_CAP:
+            st["last_prompt"] = prompt[:_LAST_PROMPT_CAP]
+    return sessions
+
+
 def _save_sessions():
     # Same reasoning as _atomic_json above: corrupting this file loses every
     # kiln-conversation -> DeepSeek-chat mapping, and _load_sessions returns {}
     # for a bad file, so every existing chat would silently start from scratch.
     try:
-        _atomic_json(_SESS_FILE, _sessions)
+        _atomic_json(_SESS_FILE, _prune_last_prompts(_sessions))
     except Exception:
         pass
 
@@ -3880,6 +3936,12 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
         prev_sent = int(st.get("sent") or 0)
         prev_prompt = st.get("last_prompt")
         prev_sid = st.get("sid")
+        # Mark this entry as recently used, so _prune_last_prompts keeps the
+        # prompt of a conversation that is actually running and drops the ones
+        # that are not. Only a stored entry is stamped; `or {}` above may hand
+        # back a throwaway dict for a conversation that has no state yet.
+        if key in _sessions:
+            st["_seen"] = time.time()
         # One-shot, and honoured only while FRESH. After a long pause the browser
         # is a freshly loaded page, not a page mid-cancel, so `preempt:true` on the
         # first request back is a shape the website does not produce. Same
@@ -4292,7 +4354,10 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
                                   if m.get("role") != "system"
                                   and m.get("kind") != "env"])
                     st["sent"] = body_n + 1
-                    st["last_prompt"] = full_prompt
+                    # A PREFIX only: _turn_usage needs the common prefix with the
+                    # next prompt, which cannot exceed this -- see _LAST_PROMPT_CAP.
+                    st["last_prompt"] = full_prompt[:_LAST_PROMPT_CAP]
+                    st["_seen"] = time.time()
                     _note_system_sent(st)
                 _save_sessions()
             if yielded:

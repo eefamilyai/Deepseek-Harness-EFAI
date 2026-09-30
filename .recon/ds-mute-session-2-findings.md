@@ -1117,3 +1117,113 @@ with the idle-window verdicts (8.3) and the flat request shape (12), the evidenc
 keeps pointing away from "something in what the connector sent" and toward a
 server-side decision about the *account set* — which is where the alias-base
 question of 15.5 remains open.
+
+
+---
+
+# 18. FIX 15 — ds_sessions.json was growing without bound (46.76 MB)
+
+This is the **first thing in the investigation that literally accumulates per
+turn**, and it was found by accident while checking a soak.
+
+## 18.1 The measurement
+
+`.kiln_kernel_state/ds_sessions.json` was **46.76 MB for 195 entries** — about
+240 KB per entry, which is absurd for a session-mapping file. Breaking it down by
+field:
+
+| field | bytes | share |
+| --- | --- | --- |
+| **`last_prompt`** | **43.46 MB** | **93 %** |
+| `ref_sent` | 22 KB | 0.05 % |
+| `sid` | 7.4 KB | 0.02 % |
+| `account` | 4.6 KB | 0.01 % |
+| everything else | < 1 KB | — |
+
+Per-entry prompt sizes: **median 176 KB, p90 500 KB, max 997 KB.**
+
+Two independent growth axes, which is why a per-entry cap alone would not have
+fixed it:
+
+1. each entry stored the **entire** reconstructed conversation prompt;
+2. the **entry count** grows without bound — one per kiln conversation.
+
+And `_save_sessions()` rewrites the whole file atomically (mkstemp + fsync +
+replace) and is called from **14 sites**, at least once per turn.
+
+## 18.2 Why bounding it is safe
+
+`last_prompt` has exactly **one** reader:
+
+```python
+prev_prompt = st.get("last_prompt")                              # 3881
+usage = _turn_usage(None if fresh_chat else prev_prompt, ...)    # 4276
+```
+
+and `_turn_usage` uses it for exactly one thing:
+
+```python
+common = _common_prefix_len(prev_prompt, prompt)                 # 2461
+```
+
+`_common_prefix_len` is bounded by `min(len(a), len(b))`, so **storing a prefix is
+exactly equivalent** for every common prefix up to the cap. Above the cap only the
+reported `cache_read` is understated — a cosmetic number in a usage report, never
+anything sent on the wire.
+
+The fields that actually resume a chat — `sid`, `parent`, `sent`, `account` — are
+untouched, so a pruned entry still resumes the **same** DeepSeek chat.
+
+## 18.3 The fix
+
+`_LAST_PROMPT_CAP = 262144` chars (256 Ki ≈ 87k English tokens) and
+`_LAST_PROMPT_KEEP = 40` most-recently-used entries. A `_seen` stamp at turn start
+and at the write site drives the retention, so a conversation that is actually
+running keeps its prompt and idle ones do not.
+
+**Truncation happens inside `_prune_last_prompts`, not only at the write site**,
+and the test suite caught that this mattered: an earlier version applied the cap
+only when storing, which meant the already-oversized file would never shrink and
+any other setter would bypass the cap. Enforcing it in the prune is what makes the
+next save reclaim the space.
+
+## 18.4 Verification on the real file
+
+Run against a **copy** of the actual 46.76 MB file, so the original was untouched
+(asserted: unchanged byte-for-byte afterwards):
+
+| | |
+| --- | --- |
+| before | 46.76 MB |
+| after one save | **8.85 MB** |
+| reclaimed | **37.91 MB (81.1 %)** |
+| entries after | 195 (was 195) |
+| same key set | **True** |
+| every `sid` intact | **True** |
+| max stored prompt | 262144 chars (= cap) |
+| entries retaining a prompt | 40 (= KEEP) |
+
+`test_ds_direct_session_bound.py` — **22 checks, 0 failed** — asserts the cap, the
+prefix property, that a small prompt is stored unchanged, that all four mapping
+fields survive, that exactly KEEP entries retain a prompt and the retained set is
+the KEEP *newest*, that no entry is ever deleted, that pruning is self-healing
+(a pruned entry re-stores on its next turn), that `_turn_usage` still works against
+a truncated previous prompt, and that the written file stays bounded.
+
+## 18.5 The accumulating-cause question, finally with an answer
+
+Section 12 concluded that **nothing client-side accumulates** — body size flat,
+headers constant, requests per turn flat. FIX 15 does not overturn that; it is the
+same finding seen from the other side. What accumulated was never a *request*
+property, and it was never anything the server would see. It was a **local state
+file**, rewritten in full on every turn, that no request ever carries.
+
+So the two statements are consistent and both are now measured:
+
+* **nothing about a request grows with turn count** (section 12), and
+* **a local bookkeeping file grew with turn count**, which cost disk and per-turn
+  write latency but could not have influenced a moderation verdict (section 18).
+
+The second is a real defect fixed here. It is *not* the mute mechanism, and
+claiming otherwise would be exactly the kind of correlation-to-causation jump this
+document has already retracted three times.
