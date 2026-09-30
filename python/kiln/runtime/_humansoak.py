@@ -31,6 +31,10 @@ TURNS = int(os.environ.get("HS_TURNS", "200"))
 DELAY_MIN = float(os.environ.get("HS_DELAY_MIN", "180"))   # 3 min
 DELAY_MAX = float(os.environ.get("HS_DELAY_MAX", "600"))   # 10 min
 ACCOUNT = os.environ.get("HS_ACCOUNT", "").strip()
+# Chance that a gap is a long ABSENCE rather than a pause between turns. Low, so a
+# 200-turn run still fits in a day or two, but non-zero so the resume path is
+# actually exercised -- the ordinary 3-10 min gaps never reach IDLE_RESUME_S.
+WALK_AWAY_P = float(os.environ.get("HS_WALK_AWAY_P", "0.06"))
 
 # 3-10 min between turns is ~6-20 turns/hour: inside the range a person typing at
 # a chat window produces, and an order of magnitude below what the machine soaks did.
@@ -193,7 +197,18 @@ def main():
         save_state(st)
 
         if st["done"] < TURNS:
-            time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
+            # Occasionally the person WALKS AWAY rather than pausing between
+            # turns, and the gap has to exceed `ds_direct.IDLE_RESUME_S` or the
+            # run never exercises `_resume_hygiene` at all -- the 3-10 min gaps
+            # above are an order of magnitude below its 90-minute threshold. This
+            # is the load shape the resume fix exists for: a pause long enough for
+            # the server to lapse the session cookie, then the next request.
+            if random.random() < WALK_AWAY_P:
+                gap = ds.IDLE_RESUME_S + random.uniform(60, 1800)
+                print("  ... walking away for %.0f min" % (gap / 60.0))
+                time.sleep(gap)
+            else:
+                time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
 
     print()
     print("completed %d turns with no mute" % st["done"])
