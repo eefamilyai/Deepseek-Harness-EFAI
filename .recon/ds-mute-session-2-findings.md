@@ -2035,3 +2035,38 @@ mechanism the earlier soaks could not see -- and its result will be informative
 either way. It is not, on the current evidence, a promising mute cause.
 
 The run continues to 240 turns. Its verdict is the measurement.
+
+### 27.5 Where this soak journals, and why that looked like a bug
+
+The run's requests did not appear in `python/kiln/runtime/ds_wirelog.jsonl`, and
+the file's mtime was minutes stale while the soak was demonstrably sending. That
+is not a fault in the soak: `ds_wirelog._state_dir()` returns
+
+    os.environ.get("KILN_STATE_DIR") or _DIR
+
+so a process that inherits `KILN_STATE_DIR` writes its journal there, not beside
+the module. The kernel launched this soak with `env=dict(os.environ)`, so it
+picked up the kernel's own state directory
+(`C:\\Users\\eejar\\AppData\\Local\\Temp\\devid-<id>`) and journaled there -- 168
+entries, every one of them t2.
+
+Both locations are correct; they are different state dirs. The lesson for the
+next launch is to clear `KILN_STATE_DIR` in the child environment so the soak's
+journal lands beside the module with the others, or to read it from the state
+dir deliberately. Nothing about the measurement changes either way: the journal
+was written, and its contents are complete.
+
+### 27.6 The resend is visible on the wire
+
+In that journal, the completion bodies are `240`, `241`, `242`, `245`, `246`,
+`248`, `255`, `256`, `257`, `258` bytes -- the flat per-turn delta, as section
+26.2 predicts -- **plus one at 2236 bytes**.
+
+The 2236-byte body is the turn that carried the system prompt: 1883 characters
+of it over a ~350-byte delta. It is the wire counterpart of the `sys_age` reset
+at turn 8, and it is the first direct evidence in this investigation that a
+re-sent system prompt actually enlarges what DeepSeek receives and stores.
+
+One body in 63, because the cadence is every 8 turns and only the first resend
+had happened when the journal was read. Over the full 240 turns the count should
+reach ~30.
