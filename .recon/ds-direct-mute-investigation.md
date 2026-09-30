@@ -661,3 +661,40 @@ This does not PROVE it is a short-lived session token -- confirming that needs a
 re-login to observe whether the value changes -- but it removes the objection that
 dropping it throws away a stable device identity, which was the one way the fix
 could have been harmful.
+
+## THE FIXES DO NOT REACH A RUNNING HARNESS UNTIL provider_bridge RESTARTS
+
+Operational finding, worth recording because it decides when the fix takes effect.
+
+`providers._load_module` caches each provider module in a module-level dict and never
+re-reads it:
+
+    def _load_module(module_name):
+        if module_name not in _MODULES:
+            ... exec_module(mod) ...
+            _MODULES[module_name] = mod
+        return _MODULES[module_name]
+
+Measured against the running processes:
+
+    provider_bridge PID 836/5664  started 2026-09-30 15:09:44   <- serves harness turns
+    fix 1 (cookie expiry)         committed 16:09:29
+    fix 2 (resume hygiene)        committed 16:15:24
+    fix 4 (account exclusion)     committed 16:22:49
+
+The bridge started 60 minutes BEFORE the first fix, so its cached `ds_direct` is the
+pre-fix code and a long-lived harness keeps serving the old behaviour until that
+process is restarted. The source being correct on disk is not enough; the import is
+memoised for the life of the process.
+
+This does NOT invalidate the soak, which is a SEPARATE process: `_humansoak.py`
+imports `ds_direct` directly (it does not route through provider_bridge), and it was
+started at 16:17:38 -- after fixes 1 and 2 were on disk. So the soak's turns have
+been running the fixed cookie and resume code. It does not have fix 4 (committed
+16:22:49), which is harmless here because the soak pins its account explicitly via
+HS_ACCOUNT rather than relying on automatic selection.
+
+The bridge is deliberately NOT restarted from here: it serves THIS session's own
+turns, and killing it mid-run would cut the session off. The restart is the
+operator's call, and the honest guidance is that the fix lands on the next bridge
+start -- not on the commit.
