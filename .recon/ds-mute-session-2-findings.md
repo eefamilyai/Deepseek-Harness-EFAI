@@ -2576,3 +2576,125 @@ regression of that fix; it is a different trigger reaching the same request.
 
 Whether the WAF recovery path should also avoid posting a login is an open
 question this capture raises and does not answer.
+
+
+---
+
+## 37. THE ARRIVAL SHAPE OF A MUTE, THE 6-MINUTE LAG, AND A FALSIFICATION
+
+### 37.1 A mute arrives as a SUCCESS-shaped response
+
+At `10-01 00:46:12` the journal captured t1's verdict together with the 80 requests
+that preceded it. The request that drew it:
+
+    seq=65  REQ   /api/v0/chat/create_pow_challenge    -> 200 application/json
+    seq=66  REQ   /api/v0/chat/completion              -> 200 application/json   <-- THE VERDICT
+    verdict: "mute"  detail "user is muted (until 2026-10-03 16:40 UTC)"
+
+The tell is the **content-type**. Every turn DeepSeek actually serves returns
+`text/event-stream; charset=utf-8`. The muted turn returned `application/json` with
+**HTTP 200** and no WAF header. So:
+
+    served turn : 200 + text/event-stream
+    muted turn  : 200 + application/json
+
+That is a second, independent detection channel. `ds_direct` reads the body for the
+verdict (`_mute_of`, `_mute_until_in`) and that works; this records that a
+content-type test alone would also have caught it, which matters because the body
+reader requires a parsed object with a nested `data` dict and silently declines
+anything else.
+
+### 37.2 The verdict lags its own clock by 6 minutes
+
+`mute_until` is known to the minute and the penalty is a fixed 72 h, so
+
+    issue = 2026-10-03 16:40 UTC - 72h = 2026-09-30 16:40 UTC = 10-01 00:40 local
+
+but the refusal was **observed** at `10-01 00:46:12 local`. The account was still
+being served in between:
+
+    00:40:55  WAF challenge + re-login (the burst in section 36)
+    00:40:57  /chat/completion -> 200 text/event-stream   <-- SERVED, 2s after the burst
+    00:46:12  /chat/completion -> 200 application/json    <-- REFUSED
+
+So the penalty clock starts at the minute of the burst, and enforcement arrives
+about six minutes later. A mute is not a synchronous rejection of the request that
+caused it, and the request that first observes it is generally not the cause.
+
+### 37.3 FALSIFIED: the WAF burst shape did not cause this mute
+
+t1 was WAF-intercepted and re-logged-in four times. Diffing all four, request by
+request, they are **shape-identical**:
+
+    seq  POW  GET-/  LOGIN  GET-/  AWSWAF  AWSWAF  GET-/  LOGIN  POW  COMPL
+         |     |      |      |      inputs  verify  |      |      |    |
+         |     |      |      |                      |      |      |    served
+         |     |      |      +-- solver's own GET (11 hdrs, _nav_headers)
+         |     |      +--------- 202 WAF-intercepted
+         |     +---------------- naked GET (0 recorded hdrs)
+         +---------------------- PoW for the turn
+
+    19:50:55  (no leading POW - first login of the account)
+    22:35:02  full shape -> served
+    22:36:29  full shape -> served
+    00:40:55  full shape -> served at 00:40:57, muted 5 min later
+
+Three of the four are byte-for-byte the same request sequence, same jar transitions
+(`ds_session_id` dropped first, `aws-waf-token` replaced by each solve), same status
+codes. **Only the fourth drew a mute.** A shape that recurs four times cannot by
+itself be the trigger, and this record will not claim it is. The correlation between
+the burst and the issue minute is real; the causal claim is not supported.
+
+Also against it: t2 was WAF-intercepted **five** times inside 2.5 minutes
+(19:51:03, 19:52:01, 19:52:22, 19:52:42, 19:53:03, 19:53:23) and has never been
+muted. A more aggressive burst than t1's, no penalty.
+
+### 37.4 CORRECTION: the "naked GET" is not naked on the wire
+
+Section 36 called `chat.deepseek.com/` with no headers a "naked fetch". That was
+read off the journal, and the journal is misleading here: `ds_wirelog.install`
+records `kwargs.get("headers")`, i.e. **the headers the call site passed**, and
+`ds_direct.py:1569` passes none. `curl_cffi`'s `impersonate=` then mints the whole
+browser navigation itself.
+
+Measured with a loopback echo server (`_navtest.py`), the wire actually carries
+**17 headers** for that call:
+
+    Host, Upgrade, HTTP2-Settings, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform,
+    Upgrade-Insecure-Requests, User-Agent, Accept, Sec-Fetch-Site, Sec-Fetch-Mode,
+    Sec-Fetch-User, Sec-Fetch-Dest, Accept-Encoding, Accept-Language, Priority, Connection
+
+with `Sec-Fetch-Mode: navigate`, `Sec-Fetch-Dest: document`, `Sec-Fetch-Site: none`
+and the full navigation `Accept`. That is a correct, complete browser navigation.
+
+So `header_order: []` in the journal means "this call site set nothing", never "this
+request had nothing". Any future conclusion drawn from that field has to say which
+of the two it is.
+
+### 37.5 The WAF-intercepted login sequence, counted
+
+The arithmetic closes exactly, which confirms the reconstruction rather than
+assuming it:
+
+    per WAF-intercepted login() = 2 naked GET + 1 solver GET + 2 login POST
+    t1: 4 intercepted logins  -> 12 GETs and 8 logins
+    journal:                     12 GET-/ and 8 users/login      MATCH
+
+`_login_attempt` runs `range(2)`: iteration 1 posts login, is answered 202, clears
+the **entire** cookie jar, solves the challenge, and `continue`s; iteration 2
+re-posts and succeeds.
+
+### 37.6 What 37.1-37.5 do not settle
+
+The same tension section 36 named is still open, now with better numbers:
+
+* five of the eight known mute instants have **zero** journaled requests inside
+  +/- 3 min (`f`, `jw1`, `mutetest`, and two others - all before the journal
+  existed, so this is an absence of evidence, not evidence of absence);
+* `j1`'s issue instant has 68 requests in its window, but 64 belong to t2 and 4 to
+  t1 - **j1 itself sent nothing**;
+* t1's is the only instant where the muted account is demonstrably active, and
+  37.3 falsifies the obvious causal reading of that activity.
+
+Either a scheduled background pass, or a computation at a request that was already
+answered - not resolved, and not resolvable from client-side logs alone.
