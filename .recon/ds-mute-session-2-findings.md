@@ -1658,3 +1658,157 @@ Two processes are driving t1 (the fast soak and the paced one). That is a real
 confound for attribution and is stated here rather than hidden: a verdict on t1
 could not be attributed to one of them by account alone. The wire journal's
 per-request records are what would separate them.
+
+## 25. The retry ladder is the amplifier, and a mute was borrowing TRANSPORT
+
+### 25.1 The mechanism, end to end
+
+The mute hunt has been looking for what *causes* a mute. This section is about
+what makes one **worse**, and it is a client-side bug with a one-line shape.
+
+A mute reaches `ds_direct` as a raised `_Muted`, whose message is prose. That
+message crosses the provider bridge as a `meta` frame with `finish: 'error'` and
+the reason in `error`. The harness's Kiln adapter classifies that frame in
+`reason()` -- and before this fix it recognised exactly two cases:
+
+| the reason | the code it returned | retryable? |
+| --- | --- | --- |
+| matches `isContextWindowExceededError` | `CONTEXT_WINDOW_EXCEEDED` | no |
+| matches `isRateLimit` | `RATE_LIMIT` | yes, after 180 s |
+| **everything else, including a mute** | **`TRANSPORT`** | **yes, 5x** |
+
+The default policy retries `TRANSPORT` five times with a 500 ms-to-10 s
+exponential backoff (`packages/llm/llm-retry/README.md`). So one mute verdict
+produced **ten requests** against an account the provider had already refused --
+one initial plus five retries, each retry itself a pow challenge plus a
+completion.
+
+### 25.2 The escalation, measured
+
+`jw1` is the account that proves it. Its two verdicts, both recovered as raw
+floats from the session log:
+
+| verdict | until (UTC) | duration | implied issue instant |
+| --- | --- | --- | --- |
+| first | 2026-10-02 09:13:27 | 72 h | 2026-09-29 17:13:27 local |
+| second | 2026-10-08 11:16:00 | **216 h** | 2026-09-29 19:16:00 local |
+
+The duration of the second is not a guess. 216 h is the only candidate that puts
+the issue instant inside jw1's live window; 72 h would place it on 10-05, two
+days *after* the verdict was observed, which is impossible.
+
+Between those two instants, **32 requests** went to jw1 (median inter-request gap
+32.6 s). The account was already muted for the first 2 h 03 m of them. The
+penalty escalated from 3 days to 9.
+
+This is the accumulation the objective asked for, and it is not the request
+count that mutes an account -- it is that a refusal was answered by resending.
+
+### 25.3 The operator's hypothesis, tested and falsified
+
+The operator's reading was: *"when the AI keeps running it doesn't get muted,
+until there's a long pause ... then the ai comes back and shortly after it gets
+banned."*
+
+The fast soak tested exactly that shape, on purpose and at scale. `_fastsoak.py`
+ran **400 consecutive turns** on t1 and hit the rate limit **twice**, at turn 200
+and turn 397. Each episode burned 8-9 retries of `DS_RATE_WAIT=180` and lasted
+**1445 s (24.1 min)**.
+
+After the first 24-minute pause: **196 clean turns, zero mutes, zero errors.**
+After the second: 2 more clean turns to the end of the run.
+
+**A 24-minute forced silence followed by a resume did not mute t1.** The soak
+finished `400 turns with no mute`, with `muted: null` in its state file and 0 of
+400 rows carrying a mute. The pause is not the trigger.
+
+Caveat, stated plainly: a rate-limit pause and an overnight pause are not the
+same event, and one account is not the population. This falsifies the *pause* as
+a sufficient trigger on t1; it does not falsify the operator's observation that
+mutes were noticed after pauses.
+
+### 25.4 The idle windows, at second precision
+
+Three verdicts arrived while nothing was touching the machine, and the raw
+floats let that be measured rather than asserted. Against every `turn/start`,
+`turn/end`, `step/start` and `step/end` marker in the session log:
+
+| issue instant (local) | last activity before | first activity after | gap |
+| --- | --- | --- | --- |
+| 09-29 17:13:27 (jw1) | 16:05:35 | 17:19:39 | 74.1 min |
+| 09-29 19:28:00 | 19:13:03 | 19:30:25 | 17.4 min |
+| 09-29 21:41:00 | 19:33:48 | 21:57:13 | 143.4 min |
+| 09-30 01:55:15 (f) | 09-29 23:50:38 | 09-30 14:44:34 | 893.9 min |
+| 09-30 04:19:40 (hunt) | 09-29 23:50:38 | 09-30 14:44:34 | 893.9 min |
+| 09-30 09:56:00 (mutetest) | 09-29 23:50:38 | 09-30 14:44:34 | 893.9 min |
+
+**f's verdict issued at 01:55:15 and hunt's at 04:19:40, both inside a 14 h 54 m
+window with no harness activity at all.** That is the operator's "muted at 1am or
+4am while I'm sleeping, nothing is touching the computer" -- confirmed from
+server-recorded timestamps, not from recollection.
+
+The tension this leaves unresolved, and it must not be papered over: three
+verdicts landed in a fully idle window, while j1's landed inside a live request.
+Either the penalty is applied by a background pass (which explains the idle
+three and not j1) or it is computed synchronously at a rejected request (which
+explains j1 and not the three). Both readings survive the evidence.
+
+### 25.5 Correction: three raw floats do survive
+
+An earlier pass concluded that no raw `mute_until` float survives anywhere and
+that every issue instant is therefore known only to the minute. **That was too
+broad.** Three second-precision floats are present in the session log, one of
+them 149 times:
+
+| raw float | until (UTC) | how it was first seen |
+| --- | --- | --- |
+| 1790932407.459 | 10-02 09:13:27 | `jw1`'s own failure message, 09-29 17:21:47 |
+| 1790963715.231 | 10-02 17:55:15 | a tool result, 09-30 15:03:51 |
+| 1790972380.757 | 10-02 20:19:40 | a tool result, 09-30 15:02:54 |
+
+So `f`'s issue instant is 09-30 01:55:15, not "01:55-ish", and `hunt`'s is
+04:19:40. The other five remain minute-precision only. The correction matters
+because section 25.4's gap arithmetic depends on it.
+
+### 25.6 FIX 17 -- a mute gets its own non-retryable code
+
+`packages/llm/llm-kiln/src/adapter.ts`:
+
+- `ACCOUNT_MUTED_CODE = 'ACCOUNT_MUTED'`, exported from the package index.
+- `isMutedAccount(message)`, a vocabulary test over the sidecar's structured
+  `error` field only -- never over model output, so an answer that discusses
+  mutes cannot classify itself.
+- The branch sits **before** the rate-limit branch in `reason()`, because a mute
+  is the more specific verdict and `RATE_LIMIT` is retryable.
+
+Pinned by `packages/llm/llm-kiln/tests/mute-code.spec.ts` -- five assertions,
+including that the real mute body is claimed by the new classifier and left
+unclaimed by `isRateLimit`. Suite result: **5 passed, rc=0.**
+
+Tier: **1**. `llm-kiln` does not exist at the recorded base (every file is
+status `A`), and it appears in neither `SEAM.json` nor any `patchGroups` entry --
+so this needs no seam marker and no seam re-record.
+
+`lib/index.js` was rebuilt so the change reaches a served app; the extra
+artifacts a `--no-config` bundling run left at `lib/` root were removed to keep
+the output shape the repo's own build produces.
+
+### 25.7 What this fix does not do, and what is still open
+
+**It does not stop a mute being issued.** It stops a mute being *answered with
+more requests*, which is the escalation half.
+
+**The 4 pre-existing failures in `dsml.spec.ts` are not mine.** They assert that
+the DSML translator echoes raw block text into its prose correction (spec lines
+119, 126, 929). The translator no longer does, and the same four fail against
+`HEAD`'s own copy of the spec in a scratch file. `packages/llm/llm-text-toolcalls`
+has no diff against `HEAD`, so the assertions and the implementation are simply
+out of step. That package is another agent's; the failures were reported, not
+touched.
+
+**The still-open question is unchanged**: what makes DeepSeek issue the first
+verdict. Volume is falsified. Content is falsified. Device identity is distinct
+per account and the alias theory is refuted. The idle-window evidence points at
+something not driven by this machine's traffic, and j1's evidence points at
+something that is. FIX 17 removes the amplifier, which makes the next mute
+cheaper to observe -- it does not explain the first one.

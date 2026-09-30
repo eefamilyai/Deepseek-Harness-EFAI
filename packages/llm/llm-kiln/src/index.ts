@@ -52,7 +52,7 @@ import { KilnAdapter } from './adapter.ts'
 import { KilnBridge } from './bridge.ts'
 import type { KilnAccountRow, KilnLogEntry, KilnProvider } from './bridge.ts'
 
-export { DEFAULT_COMPACTION_FOLD_CHARS, DEFAULT_COMPACTION_FOLD_PARTS, KilnAdapter, SUMMARIZER_SYSTEM, buildTurns, flattenMessage, isRateLimit, mintCallId, planCompactionFold, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions } from './adapter.ts'
+export { ACCOUNT_MUTED_CODE, DEFAULT_COMPACTION_FOLD_CHARS, DEFAULT_COMPACTION_FOLD_PARTS, KilnAdapter, SUMMARIZER_SYSTEM, buildTurns, flattenMessage, isMutedAccount, isRateLimit, mintCallId, planCompactionFold, RATE_LIMIT_RETRY_MS, renderToolCall, requestOptions } from './adapter.ts'
 export type { CompactionFoldPlan } from './adapter.ts'
 export type { KilnAdapterOptions } from './adapter.ts'
 export { KilnBridge } from './bridge.ts'

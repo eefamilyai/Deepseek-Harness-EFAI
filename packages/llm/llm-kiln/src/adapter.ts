@@ -429,6 +429,31 @@ export function isRateLimit(message: string): boolean {
 }
 
 /**
+ * Canonical failure code for an account the provider has muted.
+ *
+ * Deliberately outside the default retryable set: a mute is an account-level
+ * moderation verdict whose expiry is measured in days, so a resend answers
+ * identically and each attempt spends one more request against an account the
+ * provider has already refused.
+ */
+export const ACCOUNT_MUTED_CODE = 'ACCOUNT_MUTED'
+
+/** Provider vocabulary for the account-level mute verdict. */
+const MUTED_ACCOUNT_RE = /user is muted|is_muted|mute_until|account-level moderation/i
+
+/**
+ * Whether a terminal provider failure is an account mute.
+ *
+ * Applied only to the sidecar's structured `error` field, never to model
+ * output: an answer that discusses mutes is not a muted account.
+ * @param message - the reason the sidecar reported for a failed stream.
+ * @returns true when the harness should treat it as `ACCOUNT_MUTED`.
+ */
+export function isMutedAccount(message: string): boolean {
+  return MUTED_ACCOUNT_RE.test(message)
+}
+
+/**
  * Mint the id for one call. These providers return no call id of their own, so
  * the adapter is the only thing that can.
  *
@@ -1015,6 +1040,18 @@ class ChunkEmitter {
       // which summarizes the history and retries, instead of failing the turn.
       if (isContextWindowExceededError(message)) {
         return { kind: 'error', failure: { message, code: CONTEXT_WINDOW_EXCEEDED_CODE } }
+      }
+      // DSH-FORK(kiln): a mute is an account-level moderation verdict with a
+      // multi-day expiry. Retrying it answers identically, and each attempt is
+      // one more request against an account the provider has already refused --
+      // so it gets its own code, and none of the retryable ones. Checked before
+      // the rate-limit branch because a mute is the more specific verdict, and a
+      // retryable code would be the wrong answer to it.
+      // EXIT: upstream adds a provider-neutral account-suspension code, or the
+      // sidecar reports the mute as a structured status instead of an error
+      // string this adapter has to recognise.
+      if (isMutedAccount(message)) {
+        return { kind: 'error', failure: { message, code: ACCOUNT_MUTED_CODE } }
       }
       // A rate limit is not a transport fault, and the difference is not
       // cosmetic: the retry policy backs a TRANSPORT failure off in
