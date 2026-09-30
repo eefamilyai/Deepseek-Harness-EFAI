@@ -1427,3 +1427,80 @@ decision. It does not depend on the soak doing anything.
 **No mute has occurred on t1 or t2.** 30 turns and 9 turns, zero mutes. Every
 piece above is verified by reading the code and the on-disk state, not by having
 observed a capture. The chain is ready; it has not yet been exercised by the event.
+
+
+---
+
+# 22. The "returned no challenge" prediction — tested on structured events, and it holds
+
+## 22.1 The hypothesis
+
+`_pow`'s own docstring records that a mute could present as a **bare failure to
+get a challenge**, not as a recognisable verdict:
+
+> *"Left unread, this route reports 'returned no challenge' for an account DeepSeek
+> has plainly told us it will not serve."*
+
+So "the proof-of-work challenge request returned no challenge (HTTP 200)" is the
+**pre-fix signature of an unreadable mute**. FIX 1 (mute classification) landed at
+**2026-09-29 17:48:56**. If it worked, that symptom should **stop** appearing.
+
+That is a falsifiable prediction with a sharp form: 0 occurrences after the fix.
+
+## 22.2 A contaminated first attempt, discarded
+
+The first run reported **168** occurrences and looked like a refutation. It was
+**wrong**: it matched the phrase on *any* line, which swept in my own prose, the
+recon documents, and tool results that quote the string. That is the fourth time
+in this investigation that substring-matching over log text has produced a false
+result.
+
+Redone on **structured `llm/retry` events only** — parsing each line as JSON and
+reading `data.failure.message` — the picture is completely different.
+
+## 22.3 The result
+
+| HTTP code | before FIX 1 | after FIX 1 |
+| --- | --- | --- |
+| **200** (DeepSeek answered, no challenge — the mute shape) | **37** | **0** |
+| **202** (AWS WAF challenge, per the module's own comment) | 0 | **1** |
+
+**The prediction holds.** Every one of the 37 HTTP-200 occurrences predates mute
+classification; none occurs afterwards. The single post-fix case is **HTTP 202**,
+which the code explicitly documents as the **AWS WAF** path — a different condition
+that happens to share the message text because both are "no challenge". Separating
+the two codes is what makes the test meaningful; the message alone conflates them.
+
+## 22.4 A necessary caveat: the symptom is not one-to-one with a mute
+
+Four accounts show HTTP-200 "no challenge" storms **before** the fix — `4`, `6`,
+`7`, `9` — and **none of them is ever attributed a mute**:
+
+| account | no-challenge events | later activity |
+| --- | --- | --- |
+| 9 | 12 (09-27 → 09-28) | ran 40 requests afterwards, no mute |
+| 4 | 5 (09-25) | 6 requests, no mute |
+| 6 | 5 (09-26) | 4 requests, no mute |
+| 7 | 5 (09-26) | 213 requests, no mute |
+
+`9` is the clearest: it hit the symptom twelve times over two days and then went on
+to serve 40 requests normally. So "no challenge (HTTP 200)" is a **necessary-ish
+but not sufficient** indicator — it can mean a mute, and it can mean something else
+(a transient challenge failure). The honest statement is:
+
+> the symptom **disappeared** when mute classification shipped, which is consistent
+> with some of those occurrences having been unread mutes; but it does **not**
+> establish that every occurrence was one, and `9`'s history shows at least one
+> that was not.
+
+## 22.5 Why this is worth recording anyway
+
+It is the **first test in this investigation whose prediction was made in advance
+and then confirmed**, rather than a correlation noticed afterwards. That makes it
+the strongest single piece of evidence that FIX 1 does what it claims: the
+connector now *sees* a condition it used to misreport as a generic failure.
+
+It is also a limit on what can be recovered: any mute that occurred before
+2026-09-29 17:48:56 and surfaced as "no challenge" left **no `mute_until`** to
+read, so those penalties cannot be back-computed. Their number is unknown and
+unknowable from these logs.
