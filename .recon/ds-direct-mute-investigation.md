@@ -754,3 +754,32 @@ readers per turn. The soak logged only chars, prompt text, and verdicts. Added:
 
 Verified live on turn 18: sid=08c2a07e-c708-4b66-8d27-34f5f2371e30, prompt_chars=30,
 dur_s=1.4.
+
+## x-hif-* : ONE OF THE TWO ENVELOPES CANNOT BE MINTED HERE (environmental, not a defect)
+
+`_hifprobe.py`, no account touched (anonymous GETs to the same endpoint a browser calls):
+
+    x-hif-leim     MINTED  len=73  ttl=600.0
+    x-hif-dliq     FAILED  (no value)
+    refresh(configured={}) -> leim present, dliq ABSENT (omitted)
+
+So on this network the harness renews `x-hif-leim` on its stated 600 s TTL and
+OMITS `x-hif-dliq` entirely. Neither is replayed stale -- and that matters, because
+`ds_hif`'s own docstring is explicit that a frozen capture is worse than nothing:
+"a value frozen at capture time is a beacon that says this client stopped behaving
+like a browser at the moment of the capture, and it is a sharper signal than an
+empty header would be." The omission is the better of the two available failures.
+
+WHY dliq CANNOT BE MINTED. `hif-dliq.deepseek.com` has NO IPv4 A record on this
+network (AAAA only), and this host is IPv4-only -- measured: `Get-NetRoute
+-AddressFamily IPv6` reports no ::/0 default route. `hif-leim` answers from
+3.173.21.63 and mints fine. So this is an environmental divergence, not a code
+defect, and it is not fixable from here without an IPv6-capable route.
+
+WHAT IS AND IS NOT CLAIMED. The real web client is believed to send BOTH envelopes
+on `/chat/completion`; the harness sends one. That is a header-count divergence --
+but a MISSING HEADER CANNOT PRODUCE ACCOUNT-LEVEL MODERATION, so this is hygiene at
+most, exactly as the operator said when calling the header theory "stupid". It is
+recorded as an environmental limitation, NOT as a mute cause. Whether the real
+browser sends both on that specific route also remains unconfirmed without a
+capture.
