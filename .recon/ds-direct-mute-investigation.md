@@ -451,3 +451,36 @@ no storm to escalate.
 
 All 11 kiln suites pass. The 60-second `f`/`mutetest` correlation is the strongest
 single piece of evidence in this investigation.
+
+## RETRACTION - the "scheduled review at 13:41" hypothesis was MY ROUNDING ARTIFACT
+
+I reported that two mute starts fell at exactly 13:41:00 UTC and inferred a possible
+scheduled moderation job. That was wrong, and the error was mine.
+
+The five expiry strings I tested were typed BY HAND from earlier notes, rounded to
+whole minutes. Testing my own rounded transcription naturally produced `:00` seconds
+and a spurious repeat. The RAW `mute_until` values in the session log are:
+
+    raw=1790932407.459  expiry 2026-10-02 09:13:27.459 UTC  start 2026-09-29 09:13:27.459
+    raw=1790963715.231  expiry 2026-10-02 17:55:15.231 UTC  start 2026-09-29 17:55:15.231
+    raw=1790972380.757  expiry 2026-10-02 20:19:40.757 UTC  start 2026-09-29 20:19:40.757
+
+Distinct times AND distinct fractional seconds. A scheduled job would show the same
+clock offset; these show per-event jitter, so there is NO scheduled review. The
+13:41 values came from live probes whose display truncates seconds, not from a
+cluster.
+
+Lesson recorded so it is not repeated: never test a hypothesis against strings I
+transcribed myself when the raw source is available. `mute_until` is the raw source.
+
+## WHAT THE TIMING ACTUALLY SHOWS
+
+The three measured starts - 09:13:27, 17:55:15, 20:19:40 UTC on 2026-09-29 - are
+8h42m and 2h24m apart. They are consistent with per-account verdicts landing shortly
+after that account's own last request, not with any global clock.
+
+The mute is ASYNCHRONOUS: in every case the verdict lands AFTER the last request,
+never during one. For `f` and `mutetest` the last turn ended 16:32:55 UTC and the
+verdict landed at 17:55:15 / 17:56 - roughly 83 min later, during complete silence.
+That is why a scan for events within 30 min of the mute instant found ZERO: it was
+looking at the verdict time, not the offence time.
