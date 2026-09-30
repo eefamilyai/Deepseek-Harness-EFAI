@@ -2479,3 +2479,22 @@ The set is not *concentrated* in the small hours -- six of eight are daytime or
 evening -- so this is not a nightly batch job. But the two that are, are exactly
 the two the operator noticed, which is why the observation was worth measuring
 rather than dismissing.
+
+## 35. Every resume after 90+ minutes idle was clean
+
+The operator's hypothesis is a pause, and the longest pauses available to test are the soaks' deliberate walk-aways -- the only event on this machine that resembles an overnight gap. `FIX 3`'s threshold (`IDLE_RESUME_S = 5400 s = 90 min`) is the boundary those pauses cross.
+
+Every gap over 30 minutes across every soak log, and what the resume turn did:
+
+| soak | gap | resume turn | result |
+| --- | --- | --- | --- |
+| vrun (human) | 35 min | 29 | ok, no mute |
+| humansoak | **122 min** | 9 | ok, no mute |
+| humansoak | **93 min** | 12 | ok, no mute |
+| t2soak | **96 min** | 30 | ok, no mute |
+| t2soak | **92 min** | 55 | ok, no mute |
+| fastsoak | 24 min (x2) | 200, 397 | ok, no mute |
+
+**Four resumes past the 90-minute threshold, and every one returned a normal answer.** Two of them are the same pauses FIX 3 was written for, and the hygiene guard fired on both without the turn failing.
+
+The honest bound: a 2-hour pause is not a 6-to-10-hour overnight pause, and no soak has yet taken one. So this narrows the operator's hypothesis without closing it -- what is falsified is that a >90-minute pause *by itself* draws a verdict, at the durations that have been tested.
