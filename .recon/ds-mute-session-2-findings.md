@@ -1812,3 +1812,135 @@ per account and the alias theory is refuted. The idle-window evidence points at
 something not driven by this machine's traffic, and j1's evidence points at
 something that is. FIX 17 removes the amplifier, which makes the next mute
 cheaper to observe -- it does not explain the first one.
+
+## 26. The wire carries a delta, the server holds the thread -- and three
+##      accumulators are now falsified
+
+### 26.1 CORRECTION: this machine has 89 session logs, not one
+
+Every per-account traffic figure in this document before now was computed from
+**one** DSH session log. That was never stated, and it is wrong as a coverage
+claim: `C:\Users\eejar\.dsh\sessions` holds **89** compressed session logs,
+and only one of them was ever scanned.
+
+The concrete casualty is the claim that **hunt had zero requests and was still
+muted**. hunt has **28** `request/header` events -- in a *different* session log
+(`session-7cff49`), not the one that had been scanned. The claim was an artefact
+of the scan's scope.
+
+Restated honestly: the async-verdict argument that rested on "hunt had no
+traffic" no longer rests on that. hunt's 28 requests are timestamped below
+against its own mute instant, which is the measurement that replaces it.
+
+Total `request/header` events per account, across all 89 logs:
+
+| account | requests |
+| --- | --- |
+| 5 | 218 |
+| 7 | 214 |
+| 4 | 45 |
+| parserfix | 43 |
+| p | 42 |
+| j1 | 42 |
+| 9 | 40 |
+| jw1 | 37 |
+| hunt | 28 |
+| kilnsal | 23 |
+| v | 21 |
+| f | 15 |
+| donttouch | 8 |
+| 6 | 4 |
+
+### 26.2 The wire body is a DELTA, not the transcript
+
+`ds_wirelog` measures every completion request at ~250-300 bytes, and that looked
+like a broken instrument: the agent's own requests could not possibly be 250
+bytes. They can, and are.
+
+`_Client.open_completion` sends exactly this:
+
+    chat_session_id, parent_message_id, prompt, ref_file_ids,
+    thinking_enabled, search_enabled, model_type
+
+There is no `messages` array. `_prompt_for` sends only the **per-turn delta**,
+because DeepSeek threads every turn onto one server-side chat and the server
+holds the flattened conversation. The local `messages` list is not what crosses
+the wire; the wire carries one new turn and a pointer to its parent.
+
+So body size on the wire can never grow, and "the request body accumulates" was
+never a candidate. What accumulates is **server-side**, and the only local proxy
+for it is `last_prompt` -- the reconstructed full transcript, kept for prompt
+cache accounting.
+
+### 26.3 Accumulator 1, falsified: chat LENGTH
+
+The fast soak drove **397 turns through ONE server-side chat**
+(`d5b5ea77-0a3e-4207-a0d5-2f319d30265b`), with a monotonic `parent_message_id`
+running 12 -> 830. That is a single DeepSeek thread 397 messages deep.
+
+**No mute.** The soak finished 400 turns, `muted: null`, and 0 of 400 rows
+carrying a mute.
+
+If "one very long conversation" were the trigger, 397 turns in one thread would
+be a stronger version of it than any real session, and it was not enough.
+
+### 26.4 Accumulator 2, falsified: server-side BYTE VOLUME
+
+`last_prompt` is the reconstructed transcript, so its length is the best local
+proxy for how much text the server-side chat holds. Per account, across the 195
+entries in the live state file:
+
+| account | largest chat | total | chats | mute status |
+| --- | --- | --- | --- | --- |
+| v | 1,012,776 | 1,319,634 | 2 | **never muted** |
+| deepseek.ee.1 (base) | 895,851 | 14,379,861 | 52 | ? |
+| 5 | 790,428 | 1,456,251 | 3 | ? |
+| eefamilyai | 785,255 | 16,857,076 | 89 | ? |
+| donttouch | 628,694 | 628,694 | 1 | excluded |
+| 7 | 274,167 | 522,785 | 3 | ? |
+| **f** | **178,481** | 178,481 | 1 | **MUTED** |
+
+The account this agent runs on, `v`, accumulated **1,012,776 characters** in one
+chat and was **never muted**. `f` was muted with **178,481** -- a sixth as much.
+
+**Volume does not separate.** This is the byte-volume version of section 15's
+turn-count falsification, and it now fails the same way: the busiest account is
+not the muted one.
+
+### 26.5 Accumulator 3: the system prompt is re-sent and STORED AGAIN
+
+This is the one live lead, and the code names it. `_system_due` re-sends the
+system prompt when a chat is unprimed, when its text changes, and every
+`_system_every()` turns (default 8). The docstring states the consequence
+explicitly:
+
+> The chat keeps every prompt it is sent, so a system prompt re-sent each turn
+> is stored again each turn: a tool protocol of tens of thousands of characters
+> filled the server-side conversation with copies of itself long before the work
+> did.
+
+The three soaks send **no system message at all** -- `msgs = [{"role": "user",
+"content": prompt}]` in all three -- so they never exercised this path. The
+agent's chat carries `sys_hash` and `sys_age` and a 995,798-character prompt.
+
+`sys_hash`/`sys_age` appear on only **7 of 195** entries, so this is a thin
+sample and the next soak must be built to exercise it: a system prompt large
+enough to matter, re-sent on the real cadence, on a fresh account.
+
+### 26.6 What the objective's premise looks like now
+
+The objective was to drive t1/t2 to a mute by running hundreds of consecutive
+turns and then diagnose what accumulates. The turns ran -- 400 on t1, in one
+397-turn server-side chat -- and **no mute followed**. Combined with this
+section, three separate accumulators are falsified: turn count, chat length, and
+byte volume.
+
+What the evidence now supports is the shape section 25.4 left open. Three
+verdicts (f 01:55:15, hunt 04:19:40, mutetest 09:56) landed inside a 14 h 54 m
+window with no harness activity, and the account this agent runs on accumulated
+a megabyte of chat without being muted. The first verdict is not proportional to
+anything this client accumulates.
+
+FIX 17 (section 25.6) remains correct and independent of all of the above: a mute
+is no longer answered with five more requests. That does not explain the first
+verdict, and nothing in this section does either.
