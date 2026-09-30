@@ -3282,9 +3282,27 @@ def _load_muted():
 _muted_until = _load_muted()
 
 
+def _merge_muted(mine):
+    """`mine` merged with what is ON DISK, the later expiry winning per account.
+
+    The same cross-process clobber `_merge_last_turn` describes: a process writes
+    its WHOLE in-memory ledger, so a second process sharing the state directory
+    erases a mute the first one recorded -- and a forgotten mute means the pool
+    hands a benched account the next new conversation. Keeping the later expiry is
+    already this ledger's rule for two verdicts on one account, so the merge uses
+    the same rule rather than inventing a second one.
+    """
+    out = dict(mine)
+    for k, v in _load_muted().items():
+        prev = out.get(k)
+        if prev is None or v > prev:
+            out[k] = v
+    return out
+
+
 def _save_muted():
     try:
-        _atomic_json(_MUTE_STATE_FILE, dict(_muted_until))
+        _atomic_json(_MUTE_STATE_FILE, _merge_muted(_muted_until))
     except Exception:  # noqa: BLE001 -- persistence must never break a turn
         pass
 
@@ -3706,10 +3724,36 @@ def _load_last_turn():
 _last_turn_at = _load_last_turn()
 
 
+def _merge_last_turn(mine):
+    """`mine` merged with what is ON DISK, the later stamp winning per account.
+
+    Two processes share this file whenever they share a state directory, and each
+    loads it ONCE at import and then writes its whole in-memory dict back. Without
+    this merge the last writer erases every account the other process added after
+    that import. Observed live: t2 disappeared from this file while its own soak
+    was still running, because the t1 process -- imported earlier -- kept writing
+    a dict that had never contained t2.
+
+    The cost is not cosmetic. `_resume_hygiene` reads `prev` from this map and
+    returns immediately when it is None, so an account erased by a clobber gets NO
+    stale-cookie drop on the first turn after an overnight gap -- which is exactly
+    the case this persistence exists for.
+    """
+    out = dict(mine)
+    for k, v in _load_last_turn().items():
+        prev = out.get(k)
+        try:
+            if prev is None or float(v) > float(prev):
+                out[k] = v
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _save_last_turn():
     with _last_turn_lock:
         try:
-            _atomic_json(_LAST_TURN_FILE, _last_turn_at)
+            _atomic_json(_LAST_TURN_FILE, _merge_last_turn(_last_turn_at))
         except Exception:  # noqa: BLE001 -- persistence must never break a turn
             pass
 
