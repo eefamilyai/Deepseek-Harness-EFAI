@@ -2698,3 +2698,111 @@ The same tension section 36 named is still open, now with better numbers:
 
 Either a scheduled background pass, or a computation at a request that was already
 answered - not resolved, and not resolvable from client-side logs alone.
+
+
+---
+
+## 38. TWO PROCESSES, ONE ACCOUNT, TWO TOKEN GENERATIONS
+
+### 38.1 How this was found, and the two false starts
+
+Section 37 left an unexplained shape in the journal: at `22:36:29` t1 presented
+token `3332b8b4af` when the newest token seen for that account was `ad3b0e7aca`,
+minted **97 seconds earlier**. The first reading was "two clients in one process".
+
+That was wrong, and the journal itself says so. `ds_wirelog._SEQ` is a
+**module-global** counter (`ds_wirelog.py:47`, incremented in `_next_seq` at
+:157) with no reset anywhere, so a single process can only emit a strictly
+increasing `seq`. The window reads
+
+    seq 407 .. 436   <- writer A
+    seq  37 ..  46   <- a DIFFERENT writer, restarting from 1
+    seq 437 .. 450   <- writer A resumes
+
+One process cannot produce that. A second reading - "attribute requests to
+writers by time windows" - also failed, because it split single writers at their
+own pauses (the 429 ladders) and produced 52 bogus segments.
+
+The reading that works is a **patience demultiplex**: assign each request to the
+longest-running writer whose last `seq` is still below it, with no time
+heuristic at all. That needs **12 writers** to cover the journal, and they
+resolve into the processes that actually exist on this machine.
+
+### 38.2 What the demux shows
+
+    W0  n=830  seq   1..830   17:27 -> 23:35   v, t1
+    W1  n=146  seq   1..146   17:32 -> 00:59   v, t1, t2
+    W2  n=142  seq   1..142   18:14 -> 00:58   v, t1, t2
+    W3  n= 66  seq   1.. 66   18:17 -> 00:46   v, t1, t2
+    ... 8 more, all starting at seq=1
+
+Every writer starts at `seq=1`, which is what a fresh process looks like.
+
+And for t1, the token handoff at the interesting moment:
+
+    22:35:02  W0  3332b8b4af
+    22:35:03  W0  ad3b0e7aca     <- W0 logs in; its OWN generation advances
+    22:36:24  W0  ad3b0e7aca     <- W0 still on the new generation
+    22:36:29  W3  3332b8b4af     <- W3 presents the generation W0 REPLACED
+    22:36:30  W3  abd09baa36     <- W3 logs in separately and gets its own
+
+Two processes, one account, two independent token generations alive at once.
+`3332b8b4af` was **2 h 46 m old** when W3 used it, and had been superseded by
+another process 86 seconds earlier.
+
+This is the operator's hypothesis - *"logging into an account with a device id
+and then without properly signing out, logging back in again"* - found in the
+data, with the mechanism named.
+
+### 38.3 The structural cause: every pool is per-process
+
+`_pool_for` reads a module-global `_pools` dict, `POOL_MAX` is 8 **per account
+per process**, and `login()`'s docstring claims it is *"Serialised per ACCOUNT,
+not per client"*. The lock it takes is `acct.login_lock`, a plain
+`threading.Lock` on the account object - and the account object is also
+per-process, built by `_load_accounts()` at import.
+
+So the guarantee holds **only inside one process**. Across processes there is:
+
+* no shared pool - N processes means N pools, up to 8 clients each;
+* no shared `login_lock` - N processes can post `/users/login` simultaneously;
+* no shared token - each process's `_Client.token` is its own, refreshed from
+  `acct.last_login_token` only within that process;
+* no shared "newest token" - so a process that has not logged in recently keeps
+  presenting its own older generation until something makes it re-login.
+
+The soak instruments make this concrete: `_fastsoak.py`, `_syssoak.py` and
+`_t2soak.py` each `import ds_direct as ds` in their own interpreter, so each is
+its own pool and its own token generation for whichever account it drives. The
+same is true of `provider_bridge.py`.
+
+### 38.4 What this does NOT establish
+
+**It does not explain t1's mute.** At t1's actual issue instant, `00:40:55`, the
+token handoff `abd09baa36 -> afa0b46406` happens **inside W3 alone** - the demux
+attributes both to the same writer. No cross-process stale token is involved in
+the minute that was muted.
+
+So this record now holds two defects with different evidence:
+
+    1. a mute is retried as TRANSPORT -> 10 requests per refusal, escalating
+       72 h to 216 h                    (FIX 17; measured on jw1)
+    2. a stale token is presented after another process re-logged in
+                                       (section 38; measured once, on t1)
+
+Both are real and both are worth fixing. **Neither is demonstrated to cause a
+mute**, and this document will not claim otherwise. The one mute whose minute is
+fully instrumented (t1, section 36-37) has a WAF re-login in it and that re-login
+is shape-identical to three unmuted ones.
+
+### 38.5 A candidate fix, not yet applied
+
+Make the login generation shared rather than per-process: a small on-disk record
+per account holding `{token_fp, minted_at, minted_by_pid}`, written on every
+login, and read before any request that would use a token older than the record.
+That is the same shape as the existing `ds_muted.json` ledger (FIX 12) and the
+`ds_sessions.json` map, so it needs no new mechanism - only a new key.
+
+Not applied here: it changes an auth path this agent runs through, and the bridge
+would need a restart to pick it up, which is already the outstanding operator
+action.
