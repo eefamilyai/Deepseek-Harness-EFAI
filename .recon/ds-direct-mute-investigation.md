@@ -821,3 +821,32 @@ production. Confirmed: no real `ds_last_turn.json` is created by the suite.
 ALSO FIXED: the comment block above `IDLE_RESUME_S` still asserted the retracted
 browser claim ("a browser in that state has been redirected to the sign-in page").
 Rewritten to state the drop is a PRECAUTION and why it is safe.
+
+## END-TO-END VERIFICATION: A RESTART + AGED CLOCK DROPS THE COOKIE (the fix works)
+
+The persistence fix was verified on the REAL soak, not just in a unit test. Method:
+
+  1. stop the soak (fresh process on restart, so the in-memory map is empty)
+  2. age the persisted clock in ds_last_turn.json by 7200 s (simulating an overnight gap)
+  3. clear stderr, restart, and read what the first turn does
+
+Result -- the resume check FIRED:
+
+    [ds_direct] ds_direct: deepseek.ee.1+v@gmail.com resumed after 122 min idle
+                -- dropped the stale ds_session_id (it named a session the server had rejected)
+
+122 min is the aged clock plus the turn's own elapsed time. The chain that had to hold
+for this line to appear: the process restarted (empty map), the map was RELOADED from
+disk, the gap exceeded IDLE_RESUME_S, and the drop ran. Before the persistence fix the
+first turn after any restart was a guaranteed no-op.
+
+AND THE TURN SUCCEEDED AFTERWARD. Turn 22 returned `reply: "4"`, chars=1, dur_s=1.7 --
+no error, no re-login, no re-auth. That is the empirical form of the safety argument:
+authentication rides the bearer token, so dropping a cookie cannot make the request
+unauthenticated. The prediction and the measurement agree.
+
+The clock was also re-written on that turn ({account: 1790759786.95}), confirming the
+every-turn write path.
+
+This is the strongest verification in the whole investigation: a real restart, a real
+aged gap, the fix firing, and the request still succeeding.
