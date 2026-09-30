@@ -795,3 +795,117 @@ millisecond.
 the marker and this fix existed. **None of FIX 11, FIX 12, or FIX 13 is live in
 the running bridge until it is restarted.** The soaks are unaffected — they are
 separate processes that load the module fresh.
+
+
+---
+
+# 15. Does VOLUME cause mutes? The operator's premise, tested and falsified
+
+The original report was *"The mute comes after 100s of back and forths, but that is
+already more than usual."* That is a causal claim with a checkable form: if volume
+drives the verdict, request count should separate the muted accounts from the rest.
+
+## 15.1 First attempt, and why its answer had to be thrown away
+
+The first pass produced a clean-looking table: the busiest account (`+7`, 213
+requests) was never muted, while an account with 14 requests was. Tempting, and
+**wrong to publish as-is**, because of a confound I nearly missed:
+
+`+7` stopped at **09-29 18:21** — five minutes after the enforcement wave began.
+So "volume doesn't predict" and "nothing before 17:13 was being punished" explain
+the same data equally well. The test had no way to tell them apart.
+
+## 15.2 The correction that made it sound: an OBSERVABILITY window
+
+Mute *classification* was introduced by commit `7d6888732c` at **2026-09-29
+17:48:56 +08:00**. Before that the connector could not distinguish a mute from a
+generic refusal, so an account that went quiet earlier is not evidence of
+anything — it is **unobservable**, not unmuted. Every account is now classified:
+
+| account | pre | post | last request | status |
+| --- | --- | --- | --- | --- |
+| j1 | 0 | 42 | 09-30 20:00 | **MUTED** 10-03 12:04 |
+| p | 8 | 34 | 09-29 22:54 | **MUTED** 10-02 13:41 |
+| hunt | 0 | 28 | 09-30 16:03 | observed, no mute |
+| jw1 | 10 | 27 | 09-29 19:30 | **MUTED** 10-08 11:16 |
+| f | 0 | 14 | 09-30 14:44 | **MUTED** 10-02 17:55 |
+| v | 0 | 8 | 09-30 20:12 | observed, no mute |
+| donttouch | 0 | 8 | 09-30 16:17 | observed, no mute |
+| 7 | 212 | 1 | 09-29 18:21 | observed, no mute |
+| parserfix | 43 | 0 | 09-29 15:45 | **UNOBSERVABLE** |
+| 9 | 40 | 0 | 09-28 20:25 | **UNOBSERVABLE** |
+| kilnsal | 4 | 0 | 09-29 15:12 | **UNOBSERVABLE** |
+| 4 | 6 | 0 | 09-25 20:49 | **UNOBSERVABLE** |
+| 6 | 4 | 0 | 09-25 21:49 | **UNOBSERVABLE** |
+
+## 15.3 The result, on observable accounts only
+
+Post-classification request counts:
+
+* **muted**: 42, 34, 27, 14
+* **not muted**: 28, 8, 8, 1
+
+> The busiest **unmuted** account made **28** requests.
+> The quietest **muted** account made **14**.
+
+So volume is **neither sufficient nor necessary**:
+
+* **not sufficient** — 28 requests and no mute, against 14 requests and a mute;
+* **not necessary** — an account with 14 requests was muted while one with 28 was not;
+* **does not order** — the two lists interleave; there is no threshold that
+  separates them.
+
+This is a genuine falsification of the premise as stated. Volume is at most a weak
+contributor, and on this data not a discriminator at all.
+
+## 15.4 What survives, and what replaces it
+
+The corrected picture is that **the mutes are a wave, not a dosage**:
+
+* seven 72 h verdicts plus one 216 h verdict were issued inside a ~17 h window on
+  09-29/09-30;
+* at least three of them were issued while the machine was completely idle
+  (section 8.3), the strongest of which has **zero** events within 6.5 h either
+  side;
+* request volume across the whole fleet is small — the busiest account in the
+  entire history made 213 requests, and most made under 50.
+
+An enforcement wave against a *set of related accounts* explains all of that at
+once. Per-account dosage explains almost none of it: it cannot explain verdicts
+issued during total inactivity, and it does not order the outcomes (15.3).
+
+## 15.5 Caveat that must not be lost
+
+All 21 identities are plus-aliases of **one Gmail base** (section 13.6). A wave
+targeting the *base address* is fully consistent with everything measured — and
+would explain why unrelated-in-behaviour accounts fell together, why the timings
+cluster, and why volume is irrelevant. Section 13.6 refuted the base flag as
+**inherited by new aliases** (t1/t2 ran mute-free), but that is a different claim
+from "the base is what an enforcement pass looks at". The distinction is now the
+leading open hypothesis and is not yet tested.
+
+## 15.6 The verdict ledger, corrected
+
+An earlier pass in this section reported "every distinct mute_until: 4". That was
+wrong — it scanned only `llm/retry` and the wire journal. Scanning **all** event
+types yields **8**:
+
+| until (UTC) | issue @72 h (local) | first seen | observations |
+| --- | --- | --- | --- |
+| 2026-10-02 09:13 | 09-29 17:13 | 09-29 17:27 | 8 |
+| 2026-10-02 11:28 | 09-29 19:28 | 09-30 18:04 | 17 |
+| 2026-10-02 13:41 | 09-29 21:41 | 09-29 21:48 | 117 |
+| 2026-10-02 17:55 | 09-30 01:55 | 09-30 14:46 | 74 |
+| 2026-10-02 20:19 | 09-30 04:19 | 09-30 15:02 | 40 |
+| 2026-10-03 01:56 | 09-30 09:56 | 09-30 19:56 | 10 |
+| 2026-10-03 12:04 | 09-30 20:04 | 09-30 20:04 | 85 |
+| 2026-10-08 11:16 | 216 h → 09-29 19:16 | 09-29 19:30 | 51 |
+
+**Three of the eight cannot be attributed to an account by any structured field:**
+`09:13`, `11:28`, and `20:19` appear only in prose-bearing events (`assistant/message`,
+`tool/result`) where the nearby account names are my own write-ups. Per-account
+attribution stands for the four that `llm/retry` names (`p`, `jw1`, `f`, `j1`) and
+for `parserfix`; the rest are indicative only.
+
+This is the attribution caveat of section 8.6, now quantified: **5 of 8 verdicts
+attributable, 3 not.**
