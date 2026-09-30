@@ -1458,3 +1458,40 @@ used. A result that matches the hypothesis is the one that most needs its
 mechanism checked.
 
 PROBES: `_concurrent.py` (naive overlap), `_forkcheck.py` (subset/fork aware).
+
+## THE RATE LIMIT IS A DETERMINISTIC 10-TURN CYCLE (round 38)
+
+Running the soak at 2-5 s per turn produced a pattern that the human-pace run
+could never have shown, because its 3-10 min gaps never packed turns tightly
+enough to hit a quota:
+
+    turn 49: 181.6s
+    turn 59: 181.8s
+    turn 69: 181.8s
+    turn 79: 181.7s
+    turn 89: 181.5s
+    turn 99: 181.8s
+
+Every TEN turns, to within 0.3 s, each storm exactly `DS_RATE_WAIT` (180 s) plus
+overhead. That is not a random load event -- it is a deterministic quota: the
+account is allowed roughly 10 completion requests, then the window closes and the
+next request waits out the full 180 s interval, and the cycle repeats.
+
+WHY THIS MATTERS FOR THE MUTE QUESTION. It means the retry path is reachable
+PREDICTABLY, not rarely. In ~100 fast turns this account hit the rate limit six
+times, each time waiting 180 s and then continuing normally -- and did NOT get
+muted. That is a useful negative result: repeated, clean, orderly rate-limit
+recovery, six times in a row, with the wire journal recording every request, and
+no verdict followed. If orderly rate-limit recovery were itself the trigger, this
+run would have produced six mutes.
+
+It also gives the soak a reliable way to exercise the retry path on demand: 10
+tight turns guarantee one storm, which no human-paced cadence achieves.
+
+STATE AT THIS POINT: 103 turns, 176 journaled requests, 0 verdicts, account `v`
+healthy. The run then walked away for 103 minutes -- the first time in this
+investigation that a pause long enough to trip `IDLE_RESUME_S` (90 min) is being
+exercised in a live soak with the journal on.
+
+PROBE: `_humansoak.jsonl` per-turn `dur_s`, and the journal request/response
+sequence.
