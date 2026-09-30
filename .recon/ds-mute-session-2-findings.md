@@ -909,3 +909,114 @@ for `parserfix`; the rest are indicative only.
 
 This is the attribution caveat of section 8.6, now quantified: **5 of 8 verdicts
 attributable, 3 not.**
+
+
+---
+
+# 16. FIX 14 — the state files were clobbering each other across processes
+
+Found by accident while checking whether the t2 soak's 96-minute walk-away would
+exercise `_resume_hygiene`. The file that was supposed to prove it had fired was
+**missing the account under test**.
+
+## 16.1 The observation
+
+`runtime\ds_last_turn.json` contained **t1 and v — but not t2**, while t2's own
+soak was actively making requests:
+
+```
+runtime\ds_last_turn.json              (2 accounts)
+    deepseek.ee.1+t1@gmail.com         09-30 20:34:16
+    deepseek.ee.1+v@gmail.com          09-30 18:40:03
+```
+
+t2 had been sending requests since 19:51 and its last turn was 20:06:28. It should
+have been there. It was not.
+
+## 16.2 The mechanism
+
+Both soaks run **without `KILN_STATE_DIR`**, so both write that file. Each process
+loads it **once at import** and then dumps its **whole in-memory dict** back:
+
+| process | imported | consequence |
+| --- | --- | --- |
+| t1 soak | 19:51:56 | its dict has never contained t2 |
+| t2 soak | 20:01:01 | its dict has t1 only if t1 wrote before import |
+
+t1's 20:34:16 write therefore carried a dict without t2, and it was the last write.
+The loss is not interleaving — `_atomic_json` already makes each write atomic, so no
+reader ever sees a partial file. The loss is that **a process's in-memory dict is a
+snapshot from import time**, and writing it whole discards everything another
+process added afterwards.
+
+Reproduced deterministically with three sequential processes sharing one state
+directory: each wrote correctly, the final file held all three. The clobber needs
+the *overlapping* lifetime, which is exactly what two long-running soaks have.
+
+## 16.3 Why it matters for both files
+
+* **`ds_last_turn.json`** — `_resume_hygiene` reads `prev` from this map and
+  **returns immediately when it is None**:
+
+  ```python
+  prev = _last_turn_at.get(acct_id)
+  ...
+  if prev is None or (now - prev) < IDLE_RESUME_S:
+      return False
+  ```
+
+  So an account erased by a clobber gets **no stale-cookie drop** on the first turn
+  after an overnight gap. That is precisely the case the persistence was added for:
+  *"an overnight pause is exactly when the process is likely to have been restarted,
+  and an in-memory map is empty on a fresh process."* The clobber restores the bug
+  the persistence was written to remove.
+
+* **`ds_muted.json`** (FIX 12) — the same shape, so the same loss: a mute recorded
+  by one process is erased by another, and a forgotten mute means the pool hands a
+  benched account the next brand-new conversation, which is the waste FIX 12 exists
+  to remove.
+
+## 16.4 The fix
+
+`_save_last_turn` and `_save_muted` now **re-read the file and merge** before
+writing, the later value winning per account. For the mute ledger that is the same
+rule it already used for two verdicts on one account, so no second rule was
+invented. A file lock was deliberately **not** added: it would serialise writers but
+not fix this, because the loss is a stale view rather than a race. Merging is what
+makes each process's snapshot additive.
+
+## 16.5 A deployment caveat that must not be lost
+
+**The running soaks do not have FIX 12, 13, or 14.** They started at 19:51:56 and
+20:01:01; those fixes were committed later. Only FIX 1–11 are live in them.
+
+That does **not** invalidate the t2 walk-away test, and the reason is worth stating
+precisely: the clobber removes *other* accounts' entries, never the writer's own.
+t2's process holds t2's timestamp in its own memory, so `_resume_hygiene` will still
+see the 96-minute gap and drop the cookie. What the clobber prevents is *t1's* entry
+surviving inside t2's file, and vice versa — which is why the file showed two
+accounts where it should have shown three.
+
+## 16.6 Verification
+
+`test_ds_direct_state_merge.py` — **14 checks, 0 failed**. It asserts that the other
+process's account survives, that both are present, that the later stamp/expiry wins,
+that an older in-memory value cannot overwrite a newer one, and that a corrupt file
+raises nothing while the in-memory value still reaches disk.
+
+Full set: **11 suites, all green** (48 + 13 + 23 + 18 + 33 + 17 + 22 + 36 + 14 +
+ds_hif + ds_identity).
+
+## 16.7 The pattern in this session's defects
+
+Three of the last four fixes are the same class of bug, and it is worth naming:
+
+| fix | the shape |
+| --- | --- |
+| FIX 12 | state was *parsed* and then discarded (the exact `mute_until`) |
+| FIX 13 | a test *created* state in a live directory and deleted it unconditionally |
+| FIX 14 | state was *held in memory* and written whole, discarding another writer's |
+
+All three are "the value existed and was thrown away". None was a wrong algorithm.
+That is a useful thing to know about this codebase: the request path is careful, and
+the *bookkeeping around* it is where the losses are.
