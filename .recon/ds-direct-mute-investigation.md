@@ -1495,3 +1495,28 @@ exercised in a live soak with the journal on.
 
 PROBE: `_humansoak.jsonl` per-turn `dur_s`, and the journal request/response
 sequence.
+
+## EVERY ACCOUNT HAS ITS OWN DEVICE ID (round 39)
+
+The operator's device-reuse suspicion had one form I had not tested. If several
+ACCOUNTS all presented ONE `x-device-id`, then from DeepSeek's side a single device
+would be running a fleet of accounts -- the classic multi-account pattern, and
+exactly what a device-bound anti-abuse rule would act on.
+
+`_devices.py` reads `_device_id_for(acct)` directly for every account in the pool
+(it prints a FINGERPRINT of each id, not the value -- that identifier does not need
+to be in a report):
+
+    deepseek.ee.1+hunt@gmail.com    4e32355e9b7b   derived
+    deepseek.ee.1+v@gmail.com       bce08334375a   derived
+    deepseek.ee.1+f@gmail.com       2d1ce3457c29   derived
+    deepseek.ee.1+j1@gmail.com      8f79a86a0e78   derived
+
+FOUR distinct device ids across FOUR accounts, every one DERIVED rather than
+configured. So the fleet does not look like one device running many accounts.
+
+This is the third independent refutation of the device theory, and the most direct:
+the session timeline showed no genuine concurrent sessions (the apparent overlap
+was a forked log), and now the device ids themselves are distinct per account.
+
+PROBE: `_devices.py`. Read-only; touches no account and sends nothing.
