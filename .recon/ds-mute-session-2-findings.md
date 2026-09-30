@@ -2292,3 +2292,66 @@ This is deliberately **not** something done here: the bridge is the route this
 agent is currently running through, so terminating it mid-turn would end the
 session that is doing the investigating. The operator has restarted the harness
 before for exactly this kind of change, and this note is the request.
+
+## 31. Aggregate pool activity does not distinguish a mute instant
+
+The alias hypothesis had one form left alive. Per-account activity had been
+falsified (sections 15 and 26.4), but every account is a plus-alias of one Gmail
+base. If DeepSeek counted the BASE rather than the alias, a quiet account could
+still be muted because its siblings were busy -- and no per-account measurement
+would see it.
+
+That is testable, and it fails.
+
+### 31.1 The measurement
+
+Across all **89** session logs, 1,035 `request/header` events spanning 08-15 to
+10-01. For each mute issue instant, the total pool activity in the preceding 30
+minutes:
+
+| account | issue instant | requests | distinct accounts |
+| --- | --- | --- | --- |
+| jw1 | 09-29 17:13:27 | 1 | kilnsal |
+| ? | 09-29 19:28:00 | 5 | jw1, p |
+| ? | 09-29 21:41:00 | **0** | -- |
+| f | 09-30 01:55:15 | **0** | -- |
+| hunt | 09-30 04:19:40 | **0** | -- |
+| mutetest | 09-30 09:56:00 | **0** | -- |
+| j1 | 09-30 20:04:00 | 3 | j1 |
+| jw1 (second) | 09-29 19:16:00 | **11** | jw1, p |
+
+Random 30-minute windows over the same span: **min 0, median 0, max 4.**
+
+Six of the eight mute instants follow a window carrying 0-3 requests, which is
+the baseline. **Aggregate activity on the shared base does not distinguish a mute
+instant either.**
+
+### 31.2 The one elevated window is the fix, not the cause
+
+`jw1`'s second mute follows 11 requests in 30 minutes -- the only window above
+the random maximum of 4. That looks like a counter-example until it is
+identified: those 11 requests are the retry ladder of section 25.2, part of the
+32 requests that fell between jw1's two verdicts.
+
+So the single elevated window in the whole set is the client's *response* to a
+mute already in hand, which is exactly the behaviour FIX 17 removes. It is not
+evidence that activity caused the mute; it is evidence that a mute caused
+activity -- and that the client then escalated its own penalty.
+
+### 31.3 What is closed
+
+Every activity-proportional explanation is now measured and falsified:
+
+| explanation | verdict | section |
+| --- | --- | --- |
+| per-account turn count | falsified | 15 |
+| per-account byte volume | falsified | 26.4 |
+| single-chat length | falsified | 26.3 |
+| system-prompt resends | exercised, ~57 KB -- too small | 27 |
+| login bursts | falsified -- muted accounts had 0 logins | 29.3 |
+| **aggregate base-address activity** | **falsified here** | 31 |
+
+What remains is the shape section 25.4 left open and this section strengthens:
+the verdicts arrive in windows that are indistinguishable from quiet windows, so
+the trigger is not proportional to anything this machine sends. The one
+exception is the escalation, and that one has a mechanism and a fix.
