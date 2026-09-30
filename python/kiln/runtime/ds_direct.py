@@ -3489,16 +3489,11 @@ def _sleep_cancellable(secs, cancelled, step=0.5):
     return not cancelled()
 
 
-# A resume after a long idle gap is when a lapsed session cookie is most dangerous.
-# The server has expired it during the pause, and a browser in that state has been
-# redirected to the sign-in page -- so the first request after the pause carries NO
-# session cookie. This connector instead carried the stored one straight into the
-# resume request, which is precisely the state no browser occupies.
-#
-# Measured on this machine: the captured Chrome profile holds `aws-waf-token`
-# (persistent, ~3-day expiry) and `smidV2`, but NO `ds_session_id` for any account.
-# So on the one request that follows a pause, the harness was the only client
-# presenting a session cookie -- and that request is the one that draws the verdict.
+# A resume after a long idle gap is when a possibly-lapsed session cookie is most
+# awkward to carry: the server may have expired it during the pause, and
+# re-presenting it after 90 minutes buys nothing. Dropping it is a PRECAUTION, not
+# a measured correction -- see `_resume_hygiene` for why it is safe (authentication
+# rides the bearer token, so a dropped cookie cannot force a re-login).
 #
 # The threshold is DERIVED from the retry constants, not chosen, because one turn
 # can legitimately spend `RATE_MAX_TRIES` x `DS_RATE_WAIT` (20 x 180 s = an hour)
@@ -3506,8 +3501,36 @@ def _sleep_cancellable(secs, cancelled, step=0.5):
 # threshold below it would drop the cookie in the middle of one. Half an hour of
 # headroom on top means a storm can never trip this and a genuine overnight gap
 # always does.
+#
+# PERSISTED, because an overnight pause is exactly when the process is likely to
+# have been restarted, and an in-memory map is empty on a fresh process: the first
+# turn after a restart would never see the gap, however long it was. Best-effort --
+# losing the file restores the previous behaviour, which is not worse.
 IDLE_RESUME_S = RATE_MAX_TRIES * DS_RATE_WAIT + 1800.0      # 5400 s = 90 min
-_last_turn_at = {}
+_LAST_TURN_FILE = os.path.join(
+    os.environ.get("KILN_STATE_DIR") or _DIR, "ds_last_turn.json")
+_last_turn_lock = threading.Lock()
+
+
+def _load_last_turn():
+    """The persisted account -> last-turn epoch map, or {} if unreadable."""
+    try:
+        with open(_LAST_TURN_FILE, "r", encoding="utf-8") as f:
+            doc = json.load(f)
+        return {str(k): float(v) for k, v in doc.items()}
+    except Exception:  # noqa: BLE001 -- absent or corrupt is not fatal
+        return {}
+
+
+_last_turn_at = _load_last_turn()
+
+
+def _save_last_turn():
+    with _last_turn_lock:
+        try:
+            _atomic_json(_LAST_TURN_FILE, _last_turn_at)
+        except Exception:  # noqa: BLE001 -- persistence must never break a turn
+            pass
 
 
 def _resume_hygiene(client, acct_id, now=None):
@@ -3537,6 +3560,10 @@ def _resume_hygiene(client, acct_id, now=None):
     now = time.time() if now is None else now
     prev = _last_turn_at.get(acct_id)
     _last_turn_at[acct_id] = now
+    # Recorded every turn, not only on a drop: a stale entry would make the next
+    # gap look longer than it was and drop a cookie for a pause that never
+    # happened. The file is tiny and the write is atomic.
+    _save_last_turn()
     if prev is None or (now - prev) < IDLE_RESUME_S:
         return False
     dropped = _forget_cookie(getattr(client, "sess", None), "ds_session_id")

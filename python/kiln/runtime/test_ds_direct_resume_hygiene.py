@@ -14,6 +14,14 @@
 # Run:  .venv\Scripts\python.exe test_ds_direct_resume_hygiene.py
 import os
 import sys
+import tempfile
+
+# Isolate persisted state BEFORE importing ds_direct. The module resolves its state
+# paths at import time, and `_resume_hygiene` now persists a per-account last-turn
+# clock. Without this the suite would write into the REAL state directory and leave
+# epoch-1000 timestamps behind, which a later production run would read as an
+# enormous idle gap and act on.
+os.environ["KILN_STATE_DIR"] = tempfile.mkdtemp(prefix="ds-resume-test-")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ds_direct as ds  # noqa: E402
