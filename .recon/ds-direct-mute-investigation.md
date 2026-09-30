@@ -530,3 +530,44 @@ test_ds_direct_resume_hygiene.py: 17 checks, all green. Pins the derived relatio
 the first-turn case, a 1-minute gap, a storm-length gap (must NOT trip), a genuine
 pause (must trip), the exact boundary, per-account isolation, two unreadable-jar
 shapes. All 12 kiln suites pass.
+
+## OPERATOR BOUNDARIES AND THE ACCOUNT EXCLUSION FLAG
+
+The operator named two accounts off-limits mid-investigation:
+
+  * `deepseek.ee.1+donttouch@gmail.com` — a new config entry, name says it.
+  * `deepseek.ee.1+j1@gmail.com` — the account this session RUNS ON.
+
+`j1` needs no config change: driving it would be self-interference, and marking it
+disabled would remove the very route the session uses. It is left alone entirely.
+
+`donttouch` exposed a real hazard. `_next_account_id` round-robins over EVERY
+account in `_accounts`, so a brand-new conversation could land on it, and with no
+opt-out flag in the config there was no way to prevent that. Added one:
+
+  * `_Account.disabled`, set from a config entry's `"disabled": true` (per-account,
+    falling back to the document's top-level flag), defaulting False.
+  * `_read_accounts_from_disk.add()` returns early for a disabled account, so it
+    never enters `_accounts` — the pool every automatic pick draws from.
+
+Verified live: marking `donttouch` disabled took the pool from 5 accounts to 4
+(`hunt`, `v`, `f`, `j1`). The account keeps its token and cookie in the config; it
+is invisible to the round-robin and to the failover ring, not deleted.
+
+TWO BUGS I INTRODUCED AND CAUGHT, BOTH WORTH RECORDING.
+
+  1. I added the `if acct.disabled:` guard to `add()` BEFORE adding `disabled` to
+     `__slots__` and `__init__`. With `__slots__` declared, an unset attribute is
+     an AttributeError rather than a silent None, so EVERY account load raised and
+     the module could not be imported at all -- which killed the soak that was
+     running at the time. `python -m py_compile` passes on that; only an actual
+     `import` catches it. The lesson is to run the import check after touching
+     `_Account`, not just the compile check.
+
+  2. I briefly wrote `_account_by_id` to consult a `_disabled_accounts` dict that
+     did not exist. That edit did not land, so no harm was done, but the design
+     point stands: `_account_by_id` must NOT fall back to `_accounts[0]` for a
+     known-but-disabled id, because that would run the call on a DIFFERENT login
+     than the one named. It currently cannot happen -- a disabled account has no
+     route registered, so nothing addresses it by id -- but the fallback is the
+     thing to watch if disabled accounts ever become addressable.
