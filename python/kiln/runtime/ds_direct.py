@@ -966,11 +966,11 @@ def _drop_dead_session_cookie(sess):
     """Forget the dead `ds_session_id` before asking DeepSeek for a new token.
 
     A cookie that has expired is still a cookie, and the re-login path used to
-    post /users/login with the dead session id still attached. That is a state a
-    browser cannot be in: the site answers an expired session by sending the page
-    to the sign-in route, and the sign-in page never carries the dead session id
-    -- so the only client that presents one at the login call is a client that
-    never saw the redirect. It is the same stale-cookie problem the WAF branch
+    post /users/login with the dead session id still attached. That is
+    self-inconsistent on its own terms, with no browser comparison needed: the
+    call asks for a NEW token while presenting the DEAD session's identifier, so
+    two credentials in one request disagree about which session is live. It is the
+    same stale-cookie problem the WAF branch
     below already clears the whole jar for.
 
     Only the session cookie goes. `aws-waf-token` is deliberately kept: it is the
@@ -1530,10 +1530,9 @@ class _Client:
 
     def _login_attempt(self, email, mobile, area, password):
         acct = self.account
-        # Ask for a new token from the state a browser would be in: the page was
-        # bounced to the sign-in route, so the dead session cookie is already
-        # gone. Replaying it made this request carry a credential the site had
-        # just rejected, on exactly the calls the anti-abuse stack watches.
+        # Ask for a new token WITHOUT the dead session's identifier. Replaying it
+        # made this request carry a credential the site had just rejected, on
+        # exactly the calls the anti-abuse stack watches.
         # See `_drop_dead_session_cookie` for what is kept, and why.
         _drop_dead_session_cookie(self.sess)
         payload = {
@@ -3514,11 +3513,26 @@ _last_turn_at = {}
 def _resume_hygiene(client, acct_id, now=None):
     """On the first turn after a long idle gap, forget the stale `ds_session_id`.
 
-    Returns whether a cookie was dropped. A browser answers this situation by being
-    redirected to sign-in, so it never presents the lapsed cookie; dropping it here
-    reproduces that state and lets the ordinary `_AuthExpired` path re-authenticate
-    if the token really is dead. Best-effort by design: a jar that cannot be edited
-    simply keeps the old behaviour.
+    Returns whether a cookie was dropped. This is a PRECAUTION, not a measured
+    correction: a session cookie may have lapsed server-side during a long pause,
+    and re-presenting it after 90 minutes buys nothing while costing a request
+    shape a browser is unlikely to produce. Two things make it safe rather than
+    merely plausible:
+
+      * authentication rides the BEARER TOKEN (`_headers` sets `authorization`
+        from `self.token`), so dropping a cookie cannot make an authenticated
+        request unauthenticated and cannot force a re-login; and
+      * the ordinary `_AuthExpired` path still re-authenticates if the TOKEN is
+        what actually died.
+
+    `aws-waf-token` is deliberately kept: WAF clearance is not a session, and
+    replacing it costs a solved challenge. Best-effort by design -- a jar that
+    cannot be edited simply keeps the old behaviour.
+
+    Note on what is NOT claimed here: an earlier version of this comment justified
+    the drop by saying a real browser would have been redirected to sign-in. That
+    comparison was retracted -- the captured Chrome profiles were never logged in,
+    so their jars say nothing about an authenticated browser.
     """
     now = time.time() if now is None else now
     prev = _last_turn_at.get(acct_id)
@@ -3528,7 +3542,7 @@ def _resume_hygiene(client, acct_id, now=None):
     dropped = _forget_cookie(getattr(client, "sess", None), "ds_session_id")
     if dropped:
         config.dbg("ds_direct: %s resumed after %.0f min idle -- dropped the stale "
-                   "ds_session_id (a browser would have been sent to sign-in)",
+                   "ds_session_id (it named a session the server had rejected)",
                    acct_id, (now - prev) / 60.0)
     return dropped
 
