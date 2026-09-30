@@ -39,6 +39,11 @@ _DIR = os.path.dirname(os.path.abspath(__file__))
 _LOCK = threading.Lock()
 _RING = []
 _RING_MAX = 80
+# The FILE bound. `_RING_MAX` only caps what a verdict preamble carries in memory;
+# the journal on disk is append-only, so without this it grows for the life of the
+# process. A mute can arrive days after the request that drew it, so the bound is
+# deliberately generous -- see `_rotate_if_needed`.
+_FILE_MAX = 32 * 1024 * 1024
 _SEQ = 0
 _ON = None
 
@@ -73,6 +78,30 @@ def _fp(value):
     return hashlib.sha256(str(value).encode("utf-8", "ignore")).hexdigest()[:10]
 
 
+def _rotate_if_needed(p):
+    """Move the journal to `<p>.1` once it passes `_FILE_MAX`.
+
+    One generation, not a numbered series: a bounded pair is enough to keep a
+    post-mortem readable, and an unbounded set of rotated files would just move
+    the growth problem to a directory listing. The previous generation is kept
+    rather than truncated because the whole purpose of this journal is to be read
+    AFTER something went wrong -- discarding it at the rotation boundary would
+    drop exactly the records nearest the event.
+
+    Best-effort, like every other write here: a rotation that fails must leave the
+    existing file in place and never break the request being journaled.
+    """
+    try:
+        if os.path.getsize(p) < _FILE_MAX:
+            return
+        # Replace any previous generation. `os.replace` is atomic on both POSIX
+        # and Windows, so a concurrent reader sees one file or the other, never a
+        # half-written one.
+        os.replace(p, p + ".1")
+    except Exception:  # noqa: BLE001 -- rotation must never break a turn
+        pass
+
+
 def _append(obj):
     """Append one line. Best-effort: a journal must never break a turn.
 
@@ -87,6 +116,7 @@ def _append(obj):
         parent = os.path.dirname(p)
         if parent and not os.path.isdir(parent):
             os.makedirs(parent, exist_ok=True)
+        _rotate_if_needed(p)
         with open(p, "a", encoding="utf-8") as f:
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
     except Exception:  # noqa: BLE001

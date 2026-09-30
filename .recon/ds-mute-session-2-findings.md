@@ -1227,3 +1227,84 @@ So the two statements are consistent and both are now measured:
 The second is a real defect fixed here. It is *not* the mute mechanism, and
 claiming otherwise would be exactly the kind of correlation-to-causation jump this
 document has already retracted three times.
+
+
+---
+
+# 19. FIX 16 — the wire journal was append-only with no rotation
+
+Found by sweeping every mutable state file after FIX 15, on the question "are
+there others?".
+
+## 19.1 The defect
+
+`ds_wirelog.py` capped its **in-memory** ring at 80 entries (`_RING_MAX`) — that
+is what keeps a verdict's preamble small — but `_append` opened the journal in
+append mode and **never rotated it**. The file grew for the life of the process.
+Measured: 0.53 MB after roughly two hours of light traffic.
+
+That is small in absolute terms, and on a normal log it would be a nuisance rather
+than a defect. What makes it matter here is the journal's purpose: it is the one
+artifact that must still be readable **after** a mute, and a mute can arrive days
+after the request that drew it. An unbounded file is a file that eventually
+becomes impractical to read exactly when someone needs to read it — and because
+this journal is enabled by a marker file, it is the one most likely to be left on
+by accident.
+
+## 19.2 The fix
+
+`_FILE_MAX = 32 MiB` — roughly a hundred times the observed size, i.e. weeks of
+traffic, chosen so the bound cannot truncate the window a mute investigation
+actually cares about.
+
+Rotation is **one generation, by `os.replace`**: the live file moves to `<path>.1`,
+replacing any previous `.1`, and a fresh file starts. Three deliberate choices:
+
+* **preserve, do not truncate.** Discarding records at the rotation boundary would
+  drop exactly the ones nearest the event under investigation. The previous
+  generation stays on disk.
+* **one generation, not a numbered series.** A bounded pair keeps a post-mortem
+  readable; an unbounded set of rotated files would just move the growth problem
+  to a directory listing.
+* **`os.replace`, which is atomic** on both POSIX and Windows, so a concurrent
+  reader sees one file or the other and never a half-written one.
+
+Best-effort like every other write in the module: a rotation that fails leaves the
+existing file in place and never breaks the request being journaled.
+
+## 19.3 Verification
+
+`test_ds_wirelog_rotation.py` — **23 checks, 0 failed**:
+
+| property | asserted |
+| --- | --- |
+| the bound is generous | `>= 16 MiB` |
+| below the bound | nothing rotates, both records in the live file |
+| crossing the bound | the live file rotates away |
+| the old generation | intact, same size, still holds the old record |
+| the new record | lands in the fresh live file, which is small again |
+| one generation | `.1` exists, `.2` and `.3` never created |
+| best-effort | an aggressive bound does not raise; records still reach disk |
+| robustness | a missing file and a non-file path both tolerated |
+| the ring | still capped at `_RING_MAX`, verdict still carries its preamble |
+
+Full set: **13 suites, all green** (48 + 13 + 23 + 23 + 18 + 33 + 17 + 22 + 36 +
+14 + 22 + hif + identity).
+
+## 19.4 The accumulating-file sweep, complete
+
+After FIX 15 and FIX 16, every mutable file this connector writes is bounded:
+
+| file | bound |
+| --- | --- |
+| `ds_sessions.json` | **FIX 15** — `last_prompt` capped at 256 Ki chars, kept for the 40 MRU entries |
+| `ds_wirelog.jsonl` | **FIX 16** — 32 MiB, one preserved generation |
+| `ds_muted.json` | one entry per muted account, pruned on expiry |
+| `ds_last_turn.json` | one entry per account |
+| `ds_config.json` | fixed account roster |
+
+Note what this list is and is not. It closes the class of "a local file grows
+without bound", which was a real defect class in this codebase — three of the six
+were unbounded or clobbering. It says **nothing** about mutes, and it is not
+evidence about the mute mechanism either way. Section 18.5's reasoning applies
+unchanged: what accumulates locally is invisible to DeepSeek.
