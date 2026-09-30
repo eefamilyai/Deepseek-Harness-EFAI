@@ -307,3 +307,147 @@ is why re-authenticating at it is pure added risk.
     `x_device_id` and `did`, none on the machine-wide fallback.
   * The eager re-login as the SOLE cause: falsified by the 09:13 and 11:16 mute
     starts, which precede the commit that introduced it.
+
+## SURFACE 5 - THE HARNESS RESURRECTS EXPIRED COOKIES (operator lead A, deepest form)
+
+CONFIRMED empirically by `_cookiejar.py` (Part B, deterministic, no network):
+
+    step 1: install ds_session_id with expires = (now - 3600)   -> jar: domain='chat.deepseek.com' expires=1790748939
+    step 2: get_dict()                                          -> {'ds_session_id': 32, ...}
+    step 3: cookie_string() serializes                         -> "ds_session_id=ZZZ..." (carries expiry? False)
+    step 4: apply_account() re-installs via set(name, value)    -> jar: domain='' expires=None
+    >>> EXPIRED COOKIE RESURRECTED ALIVE: True
+
+The mechanism, three cooperating defects in ds_direct.py:
+
+  1. `cookie_string()` (line 1208) emits ONLY `name=value`:
+         return "; ".join(f"{k}={v}" for k, v in self.sess.cookies.get_dict().items())
+     `get_dict()` has no domain/expiry to give it, so the expiry is destroyed at the
+     moment of persistence.
+  2. `apply_account()` (line 1201) re-installs with a bare `set(k, v)`:
+         self.sess.cookies.set(k.strip(), v)
+     No domain, no path, no expires. curl_cffi yields domain='' expires=None -- a
+     SESSION cookie that never expires.
+  3. `ds_config.json` stores the result as a flat 416-char string
+     ("aws-waf-token=...; ds_session_id=..."), a format that CANNOT carry an expiry,
+     so nothing downstream can recover it either.
+
+Net effect: every cookie this harness holds is immortal. A cookie that DeepSeek has
+already lapsed server-side is still presented on every single request, forever. That
+is precisely the state the operator described and a browser can never be in: the site
+answers an expired session by redirecting the page to the sign-in route, and the
+sign-in page never carries the dead session id -- so the only client that presents one
+on the next call is a client that never saw the redirect.
+
+## THE BROWSER'S REAL JAR, READ FROM THE CAPTURED CHROME PROFILES
+
+`_chromecookies.py` read `expires_utc` / `is_persistent` / `has_expires` from each
+profile's `Default/Network/Cookies` (metadata only; the `value`/`encrypted_value`
+columns are never selected). All four profiles agree:
+
+  | cookie                  | host               | persistent | has_expires | expires_utc      |
+  |-------------------------|--------------------|------------|-------------|------------------|
+  | aws-waf-token           | .deepseek.com      | 1          | 1           | ~2026-10-03/04   |
+  | smidV2                  | chat.deepseek.com  | 1          | 1           | 2027-11-03/04    |
+  | .thumbcache_6b2e5483... | chat.deepseek.com  | 1          | 1           | 2027-11-03/04    |
+  | ds_session_id           | (ABSENT)           | -          | -           | -                |
+
+Three consequences, all divergences from the real client:
+
+  * `aws-waf-token` is PERSISTENT in the browser with a ~3-day expiry and host
+    `.deepseek.com`. The harness holds it as a session cookie with domain='' and no
+    expiry, so it outlives the value the server issued -- a stale WAF clearance is
+    exactly what the WAF branch at ~1408 already documents as making "/users/login
+    still refuse it".
+  * `smidV2` is the Shumei device cookie -- the same Shumei vendor ds_identity names
+    when it mints the "browser-minted Shumei fingerprint" for `device_id`. The real
+    browser carries it as a first-party cookie on chat.deepseek.com. The harness
+    sends the header-side fingerprint but NONE of the cookie-side one.
+  * `ds_session_id` is not in the browser jar at all, yet ds_config.json holds one for
+    every account and `_headers` replays it on every request.
+
+## WHAT THIS DOES *NOT* YET PROVE
+
+The mute is an account-level moderation verdict, and a stale cookie is a session-state
+defect; the link between them is the operator's hypothesis (lead A), now confirmed as a
+real divergence, not yet proven as the mute trigger. It is however the strongest
+remaining candidate, because it is the one state a browser is structurally prevented
+from entering and the harness enters by construction.
+
+FIX (implemented this round): preserve domain/path/expiry through the round-trip, so a
+cookie dies on schedule the way a browser's does.
+
+## SURFACE 6 - THE MUTE ARRIVES AFTER THE STORM, NOT DURING IT (operator leads B and C)
+
+Two operator observations, both measured and both confirmed.
+
+LEAD B - "it usually does not get muted until there is a long pause".
+LEAD C - "the rate limit is normal, but it is the pause during those turns, then
+the AI comes back and shortly after it gets banned".
+
+What the turn-duration probe (`_turndur.py`) shows. Pairing every `turn/start`
+with its `turn/end` makes a retry storm visible as ONE very long turn, because the
+retries themselves print to stderr and never become turn events:
+
+    median turn   0.9 min
+    p90          21.0 min
+    max         101.4 min
+
+The long turns are the storms. `RATE_MAX_TRIES = 20` at `DS_RATE_WAIT = 180 s`
+means a rate-limited turn resends 20 times over ~60 minutes on the SAME account,
+session and prompt.
+
+What the mutes show. Every mute back-computed from its reported expiry (expiry
+minus 72 h) against the last turn that ended before it:
+
+    account    mute start (UTC)   last turn ended   gap
+    v          09-27 13:41        09-27 13:22       18.3 min
+    j1         09-29 13:41        09-29 13:34        7.0 min
+    f          09-29 17:55        09-29 16:33       82.1 min
+    mutetest   09-29 17:56        09-29 16:33       83.1 min
+    hunt       09-29 20:19        09-29 16:33      226.1 min
+
+Every mute lands AFTER the last request, never during one. Moderation is
+ASYNCHRONOUS: the offence precedes the verdict by minutes to hours. That is why an
+earlier scan for events within plus/minus 30 min of the mute instant found ZERO --
+it was looking at the verdict time, not the offence time. The correct window is the
+STORM, and the storm's retries are invisible to event counting.
+
+THE CORRELATION THE OPERATOR SPOTTED, CONFIRMED. `f` (expiry 2026-10-02 17:55 UTC)
+and `mutetest` (expiry 2026-10-03 01:56 local = 17:56 UTC) back-compute to starts
+60 SECONDS APART, and they are two DIFFERENT accounts. A per-account volume theory
+cannot explain two accounts muted in the same minute; a shared INSTANT of the same
+behaviour can. Both had their last turn end at exactly 16:32:55 UTC, and both mutes
+follow ~83 min later.
+
+THE MECHANISM THAT FITS ALL THREE LEADS. Operator lead A (expired cookies still
+presented) and lead C (the AI comes back after a pause) are the same event:
+
+  1. a pause long enough for the session to lapse server-side;
+  2. the next request presents the credential the server has lapsed -- because
+     `cookie_string()` wrote only `name=value` and `apply_account()` re-installed it
+     as a SESSION cookie, so nothing in the harness could ever expire (SURFACE 5);
+  3. the server refuses it, and the refusal is a `biz_code` the harness does not
+     recognise;
+  4. the retry path resends -- up to 20 times at 3-minute intervals -- carrying the
+     same lapsed credential, for an hour.
+
+A browser cannot enter step 2 at all: the site answers a lapsed session by sending
+the page to the sign-in route, so the dead cookie is never presented, and there is
+no storm to escalate.
+
+## THE COOKIE FIX IS COMPLETE AND VERIFIED
+
+`test_ds_direct_cookie_expiry.py`, 33 checks, ALL GREEN. Four pieces:
+
+  * `_parse_cookie_field` reads both the legacy flat form and the attributed form,
+    and only treats a token as an attribute when it FOLLOWS a cookie and its name
+    is a known attribute -- so a cookie genuinely named `expires` stays a cookie.
+  * `_cookie_expired` decides by the cookie's own expiry; a session cookie never
+    expires.
+  * `_cookie_header` emits Domain/Path/Expires so the round-trip is lossless.
+  * `apply_account` and the login token handoff install through `_install_cookie`
+    and SKIP anything already lapsed.
+
+All 11 kiln suites pass. The 60-second `f`/`mutetest` correlation is the strongest
+single piece of evidence in this investigation.

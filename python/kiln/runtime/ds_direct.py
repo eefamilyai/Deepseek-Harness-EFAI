@@ -967,6 +967,148 @@ def _drop_dead_session_cookie(sess):
     return _forget_cookie(sess, "ds_session_id")
 
 
+# Cookie attribute names, so a Set-Cookie-style attribute can be told apart from
+# a cookie whose name merely looks like one. Matched case-insensitively, and only
+# when the token follows an existing cookie.
+_COOKIE_ATTRS = ("path", "domain", "expires", "max-age", "secure", "httponly",
+                 "samesite", "version", "comment")
+
+
+def _cookie_expiry(value):
+    """An epoch int from either a numeric Expires or an HTTP-date, else None."""
+    v = str(value or "").strip()
+    if not v:
+        return None
+    try:
+        n = int(float(v))
+        return n if n > 0 else None
+    except ValueError:
+        pass
+    try:
+        import email.utils as _eu
+        dt = _eu.parsedate_to_datetime(v)
+        return int(dt.timestamp()) if dt is not None else None
+    except Exception:  # noqa: BLE001 -- an unreadable date means "session cookie"
+        return None
+
+
+def _parse_cookie_field(raw):
+    """Parse a cookie field into ``[{"name","value","domain","path","expires"}]``.
+
+    Two shapes have to be accepted, because the field must survive an upgrade:
+
+      * the legacy flat header -- ``"a=1; b=2"`` -- where nothing carries an
+        attribute, so every cookie in it reads as a session cookie;
+      * the Set-Cookie-style form ``cookie_string()`` now writes --
+        ``"a=1; Domain=.deepseek.com; Path=/; Expires=1791027170"``.
+
+    A token is treated as an attribute only when it follows a cookie AND its name
+    is a known cookie attribute, so a cookie genuinely named ``Expires`` that
+    carries a value of its own is still read as a cookie. `expires` is normalised
+    to an epoch int, or None for a session cookie.
+    """
+    out = []
+    for part in (raw or "").split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" in part:
+            name, value = part.split("=", 1)
+            name, value = name.strip(), value.strip()
+        else:
+            name, value = part, ""
+        low = name.lower()
+        if out and low in _COOKIE_ATTRS:
+            if low == "expires":
+                out[-1]["expires"] = _cookie_expiry(value)
+            elif low in ("domain", "path"):
+                out[-1][low] = value
+            continue
+        out.append({"name": name, "value": value, "domain": "",
+                    "path": "/", "expires": None})
+    return [c for c in out if c["name"]]
+
+
+def _cookie_expired(cookie, now=None):
+    """Whether this cookie's own expiry has passed. Session cookies never expire."""
+    exp = cookie.get("expires")
+    if not exp:
+        return False
+    return exp <= (time.time() if now is None else now)
+
+
+def _install_cookie(sess, c):
+    """Install one parsed cookie, preserving its domain, path and expiry.
+
+    curl_cffi's ``Cookies.set()`` takes no ``expires`` (measured: it raises
+    ``TypeError``), so an expiring cookie is installed through the underlying
+    ``http.cookiejar`` -- which is exactly what a real ``Set-Cookie`` response
+    populates. A jar that is not a real cookiejar (the tests' duck-typed fakes)
+    falls back to the plain two-argument set, then to a bare set, so no jar shape
+    loses the credential over an attribute it cannot carry.
+    """
+    jar = getattr(sess, "cookies", None)
+    if jar is None:
+        return False
+    inner = getattr(jar, "jar", None)
+    exp = c.get("expires")
+    if inner is not None and exp:
+        try:
+            from http.cookiejar import Cookie
+            dom = c.get("domain") or ""
+            inner.set_cookie(Cookie(
+                version=0, name=c["name"], value=c["value"], port=None,
+                port_specified=False, domain=dom, domain_specified=bool(dom),
+                domain_initial_dot=dom.startswith("."),
+                path=c.get("path") or "/", path_specified=True, secure=True,
+                expires=exp, discard=False, comment=None, comment_url=None,
+                rest={}, rfc2109=False))
+            return True
+        except Exception:  # noqa: BLE001 -- fall through to the plain set
+            pass
+    for kwargs in ({k: c[k] for k in ("domain", "path") if c.get(k)}, {}):
+        try:
+            jar.set(c["name"], c["value"], **kwargs)
+            return True
+        except Exception:  # noqa: BLE001
+            continue
+    return False
+
+
+def _cookie_header(sess):
+    """The jar as one cookie header, each cookie carrying its own attributes.
+
+    Emitting Domain/Path/Expires is what makes the persistence round-trip
+    lossless. A bare `name=value` list cannot express an expiry at all, so a
+    cookie saved that way returns as a SESSION cookie and is presented forever --
+    the immortal-cookie state `apply_account` refuses to re-enter. Falls back to
+    the flat form for a jar exposing only get_dict, and to "" on a jar that
+    cannot be read, so no jar shape loses the credential.
+    """
+    try:
+        jar = getattr(getattr(sess, "cookies", None), "jar", None)
+        entries = list(jar) if jar is not None else []
+        if entries:
+            out = []
+            for c in entries:
+                bits = ["%s=%s" % (c.name, c.value)]
+                if getattr(c, "domain", ""):
+                    bits.append("Domain=%s" % c.domain)
+                if getattr(c, "path", ""):
+                    bits.append("Path=%s" % c.path)
+                if getattr(c, "expires", None):
+                    bits.append("Expires=%d" % int(c.expires))
+                out.append("; ".join(bits))
+            return "; ".join(out)
+    except Exception:  # noqa: BLE001 -- fall through to the flat form
+        pass
+    try:
+        return "; ".join("%s=%s" % (k, v)
+                         for k, v in sess.cookies.get_dict().items())
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _persist_cookies(client):
     """Save the client's account cookies if the WAF token changed (sliding refresh)."""
     acct = getattr(client, "account", None)
@@ -1194,18 +1336,21 @@ class _Client:
         self.account = account
         self.token = account.token or ""
         self.creds_mtime = account.mtime
-        for part in (account.cookie or "").split(";"):
-            if "=" in part:
-                k, v = part.strip().split("=", 1)
-                try:
-                    self.sess.cookies.set(k.strip(), v)
-                except Exception:
-                    pass
+        parsed = _parse_cookie_field(account.cookie or "")
+        now = time.time()
+        stale = {c["name"] for c in parsed if _cookie_expired(c, now)}
+        for c in parsed:
+            if c["name"] in stale:
+                continue
+            _install_cookie(self.sess, c)
+        if stale:
+            config.dbg("ds_direct: %s not restored -- %d expired cookie(s): %s"
+                       % (account.id, len(stale), ", ".join(sorted(stale))))
 
     def cookie_string(self):
         """Current cookies as 'name=value; ...' — captures WAF tokens DeepSeek refreshes."""
         try:
-            return "; ".join(f"{k}={v}" for k, v in self.sess.cookies.get_dict().items())
+            return _cookie_header(self.sess)
         except Exception:
             return ""
 
@@ -1322,11 +1467,11 @@ class _Client:
                 # The other client already refreshed the WAF cookies for this
                 # login; carrying the OLD ones into the new token is what makes
                 # the retry fail again.
-                for part in (acct.last_login_cookie or "").split(";"):
-                    if "=" in part:
-                        k, v = part.strip().split("=", 1)
-                        with contextlib.suppress(Exception):
-                            self.sess.cookies.set(k.strip(), v)
+                _now = time.time()
+                for _c in _parse_cookie_field(acct.last_login_cookie or ""):
+                    if _cookie_expired(_c, _now):
+                        continue
+                    _install_cookie(self.sess, _c)
                 return self.token
             return self._login_once(email, mobile, area, password)
 
