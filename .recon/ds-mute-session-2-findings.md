@@ -1020,3 +1020,100 @@ Three of the last four fixes are the same class of bug, and it is worth naming:
 All three are "the value existed and was thrown away". None was a wrong algorithm.
 That is a useful thing to know about this codebase: the request path is careful, and
 the *bookkeeping around* it is where the losses are.
+
+
+---
+
+# 17. Three corrections, and a third falsification
+
+## 17.1 CORRECTION: my expired-cookie refutation tested the wrong thing
+
+Section 9 reported that **0 of 212** journaled requests carried an expired cookie,
+and treated that as refuting the operator's suspicion #1 (*"ds_direct still sends a
+request with the expired cookies"*).
+
+That measurement is **true but answers a different question.** `apply_account`
+installs cookies with `cookies.set(name, value)` and **no `expires` attribute**:
+
+```python
+self.sess.cookies.set(k.strip(), v)
+```
+
+A cookie with no expiry is a **session cookie**. `_cookie_expired` compares against
+a local `expires` value, so for a session cookie it can *never* return true — there
+is nothing to compare. A test that looks for locally-expired cookies therefore
+cannot see the case the operator described:
+
+> the server may have invalidated `ds_session_id` while the jar still holds it.
+
+That is a **server-side** expiry, invisible to any local check, and it is exactly
+what `_resume_hygiene` (FIX 3) exists to handle: after a long idle gap, drop the
+stale `ds_session_id` rather than replay it.
+
+So the honest statement is: *no cookie in the jar carries a lapsed local expiry, and
+that says nothing about whether a replayed session cookie was still valid server
+side.* The operator's instinct was pointing at something real, and my refutation
+was aimed one level too shallow.
+
+## 17.2 FIX 3 IS live in the soaks — the walk-away test is valid
+
+Worth confirming, because a fix committed after a process starts is not running in
+it:
+
+| item | time |
+| --- | --- |
+| `IDLE_RESUME_S` set to `RATE_MAX_TRIES * DS_RATE_WAIT + 1800` (5400 s) | 09-30 **16:15:24** (`ee2ab79628`) |
+| t1 soak started | 09-30 19:51:56 |
+| t2 soak started | 09-30 20:01:01 |
+
+Both soaks postdate that commit, so `_resume_hygiene` with the 90-minute threshold
+**is** the code they run. t2's deliberate 96-minute walk-away therefore exercises it
+for real — the first live test of FIX 3 — and 96 min > 90 min, so the threshold is
+crossed.
+
+What the clobber of section 16 does **not** break is this specific test: the
+clobber removes *other* accounts' entries, never the writer's own, and t2's process
+holds t2's timestamp in its own memory. t2 will see its own 96-minute gap.
+
+FIX 12/13/14 are **not** live in either soak — they were committed at 20:35:58 and
+later.
+
+## 17.3 FALSIFICATION #3: content density does not order the mutes either
+
+Volume was falsified in section 15. The remaining content-shaped hypothesis is that
+the *subject matter* drew the verdict, so each account's prompts were scored for
+abuse-adjacent vocabulary (`mute`, `ban`, `evade`, `detect`, `fingerprint`,
+`suspicious`, …) per 1,000 characters:
+
+| account | abuse terms /1k | status |
+| --- | --- | --- |
+| v | **6.29** | **unmuted** |
+| f | 4.82 | MUTED |
+| j1 | 0.56 | MUTED |
+| jw1 | 0.35 | MUTED |
+| p | 0.08 | MUTED |
+| parserfix | **0.00** | **MUTED** |
+| hunt | 0.00 | unmuted |
+
+It fails in both directions, exactly as volume did:
+
+* the **densest** account (v, 6.29) was never muted;
+* an account with **zero** abuse vocabulary (parserfix) was muted;
+* another with zero (hunt) was not.
+
+There is no threshold that separates the two groups; the lists interleave.
+
+**An honest caveat about this test.** The prompts are attributed to whichever
+account served the request, and the accounts that carried *this investigation* —
+j1, f — were being asked about mutes by definition. So part of the density signal is
+reverse-causal: accounts that researched mutes discuss mutes. That is why v and
+parserfix matter more than the middle of the table: v's high density comes from
+ordinary work and it was unmuted, and parserfix's zero density and mute cannot be
+explained by topic at all.
+
+**What this leaves.** Two client-side quantities have now been measured and both
+fail to order the outcome: request volume (15.3) and prompt content (17.3). Together
+with the idle-window verdicts (8.3) and the flat request shape (12), the evidence
+keeps pointing away from "something in what the connector sent" and toward a
+server-side decision about the *account set* — which is where the alias-base
+question of 15.5 remains open.
