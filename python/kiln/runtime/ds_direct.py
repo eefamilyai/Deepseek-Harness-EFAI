@@ -3558,8 +3558,15 @@ def _resume_hygiene(client, acct_id, now=None):
     so their jars say nothing about an authenticated browser.
     """
     now = time.time() if now is None else now
-    prev = _last_turn_at.get(acct_id)
-    _last_turn_at[acct_id] = now
+    # Read-modify-write under the lock. `_save_last_turn` serialises this dict
+    # while holding the same lock, and pooled clients let two conversations on one
+    # account run at once, so an unlocked insert here could land mid-`json.dump`
+    # and raise "dictionary changed size during iteration". That is swallowed by
+    # the save's `except`, leaving a stale clock -- which then makes a later gap
+    # look longer than it was and drops a cookie for a pause that never happened.
+    with _last_turn_lock:
+        prev = _last_turn_at.get(acct_id)
+        _last_turn_at[acct_id] = now
     # Recorded every turn, not only on a drop: a stale entry would make the next
     # gap look longer than it was and drop a cookie for a pause that never
     # happened. The file is tiny and the write is atomic.
