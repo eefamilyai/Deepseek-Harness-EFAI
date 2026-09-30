@@ -150,6 +150,7 @@ def main():
         prompt = random.choice(PROMPTS)
         msgs = [{"role": "user", "content": prompt}]
         raw, got, err = [], 0, None
+        muted = None
         t0 = time.time()
         try:
             for ev in ds.stream("deepseek-chat", msgs, conv_id=st["conv"],
@@ -160,24 +161,32 @@ def main():
         except Exception as e:  # noqa: BLE001
             err = "%s: %s" % (type(e).__name__, e)
             raw = [err]
+            # A mute reaches the caller as a RAISED `_Muted`, and the verdict
+            # readers below cannot see it: they require a parsed JSON envelope and
+            # `_Muted`'s message is prose. Without this the soak would keep running
+            # all 200 turns through a mute and never record one -- which is exactly
+            # the result the whole multi-day run exists to produce.
+            if isinstance(e, ds._Muted):
+                muted = str(e)
         dur = time.time() - t0
 
         # The goal's per-turn telemetry. `sid` ties the turn to the server-side
         # chat; `prompt_chars` records the request size; `dur_s` separates a
         # normal turn from a retry storm, which is one turn that lasts ~an hour.
         v = verdicts_of([str(x) for x in raw])
-        log(turn=i, chars=got, err=err, verdicts=v, prompt=prompt,
+        log(turn=i, chars=got, err=err, verdicts=v, muted=muted, prompt=prompt,
             sid=_sid_for(st["conv"]), prompt_chars=len(prompt),
             dur_s=round(dur, 1), account=st["account"],
             reply=" ".join(str(x) for x in raw)[:400])
         print("  turn %-4d chars=%-4d %5.1fs %s"
               % (i, got, dur, ("ERR " + err[:80]) if err else "ok"))
 
-        if v.get("mute"):
-            st["muted"] = {"turn": i, "verdict": v["mute"], "ts": time.time()}
+        if muted or v.get("mute"):
+            verdict = muted or v["mute"]
+            st["muted"] = {"turn": i, "verdict": verdict, "ts": time.time()}
             save_state(st)
             print()
-            print("MUTED at turn %d: %s" % (i, v["mute"]))
+            print("MUTED at turn %d: %s" % (i, verdict))
             return 3
 
         st["done"] = i + 1

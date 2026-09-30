@@ -698,3 +698,59 @@ The bridge is deliberately NOT restarted from here: it serves THIS session's own
 turns, and killing it mid-run would cut the session off. The restart is the
 operator's call, and the honest guidance is that the fix lands on the next bridge
 start -- not on the commit.
+
+## THE SOAK COULD NOT HAVE DETECTED A MUTE (found and fixed)
+
+A bug that would have silently wasted the whole multi-day verification run.
+
+A mute reaches a caller as a RAISED `ds._Muted`, not as a returned body. The soak's
+turn loop caught the exception and did this:
+
+    except Exception as e:
+        err = "%s: %s" % (type(e).__name__, e)
+        raw = [err]
+    v = verdicts_of([str(x) for x in raw])
+    if v.get("mute"): ...stop...
+
+But every verdict reader requires a parsed JSON ENVELOPE -- that is their whole
+safety property, so the model's own prose can never classify itself -- and
+`_Muted`'s message is prose. Measured directly:
+
+    raise ds._Muted("DeepSeek has muted this account: user is muted. ...")
+    ds._mute_verdict_in(["...that string..."])  ->  None
+
+So `v.get("mute")` was never truthy for a real mute. The soak would have run all 200
+turns through a mute, recorded 200 clean turns, and reported "completed with no
+mute" -- the exact opposite of the truth, at the end of a multi-day run.
+
+FIX: catch the type, not the text.
+
+    except Exception as e:
+        ...
+        if isinstance(e, ds._Muted):
+            muted = str(e)
+
+and the stop condition becomes `if muted or v.get("mute")`. The `isinstance` test is
+precise -- only ds_direct's own `_Muted` matches, so a transient error cannot be
+misread as a mute -- and both paths are kept because a mute can also arrive inside a
+200 body that the verdict readers DO see.
+
+Verified end to end: raising `_Muted` now sets the flag and the stop condition fires.
+
+## THE SOAK'S PER-TURN TELEMETRY (goal requirement)
+
+The goal asks for request paths, prompt size, session id, and all four verdict
+readers per turn. The soak logged only chars, prompt text, and verdicts. Added:
+
+    sid            the DeepSeek session serving this conversation, read from
+                   ds._sessions by its "<conv>#<model_type>" key -- this is what
+                   attributes a mute to a specific chat
+    prompt_chars   the request size
+    dur_s          turn duration; the field that separates a normal turn from a
+                   retry storm, which is ONE turn lasting about an hour
+    account        which login served it
+    reply          the first 400 chars of what came back
+    muted          the raw _Muted message when the turn raised one
+
+Verified live on turn 18: sid=08c2a07e-c708-4b66-8d27-34f5f2371e30, prompt_chars=30,
+dur_s=1.4.
