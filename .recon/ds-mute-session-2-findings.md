@@ -1572,3 +1572,89 @@ class as FIX 12 and FIX 14: a value that existed and was discarded.
 mutes. The instrumentation is verified, FIX 3 is verified live, and the fast soak
 is now generating the volume the objective asks for. What remains is the event
 itself.
+
+
+---
+
+# 24. A 429 at turn 200 of the fast soak — the operator's hypothesis, live
+
+The operator's account of the pattern, verbatim:
+
+> *"I realize when the AI keeps running, it usually doesnt get muted, until theres a
+> long pause, like overnight or DeepSeek rate limit reached — retrying in 3 min
+> (attempt 1/20)… …so there has to be a corrolation with that too."*
+
+and the refinement:
+
+> *"the rate limit reached is normal, but its the pause during these turns then the
+> ai comes back and shortly after it gets banned"*
+
+## 24.1 What happened
+
+The fast soak ran cleanly from turn 0 to turn 199 at 5-15 s spacing — **200
+consecutive turns with no mute, no rate limit, no auth failure**. At turn 200:
+
+```
+[ds_direct] rate-limited -- retry #1 in 180s
+[ds_direct] rate-limited -- retry #2 in 180s
+```
+
+The request rate on t1 from the wire journal, per minute, shows the run plainly:
+
+```
+21:46   6    21:52  10    21:58  12    22:04  12    22:10   6
+21:47  10    21:53  12    21:59  10    22:05  12    22:13   2  <- limit hit
+21:48  12    21:54  10    22:00  12    22:06  10    22:15   2
+21:49  12    21:55  10    22:01  12    22:07  10    22:16   2
+21:50  10    21:56  12    22:02   8    22:08  12
+21:51   8    21:57  10    22:03  12    22:09  12
+```
+
+~10-12 requests/minute for 24 minutes, then the server refused.
+
+## 24.2 This is the operator's shape, occurring under observation
+
+Two things make this worth recording rather than dismissing as routine:
+
+1. **It is the pause the operator described.** `DS_RATE_WAIT = 180` and
+   `RATE_MAX_TRIES = 20`, so a sustained limit parks the turn for up to an hour —
+   indistinguishable, from the outside, from the "long pause" the operator linked
+   to the mutes.
+2. **It arrived after a long high-rate run, not at the start.** 200 turns of
+   unbroken service, then a wall. That is the "keeps running, then a pause, then
+   something happens" sequence almost exactly.
+
+## 24.3 What must NOT be claimed yet
+
+The correlation the operator proposes is **pause → mute**. This event supplies the
+first half (a genuine pause is now in progress) and **not** the second: no mute has
+followed, and it may not. Recording the pause as evidence of a mute would be the
+same correlation-to-causation jump this document has retracted three times already
+(sections 13.1, 15.1, 22.2).
+
+What is now true is narrower and better: **the exact condition the operator
+described is live on t1, with the wire journal recording every request that
+preceded it.** If a verdict follows, the artifact to explain it exists. If none
+does, that is evidence against the hypothesis, and it will be recorded as such.
+
+## 24.4 The retry behaviour is correct, and that matters
+
+The 429 was classified as `_RateLimited`, **not** as a mute — which is the whole
+point of FIX 8 (`429 → _RotateAccount/_RateLimited` instead of a silent retry) and
+of the mute classification work. A rate limit and a mute are different verdicts
+with different remedies: one waits 180 s, the other waits days and needs a
+different account. Conflating them was a real defect; this is that fix doing its
+job under a genuine 429.
+
+## 24.5 Status
+
+| soak | account | turns | mutes | state |
+| --- | --- | --- | --- | --- |
+| `_fastsoak.py` | t1 | 200 | 0 | **rate-limited, retrying** |
+| `_t2soak.py` | t2 | 55 | 0 | running (resumed from a 96-min walk-away) |
+| `_humansoak.py` | t1 | 9 | 0 | running (paced) |
+
+Two processes are driving t1 (the fast soak and the paced one). That is a real
+confound for attribution and is stated here rather than hidden: a verdict on t1
+could not be attributed to one of them by account alone. The wire journal's
+per-request records are what would separate them.
