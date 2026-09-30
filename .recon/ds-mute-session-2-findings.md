@@ -1363,3 +1363,67 @@ preamble — will exist. That was the goal's instrumentation requirement.
 
 **Does not:** establish any cause. No mute has occurred on t1 or t2 (30 and 9 turns,
 0 mutes). The instruments are ready; they have not yet been handed the event.
+
+
+---
+
+# 21. Mute-capture audit — what happens the moment a verdict lands?
+
+Section 20 checked that the telemetry exists. This checks that the soaks *act* on
+it — because an instrument that records into a buffer nobody flushes, or that keeps
+running through the event it exists to catch, is the same as no instrument.
+
+## 21.1 The capture path, traced
+
+Both soaks (`_t2soak.py`, `_humansoak.py`) do the same four things on every turn:
+
+1. **Catch `_Muted` by TYPE, not by message.**
+   ```python
+   except Exception as e:
+       if isinstance(e, ds._Muted):
+           muted = str(e)
+   ```
+   This matters for the reason FIX 6 was written: a mute raised as prose is
+   invisible to the four `*_verdict_in` readers, because those require a parsed
+   object with a nested `data`. A soak that only read verdicts would keep running
+   its full turn count through a mute and record nothing — which is precisely the
+   result the multi-day run exists to produce. Both soaks avoid that.
+
+2. **Run all four verdict readers** on the raw stream:
+   `_mute_verdict_in`, `_auth_verdict_in`, `_ref_file_verdict_in`,
+   `_biz_verdict_in`. Belt and braces with (1): the raised exception catches a
+   mute that reaches the caller, the readers catch one that arrives in a body the
+   caller swallowed.
+
+3. **Persist the verdict** to the soak's own state file
+   (`_t2soak_state.json` / `_humansoak_state.json`) under `muted`, with the turn
+   number and a timestamp.
+
+4. **STOP.** `return 3` in `_t2soak.py`. The run ends rather than continuing to
+   hammer a muted account. Section 13 established that retries do not extend a
+   penalty, so this is not a correctness fix — it is what keeps the result
+   legible: the LAST turn in the log is the turn that drew the verdict, with
+   nothing after it.
+
+## 21.2 The wire journal fires independently
+
+`KILN_DS_WIRELOG=1` is set for both soak processes, so `ds_wirelog.verdict(...)` —
+called at every `_Muted` raise site — writes the verdict **together with its
+preamble** automatically. That is the artifact section 13 said was missing for
+j1: the exact request shapes that preceded the decision, in the same line as the
+decision. It does not depend on the soak doing anything.
+
+## 21.3 What a captured mute will contain
+
+| artifact | content |
+| --- | --- |
+| `_t2soak.jsonl` | the per-turn row whose `muted` is set, plus every prior turn |
+| `_t2soak_state.json` | `{turn, verdict, ts}` |
+| `ds_wirelog.jsonl` | a `verdict` record **plus its 80-entry preamble** |
+| `ds_muted.json` | the exact `mute_until` float (FIX 12) |
+
+## 21.4 Honest status
+
+**No mute has occurred on t1 or t2.** 30 turns and 9 turns, zero mutes. Every
+piece above is verified by reading the code and the on-disk state, not by having
+observed a capture. The chain is ready; it has not yet been exercised by the event.
