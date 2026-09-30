@@ -571,3 +571,60 @@ TWO BUGS I INTRODUCED AND CAUGHT, BOTH WORTH RECORDING.
      than the one named. It currently cannot happen -- a disabled account has no
      route registered, so nothing addresses it by id -- but the fallback is the
      thing to watch if disabled accounts ever become addressable.
+
+## RETRACTION 2 - THE BROWSER-COMPARISON EVIDENCE IS VOID
+
+I claimed the captured Chrome profiles prove the real client does not send
+`ds_session_id`, and used that to justify the cookie and resume fixes. That
+inference does not hold, and the probe that tested it (`_profilelogin.py`) shows why:
+
+    Login Data   : absent   (ALL five profiles)
+    History      : absent   (ALL five profiles)
+    LocalStorage : present
+
+No saved logins and no browsing history means these profiles were never LOGGED IN.
+They are minted by `ds_profile`, which launches Chrome to capture the identity it
+mints -- not to sign in. A jar from a profile that never authenticated lacking a
+session cookie is EXPECTED and says nothing about an authenticated browser.
+
+So this specific claim is withdrawn:
+
+    WRONG: "the real Chrome jar has no ds_session_id, so the harness diverges."
+    WHY:   the profiles were never logged in, so the absence is uninformative.
+
+WHAT SURVIVES, AND ON WHAT EVIDENCE.
+
+The cookie-expiry defect does NOT depend on the browser comparison. It was proven
+directly and mechanically by `_cookiejar.py` Part B, with no browser involved:
+
+    install a cookie with expires one hour in the PAST
+      -> cookie_string() serializes it as "name=value", carrying no expiry
+      -> apply_account() re-installs with set(name, value)
+      -> it comes back ALIVE with expires=None
+
+`cookie_string` reads `get_dict()`, which has no domain or expiry to give it, and
+`apply_account` calls `set(name, value)`, which curl_cffi accepts and stores with
+expires=None. That is a lossy round-trip regardless of what any browser does. The
+fix stands on that measurement alone.
+
+`aws-waf-token` being PERSISTENT at host `.deepseek.com` also survives as a fact --
+it was in the jar with a real ~3-day expiry -- but it is a fact about an ANONYMOUS
+visit, since these profiles never authenticated. It says the WAF cookie is
+persistent for a logged-out visitor; it does not characterise the logged-in jar.
+
+WHAT THIS MEANS FOR THE RESUME FIX. `_resume_hygiene` drops `ds_session_id` after a
+long idle gap, and I justified that with the (now void) browser comparison. The
+mechanism is still defensible on its own terms -- a session cookie the server may
+have lapsed is not worth re-presenting after 90 minutes, the WAF token is kept, and
+the ordinary `_AuthExpired` path re-authenticates if the drop was unnecessary -- but
+it is now a REASONED precaution rather than an evidenced correction. It should be
+described that way, and if `ds_session_id` turns out to be a long-lived device
+identifier rather than a session token, dropping it could cost a re-login without
+buying anything. That is not yet known either way.
+
+THE LESSON, WHICH IS THE SAME ONE TWICE. Retraction 1 was testing a hypothesis
+against strings I had transcribed myself. This one was drawing a conclusion from a
+profile whose precondition I never checked. Both times the fix was to verify the
+SOURCE before reasoning from it: read the raw `mute_until`, and confirm the profile
+was logged in. A captured artifact is only evidence about the state it was actually
+captured in.
