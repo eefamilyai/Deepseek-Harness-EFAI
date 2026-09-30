@@ -3023,3 +3023,76 @@ came 24 min after a 46.5-min gap (23:35 -> 00:21). The 90-min `IDLE_RESUME_S`
 threshold was never reached on this account, so t1 contributes no evidence either
 way about the long-idle-resume hypothesis - that stands as recorded in section 28
 (every resume after 90+ min idle was clean).
+
+
+---
+
+## 42. THE LAST CLIENT-SIDE HEADER LEAD IS ALSO FALSIFIED
+
+### 42.1 Why `x-hif-leim` was the best remaining suspect
+
+Of every header on the request, `x-hif-leim` had the strongest claim to being the
+accumulating defect. `ds_hif.py` says so itself:
+
+* the server hands out a fresh value on a timer and states its own lifetime in
+  `x-hif-ttl`;
+* *"Replaying a captured value forever is worse than sending nothing"*;
+* the module exists precisely because *"nothing ever renewed them, so every
+  request after the capture carried a value the server had already expired"*.
+
+A value that goes stale after capture is exactly the shape of "mutes after
+hundreds of turns but not immediately". So: was the header on the muted request a
+stale capture?
+
+### 42.2 No. Renewal is working, and the value was fresh
+
+t1's journal shows **28 distinct `x-hif-leim` values across 439 uses**, rotating
+roughly every 8 minutes:
+
+    5aa3d20c85   46 uses   21:42:57 -> 21:50:51
+    439b3b6957   46 uses   22:34:37 -> 22:42:36
+    1632b885ce   46 uses   22:59:01 -> 23:06:56
+    5d833ac77c   45 uses   21:59:10 -> 22:07:04
+
+That is the renewal path firing, not a frozen capture.
+
+And the value on the **refused** request specifically:
+
+    x-hif-leim c5bccd8206   first used 00:40:56, reused 00:46:12, 2 uses
+    ds_hif TTL: DEFAULT_TTL=600 s, REFRESH_FRACTION=0.8  -> renew at 480 s
+    the refused request came 316 s after first use  ->  WITHIN TTL
+
+So the header was not stale. It was 5 minutes 16 seconds old against an 8-minute
+renewal threshold, and it is the same value the server had just answered
+normally.
+
+### 42.3 The complete header diff - one field, and it is per-request by design
+
+Full fingerprint comparison of the served request (`seq=64`, 00:40:56) and the
+refused one (`seq=66`, 00:46:12):
+
+    only on served  : []
+    only on refused : []
+    differing       : ['x-ds-pow-response']
+
+That is the entire difference. And `x-ds-pow-response` **must** differ: it is a
+proof-of-work minted per request for a specific path, and the journal confirms it
+is never reused - **443 distinct values over 443 uses** on t1, no repeat ever.
+
+Every other header is byte-identical, including the three the operator suspected
+most: `authorization`, `x-device-id`, and the WAF/session cookie fingerprints.
+
+### 42.4 What is now closed
+
+The original framing - *"some header or something sent mustve been wrong"* - has
+been tested field by field against the one request that was actually muted, and
+there is no differing header to blame. Combined with section 41 (the identical
+request was served 5m16s earlier), the conclusion is:
+
+    a mute is not decided by the shape of the request that receives it
+
+This closes the client-side-request line of investigation that the whole document
+opened with. It does not identify the cause, and it does not claim the connector
+is innocent of everything - FIX 17 (retrying a mute as TRANSPORT, escalating
+72 h to 216 h) is a real defect that made every mute worse, and the lease-window
+stale token in sections 38-39 is real too. But neither is the *trigger*.
