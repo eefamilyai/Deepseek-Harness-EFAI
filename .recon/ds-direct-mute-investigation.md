@@ -783,3 +783,41 @@ most, exactly as the operator said when calling the header theory "stupid". It i
 recorded as an environmental limitation, NOT as a mute cause. Whether the real
 browser sends both on that specific route also remains unconfirmed without a
 capture.
+
+## THE RESUME CHECK COULD NOT SEE A GAP ACROSS A RESTART (found and fixed)
+
+The second defect in my own resume fix, and the one that made it miss its own use case.
+
+`_last_turn_at` was an in-memory dict. Measured with a probe: on a fresh process it is
+`{}`, so `prev is None` and `_resume_hygiene` returns False -- meaning the FIRST turn
+after any restart never dropped the cookie, HOWEVER long the pause had been. An
+overnight pause is exactly when the process is likely to have been restarted, so the
+check was blind to the scenario it exists for. Within one process it worked (a 27.8 h
+gap dropped correctly).
+
+FIX: the map round-trips through `ds_last_turn.json` beside `ds_sessions.json`, using
+the existing `_atomic_json`:
+
+    _LAST_TURN_FILE = os.path.join(KILN_STATE_DIR or _DIR, "ds_last_turn.json")
+    _load_last_turn()  -> {} on absent/corrupt
+    _save_last_turn()  -> atomic write, best-effort
+
+Recorded on EVERY turn, not only on a drop -- a stale entry would make the next gap
+look longer than it was and drop a cookie for a pause that never happened.
+
+VERIFIED LIVE, not just unit-tested: the running soak now writes
+
+    {"deepseek.ee.1+v@gmail.com": 1790759653.9045358}
+
+And verified by runtime round-trip in a throwaway state dir: fresh -> {} on load,
+fresh turn -> False, file written as {'a@x': 1000.0}, then a 100000 s gap -> True.
+
+TEST ISOLATION. The suite now sets `KILN_STATE_DIR` to a temp dir BEFORE importing
+ds_direct, because the module resolves its state paths at import time. Without that the
+test wrote epoch-1000 timestamps into the REAL state directory, which a later
+production run would read as an enormous idle gap and act on -- a test corrupting
+production. Confirmed: no real `ds_last_turn.json` is created by the suite.
+
+ALSO FIXED: the comment block above `IDLE_RESUME_S` still asserted the retracted
+browser claim ("a browser in that state has been redirected to the sign-in page").
+Rewritten to state the drop is a PRECAUTION and why it is safe.
