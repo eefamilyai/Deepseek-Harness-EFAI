@@ -659,3 +659,139 @@ verdict that arrives on the *harness* route will carry its own preamble in the
 same file as the pool accounts. If a future verdict again back-computes to a
 minute that contains a live call, the synchronous reading gains; if it
 back-computes to an idle window like mutetest's, the scheduled reading gains.
+
+
+---
+
+# 14. FIX 12 — the ledger that keeps the exact expiry, and stops selecting muted accounts
+
+Two defects turned out to share one missing piece of state, so one fix closes both.
+
+## 14.1 Defect: the exact expiry was parsed and then thrown away
+
+`_mute_verdict_in` already pulled `mute_until` out of `biz_data` as a **float**:
+
+```
+{"code":0,"msg":"","data":{"biz_code":14,"biz_msg":"user is muted",
+ "biz_data":{"is_muted":1,"mute_until":1790972380.757}}}
+```
+
+and then formatted it to `"YYYY-MM-DD HH:MM UTC"` before returning. That single
+line is why section 13.1 had to retract a result: the only second-precision
+timestamp DeepSeek ever gives us was destroyed at the moment it existed, so every
+log on this machine carries a minute-rounded string and nothing else.
+
+Confirmed by search, not assumption: a regex for the raw float across all 227 MB
+of session logs returns **zero** hits.
+
+**The fix** adds `_mute_until_of` / `_mute_until_in` — the machine-readable twins
+of `_mute_of` / `_mute_verdict_in`. Same nested path, same three tells, but they
+return the FLOAT. They are separate functions rather than a widened return on
+`_mute_of`, because five call sites and their tests depend on that returning a
+message, and a silent type change there would be worse than the defect.
+
+## 14.2 Defect: a muted account was selected forever
+
+`_account_order` was a pure ring over `_accounts` with no notion of account health.
+An account DeepSeek had refused until Friday was still handed the next brand-new
+conversation, spending a request, a round trip, and a full retry ladder to
+rediscover a verdict already in hand.
+
+This is worth stating precisely, because section 13 established the limit of the
+harm: **repeated requests do not extend the penalty.** Across five retries the
+reported `until` never moved once. So the cost of selecting a muted account was
+waste — a handful of requests and a visible delay — not an escalation. Had it been
+escalation, the operator's "it gets muted faster the more I use it" reading would
+have had a mechanism; it does not.
+
+**The fix** sorts muted accounts LAST rather than removing them, and the reasons
+are load-bearing:
+
+* if the **whole pool** is muted the caller must still get the real verdict, not a
+  confusing "no accounts configured" that hides the one fact worth reporting;
+* a **pinned** account is an explicit instruction from the model picker, so it is
+  left exactly where it is, mute or not;
+* an **expired** entry must restore preference on its own, with no restart.
+
+## 14.3 The ledger
+
+Persisted to `ds_muted.json` beside `ds_last_turn.json`, because a mute outlives
+the process by days and the bridge is restarted far more often than a 72 h penalty
+expires — an in-memory map would forget a verdict it had already been told.
+
+| property | behaviour |
+| --- | --- |
+| key | account id |
+| value | `mute_until` as an **exact float** |
+| on two verdicts for one account | keeps the **later** expiry |
+| on expiry | prunes the entry on read, so the account returns by itself |
+| on a corrupt/absent file | returns `{}` — costs one wasted request, never a turn |
+| on junk input | never raises; `None`, `""`, `0`, `-5`, and `True` are all rejected |
+
+`_note_mute` is called at every site that raises `_Muted`. Four of the five sites
+carry an envelope and therefore record a real timestamp; the fifth
+(`server_error`) carries the **wording only** and has no `mute_until` to record —
+that is documented in place rather than papered over with a fabricated expiry.
+
+## 14.4 FIX 13 — a test that was silently turning the journal OFF
+
+Running the suites for 14.1 turned up an unrelated defect that matters more than
+it sounds.
+
+`test_ds_wirelog.py` created `ds_wirelog.on` in the **real module directory** and
+removed it unconditionally in a `finally`. So running the suite deleted an
+operator's marker — and the marker is the switch that enables the wire journal.
+It happened during this session: the marker created minutes earlier was gone after
+the first full run, and the "off by default" checks failed *because the marker
+was missing*.
+
+It now stashes the marker for the duration of the run and restores it. That fixes
+two things at once: the suite no longer destroys machine state, and "off by
+default" becomes testable on a machine where the journal is switched on — which is
+the state the operator actually runs in.
+
+## 14.5 Verification
+
+8 suites, **210 checks, 0 failed**:
+
+| suite | checks |
+| --- | --- |
+| test_ds_wirelog.py | 48 |
+| test_ds_wirelog_integration.py | 13 |
+| test_ds_direct_hint_mute.py | 23 |
+| test_ds_direct_preempt_freshness.py | 18 |
+| test_ds_direct_cookie_expiry.py | 33 |
+| test_ds_direct_resume_hygiene.py | 17 |
+| test_ds_direct_account_exclusion.py | 22 |
+| **test_ds_direct_mute_ledger.py** (new) | **36** |
+
+The new suite asserts second precision survives, that the ledger persists and
+expires, that selection prefers healthy accounts, that a pinned account is still
+honoured, that an all-muted pool still returns every account, and that an expired
+entry changes the order **not at all**.
+
+Two of its own checks failed first and were **the test's fault, not the code's** —
+both are recorded rather than quietly fixed:
+* one compared two round-robin calls without freezing `_rr_index`, so it asserted a
+  property of ring state rather than of health;
+* one asserted a positional outcome where the real property is "indistinguishable
+  from no mute".
+
+## 14.6 What this does NOT claim
+
+It does not identify the trigger. Section 13.3's tension — three verdicts with
+provably zero activity around them against j1's verdict inside a live call — is
+untouched by this fix, and is still the central open question.
+
+What it does claim is narrower and checkable: **the next mute on any account will
+now leave a second-precision record of its own expiry**, which is the first time
+this investigation has been able to say that. The ledger turns a question that
+could only be answered to the minute into one that can be answered to the
+millisecond.
+
+## 14.7 Deployment note
+
+`provider_bridge.py` caches its modules and was started at 19:41:49, before both
+the marker and this fix existed. **None of FIX 11, FIX 12, or FIX 13 is live in
+the running bridge until it is restarted.** The soaks are unaffected — they are
+separate processes that load the module fresh.
