@@ -3477,6 +3477,49 @@ def _sleep_cancellable(secs, cancelled, step=0.5):
     return not cancelled()
 
 
+# A resume after a long idle gap is when a lapsed session cookie is most dangerous.
+# The server has expired it during the pause, and a browser in that state has been
+# redirected to the sign-in page -- so the first request after the pause carries NO
+# session cookie. This connector instead carried the stored one straight into the
+# resume request, which is precisely the state no browser occupies.
+#
+# Measured on this machine: the captured Chrome profile holds `aws-waf-token`
+# (persistent, ~3-day expiry) and `smidV2`, but NO `ds_session_id` for any account.
+# So on the one request that follows a pause, the harness was the only client
+# presenting a session cookie -- and that request is the one that draws the verdict.
+#
+# The threshold is DERIVED from the retry constants, not chosen, because one turn
+# can legitimately spend `RATE_MAX_TRIES` x `DS_RATE_WAIT` (20 x 180 s = an hour)
+# resending inside its own retry loop. That hour is a storm, not idleness, and a
+# threshold below it would drop the cookie in the middle of one. Half an hour of
+# headroom on top means a storm can never trip this and a genuine overnight gap
+# always does.
+IDLE_RESUME_S = RATE_MAX_TRIES * DS_RATE_WAIT + 1800.0      # 5400 s = 90 min
+_last_turn_at = {}
+
+
+def _resume_hygiene(client, acct_id, now=None):
+    """On the first turn after a long idle gap, forget the stale `ds_session_id`.
+
+    Returns whether a cookie was dropped. A browser answers this situation by being
+    redirected to sign-in, so it never presents the lapsed cookie; dropping it here
+    reproduces that state and lets the ordinary `_AuthExpired` path re-authenticate
+    if the token really is dead. Best-effort by design: a jar that cannot be edited
+    simply keeps the old behaviour.
+    """
+    now = time.time() if now is None else now
+    prev = _last_turn_at.get(acct_id)
+    _last_turn_at[acct_id] = now
+    if prev is None or (now - prev) < IDLE_RESUME_S:
+        return False
+    dropped = _forget_cookie(getattr(client, "sess", None), "ds_session_id")
+    if dropped:
+        config.dbg("ds_direct: %s resumed after %.0f min idle -- dropped the stale "
+                   "ds_session_id (a browser would have been sent to sign-in)",
+                   acct_id, (now - prev) / 60.0)
+    return dropped
+
+
 def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: False,
            conv_id=None, preempt=False, account=None, oneshot=False, ref_file_ids=None):
     """Yield {'type': 'reasoning'|'content'|'title', 'text': ...}. ONE persistent, threaded
@@ -3521,6 +3564,7 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     acct_id = _account_order(key, pinned=account)[0]
     try:
         with _lease_client(acct_id) as client:
+            _resume_hygiene(client, acct_id)
             for ev in _stream_with(client, model_type, thinking, search, messages,
                                    cancelled, conv_id, preempt, is_last=True,
                                    ref_file_ids=ref_file_ids):
