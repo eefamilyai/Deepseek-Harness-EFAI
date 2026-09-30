@@ -2434,3 +2434,48 @@ The chain from DeepSeek's verdict to the harness's classification is now verifie
 5. `reason()` returns `ACCOUNT_MUTED` before the rate-limit branch -- source inspection, and pinned by the unit test.
 
 `ACCOUNT_MUTED` is not in the default retryable set, so the five-retry loop that escalated `jw1` from 72 h to 216 h cannot run on a mute any more.
+
+## 34. The package suite after FIX 17: four pre-existing failures, none new
+
+Running the whole `llm-kiln` package rather than the single spec:
+
+    Test Files  1 failed | 4 passed (5)
+    Tests       4 failed
+
+All four failures are in **`dsml.spec.ts`**, and they are the same four recorded
+in section 25.7 -- assertions that the DSML translator echoes raw block text into
+its prose correction (lines 119, 126, 929, plus the shared-line case). They fail
+identically against `HEAD`'s own copy of that spec in a scratch file, and
+`packages/llm/llm-text-toolcalls` has no diff against `HEAD`. The assertions and
+the implementation are simply out of step, in a package another agent owns.
+
+**`mute-code.spec.ts` passes: 5 of 5.**
+
+So FIX 17 added **zero** new failures. That is the claim worth recording: the one
+file I added passes, and the four failures predate my change and are not mine to
+fix.
+
+### 34.1 The clock-time question, settled
+
+The operator's observation was specific: *"my accounts are getting muted at like
+1am or 4am while im sleeping."*
+
+| account | issue instant | local clock | window |
+| --- | --- | --- | --- |
+| jw1 | 09-29 17:13:27 | 17:13 | afternoon |
+| jw1 (second) | 09-29 19:16:00 | 19:16 | evening |
+| ? | 09-29 19:28:00 | 19:28 | evening |
+| ? | 09-29 21:41:00 | 21:41 | evening |
+| **f** | **09-30 01:55:15** | **01:55** | **sleep** |
+| **hunt** | **09-30 04:19:40** | **04:19** | **sleep** |
+| mutetest | 09-30 09:56:00 | 09:56 | morning |
+| j1 | 09-30 20:04:00 | 20:04 | evening |
+
+Two of eight are in the small hours, and they are the two the operator named --
+`f` at **01:55** and `hunt` at **04:19**, both from second-precision floats, both
+inside a 14 h 54 m window with no harness activity at all.
+
+The set is not *concentrated* in the small hours -- six of eight are daytime or
+evening -- so this is not a nightly batch job. But the two that are, are exactly
+the two the operator noticed, which is why the observation was worth measuring
+rather than dismissing.
