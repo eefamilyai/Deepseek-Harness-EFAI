@@ -2806,3 +2806,92 @@ That is the same shape as the existing `ds_muted.json` ledger (FIX 12) and the
 Not applied here: it changes an auth path this agent runs through, and the bridge
 would need a restart to pick it up, which is already the outstanding operator
 action.
+
+
+---
+
+## 39. CORRECTION: CROSS-PROCESS TOKEN PROPAGATION DOES WORK
+
+### 39.1 What section 38 got wrong
+
+Section 38.3 asserted that across processes there is *"no shared token"* and
+*"no shared notion of the newest generation"*. **That is wrong, and the mechanism
+that refutes it is in the same file I was reading.**
+
+`_lease_client` calls `_refresh_client_creds(c)` on **every** borrow
+(`ds_direct.py:2102`). That function calls `_load_accounts()`, which compares
+`_config_sig()` - a tuple of `(path, mtime)` per config file - and, on any change,
+re-reads the config and merges each account by id via
+`_Account.update_from`, which copies `token` and `cookie`. So a token another
+process wrote to `ds_config.json` **is** picked up.
+
+Measured directly, with a temp config so no real credential was touched
+(`_propagate_test.py`):
+
+    1. process A loads generation A, builds a client
+    2. "another process" writes generation B to ds_config.json
+    3. _refresh_client_creds(client)
+       -> "[ds_direct] ds_config.json changed - reloaded creds for account ..."
+       -> client.token is B : True
+       -> a FRESH client reads B : True
+
+    VERDICT: cross-process propagation via config+mtime: WORKS
+
+And in the real journal, propagation is visible with a measured latency:
+
+    t1  abd09baa36   W3 minted it 22:36:30 -> W0 first used it 22:36:35   =  5 s
+    t2  f755169d1f   adopted by 11 of the 12 writers
+    v   a2509c36ec   adopted by 4 of 4 writers
+
+### 39.2 What survives from section 38
+
+The **stale presentation** is still real and still exactly one:
+
+    22:36:29  W3 presented 3332b8b4af while the newest generation was ad3b0e7aca
+
+and `ad3b0e7aca` is the one generation that did **not** spread: W0 minted it at
+22:35:03, used it for 18 requests over 1.3 minutes, and no other writer ever
+adopted it before W3 superseded it at 22:36:30.
+
+So the accurate statement is not "there is no shared token" but:
+
+    a token propagates on the next LEASE, so a writer that is mid-turn, or that
+    has already leased and cached a client, keeps presenting its own generation
+    until that lease ends - and `LOGIN_REUSE_WINDOW` is 60 s and also
+    per-process.
+
+That is a narrow timing window, not the structural gap 38.3 described.
+
+### 39.3 The part of 38.3 that does still hold
+
+Two things remain genuinely per-process and genuinely wrong:
+
+* **`acct.login_lock` is a `threading.Lock` on an object built by
+  `_load_accounts()` at import**, so it serialises logins within one interpreter
+  only. Two processes that both see a 401 will both POST `/users/login` for the
+  same identity - the exact pattern `login()`'s own docstring says earns
+  "too many requests".
+* **`_login_attempt` does `self.sess.cookies.clear()`** (`ds_direct.py:1590`)
+  before solving a WAF challenge. That wipes the jar in ONE process while another
+  process may be holding a freshly solved `aws-waf-token` for the same account.
+
+Both are real. Neither is demonstrated to cause a mute.
+
+### 39.4 Consequence for the proposed fix
+
+Section 38.5 proposed a shared per-account login-generation ledger. The
+propagation test shows that is **larger than the defect needs** for the token
+itself - the existing config+mtime path already carries the token across
+processes within seconds.
+
+What the evidence actually supports is narrower: a shared record of *who last
+logged in*, consulted before an `_AuthExpired`-driven re-login, so that two
+processes do not post `/users/login` for one account at the same time. That is a
+much smaller change, and it is not applied here.
+
+**Method note.** 38.3 was written from reading `_pools` and `acct.login_lock` and
+generalising, without testing the propagation path that sits three lines below
+the lease. The test took four minutes and falsified the claim. That is the second
+time in this document that an untested structural inference was wrong (the first
+was 37.4's "naked GET"), and both were caught by running the thing instead of
+reading it.
