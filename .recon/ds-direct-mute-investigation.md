@@ -1343,3 +1343,72 @@ inference from the client side of a one-way channel. The wire journal is the rig
 instrument for the next mute -- if one occurs while it is recording, the journal will
 contain the verdict together with the exact preamble of requests that preceded it, and
 that artifact does not exist for any previous mute.
+
+## THE WIRE JOURNAL, READ BACK: THE REQUEST SHAPE IS INTERNALLY CLEAN (round 36)
+
+The journal has been recording header NAMES and value FINGERPRINTS since it was
+built, but nobody had read them back. `_wirecheck.py` does, over 80 requests
+spanning a live rate-limit event. Three findings, all of them negative for the
+theories that prompted them.
+
+### 1. HEADER SETS ARE ROUTE-APPROPRIATE, NOT DIVERGENT
+
+Three distinct header-name sets appear, and each is exactly what its route needs:
+
+    x40  23 headers   create_pow_challenge    (the base set)
+    x36  25 headers   chat/completion         base + x-ds-pow-response + x-hif-leim
+    x4   24 headers   file/upload_file        base + x-ds-pow-response + x-file-size
+
+That is not divergence -- it is each route carrying the headers that route
+requires. The operator's theory ("some header is not supposed to be added") would
+predict a header present on one route and wrongly present or absent on another.
+Nothing of the kind is visible. Note also that `x-hif-dliq` is absent from ALL
+three sets, confirming the earlier finding that it is OMITTED rather than replayed
+stale.
+
+### 2. EVERY STABLE HEADER IS STABLE -- INCLUDING `authorization`
+
+Of the 26 header names seen, 23 have exactly ONE fingerprint across all 80
+requests. The two that vary are the two that MUST vary:
+
+    x-ds-pow-response   40 distinct over 40 requests   per-request proof of work
+    x-hif-leim           4 distinct over 36 requests   TTL'd envelope, renewed
+
+`authorization` is STABLE across all 80. No re-login occurred during the run,
+which is the direct test of the "eager re-login" theory: in this run it did not
+happen. (It was a real defect earlier -- 7d6888732c added it and 8b8e59fd7c
+removed it -- so this is the fix holding, not an absence of the mechanism.)
+
+### 3. NO REQUEST WAS EVER SENT WITH AN EXPIRED COOKIE
+
+This is the cookie-expiry theory's own prediction, tested directly rather than
+inferred:
+
+    aws-waf-token   expired=False   80 request(s)
+    ds_session_id   expired=False   80 request(s)
+    -> NO request was ever sent with an expired cookie.
+
+The journal records `expired` and `age_s` per cookie precisely so this could be
+answered without inference. Over 80 requests -- including the rate-limit event --
+it never fired.
+
+### WHAT THIS DOES AND DOES NOT ESTABLISH
+
+ESTABLISHED: the harness's outgoing request shape is internally consistent. No
+stray header, no header on the wrong route, no mid-run credential change, no
+stale cookie. Whatever draws the mute, it is not visible as a malformation in
+these 80 requests.
+
+NOT ESTABLISHED: that the request shape is what the WEBSITE sends. This compares
+the harness to ITSELF across requests. A header that is uniformly wrong -- present
+on every request and never sent by a browser -- would look perfectly STABLE here
+and would be invisible to this analysis. That is the one question a client-side
+journal cannot answer, and it is why the `x-hif-dliq` omission is recorded as an
+environmental limitation rather than a verdict.
+
+AND: no mute occurred in this run, so "clean shape" and "no mute" are not yet
+shown to be connected. One run cannot separate them, and the earlier mutes were on
+other accounts.
+
+PROBE: `_wirecheck.py` -- reads the journal, checks header-set divergence,
+fingerprint stability, and per-request cookie expiry.
