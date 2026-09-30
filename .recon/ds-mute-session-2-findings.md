@@ -2070,3 +2070,47 @@ re-sent system prompt actually enlarges what DeepSeek receives and stores.
 One body in 63, because the cadence is every 8 turns and only the first resend
 had happened when the journal was read. Over the full 240 turns the count should
 reach ~30.
+
+### 27.7 The correlation is exact: 6 sends, 6 large bodies
+
+The strongest form of the claim is a per-request match, and the journal gives
+one. Across 42 completion requests:
+
+| | |
+| --- | --- |
+| `sys_age` resets in the soak's own log | turns **8, 16, 24, 32, 40** |
+| system-send turns (turn 0 priming + those resets) | **0, 8, 16, 24, 32, 40** -- 6 turns |
+| journal bodies above 1,000 B | **6** |
+
+and the six large bodies are at 00:28:23, 00:29:58, 00:31:06, 00:32:36, 00:34:05,
+00:35:28 -- 2236, 2176, 2195, 2188, 2193, 2191 bytes, each roughly 1,900 B over
+the ~320 B delta baseline.
+
+**Every turn that sent the system prompt is visible as a large body on the wire,
+and no other turn is.** That is the mechanism confirmed at the level of the
+individual request rather than by aggregate: `_system_due` decides, `_prompt_for`
+puts the system message in the body, and the body grows by exactly the system
+prompt's size.
+
+The soak continues to 240 turns, which should produce ~30 such bodies.
+
+### 27.8 The honest bottom line on this accumulator
+
+What is now established:
+
+- the resend cadence is real and fires every 8 turns;
+- each resend is a ~1.9 KB enlargement of what DeepSeek receives and stores;
+- no earlier soak ever exercised it, because none sent a system message.
+
+What is **not** established, and must not be implied: that this causes a mute.
+The volume arithmetic argues against it. Thirty resends over 240 turns is about
+57 KB of duplicated text, and section 26.4 already showed an account holding
+**1,012,776 characters** without being muted. A mechanism that adds 57 KB to a
+conversation that can hold a megabyte unmuted is not a promising trigger on the
+evidence available.
+
+So `_syssoak.py`'s value is that it closes the last blind spot: after it, every
+path `ds_direct` documents as accumulating has been exercised at least once, and
+the four that were measured -- turn count, chat length, byte volume, and the
+system-prompt resend -- can each be reported as exercised rather than untested.
+The next mute, whenever it comes, will not be attributable to any of them.
