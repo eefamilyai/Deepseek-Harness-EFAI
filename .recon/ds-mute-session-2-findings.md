@@ -1969,3 +1969,69 @@ The honest restatement is narrower than the retracted claim and stronger than
 nothing: hunt *did* send 28 requests, but **none in the 3.8 hours before its
 mute**. The async reading survives the correction; the "zero traffic" phrasing
 did not.
+
+## 27. The system-prompt cadence, measured live for the first time
+
+### 27.1 The gap every earlier soak had
+
+`_system_due` re-sends the system prompt when a chat is unprimed, when its text
+changes, and every `_system_every()` turns (default **8**). `ds_direct`'s own
+docstring states what that costs:
+
+> The chat keeps every prompt it is sent, so a system prompt re-sent each turn
+> is stored again each turn: a tool protocol of tens of thousands of characters
+> filled the server-side conversation with copies of itself long before the work
+> did.
+
+Every soak before this one -- `_fastsoak.py`, `_t2soak.py`, `_humansoak.py` --
+built its request as `msgs = [{"role": "user", "content": prompt}]`. **No system
+message at all.** `_system_due` takes `sys_msgs` and returns `False` immediately
+when it is empty, so the resend path never executed once across ~500 logged
+turns. Every "no mute" result those soaks produced is silent about this
+mechanism, because the mechanism was never switched on.
+
+### 27.2 `_syssoak.py` switches it on
+
+Built by transforming `_fastsoak.py` (`_mk_syssoak.py`), it sends:
+
+    msgs = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+
+with a 1,883-character system prompt carrying a tool-call format statement and an
+eight-tool catalog -- the shape of the real one. It also logs `sys_age` and
+`sys_hash` every turn, read back from the session state.
+
+### 27.3 The cadence is real: sys_age resets at 8
+
+Nine turns on t2, `conv=syssoak-run1`:
+
+| turn | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `sys_age` | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | **0** |
+
+The reset at turn 8 is the resend boundary. `sys_age` climbing 0->7 is
+`_note_system_sent` counting turns since the last send; the drop to 0 is the turn
+that carried the system prompt again. `sys_hash` stayed `f7f1e1f2fad3b2eb`
+throughout, which is the correct reading -- the *text* did not change, so the
+resend is cadence-driven and not a text change.
+
+So the mechanism is confirmed to fire, and the server-side chat receives a fresh
+copy of a 1.9 KB system block every 8 turns. Over 240 turns that is **30 copies**,
+about 56 KB of duplicated instruction text inside one conversation.
+
+### 27.4 What this does and does not establish
+
+**Established:** the resend happens on schedule; the earlier soaks never
+exercised it; the agent's own chat does (it carries `sys_hash`/`sys_age`, and its
+`last_prompt` is 995,798 characters).
+
+**Not established:** that it matters. Volume is already falsified at the account
+level (section 26.4: `v` held 1,012,776 chars and was never muted, while `f` was
+muted at 178,481), and 56 KB of duplicated system text is small next to that.
+The honest reading is that this soak closes a **test-coverage gap** -- the last
+mechanism the earlier soaks could not see -- and its result will be informative
+either way. It is not, on the current evidence, a promising mute cause.
+
+The run continues to 240 turns. Its verdict is the measurement.
