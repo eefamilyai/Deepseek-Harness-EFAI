@@ -2155,3 +2155,63 @@ hypothetical one.
 
 Caveat, stated plainly: this is one session read in full. Whether every session
 rotates this way, or only ones that hit a refusal, is not established here.
+
+## 29. The operator's two explicit suspicions, resolved
+
+### 29.1 "expired cookies or tokens still being sent"
+
+Already answered by FIX 3, but the *refutation* recorded earlier was wrong and
+section 17 corrects it: `ds_session_id` is installed with **no `expires`
+attribute**, so it is a session cookie and `_cookie_expired` can never call it
+expired. The "0 of 212 expired cookies" result tested the wrong thing entirely.
+Server-side invalidation is invisible to that check, and the operator was
+pointing at something real. `_resume_hygiene` drops the stale session cookie on
+a long pause, and it has since fired live twice (95.8 min and 92 min idle).
+
+### 29.2 "logging in without signing out rotates the device"
+
+This one is now **refuted by direct measurement**, and it is worth stating
+plainly because it was a specific, testable claim.
+
+`_relogin.py` drove **five real logins** against `t2`, 20 s apart, each
+re-authenticating from the saved password. Across all five:
+
+| login | would-send device_id | profile device_id |
+| --- | --- | --- |
+| 1 | `89:7c9cc9045a` | `89:7c9cc9045a` |
+| 2 | `89:7c9cc9045a` | `89:7c9cc9045a` |
+| 3 | `89:7c9cc9045a` | `89:7c9cc9045a` |
+| 4 | `89:7c9cc9045a` | `89:7c9cc9045a` |
+| 5 | `89:7c9cc9045a` | `89:7c9cc9045a` |
+
+**One distinct value, five times** -- the account's own captured identity,
+recovered rather than re-minted. `_device_id_for` resolves the account's stored
+Chrome-profile value before the machine fallback, so a re-login *recovers* the
+identity. Repeated login without sign-out does **not** rotate the device.
+
+### 29.3 Login bursts are not the trigger
+
+The same run gives the falsification for free. Across both wire journals:
+
+| account | `users/login` requests | mute status |
+| --- | --- | --- |
+| t1 | **6** | never muted |
+| t2 | **7** | never muted |
+| f | 0 | MUTED |
+| hunt | 0 | MUTED |
+| j1 | 0 | MUTED |
+| jw1 | 0 | MUTED (216 h) |
+| p | 0 | MUTED |
+| v | 0 | never muted |
+
+**Every muted account recorded zero logins; the two accounts that took 13 logins
+between them were never muted.** My own test deliberately drove five logins in
+80 seconds against t2 -- exactly the "login storm" shape the code comments warn
+escalates -- and t2 is still serving 56 turns of the system-prompt soak without a
+mute.
+
+Caveat: the journals cover the windows they were enabled for, and a muted
+account's login could predate its journal. This is evidence against the login
+burst as a *sufficient* trigger, not a proof of absence. It is, however, the
+opposite of what the hypothesis predicts: the heavily-logged-in accounts are the
+clean ones.
