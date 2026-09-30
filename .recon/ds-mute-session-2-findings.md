@@ -2498,3 +2498,81 @@ Every gap over 30 minutes across every soak log, and what the resume turn did:
 **Four resumes past the 90-minute threshold, and every one returned a normal answer.** Two of them are the same pauses FIX 3 was written for, and the hygiene guard fired on both without the turn failing.
 
 The honest bound: a 2-hour pause is not a 6-to-10-hour overnight pause, and no soak has yet taken one. So this narrows the operator's hypothesis without closing it -- what is falsified is that a >90-minute pause *by itself* draws a verdict, at the durations that have been tested.
+
+## 36. THE LIVE CAPTURE: t1 muted, with its wire preamble
+
+The objective asked for one artifact above all others: a mute caught live with
+the per-request journal on. That artifact now exists.
+
+### 36.1 The verdict
+
+    verdict : mute
+    detail  : user is muted (until 2026-10-03 16:40 UTC)
+    account : deepseek.ee.1+t1@gmail.com
+    observed: 10-01 00:46:12 local
+    recorded: 10-01 00:46:12 (ds_wirelog verdict record)
+
+`2026-10-03 16:40 UTC` is the **ninth** distinct `mute_until` in this
+investigation -- the eight in section 15 did not include it.
+
+Back-computing at the standard 72 h: the issue window is
+**10-01 00:40:00-00:40:59 local**. This is the tightest-bounded issue instant
+available, because the account's own traffic is journaled to the second.
+
+### 36.2 What preceded it, from the 80-entry preamble
+
+| time | what |
+| --- | --- |
+| 09-30 23:35:15 | last request before a **46.5-minute gap** |
+| 10-01 00:21:45 | resume, 241 B completion, **200** |
+| 10-01 00:31:24 | 256 B completion, **200** |
+| **10-01 00:40:55** | pow challenge, **200** |
+| **10-01 00:40:55** | `chat.deepseek.com/` -> **202 `waf=challenge`** |
+| **10-01 00:40:55** | `api/v0/users/login` -> **202 `waf=challenge`** |
+| 10-01 00:40:55 | WAF `inputs` -> 200, `mp_verify` (11037 B) -> 200 |
+| **10-01 00:40:55** | `api/v0/users/login` -> **200**  <- the re-login |
+| 10-01 00:40:56 | 245 B completion -> **200** (turn 14 succeeded) |
+| 10-01 00:46:12 | 245 B completion -> **the mute verdict** |
+
+### 36.3 The correlation is exact
+
+The issue window is 00:40:00-00:40:59. **The AWS WAF challenge and the re-login
+both occur at 00:40:55**, inside that window.
+
+And the account was still serving: turn 14's completion returned 200 at
+00:40:57, two seconds after the re-login. The refusal came at 00:46:12, six
+minutes later.
+
+So this is a mute **issued in the same minute as a WAF challenge followed by a
+re-login**, on an account that had been idle for 46 minutes just before. That is
+the operator's stated shape -- *"a long pause ... then the ai comes back and
+shortly after it gets banned"* -- captured live, in order, with timestamps.
+
+### 36.4 What this establishes, and what it does not
+
+**Established:**
+- a mute can be issued in the same minute as a WAF challenge and a re-login;
+- the account continued serving for ~6 minutes after the issue instant, which is
+  the asynchronous lag section 25.4 described -- now measured rather than
+  inferred;
+- the pause -> resume -> WAF -> re-login -> mute ordering is real and recorded.
+
+**Not established, and this matters:** whether the WAF challenge *caused* the
+verdict or both are symptoms of the account already being flagged. A WAF
+challenge is a bot check, not a moderation verdict, and this single episode
+cannot separate "the re-login triggered it" from "the account was already
+condemned and the challenge was the first visible sign".
+
+**And the honest bound:** this is ONE instance. The other seven mutes have no
+journal, so the pattern cannot yet be shown to be typical rather than coincident.
+
+### 36.5 The re-login is on the WAF path, not the biz_code path
+
+This distinction matters for whether a fix already exists. Commit `8b8e59fd7c`
+removed the eager re-login that fired on an **unrecognised `biz_code`**. The
+re-login here fired on a **token expiry during a WAF challenge** -- the `ds_waf`
+recovery path, which is legitimate and still present. So this is not a
+regression of that fix; it is a different trigger reaching the same request.
+
+Whether the WAF recovery path should also avoid posting a login is an open
+question this capture raises and does not answer.
