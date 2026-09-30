@@ -1308,3 +1308,58 @@ without bound", which was a real defect class in this codebase — three of the 
 were unbounded or clobbering. It says **nothing** about mutes, and it is not
 evidence about the mute mechanism either way. Section 18.5's reasoning applies
 unchanged: what accumulates locally is invisible to DeepSeek.
+
+
+---
+
+# 20. Instrumentation audit — does the telemetry actually capture what was asked?
+
+The objective requires per-turn capture of: request paths, prompt size, session id,
+header fingerprints, cookie metadata, and all verdict readers. Audited rather than
+assumed, because an instrument that silently records nothing is worse than none.
+
+## 20.1 Per-turn telemetry (`_t2soak.jsonl`)
+
+Each row carries: `turn`, `ts`, `account`, `sid`, `prompt`, `prompt_chars`,
+`chars`, `reply`, `dur_s`, `err`, `verdicts`, `muted`.
+
+| required | field | status |
+| --- | --- | --- |
+| prompt size | `prompt_chars` | present |
+| session id | `sid` | present |
+| all verdict readers | `verdicts` + `muted` | present |
+| request paths | (wire journal — see below) | present |
+| header fingerprints | (wire journal) | present |
+| cookie metadata | (wire journal) | present |
+
+## 20.2 The wire journal — the important half
+
+Checked across **all 123 completion requests**, not a sample:
+
+| property | coverage |
+| --- | --- |
+| `header_fp` populated | **123 / 123** |
+| `jar` populated | **123 / 123** |
+| `header_order` populated | **123 / 123** |
+
+A completion request carries 25 header names with a 10-hex fingerprint each —
+including `authorization`, `x-device-id`, `x-device-model`, `x-ds-pow-response`,
+and `x-hif-leim` — plus the jar as name → `{fp, domain, expires, expired, age_s}`.
+
+**One honest caveat found during the audit.** A bare page-load `GET
+chat.deepseek.com/` records *empty* `header_order`, `header_fp`, `cookie_names`,
+and `jar`. That is not a journal bug: that request genuinely carries no custom
+headers and no jar cookies through this code path. But it does mean a naive reader
+of the journal could mistake an empty record for a measurement failure. The
+distinction is the `path`: the completion route is the one under investigation,
+and it is populated in every single case.
+
+## 20.3 What this does and does not establish
+
+**Does:** the instruments are live and complete for the route that matters, so if a
+mute lands on t1 or t2 while these soaks run, the artifact needed to reason about it
+— the exact request shapes that preceded the verdict, plus the verdict's own
+preamble — will exist. That was the goal's instrumentation requirement.
+
+**Does not:** establish any cause. No mute has occurred on t1 or t2 (30 and 9 turns,
+0 mutes). The instruments are ready; they have not yet been handed the event.
