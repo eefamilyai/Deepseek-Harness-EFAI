@@ -1944,3 +1944,28 @@ anything this client accumulates.
 FIX 17 (section 25.6) remains correct and independent of all of the above: a mute
 is no longer answered with five more requests. That does not explain the first
 verdict, and nothing in this section does either.
+
+### 26.7 hunt's timing, restated from its own log
+
+The correction in 26.1 replaced an absence of evidence with a measurement. hunt's
+28 requests, read from `session-7cff49`:
+
+| | |
+| --- | --- |
+| first request | 09-29 23:04:51 |
+| last request before its mute | 09-30 00:31:07 |
+| **its mute issue instant** | **09-30 04:19:40** |
+| first request after | 09-30 16:03:56 |
+
+So hunt was **silent for 3 h 48 m before its verdict** and did not send again for
+11 h 43 m after it. The verdict did not arrive at a rejected request; it arrived
+in the middle of a gap.
+
+That is the same shape as `f` (silent 4 h 14 m before its 01:55:15 verdict) and
+`mutetest` (silent, inside the same 14 h 54 m window). Three accounts, three
+verdicts, each issued while its own account was idle.
+
+The honest restatement is narrower than the retracted claim and stronger than
+nothing: hunt *did* send 28 requests, but **none in the 3.8 hours before its
+mute**. The async reading survives the correction; the "zero traffic" phrasing
+did not.
