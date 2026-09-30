@@ -915,6 +915,58 @@ def _load_creds():
             os.environ.get("DEEPSEEK_COOKIE", ""), 0.0)
 
 
+def _forget_cookie(sess, name):
+    """Delete one cookie from a session jar, whichever API the jar exposes.
+
+    Written as a ladder rather than one call because the jar is curl_cffi's while
+    the fakes in the tests are duck-typed: an item delete is tried first, and a
+    jar that only offers get_dict/clear/set is rebuilt without the cookie.
+    Returns whether the cookie was actually removed. The login path does not
+    depend on that answer: losing this cleanup restores the request shape that
+    existed before, which is not worse than failing the login outright.
+    """
+    jar = getattr(sess, "cookies", None)
+    if jar is None:
+        return False
+    try:
+        del jar[name]
+        return True
+    except Exception:  # noqa: BLE001 -- fall through to the rebuild path
+        pass
+    try:
+        values = dict(jar.get_dict())
+    except Exception:  # noqa: BLE001 -- a jar this opaque is left alone
+        return False
+    if name not in values:
+        return False
+    values.pop(name)
+    try:
+        jar.clear()
+        for k, v in values.items():
+            jar.set(k, v)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _drop_dead_session_cookie(sess):
+    """Forget the dead `ds_session_id` before asking DeepSeek for a new token.
+
+    A cookie that has expired is still a cookie, and the re-login path used to
+    post /users/login with the dead session id still attached. That is a state a
+    browser cannot be in: the site answers an expired session by sending the page
+    to the sign-in route, and the sign-in page never carries the dead session id
+    -- so the only client that presents one at the login call is a client that
+    never saw the redirect. It is the same stale-cookie problem the WAF branch
+    below already clears the whole jar for.
+
+    Only the session cookie goes. `aws-waf-token` is deliberately kept: it is the
+    WAF clearance, replacing it costs a solved challenge, and a stale one is
+    already answered by the branch that knows how to re-solve it.
+    """
+    return _forget_cookie(sess, "ds_session_id")
+
+
 def _persist_cookies(client):
     """Save the client's account cookies if the WAF token changed (sliding refresh)."""
     acct = getattr(client, "account", None)
@@ -1320,6 +1372,12 @@ class _Client:
 
     def _login_attempt(self, email, mobile, area, password):
         acct = self.account
+        # Ask for a new token from the state a browser would be in: the page was
+        # bounced to the sign-in route, so the dead session cookie is already
+        # gone. Replaying it made this request carry a credential the site had
+        # just rejected, on exactly the calls the anti-abuse stack watches.
+        # See `_drop_dead_session_cookie` for what is kept, and why.
+        _drop_dead_session_cookie(self.sess)
         payload = {
             # This account's own browser-minted Shumei fingerprint.
             # `_device_id_for` resolves it from the account's persistent Chrome
@@ -2950,9 +3008,46 @@ _MUTE_CODE = "5"
 _MUTE_MSG_RE = re.compile(r"\bmuted\b|\bmute\b", re.I)
 
 
-def _mute_verdict(code, msg):
-    """True when DeepSeek's nested pair says this ACCOUNT is muted."""
+def _is_muted_payload(biz_data):
+    """True when `biz_data` ITSELF declares the account muted.
+
+    The strongest mute signal, because it does not depend on knowing the code or
+    recognising the wording. Observed live on the upload route:
+
+        {"code":0,"msg":"","data":{"biz_code":14,"biz_msg":"user is muted",
+         "biz_data":{"is_muted":1,"mute_until":1790972380.757}}}
+
+    `biz_code` there is 14, not the 5 the older samples carried -- so a reader
+    keyed on the code alone would have missed it, and one keyed only on the
+    message would miss any future code whose `biz_msg` is empty. `is_muted` and
+    a non-zero `mute_until` are the verdict stating itself in its own fields.
+
+    Conservative about type: `bool` is an `int` in Python and `True` is not a
+    flag value here, so the boolean is accepted only as a boolean.
+    """
+    if not isinstance(biz_data, dict):
+        return False
+    flag = biz_data.get("is_muted")
+    if isinstance(flag, bool):
+        return flag
+    if isinstance(flag, int):
+        return flag == 1
+    until = biz_data.get("mute_until")
+    return (isinstance(until, (int, float)) and not isinstance(until, bool)
+            and until > 0)
+
+
+def _mute_verdict(code, msg, biz_data=None):
+    """True when DeepSeek says this ACCOUNT is muted.
+
+    Three independent tells, any one sufficient: the code, the wording, or the
+    account's own `biz_data`. Any one alone is a weaker read than the three
+    together, and the code has already been observed to vary (5 and 14), which
+    is what the structured fields are for.
+    """
     if code is not None and str(code) == _MUTE_CODE:
+        return True
+    if _is_muted_payload(biz_data):
         return True
     return bool(msg) and bool(_MUTE_MSG_RE.search(str(msg)))
 
@@ -2969,7 +3064,8 @@ def _mute_of(obj):
     data = obj.get("data")
     if not isinstance(data, dict):
         return None
-    if not _mute_verdict(data.get("biz_code"), data.get("biz_msg")):
+    if not _mute_verdict(data.get("biz_code"), data.get("biz_msg"),
+                         data.get("biz_data")):
         return None
     return str(data.get("biz_msg") or "user is muted")
 

@@ -206,3 +206,104 @@ mute cannot be claimed fixed.
 What is established: the login storm is the only accumulation the evidence
 supports, and it is gone; nothing else on the request path drifts over 1000
 turns; and verdict handling is now consistent across chat, vision, and upload.
+
+## THE MUTE IS A FIXED-DURATION PENALTY - 72 h, with a 216 h variant
+
+Measured from the verdicts themselves. A mute reports only an expiry, but the
+remaining time at the moment it is observed recovers the duration, because a
+freshly-started mute shows nearly the whole window:
+
+  observed 2026-09-29 09:27 UTC, expires 2026-10-02 09:13 -> 71.76 h left = 3 d
+  observed 2026-09-29 11:30 UTC, expires 2026-10-08 11:16 -> 215.76 h left = 9 d
+  observed 2026-09-29 13:57 UTC, expires 2026-10-02 13:41 -> 71.73 h left = 3 d
+  observed 2026-09-30 06:46 UTC, expires 2026-10-02 17:55 -> 59.15 h left = 3 d
+
+71.76 h against a 72 h window means the account was muted ~14 minutes before the
+verdict was seen. So `expiry - 72 h` is the START, and every observed mute
+back-computes to 2026-09-29:
+
+  09:13, 11:16, 13:41, 17:55, 20:19 UTC - all on one day.
+
+This is the first hard measurement of WHEN mutes begin rather than only that they
+happen, and it is what makes the correlation below possible at all.
+
+## THE 2026-09-29 CLUSTER vs THE COMMITS
+
+Commit times that day (author date, converted to UTC):
+
+  09:48  7d6888732c  the eager re-login added to the catch-all biz_code path
+  14:14  8b8e59fd7c  the eager re-login REMOVED (this session's first fix)
+  15:47  7f71823f5f  the upload path's nested verdict read
+
+Against the mute starts: 09:13 and 11:16 straddle the eager-re-login commit, and
+13:41 / 17:55 / 20:19 follow it. So the eager re-login is NOT a complete
+explanation - a mute began 35 minutes BEFORE that commit existed. It remains the
+best candidate for AMPLIFYING a mute (a login burst against an account already
+being declined), but something else was already getting these accounts muted that
+day.
+
+What that day actually contained: ~1000 turns of soak traffic at ~960 turns/hour
+across the pool, four load shapes, plus the concurrent 3-worker run. No human
+browser produces 16 turns/minute sustained, and account-level moderation reads
+sustained volume. Volume is the one factor present before, during and after every
+commit on that day - which is why the pace axis, not the header axis, is what
+remains untested.
+
+## THE RE-LOGIN REPLAYED A DEAD SESSION COOKIE (operator lead A - CONFIRMED)
+
+The operator's first suspicion was right, and it was mechanical. `_login_attempt`
+posted /users/login while the session jar still held the `ds_session_id` of the
+session DeepSeek had just rejected. A browser cannot be in that state: the site
+answers an expired session by sending the page to the sign-in route, and the
+sign-in page carries no dead session id - so the only client presenting one at
+the login call is a client that never saw the redirect. It is the same
+stale-cookie problem the WAF branch already cleared the whole jar for, with a
+comment saying so, in a branch the ordinary re-login path never reaches.
+
+There is no sign-out anywhere in the runtime (a grep for logout/sign_out across
+every .py in the tree: no matches), so every re-login is by construction a login
+without a sign-out - the operator's second suspicion is not a risk, it is the
+only possible behaviour.
+
+FIX: `_drop_dead_session_cookie` removes `ds_session_id` before the login body is
+built, and KEEPS `aws-waf-token` - the clearance is what lets the login reach
+DeepSeek at all, and replacing it costs a solved challenge. Pinned by
+`test_ds_direct_relogin_cookie.py`, which asserts on the jar AT THE MOMENT OF THE
+POST rather than before or after; the end state alone cannot distinguish a
+correct fix from one that drops the cookie too late.
+
+## THE MUTE CODE IS NOT STABLE (biz_code 14)
+
+Observed live on the upload route:
+
+  {"code":0,"msg":"","data":{"biz_code":14,"biz_msg":"user is muted",
+   "biz_data":{"is_muted":1,"mute_until":1790972380.757}}}
+
+`biz_code` 14, not the 5 every earlier sample carried. The reader recognised a
+mute by code OR wording, so the wording caught it - but the structured fields
+`is_muted` and `mute_until` are the verdict stating itself, and they work for any
+code. `_mute_verdict` now recognises three independent tells (code, wording,
+`biz_data`), and `test_ds_direct_mute_shapes.py` pins both observed codes plus
+the structural-only case, while keeping the reader strict against model prose and
+success bodies.
+
+## ACCOUNT STATE AT 2026-09-30 07:04 UTC
+
+  hunt      MUTED   until 2026-10-02 20:19 UTC
+  f         MUTED   until 2026-10-02 17:55 UTC
+  v         OK
+  j1        OK
+
+Also confirmed live: a re-login on a muted account SUCCEEDS and changes nothing,
+exactly as `_Muted`'s docstring predicts. The mute is not the credential, which
+is why re-authenticating at it is pure added risk.
+
+## REFUTED SINCE THE FIRST WRITE-UP
+
+  * A SHARED aws-waf-token across accounts: all four accounts carry distinct WAF
+    tokens AND distinct ds_session_ids (sha256-compared). The shared `5d4cd3`
+    prefix that prompted the check is token framing, not shared material.
+  * A SHARED device identity: all four accounts carry distinct `device_id`,
+    `x_device_id` and `did`, none on the machine-wide fallback.
+  * The eager re-login as the SOLE cause: falsified by the 09:13 and 11:16 mute
+    starts, which precede the commit that introduced it.
