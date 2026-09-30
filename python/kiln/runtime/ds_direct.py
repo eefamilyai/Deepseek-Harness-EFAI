@@ -243,12 +243,15 @@ class _Account:
     __slots__ = ("id", "token", "cookie", "email", "mobile", "area_code",
                  "password", "device_id", "headers", "source", "mtime", "lock",
                  "_last_saved_cookie", "login_lock", "last_login_token",
-                 "last_login_at", "last_login_cookie")
+                 "last_login_at", "last_login_cookie", "disabled")
 
     def __init__(self, id, token="", cookie="", email="", mobile="",
                  area_code="+86", password="", device_id="", source=("env",),
-                 mtime=0.0, headers=None):
+                 mtime=0.0, headers=None, disabled=False):
         self.id = id
+        # An account the operator marked off-limits. Honoured in
+        # `_read_accounts_from_disk`, so it never enters a pool.
+        self.disabled = bool(disabled)
         self.token = token or ""
         self.cookie = cookie or ""
         self.email = email or ""
@@ -292,6 +295,7 @@ class _Account:
         self.device_id = other.device_id
         self.headers = other.headers
         self.source, self.mtime = other.source, other.mtime
+        self.disabled = other.disabled
 
     def save(self, token=None, cookie=None):
         """Persist a refreshed token and/or cookie back to THIS account's slot."""
@@ -532,6 +536,12 @@ def _read_accounts_from_disk():
     out, seen_ids, seen_tokens = [], set(), set()
 
     def add(acct):
+        # An account the operator marked off-limits is dropped HERE, before any
+        # other judgement, so it can never enter a pool. It stays in the config
+        # (its token is untouched) but is invisible to every pick, including the
+        # round-robin for a new conversation and any failover.
+        if acct.disabled:
+            return
         # An account is usable with a TOKEN or with LOGIN CREDENTIALS. `login()`
         # mints a token from email/mobile + password and the 401 path calls it,
         # so credentials alone are a complete configuration — demanding a token
@@ -581,7 +591,8 @@ def _read_accounts_from_disk():
                          doc.get("area_code") or "+86", doc.get("password"),
                          device_id=doc.get("device_id") or "",
                          source=("top", p), mtime=mt,
-                         headers=doc.get("headers")))
+                         headers=doc.get("headers"),
+                         disabled=doc.get("disabled") or False))
         arr = doc.get("accounts")
         if isinstance(arr, list):
             for i, raw in enumerate(arr):
@@ -596,7 +607,9 @@ def _read_accounts_from_disk():
                              raw.get("area_code") or "+86", raw.get("password"),
                              device_id=raw.get("device_id") or doc.get("device_id") or "",
                              source=("array", p, i), mtime=mt,
-                             headers=raw.get("headers") or doc.get("headers")))
+                             headers=raw.get("headers") or doc.get("headers"),
+                             disabled=(raw.get("disabled") or doc.get("disabled")
+                                       or False)))
     return out
 
 
