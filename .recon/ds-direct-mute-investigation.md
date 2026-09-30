@@ -628,3 +628,36 @@ profile whose precondition I never checked. Both times the fix was to verify the
 SOURCE before reasoning from it: read the raw `mute_until`, and confirm the profile
 was logged in. A captured artifact is only evidence about the state it was actually
 captured in.
+
+## IS _resume_hygiene SAFE? YES -- AUTH DOES NOT RIDE THE COOKIE
+
+The question that decides it: if `_resume_hygiene` drops `ds_session_id`, does that
+force a re-login? A re-login burst is the suspected amplifier, so a fix that CAUSED
+one would be net-negative.
+
+It does not. `_Client._headers` sets authentication from the BEARER TOKEN, wholly
+apart from the cookie jar:
+
+    if self.token:
+        h["authorization"] = "Bearer %s" % self.token
+
+The token is what authenticates the request; cookies ride alongside it. Dropping a
+session cookie therefore cannot make an authenticated request become
+unauthenticated. The worst case is that the request carries one fewer cookie than
+before, which is the browser-equivalent state the fix is aiming for anyway.
+
+So the resume fix is safe on its own terms, independent of the retracted browser
+comparison: it removes a cookie that may have lapsed server-side, keeps the WAF
+token, cannot trigger a re-login, and the ordinary `_AuthExpired` path still
+re-authenticates if the TOKEN is the thing that died.
+
+## ds_session_id IS PER-ACCOUNT, NOT PER-DEVICE
+
+`_dsid.py`, fingerprints only: all five accounts hold a DISTINCT 32-char
+`ds_session_id`. A shared per-DEVICE identifier would repeat across accounts on one
+machine, so that reading is ruled out; the values look like per-account state.
+
+This does not PROVE it is a short-lived session token -- confirming that needs a
+re-login to observe whether the value changes -- but it removes the objection that
+dropping it throws away a stable device identity, which was the one way the fix
+could have been harmful.
