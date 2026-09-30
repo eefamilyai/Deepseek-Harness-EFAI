@@ -1412,3 +1412,49 @@ other accounts.
 
 PROBE: `_wirecheck.py` -- reads the journal, checks header-set divergence,
 fingerprint stability, and per-request cookie expiry.
+
+## THE DEVICE-REUSE / DOUBLE-LOGIN SUSPICION, TESTED: NOT SUPPORTED (round 37-38)
+
+The operator's second suspicion: "logging into an account with a device id and then
+without properly signing out, logging back in again... a device_id is tied to 1
+browser, so if i login then again login without signing out, theres definitely
+something suspicious."
+
+THE UNLOCK. Nobody had used the `request/header` session event, which carries
+`config.provider` -- the ACCOUNT every turn was served by. That makes every
+historical turn attributable to an account, which is what this theory needed: one
+account, one device_id, TWO live sessions is the predicted shape.
+
+FIRST PASS LOOKED LIKE A HIT -- AND WAS WRONG. `_concurrent.py` reported account
+`+5@gmail.com` active in `session-2bf6e1df-ded7-4b` and `session-54eaf0bd-ffbf-4f`
+at NINE overlapping windows across 09-17 to 09-18. That is exactly the predicted
+shape, and it would have been easy to stop there.
+
+The tell that it was wrong: the two spans had boundaries matching TO THE MINUTE,
+which is not how two independent drivers look. So the event TIMESTAMPS were
+compared:
+
+    session 2bf6e1df: 60 request/header events
+    session 54eaf0bd: 60 request/header events
+    identical timestamps (to the ms): 60
+    only in A: 0     only in B: 0
+
+The two logs hold the SAME events. This is a FORK -- one run recorded under two
+session ids -- not two drivers. `_forkcheck.py` makes that test explicit: a session
+whose (time, account) set is a SUBSET of another's is the same run, and only an
+overlap where each side has events the other does not is a real collision.
+
+    duplicated (fork) pairs: 2
+    genuine overlap pairs : 0
+    -> Every multi-session account is a FORKED/duplicated log, not two drivers.
+
+So the device-reuse theory is NOT supported by the session timeline. No account was
+ever driven from two sessions at genuinely overlapping times.
+
+METHOD NOTE, the same lesson as the storm probes: the first pass produced a
+satisfying answer -- nine overlap windows, a named account, the exact predicted
+shape -- and it was an artifact of how sessions are stored, not of how they were
+used. A result that matches the hypothesis is the one that most needs its
+mechanism checked.
+
+PROBES: `_concurrent.py` (naive overlap), `_forkcheck.py` (subset/fork aware).
