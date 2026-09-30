@@ -3096,3 +3096,95 @@ opened with. It does not identify the cause, and it does not claim the connector
 is innocent of everything - FIX 17 (retrying a mute as TRANSPORT, escalating
 72 h to 216 h) is a real defect that made every mute worse, and the lease-window
 stale token in sections 38-39 is real too. But neither is the *trigger*.
+
+
+---
+
+## 43. "THE PAUSE BEFORE THE MUTE" IS FALSIFIED ON 6 OF 7 MUTES
+
+The operator's strongest hypothesis, stated twice, was that a mute follows a
+pause:
+
+    "its the pause during these turns then the ai comes back and shortly after
+     it gets banned"
+
+    "my accounts are getting muted at like 1am or 4am while im sleeping, and the
+     account isnt active"
+
+That is testable, and it has now been tested against every mute instant on record
+by asking one question: **how long before the verdict was the machine last doing
+anything?**
+
+### 43.1 The measurement
+
+Event timestamps were extracted from all **13** harness session logs on this
+machine (`session.v4.jsonl.zstd`, decompressed with zstd; 23,406 distinct event
+timestamps spanning 09-14 19:39 to 10-01 02:21). For each mute, the gap between
+the last recorded event and the mute instant:
+
+    account    issue instant (local)   events in the 2 h before   last event before   gap
+    ---------  ---------------------   -----------------------   -----------------   ------
+    f          09-29 17:13                        983               16:57:07        15.9 min
+    ?          09-29 19:28                       1525               19:13:03        14.9 min
+    jw1        09-29 19:16                       1689               19:13:03         3.0 min
+    ?          09-29 21:41                        432               21:40:18         0.7 min
+    j1         09-30 20:04                        574               20:03:42         0.3 min
+    t1         10-01 00:40                        423               00:39:59         0.0 min
+    mutetest   09-30 09:56                          0               00:32:55       563.1 min
+
+**Six of the seven mutes land within 16 minutes of live activity, and three of
+them within a single minute.** `t1`'s verdict arrived 0.0 minutes after the last
+event: the machine was demonstrably working at the instant it was muted.
+
+### 43.2 So the pause hypothesis is wrong for six of seven
+
+It cannot be the general mechanism. If inactivity were the trigger, the mutes
+with 423-1689 events in the preceding two hours would not exist.
+
+### 43.3 But `mutetest` is a genuine exception, and it is the one the operator named
+
+`mutetest` is different in kind: **zero** events in the two hours before it, the
+last event 9.4 hours earlier, and it sits inside an **848-minute (14 h 8 m)**
+global inactivity gap (09-30 00:32 -> 09-30 14:41). That is precisely the "while
+I was sleeping" case, and it is real.
+
+So the honest reading is that there are **two shapes**, not one:
+
+    1. a mute issued while the machine is WORKING  - f, ?, jw1, ?, j1, t1
+    2. a mute issued while the machine is IDLE      - mutetest (and the earlier
+                                                      f=01:55 / hunt=04:19 pair)
+
+and the operator has been describing shape 2 while the majority of mutes are
+shape 1. Both are real; they are not the same phenomenon, and a single mechanism
+does not have to explain both.
+
+### 43.4 The t1 rate profile, stated carefully
+
+t1's request rate collapsed going into its mute, and that is worth recording even
+though it does not generalise:
+
+    23:00  112 req   23:10   16   23:20    6   23:30    8
+    00:20    2       00:30    2   00:40   12   <- muted in this minute
+
+and the two silences with the rate on each side:
+
+    59.5 min silence  20:34:17 -> 21:33:46   30 req before    438 req after
+    46.5 min silence  23:35:15 -> 00:21:45  421 req before     16 req after
+
+The second is the striking one: **421 requests in the hour before a 46-minute
+silence**, then a resume, then the mute 19 minutes later. That is "heavy use,
+pause, resume, muted" and it matches the operator's description exactly.
+
+But it is **one account and one instance**, and section 43.1 shows the other six
+mutes have activity right up to the instant. A pattern that holds for one of
+seven cases is a lead, not a finding - and this document has already retracted
+two conclusions drawn from a single striking observation (37.4, 38.3). It is
+recorded as a lead.
+
+### 43.5 What would settle it
+
+A mute that lands after a *measured* heavy-use-then-idle-then-resume cycle on an
+account with the wire journal on, reproduced more than once. `t1` is the only
+account that has produced this shape once; it is muted until 10-03 16:40 UTC, so
+the same test on the same account cannot run until then. A different account run
+through the same profile is the available substitute.
