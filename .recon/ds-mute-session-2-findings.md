@@ -2114,3 +2114,44 @@ path `ds_direct` documents as accumulating has been exercised at least once, and
 the four that were measured -- turn count, chat length, byte volume, and the
 system-prompt resend -- can each be reported as exercised rather than untested.
 The next mute, whenever it comes, will not be attributable to any of them.
+
+## 28. Accounts are pooled and rotated inside ONE session
+
+Reading session `7cff49` end to end changes how every per-account number in this
+document must be read. That single DSH session issued 167 `request/header`
+events across **six different accounts**:
+
+| account | requests |
+| --- | --- |
+| parserfix | 43 |
+| p | 42 |
+| 9 | 40 |
+| hunt | 28 |
+| donttouch | 8 |
+| v | 6 |
+
+The session was titled "Hi" / "Casual Greeting to Coding Assistant" -- a
+lightweight session, and still it rotated through six accounts.
+
+**The consequence for attribution.** A per-account request count measures how
+much of the *pool's* work that account happened to carry, not how much work the
+session did. `hunt`'s 28 requests are not "hunt was lightly used"; they are
+"hunt carried 28 of this session's 167 turns before the pool moved on". The same
+applies to every count in section 26.1.
+
+**The consequence for the mute question.** This is the mechanism that makes a
+mute survivable in normal operation: when one account is refused, the pool
+rotates to another and the session continues. `hunt` was muted at 04:19:40 and
+this session went on using `v`, `donttouch`, `9` and `p`.
+
+**And the sharper question it raises.** If a session rotates accounts on a mute,
+then a mute is *supposed* to stop that account's traffic. `jw1`'s escalation
+(section 25.2) is the case where it did **not**: 32 requests continued against an
+account already carrying a 72 h verdict. FIX 17 addresses the retry half of that
+(the harness resending a refusal five times); FIX 12 addresses the selection
+half (a known-muted account sorting last). Both are now in place, and this
+section is the evidence that they answer a real observed failure rather than a
+hypothetical one.
+
+Caveat, stated plainly: this is one session read in full. Whether every session
+rotates this way, or only ones that hit a refusal, is not established here.
