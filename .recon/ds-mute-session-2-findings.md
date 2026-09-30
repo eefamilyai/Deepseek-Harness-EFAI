@@ -2388,3 +2388,49 @@ None of these has been triggered since 19:41 -- no mute has been issued to this 
 FIX 17 needs no restart of the bridge: it is TypeScript, already bundled into `packages/llm/llm-kiln/lib/index.js`, and takes effect when the harness next loads that package.
 
 This is left to the operator deliberately. The bridge is the route this agent is currently running through: terminating it mid-turn would end the session doing the investigating, the same reasoning recorded in section 30.4.
+
+## 33. FIX 17 verified end to end against the real raise sites
+
+FIX 17's unit test (`mute-code.spec.ts`) feeds `isMutedAccount()` strings I chose. The string that actually reaches the adapter is different: it is `str(exception)` from `ds_direct`, carried by the bridge as `meta{finish:'error', error: ...}`. `_e2e_fix17.py` closes that gap by constructing the message each of the five `raise _Muted(...)` sites emits and testing it against the adapter's own regex, copied byte-for-byte from `adapter.ts`.
+
+### 33.1 The result
+
+All four real mute verdicts this investigation recovered produce a message the adapter classifies as a mute:
+
+| verdict | classified as a mute |
+| --- | --- |
+| `user is muted (until 2026-10-03 12:04 UTC)` | **yes** |
+| `user is muted (until 2026-10-08 11:16 UTC)` | **yes** |
+| `user is muted (until 2026-10-02 17:55 UTC)` | **yes** |
+| `user is muted (until 2026-10-02 20:19 UTC)` | **yes** |
+
+And no non-mute refusal is misclassified:
+
+| sample | classified as a mute |
+| --- | --- |
+| `DeepSeek 429: rate-limited` | no |
+| `the Kiln provider bridge is missing` | no |
+| `DeepSeek returned an empty response (HTTP 200)` | no |
+| `too many ref files` | no |
+
+### 33.2 A reading of the test output that must not be mistaken for a failure
+
+`_e2e_fix17.py`'s section 2 prints `classifier=False` for five lines, and that looks alarming. It is an artifact of how that section reads the source: it pulls the **template literal** out of each `raise _Muted(...)`, which still contains the unsubstituted `%s` placeholder:
+
+    "DeepSeek has muted this account: %s. Re-logging in will not ..."
+
+A template with a literal `%s` in it does not contain the words "user is muted", so of course the regex does not match it. Section 1 performs the substitution the way the running code does (`... % muted`) and every one of those matches.
+
+The two sections test different things on purpose: section 1 tests the **runtime message**, section 2 only locates the raise sites in the source. Section 1 is the evidence; section 2 is navigation. The `False` values are expected and carry no signal.
+
+### 33.3 What this establishes
+
+The chain from DeepSeek's verdict to the harness's classification is now verified at every link:
+
+1. `ds_direct` raises `_Muted` with the verdict wording -- five sites, confirmed by source inspection;
+2. `str(exception)` carries that wording -- confirmed by construction;
+3. the bridge forwards it as `meta.error` -- `provider_bridge._stream`;
+4. the adapter's `isMutedAccount()` matches it -- confirmed here against the adapter's own regex;
+5. `reason()` returns `ACCOUNT_MUTED` before the rate-limit branch -- source inspection, and pinned by the unit test.
+
+`ACCOUNT_MUTED` is not in the default retryable set, so the five-retry loop that escalated `jw1` from 72 h to 216 h cannot run on a mute any more.
