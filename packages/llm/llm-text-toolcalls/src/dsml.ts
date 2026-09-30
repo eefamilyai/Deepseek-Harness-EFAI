@@ -631,6 +631,33 @@ function withoutParameterPayload(body: string): string {
 }
 
 /**
+ * Whether the transport removed every argument closer, leaving the openers.
+ *
+ * A stripped block keeps every opener and loses every closer, so its arguments
+ * are intact but the markup that ended them is gone. The grammar makes the
+ * reading decidable rather than guessed: an element never nests, so a second
+ * argument opener PROVES the first argument closed. Two or more openers with no
+ * closer anywhere is a block that was written whole and damaged on the way here,
+ * not a write that stopped mid-value -- one argument cannot be told from that,
+ * and stays on the truncation path.
+ *
+ * What this decides is only how a REFUSED block is shown: whether its values are
+ * what the call would have run with, which are dropped, or the only record of
+ * what was written, which is kept. It never completes a call and never invents
+ * an argument.
+ * @param body - the block exactly as the model wrote it.
+ * @returns true when two or more argument openers are present and no argument closer is.
+ */
+function closersStripped(body: string): boolean {
+  const run = PIPES + '*'
+  const open = new RegExp('<' + run + 'parameter(?=[\\s/>=]|$)', 'gi')
+  const close = new RegExp('<' + run + '/parameter', 'gi')
+  const opened = (body.match(open) ?? []).length
+  if (opened < 2) return false
+  return (body.match(close) ?? []).length === 0
+}
+
+/**
  * Whether a line is nothing but markup, and so framing rather than prose.
  *
  * A line carrying any real text is left exactly as written; only a line whose
@@ -677,8 +704,19 @@ const SYSTEM_REMINDER_TAG = new RegExp(`<${PIPES}*/?${PIPES}*\\s*system[_-]?remi
  *
  * The payload uses {@link ATTRIBUTE_RUN} rather than `[^>]*` so a quoted
  * attribute value may itself contain `>`.
+ *
+ * The lookahead is load-bearing, and it has to admit both spellings. The
+ * provider's pipe run may sit on EITHER side of the word -- <DSML｜｜calls>
+ * carries it on the right, and a left-only closer such as </DSMLparameter>
+ * carries none at all. So a token is native when a pipe appears anywhere
+ * before its closing bracket, or when it is a closer. What is never native
+ * is a bare word: without the lookahead the optional pipe runs let
+ * <DsmlEvent, { kind: 'text' }> match as a token, `nativeToken` read
+ * `Event` as a tag name, and the reader rewrote a TypeScript type argument
+ * inside an ARGUMENT VALUE into an invoke tag before the call ran -- the
+ * reader corrupting the very text it was carrying.
  */
-const DSML_TOKEN = new RegExp(`<${PIPES}*(/?)${PIPES}*(?:DSML${PIPES}*)+\\s*(${ATTRIBUTE_RUN})>`, 'gi')
+const DSML_TOKEN = new RegExp(`<(?=[^>]*${PIPES}|/)${PIPES}*(/?)${PIPES}*(?:DSML${PIPES}*)+\\s*(${ATTRIBUTE_RUN})>`, 'gi')
 
 /**
  * The payload's leading word, and whatever follows it, when that word is a
@@ -2545,7 +2583,12 @@ export class DsmlTranslator {
     // Measured from the TEXT, not from which path called this: an argument the
     // model never closed keeps the envelope closer from being read as the block
     // closer, so a finished block can still arrive here through the flush.
-    const closeArrived = raw.includes(block.closer)
+    //
+    // A block whose closers the transport removed proves the same thing a
+    // different way: two or more argument openers with no closer anywhere is a
+    // call written whole and damaged in flight, so its values are dropped like
+    // any other finished block's. See {@link closersStripped}.
+    const closeArrived = raw.includes(block.closer) || closersStripped(raw)
     const { produced, named, unknown } = this.parseCalls(raw)
     // Nothing callable came out: show the block. A model that named a tool it
     // does not have needs to SEE that it did — the next turn's transcript is
