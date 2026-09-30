@@ -484,3 +484,49 @@ never during one. For `f` and `mutetest` the last turn ended 16:32:55 UTC and th
 verdict landed at 17:55:15 / 17:56 - roughly 83 min later, during complete silence.
 That is why a scan for events within 30 min of the mute instant found ZERO: it was
 looking at the verdict time, not the offence time.
+
+## SURFACE 7 - THE RESUME AFTER A PAUSE IS THE MOMENT NO BROWSER OCCUPIES
+
+The second half of the operator's lead C, and the one that turns lead A from a static
+defect into a live trigger.
+
+The shape. Operator, verbatim: "its the pause during these turns then the ai comes
+back and shortly after it gets banned". A pause is when the server lapses the session
+cookie; the request that FOLLOWS the pause is the one presenting the lapsed
+credential. A browser cannot make that request: the site answers a lapsed session by
+sending the page to the sign-in route, so the next browser request carries NO session
+cookie. The connector carried the stored one straight in.
+
+Ground truth from the captured Chrome profiles (_chromecookies.py). All four agree:
+
+    aws-waf-token   host .deepseek.com     persistent=1  expires ~2026-10-03/04
+    smidV2          host chat.deepseek.com persistent=1  expires 2027-11-03/04
+    .thumbcache_*   host chat.deepseek.com persistent=1  expires 2027-11-03/04
+    ds_session_id   ABSENT
+
+ds_session_id is not in the browser jar AT ALL, yet ds_config.json holds one for every
+account and the harness replays it on every request. The config stores it in the legacy
+flat form, which carries no expiry, so the SURFACE 5 fix correctly classifies it as a
+session cookie -- and a session cookie never expires. The one cookie the browser never
+sends is the one the harness sends forever, including on the resume.
+
+THE FIX. _resume_hygiene(client, acct_id) runs at the top of stream(), inside the lease
+and before _stream_with. On the first turn after a gap longer than IDLE_RESUME_S it
+deletes ds_session_id from that account's jar, reproducing the browser's state.
+aws-waf-token is deliberately kept -- WAF clearance is not a session.
+
+THE THRESHOLD IS DERIVED, AND THE TEST CAUGHT ME GETTING IT WRONG. I first wrote
+IDLE_RESUME_S = 1800.0 (30 min). The suite failed at once: one turn can legitimately
+spend RATE_MAX_TRIES x DS_RATE_WAIT = 20 x 180 = 3600 s resending inside its own retry
+loop, so 30 min is BELOW a full storm and would have dropped the cookie mid-storm. Now:
+
+    IDLE_RESUME_S = RATE_MAX_TRIES * DS_RATE_WAIT + 1800.0      # 5400 s = 90 min
+
+30 min of headroom above a maximum-length storm, so a storm can never trip this and a
+genuine overnight gap always does. Deriving it from the retry constants is what makes
+that hold if either constant is ever tuned.
+
+test_ds_direct_resume_hygiene.py: 17 checks, all green. Pins the derived relationship,
+the first-turn case, a 1-minute gap, a storm-length gap (must NOT trip), a genuine
+pause (must trip), the exact boundary, per-account isolation, two unreadable-jar
+shapes. All 12 kiln suites pass.
