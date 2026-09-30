@@ -1261,3 +1261,85 @@ verdict-side pattern -- the retry burst -- is a consequence. The concrete
 defects found and fixed along the way are real and each is independently tested;
 the accumulating cause behind the mute itself has not been identified from the
 available evidence, and inventing one would be worse than saying so.
+
+## THE FAST SOAK REACHED A REAL RATE LIMIT WITH THE JOURNAL ON (round 35)
+
+Ran the soak at 2-5 s per turn instead of 180-600 s -- the literal objective ("hundreds
+of consecutive turns") -- with KILN_DS_WIRELOG=1. It reached turn 38 and then hit:
+
+    [ds_direct] rate-limited -- retry #1 in 180s
+
+That is the first time the retry path has run with the wire journal recording, so the
+storm's own request shapes are now captured rather than inferred. The journal for the
+preceding turns shows the ordinary shape:
+
+    REQ seq=22 POST chat.deepseek.com/api/v0/chat/completion bytes=256 jar=aws-waf-token,ds_session_id
+    REQ seq=23 POST chat.deepseek.com/api/v0/chat/create_pow_challenge bytes=42
+    REQ seq=24 POST chat.deepseek.com/api/v0/chat/completion bytes=241
+    RESP all HTTP 200
+
+Every request carries both cookies, neither expired -- so nothing stale is being replayed
+on the normal path, which is what the cookie theory predicts should be visible here if it
+were happening.
+
+The soak was left RUNNING rather than restarted. Repeatedly killing it was my own error
+across several rounds (it was mistaken for dead because a process filter was malformed),
+and each restart destroyed the continuity the storm needs to build. It is now the
+longest-lived run of this investigation.
+
+## WHAT THIS INVESTIGATION ACTUALLY ESTABLISHED, STATED PLAINLY
+
+ESTABLISHED, with measurement:
+
+  * The mute is an ACCOUNT-level, ASYNCHRONOUS, FIXED-DURATION verdict. Durations 72 h
+    and 216 h are both confirmed exactly (each fits its observation; the alternatives
+    fit nothing). Delivery lag observed: 15 min and 95 min after issue.
+  * The issue instant is recoverable as `mute_until - duration`, and it falls BOTH
+    during activity and during idleness. The earlier claim that it always falls during
+    idleness was drawn from one pair and does not generalise.
+  * RETRIES DISCOVER A MUTE; THEY DO NOT CAUSE IT. For the one verdict with a
+    recoverable issue instant, the verdict was issued 14 minutes BEFORE the retry burst
+    that preceded its observation. Every recorded mute is preceded by a 5-10 retry burst
+    that stops 10-14 s before the verdict appears -- the signature of finding out.
+  * The storm model is refuted three independent ways: attempt counters never exceed 4
+    inside reasoning frames; no storm precedes any mute start; and the one mute with a
+    known issue instant was issued before its burst began.
+  * A 216 h (9-day) mute variant exists, previously unknown. Any start derived as
+    `mute_until - 72 h` is wrong by 144 h for such a mute.
+  * Three further mutes (parserfix, jw1, 7) were recovered from `turn/end` error
+    messages -- accounts never named in the operator's banners.
+
+FIXED, each independently tested (16 suites, all green):
+
+  * Expired cookies were resurrected alive by the lossy round-trip (33 checks)
+  * A stale `ds_session_id` was replayed on the first request after a long pause
+    (17 checks)
+  * The last-turn clock was in-memory, so a restart blinded the resume check; and
+    the mutation was outside the lock that guards the write
+  * `_MUTE_CODE` held only "5" while its own docstring documented 14 (23 checks)
+  * A mute arriving on the `event: hint` path looked like a SUCCESSFUL turn
+  * A persisted cancel armed `preempt:true` on the first request after an overnight
+    pause (18 checks)
+  * A per-request wire journal now records every request with header FINGERPRINTS
+    (never values) and, on a verdict, its own preamble (48 checks)
+
+NOT ESTABLISHED, and this is the honest bottom line:
+
+  * The accumulating cause behind the mute is NOT identified. No local artifact --
+    no request, no header, no cookie state, no retry pattern, no storm -- correlates
+    with the issue instant. The decision is made server-side and delivered late; the
+    local evidence available here does not contain its trigger.
+  * The cookie-expiry theory is a REASONED PRECAUTION, not an evidenced cause.
+    `_cookiejar.py` proves the defect is mechanically possible with no browser
+    involved, and it is worth fixing on that basis alone -- but no log shows a stale
+    cookie actually being sent at a moment that drew a verdict.
+  * The header theories (language, client hints, x-hif) have no supporting evidence.
+    `x-hif-dliq` cannot be minted on this IPv4-only network and is OMITTED rather than
+    replayed stale, which is the better of the two failure modes and cannot produce
+    account-level moderation.
+
+WHAT WOULD ACTUALLY SETTLE IT: the server's own decision. Everything above is
+inference from the client side of a one-way channel. The wire journal is the right
+instrument for the next mute -- if one occurs while it is recording, the journal will
+contain the verdict together with the exact preamble of requests that preceded it, and
+that artifact does not exist for any previous mute.
