@@ -1027,3 +1027,189 @@ logged. It is fixed because it is the same defect shape as one already fixed, an
 because it is cheap and safe.
 
 All 16 kiln suites green.
+
+## THE STORM MODEL, TESTED PROPERLY: REFUTED (round 33)
+
+The operator's model -- "a long pause OR a rate-limit storm precedes the mute" --
+was testable from the session logs, and it does not hold. Getting a trustworthy
+answer needed THREE attempts, because the first two probes were broken.
+
+WHY THE FIRST TWO PROBES WERE WORTHLESS.
+
+`_storm.py` used this pattern:
+
+    r"rate limit reached|retrying in \d+|server is busy|too many requests"
+    r"|attempt \d+/\d+|429"
+
+The trailing bare `429` matches ANYWHERE -- including inside an epoch-millisecond
+timestamp, since `..."time":1790656492429,...` ends in `429`. It reported 2244
+"storm lines" whose samples are `step/start`, `agent/inbox/spliced` and
+`compaction/summary`. Every one of its 11 clusters was an artifact, and its
+headline "84.2 min before the mute" for `f` was just the last log line anywhere
+containing those three digits. A three-character number is not a signal.
+
+`_storm2.py` fixed the regex but still counted echoes: extracting the matched
+substrings showed the top hit (x49) is the agent's own `reasoning` text quoting
+the notice, and the rest are ds_direct.py source, comment text, and recon-log
+prose being READ by the agent. Matching wording that the agent wrote ABOUT the
+mechanism is not observing the mechanism.
+
+WHAT THE REAL SIGNAL IS, AND WHAT IT SAYS. `_transient_pause` emits
+
+    DeepSeek rate limit reached -- retrying in 3 min (attempt N/20)...
+
+on every resend, and N only rises within one storm. Keeping only lines inside an
+assistant `reasoning` or `notice` frame (never a tool result reading source,
+never a compaction summary) gives 101 notices in 53 episodes. Grouped by a
+20-minute gap -- longer than the 3-minute retry interval, so one storm cannot be
+split -- **no episode ever exceeded attempt 4.**
+
+So on this machine the retry loop has never actually run to the 20-attempt hour
+the constants permit. The decay in the raw attempt distribution (293 lines at
+attempt 1 down to 3 at attempt 16) is the shape of notices being QUOTED in later
+reasoning, not of long storms.
+
+    mute start            nearest heavy storm before it
+    v/hunt? 09:13Z        none
+    f       17:55Z        none
+    hunt    20:19Z        none
+
+AND THE SEQUENCE IS BACKWARDS ANYWAY. A storm is activity. Every mute instant
+measured in this investigation lands when there is NO activity -- the 01:55/04:19
+local pair fell after the machine's last write of the evening (00:30 local), with
+no scheduled task and no session file touched in the window. A storm cannot be
+the cause of a verdict that lands when nothing is running.
+
+WHAT SURVIVES. The async-verdict model stands: the mute is decided elsewhere and
+delivered late. The retry loop is still worth having bounded -- an hour of
+resends on one account is not free -- but it is not the trigger, and no evidence
+here supports resending as the accumulating cause.
+
+METHOD NOTE, recorded because it cost real effort: both broken probes LOOKED like
+they worked. The first produced a plausible 11-cluster timeline and a headline
+correlation; the second reproduced most of that timeline with a "fixed" regex. A
+probe that reports a satisfying answer is not therefore reporting a true one --
+the matched SUBSTRING has to be printed and read, which is the step that exposed
+both.
+
+## TWO VERDICTS RECOVERED FROM `turn/end` ERRORS, AND A 216 h MUTE VARIANT (round 33)
+
+The session log records a failing turn as `turn/end` with
+`reason.kind == "error"` and the full exception message. Nobody had read those.
+Searching them for mute wording recovers verdicts that were never in the
+operator's banner, and two of them are new.
+
+    observed 09-29 09:20:57Z   (message text not preserved)
+    observed 09-29 11:31:19Z   mute_until 2026-10-08 11:16 UTC
+    observed 09-29 13:02:53Z   mute_until 2026-10-02 11:28 UTC
+
+A MUTE IS A FIXED DURATION, SO THE ISSUE INSTANT IS EXACT. Subtracting each
+candidate duration and checking which one lands BEFORE the observation (a verdict
+cannot be observed before it is issued):
+
+    until 10-08 11:16, observed 11:31:19Z
+        -72 h  -> issued 10-05 11:16   IMPOSSIBLE (after the observation)
+        -216 h -> issued 09-29 11:16   observed +15 min later   <-- FITS
+        -24 h  -> issued 10-07 11:16   IMPOSSIBLE
+    until 10-02 11:28, observed 13:02:53Z
+        -72 h  -> issued 09-29 11:28   observed +95 min later   <-- FITS
+        -216 h -> issued 09-23 11:28   observed +6 days later   (absurd)
+        -24 h  -> issued 10-01 11:28   IMPOSSIBLE
+
+So BOTH durations are real: 72 h, and a **216 h (9-day) variant** this
+investigation had never seen. That matters beyond bookkeeping -- every "mute
+start" reported earlier was computed as `mute_until - 72 h`, and for a 216 h mute
+that is wrong by 144 h. The -216 h reading for the 10-02 expiry is absurd (6 days
+of lag), which is what makes the 72 h reading for that one the right one rather
+than an assumption.
+
+THE TWO ISSUE INSTANTS ARE 12 MINUTES APART, DURING HEAVY ACTIVITY. Between
+11:06Z and 11:38Z the log shows turn 98 running to step 62 before being
+`interrupted`, then turn 259, then turn 260 stepping through 13 steps. So these
+two verdicts were issued while the machine was working, not while it was idle.
+
+THAT REVISES AN EARLIER CLAIM, AND THE REVISION IS RECORDED HERE. The conclusion
+"every mute instant lands when nothing is running" was measured on the
+01:55/04:19-local pair, which falls after the machine's last write of the evening.
+It is true of THAT pair and NOT of these two. The honest statement is:
+
+  * the ASYNC DELIVERY model holds for all of them -- a verdict is observed
+    15 min and 95 min after it was issued, never at the moment of the request;
+  * whether the ISSUE instant coincides with activity or idleness is now MIXED,
+    and the earlier generalisation was drawn from one pair and should not have
+    been stated as a rule.
+
+WHY THE STORMS DID NOT SHOW UP HERE EITHER. The harness-level `llm/retry` events
+ARE recorded (225 of them) and they cluster into bursts of 5 or 10 within seconds
+to a few minutes -- never the 20 x 180 s hour the ds_direct constants permit. The
+largest burst in the whole history is 10 retries over 122 s. So the retry loop has
+never actually run long on this machine, which is consistent with the earlier
+attempt-count finding and leaves the storm model refuted from two directions.
+
+PROBES: `_storm2.py` (strict wording), `_storm3.py` (reasoning-frame only),
+`_commitmute.py` (activity before a start), `_llmretry.py` / `_llmretry2.py`
+(harness retries and full pre-mute errors), `_mutevariant.py` (duration
+arithmetic), `_issuewindow.py` (activity at an exact issue instant).
+
+## RETRIES DISCOVER A MUTE; THEY DO NOT CAUSE IT (round 34)
+
+The strongest causal result in this investigation, and it is arithmetic rather
+than correlation.
+
+THE OBSERVATION. Every mute the session log records is preceded by a burst of
+harness `llm/retry` events that stops 10-14 s before the verdict appears:
+
+    mute observed 09:20:57Z   10 retries, burst 09:18:44..09:20:46 (122 s), last 10 s before
+    mute observed 11:31:19Z    5 retries, burst 11:30:34..11:31:05 ( 31 s), last 14 s before
+    mute observed 13:02:53Z    5 retries, burst 13:02:28..13:02:40 ( 12 s), last 13 s before
+
+A burst that stops the instant the verdict appears is what "the harness found
+out" looks like. It is NOT what "the harness caused it" looks like -- a cause
+would keep retrying, because nothing yet says not to.
+
+THE ARITHMETIC SETTLES IT. For the second one, the issue instant is recoverable
+exactly (`mute_until - 216 h` = 11:16:00Z). The observation is at 11:31:19Z. The
+retry burst runs 11:30:34..11:31:05.
+
+    verdict ISSUED      11:16:00Z
+    retry burst         11:30:34Z .. 11:31:05Z      <-- 14 minutes LATER
+    verdict OBSERVED    11:31:19Z
+
+The mute already existed for 14 minutes before the first retry of that burst. The
+retries cannot have caused a verdict that was issued before they started. What
+they did was make the harness ASK, and the fifth ask is the one that came back
+with the refusal.
+
+WHY THERE WAS A BURST AT ALL -- AND WHY THE FIX REMOVED IT. A mute arrives as a
+bare JSON envelope with no `event:` framing. Before commit 7d6888732c `_parse`
+yielded nothing for it, so the turn looked like an EMPTY RESPONSE and the harness
+retried it under its own policy:
+
+    ["normal", 5, ["EMPTY_RESPONSE", "RATE_LIMIT", "SERVER", "TIMEOUT", ...]]
+
+Every one of those retries is a FRESH request to an account DeepSeek had already
+refused. That is the real harm the operator was seeing, and it is the opposite
+direction from the storm hypothesis: not retries causing mutes, but mutes causing
+5-10 extra requests each, aimed at an account already under moderation.
+
+MEASURED AGAINST THE FIX:
+
+    PRE-fix   3 mute observations;  3 had a retry burst within 10 min
+    POST-fix  0 mute observations;  0 had a retry burst
+    retries: 108 before the fix, 5 after
+
+LIMITS OF THAT COMPARISON, STATED PLAINLY. There are ZERO post-fix mute
+observations, so this is not a direct before/after test of the same event -- it
+is the absence of the event. And the retry count fell while overall activity also
+fell (accounts were being muted and sessions slowed), so the drop from 108 to 5
+cannot be attributed to the fix alone. What CAN be said: the mechanism that
+produced the bursts is gone (a mute now raises `_Muted`, which is not retryable),
+and no burst has accompanied any verdict since.
+
+WHAT THIS CLOSES. The operator's storm model is refuted from three directions now:
+retry bursts never exceed 10 and last seconds, not the 20x180 s hour the
+constants permit; the reason/wording probes show no storm before any mute start;
+and the one mute with a recoverable issue instant was issued 14 minutes BEFORE
+its burst began. Retrying is a consequence of a mute, never its cause.
+
+PROBE: `_discover.py` (burst vs observation), `_fixcheck.py` (pre/post the fix).
