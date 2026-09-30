@@ -918,3 +918,64 @@ inference.
 
 `test_ds_wirelog.py`: 48 checks green, including the two bugs above, the leak check,
 install idempotence, and error propagation.
+
+## TWO MORE DEFECTS IN THE MUTE READERS (rounds 27-32)
+
+### 1. `_MUTE_CODE` held ONE code while its own docstring documented TWO
+
+    _MUTE_CODE = "5"
+
+but the docstring two lines below `_is_muted_payload` records the live sample:
+
+    {"code":0,"msg":"","data":{"biz_code":14,"biz_msg":"user is muted",
+     "biz_data":{"is_muted":1,"mute_until":1790972380.757}}}
+    `biz_code` there is 14, not the 5 the older samples carried
+
+and `_mute_verdict`'s own docstring says "the code has already been observed to
+vary (5 and 14)". So the code tell silently covered half of its own evidence. It
+did not cause a missed mute -- that upload sample also carried `biz_msg` and
+`biz_data`, so one of the other two tells caught it -- but a future code-14 mute
+with an empty `biz_msg` and no `biz_data` would have been read as an unrecognised
+verdict. Now `_MUTE_CODES = frozenset(("5", "14"))`, checked with `in`. A third
+code is a one-token change rather than a new branch.
+
+FOUND BY: a test I wrote asserting the documented behaviour, which failed. The
+docstring and the constant disagreed and the constant was wrong.
+
+### 2. A mute arriving on the `event: hint` path looked like a SUCCESSFUL turn
+
+`_parse` emits an `("error", msg)` event for a `event: hint` payload with
+`type == "error"`. That sets `server_error`, and the `if server_error:` branch
+RETURNS before the mute reader is reached -- after yielding the text as chat
+content:
+
+    yield {"type": "content", "text": "W DeepSeek: " + msg}   # shown as an answer
+    ...
+    if server_error:  ... return                              # <-- leaves here
+    if not yielded:
+        muted = _mute_verdict_in(raw_sink)                    # <-- never reached
+
+So the turn looked successful: nothing rotated the pool off an account DeepSeek
+had already refused, and the operator saw prose instead of "switch accounts".
+NOT a storm -- `_retry_kind` returns None for mute wording (verified), so nothing
+retried -- but a muted account stayed in service.
+
+FIXED by reading the same three tells at that site, before the return.
+
+### WHAT WAS VERIFIED SAFE, AND WHY IT MATTERS
+
+The operator's storm hypothesis -- a mute misread as transient, resending for an
+hour -- is REFUTED by measurement, not argument:
+
+    _retry_kind('user is muted')                        -> None
+    _retry_kind('user is muted (until 2026-10-02 ...)') -> None
+    _retry_kind('Too Many Requests')                    -> rate
+    _retry_kind('server is busy')                       -> busy
+
+A mute can never reach `_RotateAccount` or the 20 x 180 s resend loop. And a mute
+envelope is a bare JSON object with no `event:` framing, which `_parse` ignores
+entirely -- so no events are yielded, `yielded` stays False, and the
+`if not yielded:` mute reader is reached normally. The normal path was already
+correct; the gap was only the `hint` variant.
+
+`test_ds_direct_hint_mute.py`: 23 checks. All 15 suites green.

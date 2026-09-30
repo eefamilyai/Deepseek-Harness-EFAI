@@ -3172,7 +3172,12 @@ def _auth_verdict_in(raw_lines):
 # changes nothing), not the session (a fresh chat is muted too), not the device
 # (the next account is unaffected), and not a rate limit (the window is days,
 # not something a turn can wait out).
-_MUTE_CODE = "5"
+# BOTH codes DeepSeek has been observed to use, not just the first. The upload
+# route answered with `biz_code: 14` for a mute this connector read correctly
+# only because the same payload also carried `biz_msg` and `biz_data` -- a
+# reader keyed on the code alone would have missed it. Kept as a set so a third
+# code is a one-token change rather than a new branch.
+_MUTE_CODES = frozenset(("5", "14"))
 _MUTE_MSG_RE = re.compile(r"\bmuted\b|\bmute\b", re.I)
 
 
@@ -3213,7 +3218,7 @@ def _mute_verdict(code, msg, biz_data=None):
     together, and the code has already been observed to vary (5 and 14), which
     is what the structured fields are for.
     """
-    if code is not None and str(code) == _MUTE_CODE:
+    if code is not None and str(code) in _MUTE_CODES:
         return True
     if _is_muted_payload(biz_data):
         return True
@@ -3927,6 +3932,21 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
 
         if server_error:                            # server-side refusal — surface it, no self-heal
             import sys as _sys
+            # A mute can ALSO arrive as a `event: hint` payload with type=error,
+            # which `_parse` turns into this `server_error`. Without this check it
+            # is printed as a chat message and the turn RETURNS, so it looks
+            # successful: nothing rotates the pool off an account DeepSeek has
+            # already refused, and the operator sees prose instead of the verdict.
+            # Read with the same three tells every other mute site uses.
+            if _mute_verdict(None, server_error, None):
+                _persist_cookies(client)
+                ds_wirelog.verdict("mute", server_error,
+                                   account=getattr(client.account, "id", None))
+                raise _Muted(
+                    "DeepSeek has muted this account: %s. This is an account-level "
+                    "moderation verdict, not a credential or session problem, so "
+                    "re-logging in will not clear it. Switch to another account, or "
+                    "wait for the mute to lift." % server_error)
             print(f"[ds_direct] server error: {server_error}", file=_sys.stderr, flush=True)
             _persist_cookies(client)
             return
