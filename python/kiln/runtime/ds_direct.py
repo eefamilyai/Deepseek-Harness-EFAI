@@ -27,6 +27,7 @@ import time
 import config
 import ds_hif
 import ds_identity
+import ds_wirelog
 import ds_profile
 import tool_result_files
 from token_usage import estimate_tokens
@@ -1333,6 +1334,12 @@ class _Muted(RuntimeError):
 class _Client:
     def __init__(self, account):
         self.sess = cffi.Session()
+        # Journal every request this account makes, when enabled (KILN_DS_WIRELOG=1
+        # or a `ds_wirelog.on` marker). One wrap covers every call site because
+        # Session.get/post both delegate to Session.request. Off by default, and
+        # header VALUES are never written -- only short fingerprints -- so this
+        # cannot leak a token into a log.
+        ds_wirelog.install(self.sess, account=getattr(account, "id", None))
         self.account = account
         self.token = ""
         self.last_login_error = None
@@ -1730,6 +1737,8 @@ class _Client:
             # DeepSeek has plainly told us it will not serve.
             muted = _mute_of(payload)
             if muted:
+                ds_wirelog.verdict("mute", muted,
+                                   account=getattr(self.account, "id", None))
                 raise _Muted(
                     "DeepSeek has muted this account: %s. Re-logging in will not "
                     "clear it; switch to another account or wait for it to lift."
@@ -1816,6 +1825,8 @@ class _Client:
         # gets "muted" rather than "refused the upload".
         muted = _mute_of(payload)
         if muted:
+            ds_wirelog.verdict("mute", muted,
+                               account=getattr(self.account, "id", None))
             raise _Muted(
                 "DeepSeek has muted this account: %s. Re-logging in will not "
                 "clear it; switch to another account or wait for it to lift."
@@ -3936,6 +3947,8 @@ def _stream_with(client, model_type, thinking, search, messages, cancelled, conv
             muted = _mute_verdict_in(raw_sink)
             if muted:
                 _persist_cookies(client)
+                ds_wirelog.verdict("mute", muted,
+                                   account=getattr(client.account, "id", None))
                 raise _Muted(
                     "DeepSeek has muted this account: %s. This is an account-level "
                     "moderation verdict, not a credential or session problem, so "
@@ -4292,6 +4305,8 @@ def _run_vision_turn(client, prompt, ref_ids, cancelled):
         # DeepSeek has already refused.
         muted = _mute_verdict_in(raw_sink)
         if muted:
+            ds_wirelog.verdict("mute", muted,
+                               account=getattr(client.account, "id", None))
             raise _Muted(
                 "DeepSeek has muted this account: %s. This is an account-level "
                 "moderation verdict, not a credential or session problem, so "

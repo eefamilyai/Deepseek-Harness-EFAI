@@ -850,3 +850,71 @@ every-turn write path.
 
 This is the strongest verification in the whole investigation: a real restart, a real
 aged gap, the fix firing, and the request still succeeding.
+
+## THE WIRE JOURNAL (the network logger the operator asked for)
+
+The mute verdict is ASYNCHRONOUS: it lands 7-226 min after the last request, never
+during one. So the request that draws the verdict is never the one that reports it,
+and any log that records only verdicts cannot answer "what did we send right before
+this account was muted?". `ds_wirelog.py` fixes exactly that.
+
+WHAT IT IS. A wrap around `sess.request` installed at `_Client.__init__`. `Session.get`
+and `Session.post` both delegate to `Session.request`, so ONE wrap covers every HTTP
+call an account makes -- login, PoW, upload, completion -- without touching a single
+call site. Every request is appended to `ds_wirelog.jsonl` AND kept in a bounded
+in-memory ring of the last 80 events. The four `_Muted` raise sites call
+`ds_wirelog.verdict(...)`, which writes the verdict TOGETHER WITH its own preamble --
+the exact request shapes that preceded it, in one line. That artifact is the whole
+point of the module.
+
+NEVER WRITES A CREDENTIAL. Header and cookie VALUES are written as short SHA-256
+fingerprints (10 hex chars), never plaintext: two requests whose `authorization`
+differs get different fingerprints, two whose `accept-language` matches get the same
+one. That is exactly the comparison this investigation needs -- did a header change
+shape, appear, or go missing? -- and it leaks nothing. The prompt body is not written
+either, only its top-level KEY NAMES and serialized size. Verified: three planted
+secrets (bearer token, cookie value, WAF token) are all absent from the file.
+
+OFF BY DEFAULT. Enabled per-process with `KILN_DS_WIRELOG=1` or globally by creating a
+`ds_wirelog.on` marker beside the module. Deliberately not on by default: a running
+provider_bridge caches its modules, and this must never silently change the live
+bridge's behaviour.
+
+### TWO BUGS THE MODULE HAD, BOTH FOUND BY RUNNING IT
+
+1. IT WROTE NOTHING. `_append` swallowed `FileNotFoundError` because `KILN_STATE_DIR`
+   may name a directory nobody created -- the same failure `_atomic_json` already
+   documents in ds_direct. A journal that silently writes nothing is the worst
+   possible failure for a file whose entire purpose is to exist after the fact.
+   Fixed by creating the parent directory before the first write, mirroring
+   `_atomic_json`.
+
+2. IT COULD NOT SEE COOKIES. The first live run showed `ck=` empty on every request.
+   curl_cffi applies cookies at the libcurl level, so a request carrying a full jar
+   usually has NO `cookie` header in the kwargs dict the journal was reading. For an
+   investigation specifically about stale-cookie replay this was the silently wrong
+   answer. Fixed by reading `sess.cookies.jar` (real Cookie objects, with `expires`,
+   `domain`, and a computed `expired` flag) instead of the header.
+
+MEASURED LIVE, on real DeepSeek traffic (soak turn 26, 4 requests):
+
+    POST .../chat/create_pow_challenge   jar: aws-waf-token, ds_session_id
+    POST .../file/upload_file            jar: aws-waf-token, ds_session_id
+    POST .../chat/create_pow_challenge   jar: aws-waf-token, ds_session_id
+    POST .../chat/completion             jar: aws-waf-token, ds_session_id
+
+Both cookies are SESSION cookies in the harness jar -- `expires` is empty/None for
+both -- and `ds_session_id` carries `domain=chat.deepseek.com` while `aws-waf-token`
+carries an empty domain. Neither is expired, so nothing is being replayed stale in
+this run. Note the contrast with the browser capture, where `aws-waf-token` at host
+`.deepseek.com` was PERSISTENT with a ~3-day expiry: the harness jar holds it as a
+session cookie. Whether that divergence matters is unknown, and a missing expiry is
+not evidence of wrongdoing -- recorded as an observation, not a defect.
+
+The value of the instrument is prospective: every request now records per-cookie
+`expired` and `age_s`, so the operator's exact hypothesis -- a request sent with a
+cookie already past its expiry -- becomes a visible `expired=True` line instead of an
+inference.
+
+`test_ds_wirelog.py`: 48 checks green, including the two bugs above, the leak check,
+install idempotence, and error propagation.
