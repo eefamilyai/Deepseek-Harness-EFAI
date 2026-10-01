@@ -4079,3 +4079,84 @@ worse** — 72 h escalating to 216 h, and an 11.47 GB journal record. Neither cr
 mute. The operator should expect mutes to continue until the issuing rule is
 identified, and the strongest remaining instrument is the wire journal now that FIX 18
 has made it readable.
+
+
+## 55. Two corrections: the 216 h entry is OUR escalation, and "nothing was touching the computer" is wrong
+
+### 55.1 There are 9 mute events, not 10
+
+The catalogue in 53.3 lists ten `mute_until` values. One of them is not a separate mute.
+
+`2026-10-08 11:16` (216 h) back-computes to an issue instant of **09-29 19:16**, which
+is **123 minutes after** `2026-10-02 09:13`'s issue instant of **09-29 17:13**. Both
+belong to **jw1**.
+
+FIX 17 already established the mechanism: jw1 was muted 72 h at 17:13, our connector
+kept sending, a mute arriving as prose inside an HTTP 200 was classified as `TRANSPORT`
+and retried five times, and **32 requests later the penalty was 216 h**. The 216 h is
+the *same* account's penalty escalated by our own retry loop.
+
+So the real count is **nine mute events**, and one of the ten catalogue rows is a defect
+this investigation caused and has since fixed (FIX 17). Presenting it as a tenth mute
+would have inflated the evidence with our own bug.
+
+### 55.2 "Nothing is touching the computer" — the night mutes happened during our own soaks
+
+The operator reported, verbatim: *"my accounts are getting muted at like 1am or 4am
+while im sleeping, and the account isnt active. although my computer is on. but nothing
+is touching the computer..."*
+
+Four issue instants fall in that window: **09-30 01:55, 09-30 04:19, 10-01 00:40 and
+10-01 04:53** local.
+
+Checking what was actually running at those times:
+
+* `_t2soak` ran from 09-30 20:00 to 10-01 06:08 — **straight through the night** —
+  with 90-98 minute gaps between turns. Those gaps are the rate-limit retry ladder
+  (`RATE_MAX_TRIES=20` at 180 s per rung), not idleness: the soak was waiting on a
+  429, which is a live request loop.
+* `_humansoak` ran to 10-01 00:46, covering the 00:40 issue instant to the minute.
+* The t1 capture (section 36/41) shows its muted request arriving at 00:46:12 — the
+  soak's own last turn.
+
+**So at every one of the four "night" mutes, a test harness was actively driving the
+account.** The account was not idle; the operator was asleep, but the machine was not.
+
+This does not disprove that a moderation pass runs at night. It does remove the
+evidence that was thought to support it: the observation "muted while nothing touched
+the computer" was not true of any of the four events. Two of the four are the soaks
+this investigation started.
+
+### 55.3 What the issue-instant clustering is and is not
+
+Section 53.4 noted 9 of 10 issue instants fall in 00:00-04:59 or 17:00-21:59. Adding
+the null test (section 54's activity histogram), that two-window band holds **90% of
+issues against 53.5% of activity** — a real enrichment.
+
+But it is not established, and the caveats are material:
+
+* the activity baseline covers **25 hours (09-30 15:08 to 10-01 16:16)** while the
+  issue instants span **36 hours (09-29 17:13 to 10-01 04:53)**. **The four earliest
+  issues fall outside the baseline window entirely**, so their lift is measured against
+  a different day.
+* n = 9 events. The evening window's lift is carried by hours 17:00, 19:00 and 21:00,
+  which between them contain **3 issues and 2.7% of activity** — a large ratio on
+  three data points.
+* all nine issues fall on Tue/Wed/Thu, i.e. **the three days this investigation has
+  existed**. That is a sampling artefact, not a weekday effect.
+
+Recorded as **suggestive and untested**, not as a finding. The honest summary is that
+the issue instants cluster in the hours when this machine runs, and this machine's
+running hours are not independent of the investigation that produced the mutes.
+
+### 55.4 Standing after 55 sections
+
+Established: the mute is account-level, asynchronous, fixed-duration (72 h, escalated
+to 216 h once by our own retry loop), delivered as prose inside an HTTP 200, and not
+discernible from the request that receives it. **Nine events**, all issued 09-29 17:13
+through 10-01 04:53, against accounts this investigation was driving.
+
+Not established: what issues it. Every client-side lead is closed (sections 41, 50,
+51, 52, 54): request shape, all 29 headers, login pattern, content, burst volume,
+pacing, cumulative count, IP scope. d1 — this agent's own account — is at 422 requests
+and still serving, past the point t2 was muted.
