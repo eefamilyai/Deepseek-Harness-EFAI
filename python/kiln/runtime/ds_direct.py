@@ -3979,6 +3979,82 @@ def _resume_hygiene(client, acct_id, now=None):
     return dropped
 
 
+# --- the browser's settings heartbeat -----------------------------------------
+# The operator's capture of the real site shows a tab calling GET /client/settings
+# for four scopes (provider, web_upgrade, model, main) every ~300 s, on schedule,
+# through the gaps between completions. This connector sends nothing between turns,
+# so across a 40-110 minute pause the server sees the account go silent and then
+# return in a burst. Four of five accounts penalised while active were penalised
+# 16-24 minutes into a burst that followed such a pause (findings, section 71).
+# That timing is a post-hoc lead, not a measured cause, so the heartbeat is
+# OPT-IN: KILN_DS_SETTINGS_POLL=1. It is off by default because it adds traffic
+# at all hours and nothing yet shows it helps.
+SETTINGS_SCOPES = ("provider", "web_upgrade", "model", "main")
+SETTINGS_POLL_S = 300.0
+# Only accounts that took a turn this recently are polled: a tab left open
+# overnight keeps polling, but the connector should not hold an idle account
+# alive for days.
+SETTINGS_POLL_WINDOW_S = 4 * 3600.0
+_poll_started = False
+_poll_lock = threading.Lock()
+
+
+def _settings_poll_enabled():
+    return os.environ.get("KILN_DS_SETTINGS_POLL", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _poll_once(now=None, lease=None):
+    """One heartbeat: fetch the four scopes for every recently active account.
+
+    Returns the list of ``(account, scope)`` pairs requested. Muted accounts are
+    skipped (a muted account's traffic only extends its penalty), and a busy pool
+    is skipped rather than waited on: a heartbeat must never delay a turn.
+    """
+    now = time.time() if now is None else now
+    lease = lease or _lease_client
+    with _last_turn_lock:
+        recent = [a for a, ts in _last_turn_at.items()
+                  if 0 <= now - ts <= SETTINGS_POLL_WINDOW_S]
+    sent = []
+    for acct_id in recent:
+        if _muted_now(acct_id):
+            continue
+        with _pool_cv:
+            pool = _pool_for(acct_id)
+            if not pool["idle"] and pool["total"] >= POOL_MAX:
+                continue
+        try:
+            with lease(acct_id) as c:
+                for scope in SETTINGS_SCOPES:
+                    c.client_settings(scope)
+                    sent.append((acct_id, scope))
+        except Exception as e:  # noqa: BLE001 -- a heartbeat is never fatal
+            config.dbg("ds_direct settings poll for %s failed: %s", acct_id, e)
+    return sent
+
+
+def _poll_loop():
+    while True:
+        time.sleep(SETTINGS_POLL_S)
+        try:
+            _poll_once()
+        except Exception as e:  # noqa: BLE001
+            config.dbg("ds_direct settings poll crashed: %s", e)
+
+
+def _ensure_settings_poll():
+    """Start the heartbeat thread once per process, if enabled."""
+    global _poll_started
+    if not _settings_poll_enabled():
+        return False
+    with _poll_lock:
+        if _poll_started:
+            return False
+        _poll_started = True
+    threading.Thread(target=_poll_loop, name="ds-settings-poll", daemon=True).start()
+    return True
+
+
 def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: False,
            conv_id=None, preempt=False, account=None, oneshot=False, ref_file_ids=None):
     """Yield {'type': 'reasoning'|'content'|'title', 'text': ...}. ONE persistent, threaded
@@ -4024,6 +4100,7 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     try:
         with _lease_client(acct_id) as client:
             _resume_hygiene(client, acct_id)
+            _ensure_settings_poll()
             for ev in _stream_with(client, model_type, thinking, search, messages,
                                    cancelled, conv_id, preempt, is_last=True,
                                    ref_file_ids=ref_file_ids):
