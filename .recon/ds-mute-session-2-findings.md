@@ -4828,3 +4828,81 @@ all passing, including the failure mode stated as an assertion (the floor would 
 expired t2's mute 17.878 s early; the rounded-up value does not). Full run after the
 fix: **1021 passing checks across 35 suites**, with one pre-existing, unrelated
 failure in `test_ds_did.py` (client-hint header set — not touched by this change).
+
+
+---
+
+## 65. THE CLIENT-SIDE SEARCH IS EXHAUSTED, AND THE ONE OPEN DISPUTE
+
+Three results this round, one of them a retraction of my own measurement.
+
+**65.1 The `Accept-CH` dispute is UNRESOLVED, and my probe did not settle it —
+it measured a WAF challenge.** `ds_direct` sends the three low-entropy hints
+(`ds_identity.client_hints()`), with a comment asserting that Chrome emits the six
+extra hints "only after an origin grants them via Accept-CH" and that "measured
+against this site, no response and no meta tag carries that grant". But
+`ds_identity` also defines `client_hint_extras()` (six high-entropy hints) and
+`client_hints_full()` (all nine), and the commit that added them
+(`265770d65e`) states as a measured fact that "`chat.deepseek.com` receives all
+nine `sec-ch-ua-*` hints on every request; the client sent three."
+`test_ds_did.py` asserts the nine. **Both cannot be true.**
+
+I fetched the site to check for `Accept-CH`. The response was **HTTP 202, 2,524
+bytes, containing `window.gokuProps`, `window.awsWafCookieDomainList` and
+`challenge.js`** — an AWS WAF challenge interstitial, not the application. A
+challenge page carries the WAF's headers, not the app's, so its missing
+`Accept-CH` says **nothing** about what the real app sends. **That measurement is
+retracted**, and the dispute stays open. Settling it needs a DevTools capture of
+the real chat.deepseek.com request from a logged-in browser; none is stored in
+this repository (`git ls-files` finds no `.har` and no browser capture).
+
+What *is* established without that capture: `client_hint_extras()` and
+`client_hints_full()` are **dead code** — nothing in `ds_direct` calls either, and
+the live journal shows exactly three `sec-ch-ua*` names on 2,628 of 2,649
+requests, on every path including `/api/v0/chat/completion`.
+
+**65.2 Header NAMES cannot explain the differential — and this argument does not
+depend on comparing within the harness.** Section 50 compared muted against clean
+accounts and found 23 of 29 headers byte-identical; the obvious objection is that
+two accounts driven by the same client would agree even if the client's header set
+were itself the problem. That objection is answered by the identity, not the
+similarity: across the journal, the muted accounts send **29 distinct header
+names**, the clean accounts send **29 distinct header names**, the sets are
+**equal**, and the symmetric difference is **empty** in both directions. Every
+account is driven by the same code. A header difference therefore cannot be the
+cause of a *differential* mute: whatever the header set does, it does to all four
+accounts equally, and two of them stayed clean. If the header set is a problem at
+all, it is a problem of the same magnitude for every account, which is a different
+claim than the one under test.
+
+**65.3 Exposure duration does not separate them either (tenth falsified lead).**
+The remaining candidate was that the muted accounts were simply the long-exposure
+ones. Measured as active hours (inter-request gaps over 15 minutes excluded):
+
+| account | state | requests | span | active h |
+|---|---|---|---|---|
+| t1 | MUTED | 923 | 4.92 h | 3.15 |
+| d1 | clean | 1179 | 1.59 h | 1.59 |
+| t2 | MUTED | 395 | 19.50 h | 0.96 |
+| v | clean | 176 | 1.22 h | 0.63 |
+
+No separation: `min(active) among MUTED = 0.96 h` is **below**
+`max(active) among clean = 1.59 h`. d1 is clean with more requests (1179) and more
+active time (1.59 h) than t2, which was muted (395 requests, 0.96 h active). The
+wall-clock windows are also disjoint — the muted pair ran 09-30 11:50–21:00 and the
+clean pair did not — which makes every per-request comparison across the two groups
+a comparison across *time* as well, and that confound cannot be removed from a
+single day of data.
+
+**65.4 What the mute actually is, stated plainly.** From the operator's browser
+screenshot (section 63): *"Due to violation of user policies, your account has been
+suspended until October 4, 2026 00:40."* It is a **policy/moderation verdict on an
+account**, issued server-side, reported to the API as a penalty with no reason
+field by design. Ten client-side leads have now been falsified by measurement:
+request shape (41), the 29-header set (50, strengthened here to set-identity),
+login pattern (50.3), content (51.2), burst volume (51.2), pacing (52), cumulative
+count (57), IP/machine scope (51.1), token generations (58), and exposure duration
+(65.3). The client-side search is exhausted. The cause is not a property of the
+request; it is an adjudication about the account, and the only paths to it are the
+appeal channel (`service@deepseek.com`, ToS §11) or a DevTools capture that has not
+been taken.
