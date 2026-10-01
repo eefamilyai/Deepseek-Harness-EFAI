@@ -4013,3 +4013,69 @@ d1 is at **398 requests** and still clean. It has now **passed t2's 395** — a 
 account's request count — without a mute. If the cumulative threshold is real it is
 imminent; if d1 passes ~600 the number is dead. Checking costs nothing because d1 is
 this agent's own account.
+
+
+## 54. d1 passed a muted account's request count and is still serving
+
+Section 51.4 set a test that costs nothing: d1 is this agent's own account, so its
+traffic accumulates without any new probe, and the cumulative-threshold hypothesis
+(~400 requests) makes a specific prediction.
+
+**Result at 10-01 16:16 local:**
+
+| account | requests | state |
+|---------|---------:|-------|
+| **d1** | **422** | **clean, serving right now** |
+| t2 | 395 | MUTED (until 10-03 20:53) |
+| t1 | 923 | MUTED (until 10-03 16:40) |
+| v | 176 | clean |
+
+**d1 has passed the request count at which t2 was muted and has not been muted.**
+The specific number "~400 cumulative" does not hold.
+
+### 54.1 What this does and does not kill
+
+It kills the *threshold* reading of hypothesis B — there is no fixed count near 400
+that draws a penalty. It does **not** kill the general idea that exposure accumulates,
+because d1's traffic is shaped differently from any soak: many short bursts, one per
+agent turn, with long gaps between. If the rule is "N requests *within a session*" or
+"N requests without a long gap", d1's 422 are spread across a very different profile
+and the number would not transfer.
+
+It also does not rescue hypothesis A (pacing) on its own: d1 is at 422 clean with the
+*gappiest* traffic of any account measured, which is the opposite of what A predicts.
+If long gaps were dangerous, d1 — which has them constantly — should have been muted
+first.
+
+So the honest reading: **d1 falsifies the fixed-count reading and leans against the
+simple pacing reading at the same time.** Neither surviving hypothesis explains why
+t1, t2 and j1 were muted and d1 was not.
+
+### 54.2 What is left
+
+After 54 sections, the discriminator is still not identified, and every client-side
+and volume-side lead is now closed:
+
+| lead | status | section |
+|------|--------|---------|
+| request shape | shape-identical to a served request | 41 |
+| headers (all 29) | 23/29 byte-identical with muted accounts | 50 |
+| login pattern | highest login rate is the clean account | 50.3 |
+| content | muted on "Reply with the single word: ok" | 51.2 |
+| burst volume | 400 consecutive turns drew nothing | 51.2 |
+| pacing / long gaps | confounded with soak design; t1's mute in a 9.5-min gap | 52 |
+| cumulative count | d1 at 422, past t2's mute point, clean | 54 |
+| IP-level penalty | 17 accounts on this IP unmuted | 51.1 |
+
+The remaining unexplained fact is narrow and specific: **nine penalties were issued
+between 09-29 17:13 and 09-30 09:56 local**, a 16.7-hour window, and nothing client-side
+distinguishes the accounts that received them from d1, which did not.
+
+### 54.3 Standing recommendation
+
+Do not treat any of the six fixes as a cure. FIX 3, 12, 14, 15, 17 and 18 are real
+defects, correctly fixed, and **FIX 17 and FIX 18 each made an existing mute materially
+worse** — 72 h escalating to 216 h, and an 11.47 GB journal record. Neither creates a
+mute. The operator should expect mutes to continue until the issuing rule is
+identified, and the strongest remaining instrument is the wire journal now that FIX 18
+has made it readable.
