@@ -3375,9 +3375,11 @@ def backfill_muted_from_wirelog(paths=None):
     durable record that is silently INCOMPLETE is worse than none, because it is
     believed. This repairs it from evidence the harness genuinely captured.
 
-    The journal's verdict lines carry the account and the full detail text, so the
-    expiry is recoverable exactly. Entries are merged taking the LATER expiry, the
-    same rule `_merge_muted` uses, so a backfill can never shorten a live penalty.
+    The journal's verdict lines carry the account and the full detail text, but
+    that text is only MINUTE-accurate and truncates, so the recovered value is an
+    UPPER BOUND on the true expiry, never an exact figure. Entries are merged
+    taking the LATER expiry, the same rule `_merge_muted` uses, so a backfill can
+    never shorten a live penalty.
 
     Returns the number of accounts whose expiry moved forward.
     """
@@ -3410,7 +3412,15 @@ def backfill_muted_from_wirelog(paths=None):
                     if not acct or not m:
                         continue
                     y, mo, d, h, mi = (int(g) for g in m.groups())
-                    until = calendar.timegm((y, mo, d, h, mi, 0, 0, 0, 0))
+                    # The verdict text formats `mute_until` to the MINUTE and it
+                    # TRUNCATES: t2's wire value 20:53:17.878 was rendered
+                    # "20:53". Flooring to :00 therefore expires a live mute up
+                    # to 59 s early, and the next request lands inside a live
+                    # mute -- the escalation class FIX 17 exists to stop. Round
+                    # UP instead: benching an account a few seconds long is the
+                    # safe direction, the same rule `_note_mute` applies when two
+                    # verdicts disagree.
+                    until = calendar.timegm((y, mo, d, h, mi, 0, 0, 0, 0)) + 60
                     prev = found.get(acct)
                     if prev is None or until > prev:
                         found[acct] = until
