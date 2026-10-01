@@ -4329,3 +4329,80 @@ FIX 19 is the instrument that would have caught the operator's question immediat
 **None of the seven is demonstrated to cause a mute.** That is the honest result, and
 the objective's central question — what issues one — is not answerable with the
 evidence this machine can produce.
+
+
+## 58. The token-generation lead: a perfect separation that was elapsed time — and rotation FOLLOWS the mute
+
+A fingerprint table showed something that looked like the answer. Distinct
+`authorization` values per account:
+
+| account | generations | state |
+|---------|------------:|-------|
+| t1 | 4 | MUTED |
+| t2 | 4 | MUTED |
+| d1 | 1 | clean |
+| v | 1 | clean |
+
+**A perfect separation.** Muted accounts had four bearer-token generations; clean ones
+had one. This is also close to the operator's own instinct — *"using expired cookies or
+tokens or something of that sort"*, and *"logging into an account with a device id and
+then without properly signing out, logging back in again"*.
+
+### 58.1 It is elapsed time
+
+Normalizing by exposure kills it:
+
+| account | gens | hours of traffic | **gens/hour** | reqs | state |
+|---------|-----:|-----------------:|--------------:|-----:|-------|
+| d1 | 1 | 1.22 | **0.823** | 613 | clean |
+| t1 | 4 | 4.92 | **0.813** | 892 | MUTED |
+| t2 | 4 | 19.50 | **0.205** | 361 | MUTED |
+| v | 1 | 1.22 | **0.822** | 176 | clean |
+
+**d1 and v sit at 0.822-0.823 generations/hour — marginally ABOVE t1's 0.813 — and were
+never muted.** Raw generation count separated the accounts; generation *rate* does not.
+What actually separated them was that t1 and t2 ran for 4.9 and 19.5 hours while d1 and
+v had been running for 1.2.
+
+This is the same shape as section 51's pacing result and section 54's cumulative count:
+every candidate discriminator that "works" on these four accounts is also a measure of
+how long the account was exposed.
+
+### 58.2 The ordering result, which is the useful part
+
+Each generation's first use, against the mute's issue instant:
+
+**t1** (mute issued 10-01 00:40:00):
+| token | first used | vs issue |
+|-------|-----------|----------|
+| `3332b8b4af` | 09-30 19:50:56 | −4.82 h |
+| `ad3b0e7aca` | 09-30 22:35:03 | −2.08 h |
+| `abd09baa36` | 09-30 22:36:30 | −2.06 h |
+| `afa0b46406` | 10-01 00:40:56 | **+0.02 h — AFTER** |
+
+**t2** (mute issued 10-01 04:53:00):
+| token | first used | vs issue |
+|-------|-----------|----------|
+| `08061b5f2d` | 09-30 19:51:04 | −9.03 h |
+| `f755169d1f` | 09-30 20:01:02 | −8.87 h |
+| `28689a1816` | 10-01 04:11:15 | −0.70 h |
+| `d7fdf43505` | 10-01 06:08:27 | **+1.26 h — AFTER** |
+
+**In both accounts the FINAL generation was minted after the mute was issued** — +1.2
+minutes for t1, +1.3 hours for t2. That is the connector re-authenticating *because* it
+hit a refusal, not the cause of one. The fourth generation is a consequence.
+
+So this lead resolves the same way as the retry burst in the first investigation:
+**token rotation discovers and reacts to a mute; it does not produce one.**
+
+### 58.3 Recorded because it nearly became a false conclusion
+
+This is the sixth candidate lead in this session to look like a clean answer and fail
+under one normalization step, after 37.4 (the "naked GET"), 38.3 (cross-process
+propagation), 44.2 (the browser-vs-harness hif question), 51.3 (pacing), and 54 (the
+cumulative threshold). The pattern is consistent enough to name: **on four accounts over
+one day, every binary "muted vs clean" split is a proxy for exposure time**, and only a
+rate or an ordering test distinguishes a cause from a correlate.
+
+The ordering test is the one that did real work here, and it agrees with the arithmetic
+from the first investigation: a cause cannot follow its effect.
