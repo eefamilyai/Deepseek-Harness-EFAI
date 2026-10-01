@@ -3619,3 +3619,62 @@ to one served five minutes earlier. What issues it remains unidentified. The def
 found and fixed along the way (retrying a mute as TRANSPORT, escalating 72 h to 216 h,
 the stale-token lease window, and now an 11.47 GB journal record) are all real and
 none is demonstrated to cause a mute.
+
+
+## 49. FIX 18 is NOT in the running bridge, and the watchdog that covers the gap
+
+### 49.1 The deployment gap
+
+Python caches a module at import. The bridge processes started **15:41:30**;
+`ds_wirelog.py` was written at **15:59:33**. The running bridge therefore holds the
+PRE-FIX-18 `ds_wirelog` in memory and will keep the nesting behaviour until it is
+restarted again.
+
+Nothing has gone wrong yet: the journal since the restart has **620 rows, 310
+requests, 0 verdicts**, and the longest single line is **1,862 B** — a healthy
+record. The risk is latent and begins the moment that process raises a mute twice,
+because the second verdict's preamble will carry the first one whole.
+
+That is reachable in the near term: **t2 is muted until 10-03 20:53**, so any t2
+request routed through this bridge re-raises the mute, and repeated raises are
+exactly the nesting trigger.
+
+### 49.2 The stopgap
+
+`_wirelog_watchdog.py` polls the journal and truncates it on either of two signals:
+
+| signal | threshold | why |
+|--------|-----------|-----|
+| last line length | 4 MiB | a healthy record measured 17,068 B; post-fix ceiling is 1 MiB. 4 MiB means `_strip_verdict` never ran. |
+| whole file size | 256 MiB | `_FILE_MAX` is 32 MiB, so this means rotation is not keeping up. |
+
+`_last_line_size` reads backwards in 1 MiB blocks rather than reading the file, so
+it stays cheap against a multi-gigabyte journal.
+
+Truncating is safe: nothing reads this journal for control flow. It is append-only
+diagnostics written by `_append` and consumed by a human after the fact, and a
+runaway record is unreadable anyway. A head+tail sample is preserved as
+`<journal>.runaway` before the file is emptied.
+
+### 49.3 Verification
+
+Both directions tested:
+
+* **clean journal** (5 normal records, 279 B) -> `once: clean`, file untouched
+* **synthetic runaway** (8 MB final line) -> `TRUNCATED`, file reduced to 0 B,
+  240,026 B sample kept, reason recorded in `_wirelog_watchdog.log`
+
+Launched against the real state dir at 16:09:14, polling every 30 s.
+
+### 49.4 What this is not
+
+The watchdog does not prevent the single large `f.write()` — a runaway record can
+still reach disk once before being caught. What it prevents is that record *staying*
+there, and the disk filling while an old process runs. The actual fix is FIX 18 plus
+a bridge restart; the watchdog only covers the window between them.
+
+### 49.5 The restart is now the second one owed
+
+The first restart (15:41:30) activated FIX 12/14/15/16. This one activates FIX 18.
+Both are the operator's call, because the bridge is the route this agent runs
+through.
