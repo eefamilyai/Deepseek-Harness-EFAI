@@ -44,6 +44,9 @@ _RING_MAX = 80
 # process. A mute can arrive days after the request that drew it, so the bound is
 # deliberately generous -- see `_rotate_if_needed`.
 _FILE_MAX = 32 * 1024 * 1024
+# One record's ceiling. A verdict carries at most `_RING_MAX` request
+# shapes (~1.5 KB each), so 1 MiB is far above any legitimate record.
+_RECORD_MAX = 1 * 1024 * 1024
 _SEQ = 0
 _ON = None
 
@@ -117,8 +120,19 @@ def _append(obj):
         if parent and not os.path.isdir(parent):
             os.makedirs(parent, exist_ok=True)
         _rotate_if_needed(p)
+        line = json.dumps(obj, ensure_ascii=False)
+        # A journal entry must never be able to fill a disk. `_strip_verdict`
+        # removes the unbounded growth; this is the backstop that keeps ANY
+        # future shape from doing the same thing silently.
+        if len(line) > _RECORD_MAX:
+            line = json.dumps({
+                "ts": obj.get("ts"), "kind": obj.get("kind"),
+                "account": obj.get("account"), "truncated": True,
+                "bytes": len(line),
+                "note": "record exceeded _RECORD_MAX and was replaced",
+            }, ensure_ascii=False)
         with open(p, "a", encoding="utf-8") as f:
-            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            f.write(line + "\n")
     except Exception:  # noqa: BLE001
         pass
 
@@ -135,6 +149,22 @@ def record(kind, account=None, **fields):
     _append(obj)
 
 
+def _strip_verdict(obj):
+    """A ring copy of a verdict with its `preamble` removed.
+
+    WHY: `verdict()` keeps the verdict it just built in `_RING`, and every later
+    verdict's preamble is a copy of that ring. Kept whole, verdict N's preamble
+    contains verdict N-1, whose preamble contains N-2, and so on, so the JSON
+    written for one verdict is bigger than all the ones before it put together.
+    Measured on the live journal: a single 11.47 GB line carrying 1,048,545
+    nested mute verdicts. The ring records REQUESTS; a verdict's own preamble is
+    the one thing it must never carry into the next one.
+    """
+    if not isinstance(obj, dict) or obj.get("kind") != "verdict":
+        return obj
+    return {k: v for k, v in obj.items() if k != "preamble"}
+
+
 def verdict(kind, detail, account=None):
     """Record a refusal TOGETHER with the request shapes that preceded it.
 
@@ -145,11 +175,14 @@ def verdict(kind, detail, account=None):
     if not enabled():
         return
     with _LOCK:
-        preamble = list(_RING)
+        # Stripped on the way IN as well as OUT: the ring must never hold an
+        # object that already carries a preamble, or the next verdict re-embeds
+        # this one's whole history. See `_strip_verdict`.
+        preamble = [_strip_verdict(o) for o in _RING]
         obj = {"ts": time.time(), "kind": "verdict", "verdict": str(kind),
                "detail": str(detail)[:800], "account": account,
                "preamble": preamble}
-        _RING.append(obj)
+        _RING.append(_strip_verdict(obj))
         del _RING[:-_RING_MAX]
     _append(obj)
 

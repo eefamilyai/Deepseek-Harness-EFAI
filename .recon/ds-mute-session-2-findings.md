@@ -3453,3 +3453,169 @@ including ones never muted.
 No new defect and no new fix. The round's value is that the record is now correct
 on a point it previously got wrong in both directions: section 44 wrongly called
 the question unanswerable, and the prior doc wrongly called the answer harmless.
+
+
+
+## 47. FIX 18 — the wirelog wrote an 11.47 GB record, and rotation could not stop it
+
+Found while auditing disk state after the bridge restart. `ds_wirelog.jsonl.1` was
+**11,472,864,956 bytes (11.47 GB)**. `_FILE_MAX` is 32 MiB, so rotation should have
+moved it 350 times over.
+
+### 47.1 What the file actually is
+
+It has **five newlines**. The first four lines are 3,681 bytes of ordinary records
+(seq 43 request/response, seq 44 request/response — all t2, all 14:41:37-38). The
+fifth line is a single JSON object of **11,472,861,274 bytes**.
+
+That object is one `verdict` record. Inside it:
+
+| quantity | value |
+|----------|-------|
+| `"kind": "verdict"` occurrences | 1,048,545 |
+| `"preamble"` occurrences | 1,048,545 |
+| `"seq"` occurrences | 12,582,372 |
+| **distinct** `seq` values | **44** |
+| distinct `ts` values | 15, spanning 3.4 minutes (14:38:11 - 14:41:38) |
+
+So **44 real requests** produced **12.58 million nested copies** — an amplification
+of **285,963x** — and 1,048,545 nested verdict objects, every one of them for `t2`
+with the detail `user is muted`.
+
+### 47.2 The mechanism, in the code
+
+`ds_wirelog.verdict()` did this:
+
+    with _LOCK:
+        preamble = list(_RING)
+        obj = {"ts": ..., "kind": "verdict", ..., "preamble": preamble}
+        _RING.append(obj)          # <-- the verdict goes INTO the ring
+        del _RING[:-_RING_MAX]
+    _append(obj)
+
+`preamble` is a copy of `_RING`. The verdict just built is then appended to `_RING`.
+So verdict N's preamble contains verdict N-1 whole — including *its* preamble, which
+contains N-2, and so on. The record for one verdict is larger than every earlier
+verdict put together: the growth is **exponential in the number of verdicts**, not
+linear in the number of requests.
+
+Reproduced directly (this is the run that reached ~9 GB of RAM and had to be killed):
+
+| verdicts | bytes on disk |
+|---------:|--------------:|
+| 1 | 765 |
+| 2 | 2,299 |
+| 3 | 5,366 |
+| 5 | 23,771 |
+| 8 | 195,544 |
+| 12 | 3,140,253 |
+| 16 | 50,255,598 |
+| 20 | **402,050,952** |
+
+Roughly 4x per verdict. The live file reached 1,048,545 verdicts because t2 was
+muted and **every subsequent request in that process re-raised the mute**, each one
+adding a verdict to the ring.
+
+### 47.3 Why rotation never fired — the second defect
+
+`_rotate_if_needed(p)` reads `os.path.getsize(p)` and rotates only if it is already
+over `_FILE_MAX`. It is called from `_append`, i.e. **before** the new record is
+written. That is correct for a stream of small records. It is defenceless against one
+enormous record: the size is checked while the file is small, then a single
+`f.write()` puts 11.47 GB on disk. The next `_append` would have rotated — but by
+then the damage is done, and in this case the process was restarted first.
+
+The write itself took **28 minutes to reach disk** (content timestamped 14:41, file
+mtime 15:09:48), which is why the file looked like a 19-hour log and why an earlier
+pass mis-estimated it at ~683 rows.
+
+### 47.4 The fix
+
+Three changes to `ds_wirelog.py`:
+
+1. **`_strip_verdict(obj)`** — returns a copy of a verdict without its `preamble`.
+   Applied both when building `preamble` (each ring entry is stripped on the way out)
+   and when appending the new verdict to `_RING` (stripped on the way in). The ring
+   therefore never holds an object that already contains a preamble, and nesting
+   cannot start.
+2. **`_RECORD_MAX = 1 MiB`** — a hard ceiling on one serialized record. A legitimate
+   verdict carries at most `_RING_MAX` (80) request shapes at ~1.5 KB each, so ~120 KB;
+   1 MiB is far above any real record. Anything larger is replaced by a small stub
+   recording `truncated: true` and the original byte count.
+3. The `_FILE_MAX` rotation is left as it was; it is correct for small records and the
+   ceiling now guarantees records are small.
+
+### 47.5 Verification
+
+New suite `test_ds_wirelog_nesting.py`, **5 tests, all passing**:
+
+* a written verdict record contains exactly one `"preamble"` (nothing nested)
+* 300 verdicts stay under 20 MB and under 100x the size at 50
+* `_RING` never holds a verdict carrying a `preamble`
+* every record is within `_RECORD_MAX`
+* an over-ceiling record is replaced by a stub, not written whole
+
+Measured after the fix: 500 verdicts = **8,348,635 B**, last record a flat
+**17,068 B**, one preamble per record. Linear.
+
+### 47.6 This was not harmless, and it was not the operator's
+
+Two consequences worth stating plainly:
+
+* It consumed **11.47 GB of disk** and, during the write, **several GB of RAM** in the
+  bridge process. The operator saw a ~9 GB python process and asked whether it was
+  mine. It was — that was the *reproduction*, not the bridge — but the bridge had
+  written the same shape 20 minutes earlier.
+* It is the reason the journal looked unusable. Every verdict line was enormous, so
+  the artefact built to answer "what did we send before the mute?" was itself
+  unreadable exactly when a mute happened.
+
+The 11.47 GB file has been deleted; a 240 KB head+tail sample is kept beside it as
+`ds_wirelog.jsonl.1.headsample` for the record.
+
+## 48. The j1 "second ban" is the first ban, still in force
+
+The operator reported j1 banned again, and then that every account except d1 is muted.
+
+**j1 has not sent a single request since 09-30 20:04:39.** That is `ds_last_turn.json`'s
+entry for j1, and no journal on the machine contains a j1 request after it. A mute is
+issued in response to traffic (or in an idle window attributable to the account); with
+zero traffic for 36 hours there is no second issue to find.
+
+j1's first and only mute runs **until 2026-10-03 12:04 UTC = 20:04 local**, i.e. it has
+**52 hours left**. The operator is seeing the same penalty, still running. "LOL the
+irony" and "the j1 account got banned" are both reports of that one event.
+
+The pool picture at 2026-10-01 08:06 UTC:
+
+| account | state | until (local) | remaining |
+|---------|-------|---------------|-----------|
+| hunt | clean | - | no mute on record |
+| v | clean | - | no mute on record |
+| f | clean | - | no mute on record |
+| **j1** | **MUTED** | 2026-10-03 20:04 | 52.0 h |
+| donttouch | clean (disabled) | - | - |
+| **t1** | **MUTED** | 2026-10-03 16:40 | 48.6 h |
+| **t2** | **MUTED** | 2026-10-03 20:53 | 52.8 h |
+| **d1** | **clean** | - | - |
+
+Three of eight carry a live 72 h penalty; two more were never observed muted in this
+window; `donttouch` is deliberately disabled. **This is not "every account except d1
+is muted"** — it is j1, t1 and t2, which are exactly the three accounts this
+investigation has been driving hardest, and d1, which is the one serving the agent.
+
+Worth stating as a real, unresolved tension rather than explained away: the three
+muted accounts are the three with the most harness traffic in the window (t1 923 req,
+t2 395, v 176, d1 262). That is consistent with mutes following use, and it is also
+consistent with an account-level rule that simply has not fired for d1 yet. It does
+not distinguish them.
+
+### 48.1 What is still not known
+
+After 48 sections: the mute is account-level, asynchronous, fixed-duration (72 h or
+216 h), arrives as prose inside an HTTP 200, and **is not discernible from the request
+that receives it** — section 41's muted completion request is byte-identical in shape
+to one served five minutes earlier. What issues it remains unidentified. The defects
+found and fixed along the way (retrying a mute as TRANSPORT, escalating 72 h to 216 h,
+the stale-token lease window, and now an 11.47 GB journal record) are all real and
+none is demonstrated to cause a mute.
