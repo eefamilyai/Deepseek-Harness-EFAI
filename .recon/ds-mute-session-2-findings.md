@@ -4160,3 +4160,16 @@ Not established: what issues it. Every client-side lead is closed (sections 41, 
 51, 52, 54): request shape, all 29 headers, login pattern, content, burst volume,
 pacing, cumulative count, IP scope. d1 — this agent's own account — is at 422 requests
 and still serving, past the point t2 was muted.
+
+
+### 54.4 Addendum — d1 at 506 requests
+
+Continued observation, same zero-cost test. d1 reached **506 requests** at 10-01 16:18
+local with **no mute**. The fixed-count threshold is now falsified by a margin, not a
+hair: d1 has sent 111 more requests than t2 had when it was muted, with the same code,
+the same process, the same IP, and 23 of 29 header values byte-identical (section 50).
+
+It has not reached the ~600 mark section 51.4 named as the outer bound for killing the
+number outright, but the trend is unambiguous and the threshold reading is dead. What
+remains genuinely unknown is unchanged: what issued nine penalties to the accounts this
+investigation drove, and not to the one it runs on.
