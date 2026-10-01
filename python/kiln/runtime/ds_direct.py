@@ -3360,6 +3360,11 @@ def _merge_muted(mine):
 _MUTE_UNTIL_TEXT_RE = re.compile(
     r"until (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC")
 
+# The verdict text is minute-accurate and rounds UP, so a backfilled value can
+# sit up to 60 s above the wire's exact float for the SAME penalty. A
+# difference within this window is that rounding, not a new verdict.
+_BACKFILL_TOLERANCE_S = 60
+
 
 def backfill_muted_from_wirelog(paths=None):
     """Reconstruct ledger entries from verdicts the journal already recorded.
@@ -3433,10 +3438,27 @@ def backfill_muted_from_wirelog(paths=None):
         for acct, until in found.items():
             if until <= now:
                 continue
+            # NEVER overwrite an entry the wire already supplied. Both values
+            # come from the SAME verdict, but the wire carries the exact float
+            # while the text is minute-accurate and rounds UP, so this repair
+            # has strictly less information than the ledger it would replace.
+            # Measured: t2's wire value 20:53:17.878 was replaced by 20:54:00,
+            # losing 42 s of precision for no gain. The repair exists to fill
+            # GAPS -- an account absent from the ledger -- not to refine or
+            # extend an entry that is already there. Escalation across two
+            # genuine verdicts is `_note_mute`'s job, not this function's.
             prev = _muted_until.get(acct)
-            if prev is None or until > prev:
-                _muted_until[acct] = until
-                moved += 1
+            if prev is not None and until <= prev + _BACKFILL_TOLERANCE_S:
+                # Same verdict, rendered less precisely. The text rounds UP to
+                # the minute, so a value within one minute of what the ledger
+                # already holds is the SAME penalty described twice -- and the
+                # ledger's copy is the exact float from the wire, so keep it.
+                # A genuinely LATER verdict (a re-issue, or one this process
+                # never saw) exceeds the tolerance and is still taken, because
+                # `_muted_until` may predate the verdict the journal holds.
+                continue
+            _muted_until[acct] = until
+            moved += 1
     if moved:
         _save_muted()
     return moved

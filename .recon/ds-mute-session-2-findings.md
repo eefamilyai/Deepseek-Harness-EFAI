@@ -5083,3 +5083,50 @@ driven by this same client at this same volume, on this same machine, and observ
 for 72 h. If it stays clean while the aliases keep muting, the fleet pattern is
 confirmed. That requires a new base address and is the operator's call, not this
 machine's.
+
+
+---
+
+## 69. FIX 23 — THE BACKFILL WAS DOWNGRADING EXACT DATA TO ITS OWN UPPER BOUND
+
+**69.1 How it was found.** Running the FIX 21 backfill against the live ledger to
+correct t1's floored expiry instead showed that t2's entry had *already* been
+rewritten. The wire had carried `1791060797.878` (20:53:17.878); the ledger held
+`1791060840.0` (20:54:00.000) — **42 s of precision lost**, replaced by the
+backfill's own `floor + 60`.
+
+**69.2 Why that is backwards.** The backfill and the wire path read the **same
+verdict**. The wire carries the exact float; the detail text is minute-accurate and
+rounds up. So the backfill has **strictly less information** than the entry it was
+overwriting. FIX 21 made the direction safe (never early) but the replacement was
+still a downgrade: it traded a measurement for an inference.
+
+**69.3 The first fix was too strong, and the old suite caught it.** Simply refusing
+to touch any existing entry broke `test_extending_an_entry_is_reported` — correctly,
+because `_muted_until` can legitimately *predate* a verdict the journal holds, and a
+genuinely later verdict must still be adopted. A test written before the fix was the
+thing that proved the fix was wrong.
+
+**69.4 The rule that satisfies both.** A tolerance of one minute
+(`_BACKFILL_TOLERANCE_S = 60`), which is exactly the text's rounding error:
+
+* a backfilled value **within** 60 s of what the ledger holds is the **same penalty
+  described twice** — keep the ledger's exact float;
+* a value **beyond** it is a **genuinely later verdict** — adopt it, because the
+  ledger may predate the journal line;
+* escalation across two real verdicts remains `_note_mute`'s job, unchanged.
+
+**69.5 Verification.** `test_ds_direct_mute_backfill_fix23.py`, 11 checks, all
+passing, covering both sides of the tolerance plus `_note_mute`'s independent
+extend-never-shorten rule. `test_ds_direct_mute_backfill_fix21.py` 9/9 and the
+original `test_ds_direct_mute_backfill.py` clean. Full run: **1030+ checks, no
+failing suites.**
+
+**69.6 A second, smaller finding.** The phantom `test@example.com` entry returned to
+the live ledger because `backfill_muted_from_wirelog` scans **two** journals — the
+live one and the stale vendored `runtime/` copy — and the stale copy still holds
+verdict lines from earlier test runs. Harmless (a non-existent account is never
+selected) but it means the repair can import fixture rows from a journal that is no
+longer being written. Recorded, not fixed: narrowing the scan would also drop
+genuine pre-`KILN_STATE_DIR` verdicts, which is precisely what FIX 20 exists to
+recover.
