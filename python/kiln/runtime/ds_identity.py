@@ -160,12 +160,16 @@ def client_hint_extras():
 
 
 def client_hints_full():
-    """All nine client hints -- the set a granted origin receives.
+    """All nine client hints -- the set a GRANTING origin receives.
 
-    Use this for ``chat.deepseek.com``, whose grant a real browser holds. Use
-    ``client_hints()`` for every other origin: the grant is per-origin, and a
-    third-party host that receives hints the browser would not have sent it is
-    as wrong as one that receives too few.
+    NOT for ``chat.deepseek.com``. That origin advertises no ``Accept-CH``, and
+    a real desktop Chrome answers it with the triple only, so ``client_hints()``
+    is what belongs on the chat path. Sending these nine there asserts a browser
+    state the origin cannot produce, and it was implicated in a mute storm
+    (commit 8b8e59fd7c moved all three call sites back to the triple).
+
+    Kept for an origin that DOES grant the set, where the triple would be the
+    mismatch instead. Nothing on the chat path may use it.
     """
     return {**client_hints(), **client_hint_extras()}
 

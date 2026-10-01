@@ -4906,3 +4906,56 @@ count (57), IP/machine scope (51.1), token generations (58), and exposure durati
 request; it is an adjudication about the account, and the only paths to it are the
 appeal channel (`service@deepseek.com`, ToS §11) or a DevTools capture that has not
 been taken.
+
+
+---
+
+## 66. THE CLIENT-HINT DISPUTE, RESOLVED — AND WHY IT WAS NOT THE CAUSE
+
+The one open dispute from section 65 is now closed from the repository's own
+history, and it closes against the reading I had at first.
+
+**66.1 The timeline.** Three commits, in order:
+
+* **`265770d65e`** (2026-09-27) added `sec-ch-ua-*` handling and asserted in its
+  message: "`chat.deepseek.com` receives all nine `sec-ch-ua-*` hints on every
+  request; the client sent three", citing a capture of 47 requests.
+* **`8b8e59fd7c`** (2026-09-29) titled *"stop the mute storm and send only the
+  granted client hints"* **refuted** that: "real desktop Chrome sends only the
+  client-hint triple to chat.deepseek.com, which advertises no `Accept-CH`, and
+  Chrome emits the six high-entropy hints only to an origin that granted them.
+  `ds_direct` sent all nine on three call sites, asserting a browser state this
+  origin cannot produce. All three now send the triple." That commit's own diff
+  rewrote the `ds_identity` comment that had claimed a capture showed all nine.
+* The live journal agrees with the later commit: exactly **three** `sec-ch-ua*`
+  names on 2,628 of 2,649 requests, on every path.
+
+So the triple is correct and deliberate, and the mute storm was reduced by moving
+*away* from the nine. **The operator's original hypothesis — "some headers are not
+supposed to be added" — was right in form and already acted on**: six headers were
+being added that should not have been, and the fix for that shipped in
+`8b8e59fd7c`. It is also not the whole story, because the accounts kept muting
+afterwards (sections 47–65).
+
+**66.2 FIX 22 — the refutation left two stale artefacts, and one was a live
+failing test.** `8b8e59fd7c` corrected the `client_hints()` comment but not the
+functions it had deprecated, and touched no test:
+
+* `ds_identity.client_hints_full()` still said *"Use this for
+  `chat.deepseek.com`, whose grant a real browser holds"* — a direct
+  contradiction of the corrected comment **in the same file**, and an instruction
+  to do the exact thing the mute-storm fix undid. It is dead code (zero callers),
+  so nothing failed; the hazard was that the next reader would believe the
+  docstring and wire it back in. Corrected to name the refutation.
+* `test_ds_did.py` still asserted *"it sends all nine client hints"*. That test had
+  been **failing since 2026-09-29** — `test_ds_did.py` was last touched by
+  `265770d65e` (Sep 27) and the behaviour changed two days later, so the suite
+  carried a red check for two days. Now asserts the triple, and passes: 34/34.
+  `test_ds_identity.py`: 134/134.
+
+**66.3 Why this does not reopen the mute question.** A wrong or missing header is
+a *per-request* property, and section 65.2 established set-identity: the muted and
+clean accounts send the **same 29 header names** with an empty symmetric
+difference. Whatever the header set does, it does to all four accounts. The
+nine-vs-three error was real, it was plausibly costly (the commit that fixed it is
+titled "stop the mute storm"), and it cannot explain a *differential* mute.

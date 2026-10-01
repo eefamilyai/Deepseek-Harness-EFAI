@@ -179,9 +179,13 @@ def main():
     h = kw.get("headers") or {}
     check("it sends the account's x-device-id",
           h.get("x-device-id") == SAMPLE_X_DEVICE_ID, repr(h.get("x-device-id")))
-    check("it sends all nine client hints",
-          "sec-ch-ua" in h and "sec-ch-ua-platform-version" in h
-          and "sec-ch-ua-arch" in h, repr(sorted(k for k in h if k.startswith("sec-ch-ua"))))
+    # The triple, not the nine: chat.deepseek.com advertises no Accept-CH, so a
+    # real Chrome sends only these three. Sending the high-entropy six asserts a
+    # browser state this origin cannot produce (commit 8b8e59fd7c).
+    check("it sends the client-hint triple, not the ungranted nine",
+          sorted(k for k in h if k.startswith("sec-ch-ua"))
+          == ["sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"],
+          repr(sorted(k for k in h if k.startswith("sec-ch-ua"))))
     check("it sends the x-client-* group",
           h.get("x-client-platform") == "web", repr(h.get("x-client-platform")))
     check("it drops the navigation-only headers",
