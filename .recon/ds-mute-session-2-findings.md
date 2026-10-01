@@ -5327,3 +5327,27 @@ first attempt illustrated: a plausible repair that no measurement backs. The nex
 experiment (needs an unmuted account after 10-03 16:40 UTC, or a new base address): run
 two accounts identically with one sending the 300 s settings poll through its pauses and
 one not, 4+ h each, pauses of 45-110 min.
+
+
+## 72. The heartbeat experiment (claude1 vs claude2)
+
+Started 2026-10-01 ~20:42 local. Two fresh accounts, `deepseek.ee.1+claude1@gmail.com` and
+`...+claude2@gmail.com`, each given its OWN browser-minted identity first
+(`ds_profile.py capture`: distinct `x-device-id`, `did`, and device cookie per account), so
+neither falls back to the machine-level device id and the heartbeat has a `did` to send
+(`_did_for` returns None without one, which would have made the poll a silent no-op).
+
+Both run `_humansoak.py` with `HS_MODE=burst HS_SEED=7 HS_HOURS=7`, same machine and IP,
+wire journal on. The schedule is drawn from `random.Random(7)` in both processes, so burst
+lengths (15-30 min), turn spacing (15-120 s), pause lengths (45-110 min) and prompts are
+identical. The ONE difference: claude1 has `KILN_DS_SETTINGS_POLL=1` (FIX 26 heartbeat,
+four `client/settings` scopes every 300 s), claude2 does not.
+
+FIX 26 follow-up: the heartbeat now polls only accounts THIS process has driven
+(`_poll_accounts`), because `_last_turn_at` is loaded from a file shared across processes
+and claude1's process would otherwise have polled claude2.
+
+Reading the result: if exactly one account is muted, the heartbeat is implicated (a single
+pair is weak evidence, not proof). Both muted -> the pause pattern is not rescued by the
+heartbeat. Neither after 7 h (longer than any muted stint in section 70) -> the pause
+timing lead is unsupported and the cause lies elsewhere (account-level, section 68).

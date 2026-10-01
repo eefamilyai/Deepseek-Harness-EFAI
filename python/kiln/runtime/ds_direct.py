@@ -3997,6 +3997,10 @@ SETTINGS_POLL_S = 300.0
 SETTINGS_POLL_WINDOW_S = 4 * 3600.0
 _poll_started = False
 _poll_lock = threading.Lock()
+# Accounts THIS process has driven. `_last_turn_at` is loaded from a file shared with
+# other processes, so it also names accounts another process is running; polling
+# those from here would hand one process's account to another's experiment.
+_poll_accounts = set()
 
 
 def _settings_poll_enabled():
@@ -4014,7 +4018,7 @@ def _poll_once(now=None, lease=None):
     lease = lease or _lease_client
     with _last_turn_lock:
         recent = [a for a, ts in _last_turn_at.items()
-                  if 0 <= now - ts <= SETTINGS_POLL_WINDOW_S]
+                  if a in _poll_accounts and 0 <= now - ts <= SETTINGS_POLL_WINDOW_S]
     sent = []
     for acct_id in recent:
         if _muted_now(acct_id):
@@ -4042,12 +4046,17 @@ def _poll_loop():
             config.dbg("ds_direct settings poll crashed: %s", e)
 
 
-def _ensure_settings_poll():
-    """Start the heartbeat thread once per process, if enabled."""
+def _ensure_settings_poll(acct_id=None):
+    """Register `acct_id` for the heartbeat and start the thread once per process.
+
+    Does nothing unless KILN_DS_SETTINGS_POLL is set.
+    """
     global _poll_started
     if not _settings_poll_enabled():
         return False
     with _poll_lock:
+        if acct_id is not None:
+            _poll_accounts.add(acct_id)
         if _poll_started:
             return False
         _poll_started = True
@@ -4100,7 +4109,7 @@ def stream(model, messages, temperature=0.6, max_tokens=4096, cancelled=lambda: 
     try:
         with _lease_client(acct_id) as client:
             _resume_hygiene(client, acct_id)
-            _ensure_settings_poll()
+            _ensure_settings_poll(acct_id)
             for ev in _stream_with(client, model_type, thinking, search, messages,
                                    cancelled, conv_id, preempt, is_last=True,
                                    ref_file_ids=ref_file_ids):

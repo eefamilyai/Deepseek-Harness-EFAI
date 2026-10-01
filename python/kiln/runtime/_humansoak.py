@@ -39,6 +39,18 @@ ACCOUNT = os.environ.get("HS_ACCOUNT", "").strip()
 # 200-turn run still fits in a day or two, but non-zero so the resume path is
 # actually exercised -- the ordinary 3-10 min gaps never reach IDLE_RESUME_S.
 WALK_AWAY_P = float(os.environ.get("HS_WALK_AWAY_P", "0.06"))
+# HS_MODE=burst: the two-account heartbeat experiment. A burst of turns 15-120 s
+# apart for HS_BURST_MIN..MAX minutes, then a pause of HS_PAUSE_MIN..MAX minutes,
+# repeated for HS_HOURS. Every random choice (burst length, turn spacing, pause
+# length, prompt) comes from random.Random(HS_SEED), so two processes started with
+# the same seed follow the same schedule and differ only in what the experiment varies.
+MODE = os.environ.get("HS_MODE", "").strip()
+SEED = int(os.environ.get("HS_SEED", "1"))
+HOURS = float(os.environ.get("HS_HOURS", "6"))
+BURST_MIN = float(os.environ.get("HS_BURST_MIN", "15"))
+BURST_MAX = float(os.environ.get("HS_BURST_MAX", "30"))
+PAUSE_MIN = float(os.environ.get("HS_PAUSE_MIN", "45"))
+PAUSE_MAX = float(os.environ.get("HS_PAUSE_MAX", "110"))
 
 # 3-10 min between turns is ~6-20 turns/hour: inside the range a person typing at
 # a chat window produces, and an order of magnitude below what the machine soaks did.
@@ -133,6 +145,62 @@ def _sid_for(conv):
     return None
 
 
+def one_turn(st, i, prompt):
+    """One streamed turn, logged. Returns the mute verdict string or None."""
+    msgs = [{"role": "user", "content": prompt}]
+    raw, got, err, muted = [], 0, None, None
+    t0 = time.time()
+    try:
+        for ev in ds.stream("deepseek-chat", msgs, conv_id=st["conv"], account=st["account"]):
+            if ev.get("type") == "content":
+                got += len(ev.get("text") or "")
+                raw.append(ev.get("text") or "")
+    except Exception as e:  # noqa: BLE001
+        err = "%s: %s" % (type(e).__name__, e)
+        raw = [err]
+        if isinstance(e, ds._Muted):
+            muted = str(e)
+    dur = time.time() - t0
+    v = verdicts_of([str(x) for x in raw])
+    log(turn=i, chars=got, err=err, verdicts=v, muted=muted, prompt=prompt,
+        sid=_sid_for(st["conv"]), prompt_chars=len(prompt), dur_s=round(dur, 1),
+        account=st["account"], reply=" ".join(str(x) for x in raw)[:400])
+    print("  turn %-4d chars=%-4d %5.1fs %s" % (i, got, dur, ("ERR " + err[:80]) if err else "ok"), flush=True)
+    return muted or v.get("mute")
+
+
+def run_bursts(st):
+    rng = random.Random(SEED)
+    end = time.time() + HOURS * 3600.0
+    i = st["done"]
+    n_burst = 0
+    while time.time() < end:
+        n_burst += 1
+        blen = rng.uniform(BURST_MIN, BURST_MAX) * 60.0
+        pause = rng.uniform(PAUSE_MIN, PAUSE_MAX) * 60.0
+        b_end = time.time() + blen
+        print("  burst %d: %.0f min, then pause %.0f min" % (n_burst, blen / 60, pause / 60), flush=True)
+        log(event="burst", n=n_burst, burst_s=round(blen), pause_s=round(pause), account=st["account"])
+        while time.time() < b_end:
+            verdict = one_turn(st, i, rng.choice(PROMPTS))
+            i += 1
+            st["done"] = i
+            if verdict:
+                st["muted"] = {"turn": i - 1, "verdict": verdict, "ts": time.time(), "burst": n_burst}
+                save_state(st)
+                print("\nMUTED at turn %d (burst %d): %s" % (i - 1, n_burst, verdict), flush=True)
+                return 3
+            save_state(st)
+            time.sleep(rng.uniform(15, 120))
+        if time.time() + pause >= end:
+            break
+        log(event="pause", n=n_burst, pause_s=round(pause), account=st["account"])
+        print("  ... pause %.0f min" % (pause / 60), flush=True)
+        time.sleep(pause)
+    print("\ncompleted %d turns, %d bursts, no mute" % (i, n_burst), flush=True)
+    return 0
+
+
 def main():
     if not ds.configured():
         print("no account configured")
@@ -152,6 +220,9 @@ def main():
     print("  delay     : %.0f-%.0f s (~%.1f-%.1f turns/hour)"
           % (DELAY_MIN, DELAY_MAX, 3600.0 / DELAY_MAX, 3600.0 / DELAY_MIN))
     print()
+
+    if MODE == "burst":
+        return run_bursts(st)
 
     while st["done"] < TURNS:
         i = st["done"]

@@ -18,7 +18,8 @@ def lease(acct):
 leased = []
 now = time.time()
 d._last_turn_at.clear()
-d._last_turn_at.update({"a@x": now - 600, "old@x": now - 5 * 3600, "m@x": now - 60})
+d._last_turn_at.update({"a@x": now - 600, "old@x": now - 5 * 3600, "m@x": now - 60, "other@x": now - 30})
+d._poll_accounts.update({"a@x", "old@x", "m@x"})
 orig = d._muted_now
 d._muted_now = lambda a, *k, **kw: a == "m@x"
 sent = d._poll_once(now=now, lease=lease)
@@ -27,12 +28,13 @@ check("recently active account gets all four scopes in the browser's set",
       [s for a, s in sent if a == "a@x"] == list(d.SETTINGS_SCOPES) and set(d.SETTINGS_SCOPES) == {"provider", "web_upgrade", "model", "main"}, sent)
 check("an account idle past the window is not polled", all(a != "old@x" for a, _ in sent), sent)
 check("a muted account is not polled", all(a != "m@x" for a, _ in sent), sent)
+check("an account another process drives is not polled", all(a != "other@x" for a, _ in sent), sent)
 check("the cadence is the browser's 300 s", d.SETTINGS_POLL_S == 300.0)
 
 class Boom:
     @contextlib.contextmanager
     def __call__(self, acct): raise RuntimeError("pool busy"); yield
-d._last_turn_at.clear(); d._last_turn_at["a@x"] = now
+d._last_turn_at.clear(); d._last_turn_at["a@x"] = now; d._poll_accounts.add("a@x")
 try:
     r = d._poll_once(now=now, lease=Boom()); ok = r == []
 except Exception as e:
@@ -44,7 +46,7 @@ os.environ["KILN_DS_SETTINGS_POLL"] = "1"
 d._poll_started = False
 d._poll_loop_orig = d._poll_loop
 d._poll_loop = lambda: None
-check("KILN_DS_SETTINGS_POLL=1 starts it once", d._ensure_settings_poll() is True and d._ensure_settings_poll() is False)
+check("KILN_DS_SETTINGS_POLL=1 starts it once", d._ensure_settings_poll("z@x") is True and d._ensure_settings_poll("z@x") is False and "z@x" in d._poll_accounts)
 os.environ.pop("KILN_DS_SETTINGS_POLL")
 if F: print("%d FAILED: %s" % (len(F), ", ".join(F))); sys.exit(1)
 print("all checks passed")
