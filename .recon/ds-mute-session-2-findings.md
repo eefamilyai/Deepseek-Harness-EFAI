@@ -3958,3 +3958,58 @@ What remains genuinely open and testable is the d1 prediction (51.4): d1 is this
 agent's account, at **382 requests** as of 10-01 16:13, still clean. If the cumulative
 threshold (~400) is real, it is about to fire. If d1 passes ~600 clean, that specific
 number is dead. This needs no new traffic and no operator action.
+
+
+## 53. Census correction: the per-account table was contaminated, but the mute catalogue is sound
+
+### 53.1 What was wrong
+
+A scan of all 89 session logs reported "mute evidence per account" with every account
+at 874-906 hits. That is impossible and it is contamination: **this session's own log**
+contains the compaction checkpoints, which *list every account name* while discussing
+this investigation. One log contributed 874 of the hits, and it named all 25 accounts.
+
+So the per-account counts are garbage and are retracted. What the scan *did* establish
+correctly:
+
+* the distinct `mute_until` values, which are specific enough that checkpoint prose
+  repeats them verbatim only when quoting this investigation's own findings
+* the **absence** of real verdicts for accounts that were never muted
+
+### 53.2 The two "new" values are not verified
+
+The scan surfaced `2026-10-03 18:43` and `2026-10-02 11:28` as values I had not
+catalogued. Searching the 30 largest session logs **excluding this one** for a real
+verdict line naming either returned **nothing**. `2026-10-02 11:28` was already
+catalogued in section 33. `2026-10-03 18:43` therefore has **no verified source** and
+is recorded as unconfirmed, not as a twelfth mute.
+
+### 53.3 The confirmed catalogue
+
+Ten confirmed values (section 33's nine, plus `2026-10-03 16:40` from the live t1
+capture), all 72 h except one:
+
+| until (UTC) | duration | issue instant (local) |
+|-------------|---------:|----------------------|
+| 2026-10-02 09:13 | 72 h | 09-29 17:13 |
+| 2026-10-02 11:28 | 72 h | 09-29 19:28 |
+| 2026-10-02 13:41 | 72 h | 09-29 21:41 |
+| 2026-10-02 17:55 | 72 h | 09-30 01:55 |
+| 2026-10-02 20:19 | 72 h | 09-30 04:19 |
+| 2026-10-03 01:56 | 72 h | 09-30 09:56 |
+| 2026-10-03 12:04 | 72 h | 09-30 20:04 |
+| 2026-10-03 16:40 | 72 h | 10-01 00:40 |
+| 2026-10-03 20:53 | 72 h | 10-01 04:53 |
+| 2026-10-08 11:16 | **216 h** | 09-29 19:16 |
+
+**Nine penalties were issued between 09-29 17:13 and 09-30 09:56 local** — a 16.7-hour
+window — and they all expire 72 h later, which is why the operator sees bans "surface"
+in clusters. The issue instants are the signal; the expiry dates are just that window
+shifted three days.
+
+### 53.4 The d1 test, latest
+
+d1 is at **398 requests** and still clean. It has now **passed t2's 395** — a muted
+account's request count — without a mute. If the cumulative threshold is real it is
+imminent; if d1 passes ~600 the number is dead. Checking costs nothing because d1 is
+this agent's own account.
