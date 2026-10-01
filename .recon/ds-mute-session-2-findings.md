@@ -4546,3 +4546,172 @@ If a banner exists, it is the one piece of evidence that has never been looked a
 The central deliverable -- the diagnosis -- is not achievable from the evidence this
 machine can produce. Recording that plainly is the correct outcome, not a failure to
 try hard enough.
+
+
+## 61. FIX 20 — the ledger was incomplete, and FIX 19 was reporting muted accounts as clean
+
+FIX 19 put the mute ledger on every account row. Checking its own output revealed that
+**the instrument lies for two of the three muted accounts.**
+
+### 61.1 What the account row said, against what is true
+
+| account | true state | ledger said | row said |
+|---------|-----------|-------------|----------|
+| t1 | muted until 10-03 16:40 | **absent** | `muted=False` |
+| j1 | muted until 10-03 12:04 | **absent** | `muted=False` |
+| t2 | muted until 10-03 20:53 | present | `muted=True` |
+
+t1 and j1 are serving live 72 h penalties and the account list presented them as
+healthy. That is worse than having no field at all: FIX 19 was built specifically so the
+operator could check "which logins are banned", and it answered **wrongly** for the two
+whose mutes were observed before FIX 12 created the ledger.
+
+### 61.2 Why
+
+`_muted_until` only holds mutes some process **persisted**. FIX 12 created
+`ds_muted.json` at 10-01 ~14:38. t1's mute was observed at 10-01 00:46 and j1's at
+09-30 20:04 — both before that file existed, so both went to the wirelog and to nothing
+else. t2 is in the ledger only because it was muted *again* at 14:38, which happened to
+be after.
+
+This is the same failure mode the ledger was built to prevent, one level up: a durable
+record that is silently **incomplete** is worse than none, because it is believed.
+
+### 61.3 The fix
+
+`backfill_muted_from_wirelog()` reconstructs entries from verdict lines the journal
+genuinely captured. The verdict record carries the account and the full detail text
+(`user is muted (until 2026-10-03 16:40 UTC)`), so the expiry is recovered **exactly**,
+not estimated.
+
+Merge rule: the **later** expiry wins, the same rule `_merge_muted` uses, so a backfill
+can never shorten a live penalty. Expired verdicts are ignored. A missing or corrupt
+journal is not fatal — a repair must not break a turn.
+
+Measured against the real journals: **1 entry recovered (t1)**, and the on-disk ledger
+now reads
+
+    deepseek.ee.1+t2@gmail.com   until 2026-10-04 04:53:17
+    deepseek.ee.1+t1@gmail.com   until 2026-10-04 00:40:00
+
+### 61.4 The limitation, stated plainly
+
+**j1 was NOT recovered, and cannot be.** Its mute was observed on the agent's own
+provider route, which section 30 established was never journaled (FIX 11 was not live
+for that path). There is no verdict line to recover it from. The account row will say
+`muted=False` for j1 until its penalty lapses or it is observed muted again.
+
+That is a real limit of FIX 20, not a bug to paper over: the backfill can only repair
+from evidence the harness captured, and for j1 it captured none. It is recorded in the
+function's own docstring so the next reader does not assume the ledger is complete.
+
+### 61.5 Verification
+
+New suite `test_ds_direct_mute_backfill.py`, **7 tests, all passing**:
+
+* recovers a mute the ledger never held
+* **never shortens a live penalty** (the merge rule)
+* reports an extension as a change
+* does not restore an expired verdict
+* a missing journal is not fatal
+* a corrupt journal is not fatal, and still recovers what it can
+* an unrelated verdict (`too_many_ref_files`) is ignored
+
+Full runtime suite: **174 checks across 9 files, 0 failures.**
+
+### 61.6 The pattern this makes explicit
+
+FIX 19 created a *new* way to be wrong — a field that looks authoritative and is
+silently incomplete — and the check that caught it was running the instrument's own
+output against known ground truth. That is now the third time in this session that
+verifying a fix found the fix itself wanting (FIX 15's prune, FIX 18's orphan case,
+FIX 20 here). Recording it because it is the most transferable lesson here: **a fix that
+reports state must be tested against state known independently of it.**
+
+
+## 62. The verdict envelope carries no reason — the last avenue closed
+
+The final unexplored field was the mute envelope itself: whether DeepSeek states *why*
+somewhere the client receives. It does not.
+
+### 62.1 The complete key set of a real mute verdict
+
+Every captured envelope on this machine was collected and its keys unioned:
+
+    {"code":0,"msg":"","data":{
+        "biz_code":14,
+        "biz_msg":"user is muted",
+        "biz_data":{"is_muted":1,"mute_until":1790972380.757}}}
+
+The union across every captured instance is exactly:
+
+| key | value |
+|-----|-------|
+| `code` | 0 (outer envelope: success) |
+| `msg` | "" (empty) |
+| `biz_code` | 14 (the real verdict) |
+| `biz_msg` | "user is muted" |
+| `biz_data.is_muted` | 1 |
+| `biz_data.mute_until` | the epoch float |
+
+**Six fields. No reason, no category, no rule id, no policy reference, no trigger.**
+The server states the account is muted and until when, and nothing else.
+
+`_mute_verdict_in` reads exactly those fields and has no other source to read.
+
+### 62.2 What this means for the objective
+
+The mute's *cause* is not merely hard to find in client data — it is **not present in
+client data at all**. The refusal is a verdict with no reasoning attached. Every lead
+this investigation could form was therefore an inference from *timing* and *volume*, and
+section 58 named the trap those inferences fall into: on four accounts over one day,
+every binary muted/clean split is a proxy for exposure time.
+
+Nine leads were formed and falsified by measurement:
+
+| # | lead | falsified by | section |
+|---|------|--------------|---------|
+| 1 | request shape | byte-identical to a served request | 41 |
+| 2 | all 29 headers | 23/29 identical with muted accounts | 50 |
+| 3 | login pattern | cleanest account has the highest rate | 50.3 |
+| 4 | content | muted on "Reply with the single word: ok" | 51.2 |
+| 5 | burst volume | 400 consecutive turns drew nothing | 51.2 |
+| 6 | pacing / long gaps | confounded; t1's mute in a 9.5-min gap | 52 |
+| 7 | cumulative count | d1 at 656 requests, clean | 57 |
+| 8 | IP / machine scope | 17 accounts on this IP unmuted | 51.1 |
+| 9 | token generations | a rate test puts d1 and v ABOVE t1 | 58 |
+
+Plus `client/settings` (59), which carries no mute state and is read for nothing.
+
+### 62.3 The one source that remains, and it is not reachable from here
+
+The DeepSeek web UI, logged in as a muted account, may render a banner, a reason, or an
+appeal path. That is the only place the reason might be stated, and it cannot be checked
+from this harness:
+
+* logging a muted account in from here risks the FIX 17 escalation class on a fresh
+  account, and the operator has already lost accounts to this investigation
+* the standing instruction is not to touch j1 (the route this agent runs from) and
+  `donttouch` must never be touched
+
+That observation needs the operator.
+
+### 62.4 What was delivered, and it is not nothing
+
+Nine defects found, fixed, tested and pushed:
+
+| fix | defect | why it mattered |
+|-----|--------|-----------------|
+| 3 | expired cookies replayed | credential hygiene |
+| 12 | the exact `mute_until` was parsed then discarded | a mute was re-learned the hard way |
+| 13 | a test suite deleted the operator's journal marker | the journal silently switched off |
+| 14 | cross-process state clobber | one process overwrote another's ledger |
+| 15 | `last_prompt` grew unbounded | 46.76 MB state file |
+| 17 | **a mute was retried as TRANSPORT** | **escalated jw1 from 72 h to 216 h** |
+| 18 | **verdict preambles nested into one 11.47 GB record** | **the journal was unreadable exactly when needed** |
+| 19 | the account list could not show mute state | the operator's own report was unverifiable |
+| 20 | the ledger was silently incomplete | t1 and j1 read "clean" while muted |
+
+FIX 17 and FIX 18 each made an existing mute materially worse. FIX 18, 19 and 20
+together mean the next mute will be **readable, exact, and visible** — which is the
+achievable half of the objective, and the half that makes the next attempt possible.
