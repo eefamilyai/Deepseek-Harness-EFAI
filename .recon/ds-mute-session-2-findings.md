@@ -4959,3 +4959,60 @@ clean accounts send the **same 29 header names** with an empty symmetric
 difference. Whatever the header set does, it does to all four accounts. The
 nine-vs-three error was real, it was plausibly costly (the commit that fixed it is
 titled "stop the mute storm"), and it cannot explain a *differential* mute.
+
+
+---
+
+## 67. PAYLOAD SIZE INVERTS TOO — THE CLEAN ACCOUNT SENDS THE BIGGEST BODIES
+
+Looking for a cumulative, content-shaped property that could match the words
+"violation of user policies", I measured every `/chat/completion` request body by
+size. The result is the eleventh falsified lead, and it points the other way.
+
+**67.1 The distribution.** 899 completion bodies across the journal:
+
+| size band | count |
+|---|---|
+| `<1 KB` (the delta: 7 keys, no `messages` array) | 824 |
+| `1–20 KB` | 46 |
+| `20–100 KB` | 26 |
+| `100–200 KB` | 1 |
+| `>200 KB` | 2 |
+
+The median is **254 B**, confirming the findings doc's "the wire carries a DELTA,
+not the transcript" claim — `body_keys` is the same seven keys on all 898 records:
+`chat_session_id`, `model_type`, `parent_message_id`, `prompt`, `ref_file_ids`,
+`search_enabled`, `thinking_enabled`.
+
+**67.2 Every large body belongs to the clean account.**
+
+| account | state | completion bodies | bodies >= 20 KB |
+|---|---|---|---|
+| d1 | **clean** | 202 | **29** |
+| t1 | MUTED | 439 | 0 |
+| t2 | MUTED | 174 | 0 |
+| v | clean | 84 | 0 |
+
+The two muted accounts sent **zero** bodies over 20 KB. The clean account sent all
+29, including the two largest in the whole journal — **875,193 B** (10-01 09:07:19)
+and **684,283 B** (10-01 07:43:25).
+
+**67.3 What the large bodies probably are.** The ~59,400 B cluster recurs on a
+roughly regular cadence and is the right order of magnitude for the system prompt
+re-send that `_system_due` gates to every `_system_every()` (default 8) turns — the
+findings doc measures the system prompt at ~57 KB. The two >600 KB outliers are
+something else again and are not explained here; they are recorded because the
+measurement is real, not because the mechanism is known.
+
+**67.4 Why this matters.** If "sending too much, too automated" were the trigger,
+the account with 875 KB payloads and the heaviest traffic would be the muted one.
+It is the clean one. Payload size joins exposure duration (65.3) in failing to
+separate muted from clean — and like it, it fails in the direction opposite to the
+hypothesis.
+
+**67.5 One honest caveat.** d1 is the account *this agent* runs on, so its large
+bodies are largely this investigation's own traffic. That does not weaken the
+finding — it is the same client, the same headers, the same code path as the muted
+accounts — but it does mean d1's volume is a consequence of the investigation
+rather than of the operator's normal use, and the comparison is between accounts
+driven by different *callers* even though they share one *client*.
