@@ -14,6 +14,7 @@ Grab both from chat.deepseek.com devtools (the /completion request).
 import base64
 import contextlib
 import hashlib
+import calendar
 import json
 import os
 import re
@@ -3356,6 +3357,81 @@ def _merge_muted(mine):
     return out
 
 
+_MUTE_UNTIL_TEXT_RE = re.compile(
+    r"until (\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC")
+
+
+def backfill_muted_from_wirelog(paths=None):
+    """Reconstruct ledger entries from verdicts the journal already recorded.
+
+    WHY: `_muted_until` only holds mutes this process -- or another one since FIX 12
+    created the ledger -- actually persisted. A mute observed BEFORE that file
+    existed was written to the wirelog and to nothing else, so `_muted_now` reports
+    the account as healthy while DeepSeek is still refusing it. Measured on the
+    live pool: j1 was muted until 2026-10-03 12:04 and t1 until 16:40, both issued
+    before the ledger existed, and both read `muted: False` on the account row.
+
+    That is the same failure the ledger was built to prevent, one level up: a
+    durable record that is silently INCOMPLETE is worse than none, because it is
+    believed. This repairs it from evidence the harness genuinely captured.
+
+    The journal's verdict lines carry the account and the full detail text, so the
+    expiry is recoverable exactly. Entries are merged taking the LATER expiry, the
+    same rule `_merge_muted` uses, so a backfill can never shorten a live penalty.
+
+    Returns the number of accounts whose expiry moved forward.
+    """
+    if paths is None:
+        paths = []
+        try:
+            # The journal this process actually writes, wherever the state dir is.
+            paths.append(ds_wirelog.path())
+        except Exception:  # noqa: BLE001
+            pass
+        # And the vendored-runtime journal, which is where an older process wrote
+        # before KILN_STATE_DIR was set.
+        paths.append(os.path.join(_DIR, "ds_wirelog.jsonl"))
+    found = {}
+    for p in paths:
+        if not p or not os.path.exists(p):
+            continue
+        try:
+            with open(p, "r", encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"kind": "verdict"' not in line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    acct = obj.get("account")
+                    detail = str(obj.get("detail") or "")
+                    m = _MUTE_UNTIL_TEXT_RE.search(detail)
+                    if not acct or not m:
+                        continue
+                    y, mo, d, h, mi = (int(g) for g in m.groups())
+                    until = calendar.timegm((y, mo, d, h, mi, 0, 0, 0, 0))
+                    prev = found.get(acct)
+                    if prev is None or until > prev:
+                        found[acct] = until
+        except Exception:  # noqa: BLE001 -- a repair must not break a turn
+            continue
+
+    moved = 0
+    now = time.time()
+    with _mute_lock:
+        for acct, until in found.items():
+            if until <= now:
+                continue
+            prev = _muted_until.get(acct)
+            if prev is None or until > prev:
+                _muted_until[acct] = until
+                moved += 1
+    if moved:
+        _save_muted()
+    return moved
+
+
 def _save_muted():
     try:
         _atomic_json(_MUTE_STATE_FILE, _merge_muted(_muted_until))
@@ -3363,6 +3439,17 @@ def _save_muted():
         pass
 
 
+
+
+# Repair the ledger from the journal once every helper it needs is defined.
+# Placement matters: an earlier attempt put this beside `_muted_until = _load_muted()`,
+# above the function's own definition, so it raised NameError at import and the
+# best-effort except below swallowed it silently. A repair that fails invisibly is
+# worse than none, so the ordering is called out here on purpose.
+try:
+    backfill_muted_from_wirelog()
+except Exception:  # noqa: BLE001 -- a repair must never stop the module importing
+    pass
 def _note_mute(acct_id, until):
     """Record that `acct_id` is refused until epoch `until`.
 
