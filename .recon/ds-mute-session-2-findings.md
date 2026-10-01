@@ -5259,3 +5259,71 @@ true wire set is 27. FIX 25 filters None values out of `header_order` / `header_
 
 Live run on FIX 24: d1 soak (`_humansoak.py`, `HS_TAG=d1`) logged completion bodies with
 the browser's nine keys and all nine hints (31 logged names).
+
+
+## 71. d1 is muted: the first account on the full browser-shaped wire
+
+Run: `_humansoak.py` with `HS_TAG=d1`, after the bridge restart, on the FIX 24 wire
+(nine hints, nine body keys, no navigation headers; verified in the journal for the
+final request of the run). Seven turns, 15-120 s apart. Verdict at 20:13:42 local on the
+completion that followed a forced re-login: `user is muted (until 2026-10-04 12:12 UTC)`,
+a 72 h penalty, issue instant in [20:12:00, 20:13:00) local (minute precision), i.e. 24
+minutes after the first request of the burst and at the 7th completion.
+
+### 71.1 What this rules out
+
+* **Wire shape.** d1 carried the exact header names, hint values and body keys of the
+  operator's Chrome capture and was still muted within 24 minutes. Sections 41, 50 and
+  65.2 showed shape could not separate muted from clean accounts; this removes the last
+  hope that a different shape would have kept them clean. The FIX 24 divergences were real
+  but are not what triggers the penalty.
+* **Volume and pace.** 7 completions at 15-120 s spacing, ~2.2 h into the account's
+  day. Many clean stints sent far more, far faster.
+* **Content.** The prompts were one-line trivia ("Name one colour. One word.").
+* **Cookie age / device.** Same jar and device id (`1f770ba30e`, `d785a8bd8f`) as the
+  preceding clean hours; the jar changed only after the re-login that followed the mute.
+
+### 71.2 What the timing shows (suggestive, post-hoc)
+
+All six post-regime mutes whose issue instant is known to the minute, plus d1, relative to
+the pause that preceded the burst they were issued in:
+
+| account | pause before the burst | issue, minutes after the burst started |
+|---------|------------------------|----------------------------------------|
+| j1 | 43 min | **16** |
+| t1 | 47 min | **18** |
+| v | 40 min | **23** |
+| d1 | 110 min | **24** |
+| t2 | 95 min | 42 |
+| f, jw1 | issued during an idle gap (124 and 67 min after the last request) | - |
+
+Four of the five accounts that were active when the penalty landed were penalised 16-24
+minutes after resuming from a pause of 40 min or more; this matches the operator's
+observation ("the AI comes back after a pause and shortly after it gets banned").
+Test of how surprising that is: the 15 resumes after a pause of >=40 min give 12-minute
+windows that cover 7.3% of the at-risk wall-clock time; 3 of 7 penalties fall inside a
+14-26 min window (P ~ 0.011 by chance). **The window was chosen after seeing the data, so
+this is a lead, not a finding.** It is the only timing structure in the data that none of
+the twelve falsified per-request properties has.
+
+### 71.3 What a browser does in a pause that we do not
+
+The HAR (40 min, one tab) shows `GET /api/v0/client/settings` four times (scopes
+`provider`, `web_upgrade`, `model`, `main`) **every ~300 s, on schedule, including through
+the 435-second and 465-second gaps between completions**, plus ~31 `gator.volces.com`
+telemetry posts in the 6-minute completion-free window. A tab left open therefore looks
+alive to the server for the whole pause. The harness sends nothing between turns: from the
+server's side the account goes silent for 40-110 min and then returns with a burst. This
+is the one behavioural difference between our pauses and a browser's that the capture
+documents. It is NOT shown to matter.
+
+### 71.4 Why nothing further was shipped
+
+No clean ds_direct account remains (every account is penalised until 10-03/10-04), so no
+behavioural change can be observed to help or hurt. A background keep-alive would add
+traffic during exactly the night hours the operator reported penalties in, and the
+evidence in 71.2 is post-hoc. Shipping it unverified would repeat the mistake FIX 23's
+first attempt illustrated: a plausible repair that no measurement backs. The next
+experiment (needs an unmuted account after 10-03 16:40 UTC, or a new base address): run
+two accounts identically with one sending the 300 s settings poll through its pauses and
+one not, 4+ h each, pauses of 45-110 min.
