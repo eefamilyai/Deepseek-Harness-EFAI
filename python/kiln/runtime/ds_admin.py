@@ -147,6 +147,62 @@ def _record_by_slug(slug):
         return {}
 
 
+def _mute_view(account_id):
+    """This account's live mute state, for the account row.
+
+    WHY THIS EXISTS: the account list is the one place an operator looks to answer
+    "which of my logins are banned right now", and it could not answer it. Every
+    other per-account fact was here -- token presence, cookie presence, the device
+    id, the profile folder -- but the mute lived only in `ds_direct`'s ledger and
+    was printed to a debug log nobody reads. That is why a report of "every account
+    except one is muted" could not be checked against anything.
+
+    READ-ONLY ON PURPOSE. `ds_direct._muted_now` prunes expired entries and
+    rewrites the ledger; a UI listing must not mutate state as a side effect of
+    being rendered. This reads the in-memory table under its own lock and reports
+    an expired entry as not-muted, leaving the pruning to the request path that
+    already does it.
+
+    A missing module or an unreadable table reports `muted: None` -- UNKNOWN, not
+    healthy. Reporting False for "I could not tell" would be the exact mistake this
+    field exists to prevent.
+    """
+    blank = {"muted": None, "mute_until": None, "mute_until_local": "",
+             "mute_remaining_s": None, "mute_source": ""}
+    if not account_id:
+        # An orphaned profile has no account id, so no ledger entry can name it.
+        # Not-muted is the true answer here; "unknown" would imply a lookup failed.
+        return dict(blank, muted=False, mute_source="orphan")
+    dd = _ds_direct()
+    if dd is None:
+        return dict(blank, mute_source="unavailable")
+    try:
+        table = getattr(dd, "_muted_until", None)
+        if not isinstance(table, dict):
+            return dict(blank, mute_source="unavailable")
+        lock = getattr(dd, "_mute_lock", None)
+        if lock is not None:
+            with lock:
+                until = table.get(account_id)
+        else:
+            until = table.get(account_id)
+        if until is None:
+            return dict(blank, muted=False, mute_source="ledger")
+        until = float(until)
+        now = time.time()
+        if until <= now:
+            return dict(blank, muted=False, mute_source="ledger")
+        return {
+            "muted": True,
+            "mute_until": until,
+            "mute_until_local": time.strftime("%Y-%m-%d %H:%M:%S",
+                                              time.localtime(until)),
+            "mute_remaining_s": int(until - now),
+            "mute_source": "ledger",
+        }
+    except Exception as e:  # noqa: BLE001 -- a listing must survive a bad ledger
+        record(str(account_id), "mute-read-failed", str(e), level="error")
+        return dict(blank, mute_source="error")
 def _account_view(account_id, acct=None):
     """One account's full identity, for an expandable row in the UI."""
     rec = ds_profile.read_account_identity(account_id)
@@ -185,6 +241,7 @@ def _account_view(account_id, acct=None):
         "did": str(rec.get("did") or ""),
         "origin": str(rec.get("origin") or ""),
         "captured_at": rec.get("updated_at"),
+            **_mute_view(account_id),
     }
 
 
@@ -225,6 +282,7 @@ def _orphan_view(slug):
         "did": str(rec.get("did") or ""),
         "origin": str(rec.get("origin") or ""),
         "captured_at": rec.get("updated_at"),
+            **_mute_view(""),
     }
 
 
