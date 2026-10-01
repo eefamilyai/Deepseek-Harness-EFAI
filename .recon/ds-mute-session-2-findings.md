@@ -5016,3 +5016,70 @@ finding — it is the same client, the same headers, the same code path as the m
 accounts — but it does mean d1's volume is a consequence of the investigation
 rather than of the operator's normal use, and the comparison is between accounts
 driven by different *callers* even though they share one *client*.
+
+
+---
+
+## 68. DEVICE IDENTITY IS DISTINCT PER ACCOUNT — AND THE ONE SURVIVING HYPOTHESIS
+
+**68.1 Lead 12 falsified: the accounts do not share a device identity.** The
+operator's hypothesis was *"logging into an account with a device id and then
+without properly signing out, logging back in again."* If that collided accounts,
+they would share an identity header. They do not:
+
+| header | values across the four accounts |
+|---|---|
+| `x-device-id` | **4 distinct** — d1 `d785a8bd8f`, t1 `e176f36e4a`, t2 `682037d52d`, v `0f5a6a325a` |
+| `x-device-model` | 1 shared (`e3b0c44298` = the empty string, by design) |
+| `sec-ch-ua`, `sec-ch-ua-platform` | 1 shared each |
+| `user-agent`, `accept-language` | 1 shared each |
+| `x-client-version`, `x-client-platform` | 1 shared each |
+
+Each account carries its own device id, and the two **muted** accounts' ids differ
+from each other (`e176f36e4a` vs `682037d52d`). There is no shared-identity
+collision to explain a shared fate.
+
+**68.2 Twelve per-request leads are now falsified by measurement:** request shape
+(41) · the 29-header set, strengthened to set-identity (50, 65.2) · login pattern
+(50.3) · content (51.2) · burst volume (51.2) · pacing (52) · cumulative count (57)
+· IP/machine scope (51.1) · token generations (58) · exposure duration (65.3) ·
+payload size (67) · device identity (68.1).
+
+Ten of the twelve failed in the *same* way: the muted and clean accounts were
+driven by identical code with identical headers and the property being tested did
+not separate them. Two (exposure, payload) separated them *backwards* — the clean
+account had more. This is not a search that ran out of ideas; it is a search whose
+subject does not exist. **No per-request property can produce a differential
+account-level verdict**, and every lead the client can see is per-request.
+
+**68.3 The hypothesis that survives — and it is not falsifiable from this machine.**
+Every observed fact fits **one human operating a fleet of accounts created from a
+single base address**:
+
+* The accounts are Gmail plus-aliases of one address: `deepseek.ee.1`,
+  `+t1`, `+t2`, `+d1`, `+v`, `+f`, `+hunt`, `+j1`, `+jw1` — **eight aliases**,
+  enumerated in section 65's census. To DeepSeek these are eight separate
+  accounts, all registered from the same base identity.
+* The verdict is **account-level, policy-framed, and reasonless to the API** — the
+  shape of a moderation rule about *who is operating*, not about *what was sent*.
+* It is **asynchronous and accumulating**, which matches a rule that fires on a
+  pattern across accounts and time rather than on any one request.
+* It explains why the **heaviest per-request exposure survives** (d1: 1,179
+  requests, 875 KB payloads, clean) while lighter accounts are muted: the rule is
+  not counting requests, it is looking at the account set.
+* It explains the operator's own report — *"my accounts getting muted faster than
+  ever"* — as the fleet growing, not as any single client defect.
+* **It is unfalsifiable from inside the sandbox.** Nothing the client sends or
+  receives carries the account-set view; that lives in DeepSeek's moderation
+  system and is only reachable through the appeal channel.
+
+It is stated here as the leading hypothesis, clearly labelled unproven. It is
+consistent with every measurement in this document, which is more than can be said
+for any of the twelve that were tested — but consistency is not evidence, and this
+document has falsified eleven hypotheses that were merely consistent.
+
+**68.4 What would test it.** One account, created from its own base address,
+driven by this same client at this same volume, on this same machine, and observed
+for 72 h. If it stays clean while the aliases keep muting, the fleet pattern is
+confirmed. That requires a new base address and is the operator's call, not this
+machine's.
