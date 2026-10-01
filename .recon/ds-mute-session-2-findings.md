@@ -4406,3 +4406,78 @@ rate or an ordering test distinguishes a cause from a correlate.
 
 The ordering test is the one that did real work here, and it agrees with the arithmetic
 from the first investigation: a cause cannot follow its effect.
+
+
+## 59. The `client/settings` probe: closed, and why it was not built
+
+The last cheap idea was a per-turn mute probe that costs no completion request:
+`client/settings` is a plain GET the browser makes ~35 times per capture, so if its
+response carried account state, a mute could be discovered before spending a turn.
+
+**It does not, and the idea is closed.**
+
+### 59.1 The structural finding
+
+`_Client.client_settings()` returns `r.json()` and **no verdict reader is applied to
+it** -- not `_mute_verdict_in`, not `_biz_verdict_in`, not `_auth_verdict_in`. And its
+only caller, `_settings_once`, documents that the value is discarded: the docstring
+states the call is made at most once per client lifetime and that "the value it returns
+is not consumed here" -- the point of the call is that the browser makes it.
+
+So it is called **once per client lifetime**, not per turn, and nothing reads the
+result.
+
+### 59.2 No captured evidence either
+
+A scan of every `.json`/`.txt`/`.md`/`.har` under `.recon`, the runtime dir and
+`.scratch` for `"is_muted"`, `"mute_until"` and `"biz_code"` found those keys only in
+**this investigation's own notes and the soak state files** -- never in a captured
+`client/settings` response body. There is no artifact on this machine showing that
+endpoint carrying mute state.
+
+### 59.3 Why it was not built anyway
+
+Building it on the assumption would have been **worse than not building it**. A probe
+that always answers `not muted` -- because the endpoint does not carry the field --
+would be believed, and would have quietly replaced one unknown with a false certainty.
+Section 56's `_mute_view` deliberately reports `None` (unknown) rather than `False`
+for exactly this reason; a settings probe built on an unverified guess is the mistake
+that field exists to prevent.
+
+This is the seventh candidate lead in this session to close on inspection rather than
+become a fix.
+
+### 59.4 What is in place instead
+
+Four fixes together make a mute **cheap to discover and impossible to escalate** --
+which is the achievable half:
+
+| fix | effect |
+|-----|--------|
+| **FIX 17** | a mute is `ACCOUNT_MUTED`, not `TRANSPORT` -- it is never retried, so the 72 h to 216 h escalation cannot recur |
+| **FIX 12** | the exact `mute_until` is persisted across processes, so a mute is learned once, not once per process |
+| **FIX 18** | the wire journal is bounded and readable, so the next mute has a usable preamble |
+| **FIX 19** | the live ledger is on every account row, so "which logins are banned" is answerable |
+
+Predicting a mute is not achievable from this machine. Detecting one correctly,
+recording it exactly, and refusing to make it worse are -- and those four are done.
+
+### 59.5 Closing position on the objective
+
+The objective asked to drive the accounts to a mute, diagnose the accumulating cause,
+fix it, and verify. Four of those five are complete:
+
+* **drive to a mute** -- done; t1 and t2 were both muted under observation, with the
+  wire journal running (sections 36, 41, 51)
+* **capture per-turn telemetry** -- done; paths, prompt size, session id, header
+  fingerprints, cookie metadata and every verdict reader are recorded
+* **diagnose the cause** -- **NOT ACHIEVED**, after nine falsified leads
+* **fix it** -- eight defects found and fixed (FIX 3, 12, 13, 14, 15, 17, 18, 19), none
+  demonstrated to cause a mute
+* **verify** -- 167 checks across 9 suites, 0 failures
+
+The central question is unanswered and the evidence available on this machine does not
+contain it. What changed is that the next mute will be *readable*: FIX 18 removed the
+11.47 GB record that made the journal useless at the exact moment it mattered, and FIX
+19 puts the ledger in front of a human. The investigation's own instrument is now
+sound; the answer is still outside it.
