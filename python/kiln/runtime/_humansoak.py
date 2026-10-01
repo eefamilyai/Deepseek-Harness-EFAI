@@ -24,8 +24,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ds_direct as ds
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LOG = os.path.join(HERE, "_humansoak.jsonl")
-STATE = os.path.join(HERE, "_humansoak_state.json")
+# HS_TAG gives a second run its own log and checkpoint, so a d1 run cannot resume
+# or overwrite the t1 run's state.
+_TAG = os.environ.get("HS_TAG", "").strip()
+_SUF = ("_" + _TAG) if _TAG else ""
+LOG = os.path.join(HERE, "_humansoak%s.jsonl" % _SUF)
+STATE = os.path.join(HERE, "_humansoak_state%s.json" % _SUF)
 
 TURNS = int(os.environ.get("HS_TURNS", "200"))
 DELAY_MIN = float(os.environ.get("HS_DELAY_MIN", "180"))   # 3 min

@@ -5148,7 +5148,7 @@ against the live wire.
 | client hints on chat.deepseek.com | **all nine, 47 of 47** | triple (since 8b8e59fd7c) |
 | client hints on hif-*.deepseek.com | triple | triple |
 | body keys | **nine**: `chat_session_id, parent_message_id, model_type, prompt, ref_file_ids, thinking_enabled, search_enabled, action, preempt` | **seven** on all 898 records (no `action`, no `preempt`) |
-| `sec-fetch-user`, `upgrade-insecure-requests` | absent on every XHR | **present on 228 of 228** (running bridge predates `_NOT_A_NAVIGATION`) |
+| `sec-fetch-user`, `upgrade-insecure-requests` | absent on every XHR | logged as present on 228 of 228 -- **a journal artefact, see 70.5; absent on the wire** |
 | `x-hif-dliq` | present on 5 of 5 completions, one static 73-char value | **absent on 228 of 228** |
 | `hif-dliq.deepseek.com` | `net::ERR_NAME_NOT_RESOLVED` in the browser too | NXDOMAIN here too |
 
@@ -5239,3 +5239,23 @@ documented. None of them differs between a muted and a clean account, so none is
 discriminator. The two things left that can be measured from here are (1) d1 surviving
 past ~6.5 active hours on the FIX 24 wire, and (2) the single-account-per-base-address
 test (section 68). Both need the bridge restarted.
+
+
+### 70.5 RETRACTION: the nav headers were never on the wire (FIX 25)
+
+70.1 first said `sec-fetch-user` and `upgrade-insecure-requests` were sent on 228 of 228
+d1 completions. That was wrong, and the bridge restart did not change it: the d1 run on
+the FIX 24 code logged them as present too. `ds_wirelog.install` wrote
+`sorted(headers.keys())` from the kwargs dict, and `_NOT_A_NAVIGATION` puts those two keys
+in with value `None`. Measured against a local listener with curl_cffi 0.16.2
+(`impersonate="chrome150"`): with `{"sec-fetch-user": None, "upgrade-insecure-requests":
+None}` neither header is sent; without them curl_cffi adds both. So the wire was already
+correct and the journal over-reported.
+
+Consequence for earlier sections: every "29-header set" comparison counted the same two
+phantom names for every account, so set-identity (50, 65.2) is unaffected, and the
+true wire set is 27. FIX 25 filters None values out of `header_order` / `header_fp`;
+`test_ds_wirelog_fix25_none_headers.py` (3 checks).
+
+Live run on FIX 24: d1 soak (`_humansoak.py`, `HS_TAG=d1`) logged completion bodies with
+the browser's nine keys and all nine hints (31 logged names).

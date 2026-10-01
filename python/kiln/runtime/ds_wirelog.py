@@ -294,7 +294,13 @@ def install(sess, account=None):
 
     def wrapped(method, url, *args, **kwargs):
         seq = _next_seq()
-        headers = kwargs.get("headers") or {}
+        # A header whose value is None is a REMOVAL instruction to curl_cffi: it
+        # suppresses the impersonation default and nothing goes on the wire. The
+        # journal records what is sent, so those keys are left out. Measured
+        # against a local listener: with {"sec-fetch-user": None} the header is
+        # absent, without it curl_cffi adds it.
+        headers = {k: v for k, v in (kwargs.get("headers") or {}).items()
+                   if v is not None}
         body = kwargs.get("json")
         if body is None:
             body = kwargs.get("data")
