@@ -4173,3 +4173,84 @@ It has not reached the ~600 mark section 51.4 named as the outer bound for killi
 number outright, but the trend is unambiguous and the threshold reading is dead. What
 remains genuinely unknown is unchanged: what issued nine penalties to the accounts this
 investigation drove, and not to the one it runs on.
+
+
+## 56. FIX 19 — the account list could not show mute state, which is why the operator's report was unverifiable
+
+### 56.1 The finding
+
+The operator said: *"now the d1 account, the one you are running on, is now the only
+one that isnt muted"*. That is a claim about a **list** — about what a screen shows —
+and it could not be checked against anything, because the account list had no mute
+field.
+
+`ds_admin.list_accounts()` returns one row per account carrying token presence, cookie
+presence, password presence, device id, device-id validity, profile folder, record
+path, and capture time. It carried **no mute state**, and `ds_admin.py` contained the
+string "mute" **zero times**.
+
+A search of the whole machine for where mute state *was* reported found exactly one
+place:
+
+    config.dbg("ds_direct: %d account(s) muted, deprioritised: %s" % ...)
+
+— a debug line in `ds_direct._account_order`, which renders nowhere an operator looks.
+
+So the one question an operator actually asks of an account list — *which of my logins
+are banned right now* — was the one question it could not answer. The operator was
+reading the mute from somewhere else (the harness's own error text when a turn fails),
+which reports only accounts that were *tried*, not the ones being avoided.
+
+### 56.2 The fix
+
+`_mute_view(account_id)` returns five fields, and both `_account_view` and
+`_orphan_view` spread them into their row:
+
+| field | meaning |
+|-------|---------|
+| `muted` | True / False / **None = unknown** |
+| `mute_until` | the raw epoch float, as the ledger holds it |
+| `mute_until_local` | the same instant in local time, for reading |
+| `mute_remaining_s` | seconds left, so a UI needs no clock arithmetic |
+| `mute_source` | `ledger` / `orphan` / `unavailable` / `error` |
+
+Three properties are deliberate and each is pinned by a test:
+
+1. **Read-only.** `ds_direct._muted_now` prunes expired entries and *rewrites the
+   ledger*. A listing must not mutate state as a side effect of being rendered, so
+   this reads the in-memory table under its own lock and reports an expired entry as
+   not-muted, leaving pruning to the request path that already does it.
+2. **Unknown is not healthy.** A missing module or an unreadable table reports
+   `muted: None`, never `False`. Reporting "healthy" for "I could not tell" is the
+   exact failure this field exists to prevent.
+3. **An orphan is not unknown.** An orphaned profile has no account id, so no ledger
+   entry can name it: `muted: False` with source `orphan`.
+
+### 56.3 Verified against the live ledger
+
+`list_accounts()` against the real state dir reports:
+
+    deepseek.ee.1+d1@gmail.com      muted=False
+    deepseek.ee.1+f@gmail.com       muted=False
+    deepseek.ee.1+hunt@gmail.com    muted=False
+    deepseek.ee.1+j1@gmail.com      muted=False
+    deepseek.ee.1+t1@gmail.com      muted=False
+    deepseek.ee.1+t2@gmail.com      muted=True   until 2026-10-04 04:53:17 (216085 s)
+    deepseek.ee.1+v@gmail.com       muted=False
+    (orphan profile)                muted=False  source=orphan
+
+**t2 is the only pooled account the ledger knows to be muted** — because the ledger
+only records mutes the harness *observed*. That is the same caveat section 51.1 states
+from the other direction: `muted=False` means "no mute observed", not "server says this
+account is fine". The field makes the local record visible; it does not make the local
+record complete.
+
+### 56.4 The test caught a real gap
+
+`test_ds_admin_mute_view.py` (6 tests) failed on its first run:
+`test_orphan_row_has_no_account_id_and_is_not_unknown` reported `None is not False`.
+The orphan-case tightening had been written in a cell that was **replaced by a goal
+round and never executed**. The suite caught the missing edit, which is the reason the
+case is asserted separately rather than folded into another test.
+
+All 6 pass; full runtime suite 167 checks across 9 files, 0 failures.
