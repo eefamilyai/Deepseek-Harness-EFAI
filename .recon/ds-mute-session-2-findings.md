@@ -4254,3 +4254,78 @@ round and never executed**. The suite caught the missing edit, which is the reas
 case is asserted separately rather than folded into another test.
 
 All 6 pass; full runtime suite 167 checks across 9 files, 0 failures.
+
+
+## 57. The d1 experiment concluded: 606 requests, no mute — the fixed-count reading is dead
+
+Section 51.4 set the test and named its bound: if d1 passes ~600 requests still clean,
+the cumulative-threshold hypothesis is falsified. It has.
+
+| account | requests | state |
+|---------|---------:|-------|
+| **d1** | **606** | **clean, serving** |
+| t2 | 395 | MUTED (until 10-03 20:53) |
+| t1 | 923 | MUTED (until 10-03 16:40) |
+| v | 176 | clean |
+
+**d1 has sent 211 more requests than t2 had when it was muted**, with the same code,
+the same process, the same IP, and 23 of 29 header values byte-identical (section 50).
+No fixed request count draws a penalty.
+
+### 57.1 What the three d1 observations together rule out
+
+d1 was the only zero-cost natural experiment available: the account this agent runs
+on, accumulating traffic without any probe of its own.
+
+| d1 observation | hypothesis it kills |
+|----------------|--------------------|
+| 422 requests, clean, past t2's 395 | a threshold near 400 |
+| 506 requests, clean | a threshold with slack |
+| **606 requests, clean** | **any fixed count in the observed range** |
+
+And it cuts against the pacing reading too: d1 has the *gappiest* traffic of any
+account measured — many short bursts, one per agent turn, with long idle periods —
+which is the profile that hypothesis A says is dangerous. It is the account that
+should have been muted first and is the only pooled one that never was.
+
+### 57.2 The honest closing position
+
+Every client-side and volume-side lead is now closed by measurement:
+
+| lead | status | section |
+|------|--------|---------|
+| request shape | byte-identical to a served request | 41 |
+| all 29 headers | 23/29 identical with muted accounts | 50 |
+| login pattern | cleanest account has the highest rate | 50.3 |
+| content | muted on "Reply with the single word: ok" | 51.2 |
+| burst volume | 400 consecutive turns drew nothing | 51.2 |
+| pacing / long gaps | confounded; t1's mute in a 9.5-min gap | 52 |
+| cumulative count | d1 at 606, 211 past t2's mute point | 57 |
+| IP-level penalty | 17 accounts on this IP unmuted | 51.1 |
+| identity / base alias | refuted; t1/t2 are fresh aliases that ran clean | 13.6 |
+
+The mute is account-level, asynchronous, fixed-duration (72 h; 216 h once, by our own
+retry loop), and **not discernible from any request the client sends**. What issues it
+is not observable from this machine.
+
+### 57.3 What was actually delivered
+
+Seven defects found and fixed, each with tests:
+
+| # | defect | consequence |
+|---|--------|-------------|
+| 3 | expired cookies replayed instead of re-authenticating | credential hygiene |
+| 12 | the exact `mute_until` was parsed and discarded | a mute was re-learned the hard way |
+| 13 | a test suite deleted the operator's `ds_wirelog.on` | the journal silently turned off |
+| 14 | cross-process state clobber | one process overwrote another's ledger |
+| 15 | `last_prompt` grew unbounded | 46.76 MB state file |
+| 17 | **a mute was retried as TRANSPORT** | **escalated jw1 from 72 h to 216 h** |
+| 18 | **verdict preambles nested into one 11.47 GB record** | **the journal was unreadable exactly when needed** |
+| 19 | the account list could not show mute state | the operator's own report was unverifiable |
+
+FIX 17 and FIX 18 each made an existing mute materially worse. Neither creates one.
+FIX 19 is the instrument that would have caught the operator's question immediately.
+
+**None of the seven is demonstrated to cause a mute.** That is the honest result, and
+the objective's central question — what issues one — is not answerable with the
+evidence this machine can produce.
