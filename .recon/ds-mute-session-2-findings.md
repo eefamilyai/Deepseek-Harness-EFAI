@@ -3795,3 +3795,166 @@ Defects found and fixed along the way, none demonstrated to cause a mute:
 
 FIX 17 and FIX 18 are the two that made an existing mute materially worse. Neither
 creates one.
+
+
+## 51. 400 consecutive turns drew NO mute — and the pacing hypothesis comes back
+
+This section started as an account census and turned into the most informative
+measurement in the document. It also corrects a counting error I made in the
+first pass (51.0).
+
+### 51.0 Correction first: the soak logs do not contain mutes
+
+A first pass counted "mute mentions" per soak log and reported 84, 240, 400, 177.
+Those were **the field name `muted`**, which every soak row carries and which is
+`null` in every clean row. Counting rows where a mute is actually *real* — an
+`err` naming one, or a true flag — gives **0 for every soak**. The only file with
+real mute records is `_cycle.jsonl` (the 2026-10-02 20:19 verdict from the first
+session). Recorded because it is the fifth substring-over-log-text error in this
+document, and the same fix applies: count structured fields, not words.
+
+### 51.1 The census: 19 accounts on this machine, 2 with observed mutes
+
+Every `ds_sessions.json` under the checkout and `%TEMP%` was parsed. **19 distinct
+accounts** appear, including ones never in the pool: `deepseek.ee.1+4/+5/+7`,
+`deepseek.ee.1/2/3`, `dsfreeapi1/2@yahoo.com`, `jaryl.ery.api@gmail.com`,
+`eefamilyai@gmail.com`.
+
+Consolidating every mute source (ledger, wirelog verdicts, soak logs):
+
+| account | mute evidence |
+|---------|---------------|
+| t1 | wirelog, until 10-03 16:40 UTC |
+| t2 | ledger + wirelog, until 10-03 20:53 UTC |
+| **the other 17** | **none observed** |
+
+This is **not** an IP-level penalty. Seventeen accounts on this machine, sharing
+this IP, have no observed mute. The two that do are the two the soaks drove.
+
+### 51.2 The result that matters: 400 consecutive turns, zero mutes
+
+| soak | turns | span | turns/min | median gap | outcome |
+|------|------:|-----:|----------:|-----------:|---------|
+| `_fastsoak_t1` | **400** | 121.5 min | **3.29** | 10.9 s | **clean** |
+| `_syssoak_t2` | **240** | 69.7 min | **3.44** | 10.7 s | **clean** |
+| `_archive humansoak` (v) | 103 | 211.8 min | 0.49 | 5.4 s | clean |
+| `_t2soak` | 169 | 607.4 min | 0.28 | 12.1 s | MUTED at turn 168 |
+| `_humansoak` | 16 | 294.2 min | **0.05** | 369.8 s | MUTED at turn 15 |
+
+**Four hundred turns back to back, at 3.3 turns/minute, drew no mute at all.**
+That falsifies any "N requests in a row" theory outright — the fastest, densest
+run in the whole investigation is one of the two that stayed clean.
+
+Every prompt in these runs was innocuous: *"Reply with the single word: ok"*,
+*"What is 2+2? Answer with just the number."*, *"Name one colour. One word."*,
+*"What day comes after Monday? One word."* **t1 and t2 were muted while sending
+those**, and `v` sent the *same* prompts for 103 turns without one. Content is
+not the discriminator either.
+
+### 51.3 The operator was pointing at something real
+
+The operator said: *"when the AI keeps running, it usually doesnt get muted, until
+theres a long pause"*. The two cleanest runs are the two with the highest sustained
+rate; the two muted runs are the two with the lowest. On this table the hypothesis
+has real support.
+
+**But it is confounded with cumulative exposure, and I am not going to pretend
+otherwise.** Two framings both fit:
+
+**A — pacing.** Continuous activity is safe; idle time is when a moderation pass
+lands. Clean runs: 3.29 and 3.44 turns/min. Muted runs: 0.05 and 0.28 turns/min.
+
+**B — cumulative.** A threshold near 400 total requests, regardless of pacing.
+t1 was muted after 400 (fastsoak) + 16 (humansoak) ≈ 416. t2 after 240 + 168 ≈ 408.
+v stopped at 103 and d1 is at 41.
+
+Neither separates cleanly. `v` at 0.49 turns/min was clean, between the muted
+`_t2soak` (0.28) and the clean fast runs (3.3) — and `v` also stopped earliest of
+the human-paced runs. **Every candidate discriminator here is also a measure of how
+long the account was exposed**, so this table cannot distinguish A from B.
+
+### 51.4 A falsifiable prediction, running now, costing nothing
+
+**d1 is this agent's own account.** It is serving this session, and it is climbing:
+**370 requests** in the live journal at the time of writing, with no mute.
+
+* If **B** holds, d1 draws a mute near its 400th request.
+* If d1 passes **~600 requests still clean**, B is falsified.
+
+No new traffic is needed: this agent's own turns generate it. This is the first
+genuinely falsifiable, zero-cost test this investigation has had, and it is the
+thing to check on the next pass.
+
+**A caveat on the test itself:** d1's traffic is shaped like neither soak. It is
+many short bursts (one per agent turn) with long gaps between, which is closer to
+the *muted* profile than the clean one. If d1 is muted, that supports A; if it
+sails past 600, it weakens both.
+
+### 51.5 What this changes
+
+Sections 40–50 progressively closed every client-side lead: request shape (41),
+headers (50), login pattern (50.3), content (51.2). This section closes the last
+one — **volume in a burst** — and reopens the operator's original timing
+observation with real support, while stating plainly that the pacing reading and
+the cumulative reading are confounded in every table I have.
+
+
+## 52. Correction to 51.3 — the gap "separation" is confounded, and t1's mute lands in a SHORT gap
+
+Section 51.3 reported that the clean runs and the muted runs separate on gap size, and
+flagged the confound. This section tests it at the event level and the separation does
+not hold.
+
+### 52.1 Run-level: it looks like a clean separation
+
+| soak | turns | median gap | max gap | gaps > 45 min | outcome |
+|------|------:|-----------:|--------:|--------------:|---------|
+| `_fastsoak_t1` | 400 | 11 s | 24.3 min | 0 | clean |
+| `_syssoak_t2` | 240 | 11 s | 24.3 min | 0 | clean |
+| `_archive humansoak` (v) | 103 | 5 s | 35.1 min | 0 | clean |
+| `_humansoak` (t1) | 16 | 370 s | **122.2 min** | 2 | MUTED |
+| `_t2soak` (t2) | 169 | 12 s | **98.3 min** | 6 | MUTED |
+
+Clean runs max out at 35.1 minutes; muted runs reach 98.3 and 122.2. A 63-minute
+margin. It is tempting to call this the answer.
+
+### 52.2 Event-level: it is not the answer
+
+What matters is not the largest gap *anywhere in the run* but the gap that **contains
+the issue instant**. Computing that:
+
+| mute | issue (local) | gap before | gap after | enclosing gap |
+|------|---------------|-----------:|----------:|--------------:|
+| t1 (`_humansoak`) | 10-01 00:40:00 | 8.6 min | 0.9 min | **9.5 min** |
+| t2 (`_t2soak`) | 10-01 04:53:00 | 22.8 min | 75.4 min | 98.2 min |
+| j1 (provider) | 09-30 20:04:00 | no later events | — | — |
+
+**t1's mute lands in a 9.5-minute gap** — comfortably inside the range the clean runs
+also contained. Only t2 sits inside a genuinely long gap.
+
+So of the two muted runs, one does not fit the story at all. The run-level statistic
+was measuring the *shape of the soak*, not the state of the account at the moment the
+mute was issued.
+
+### 52.3 Why this was always going to be confounded
+
+The fast soaks were **built** to run continuously; the human soaks were **built** with
+deliberate gaps. "Has a long gap" and "is the human-paced soak" are the same variable.
+Neither pacing nor run length was randomised, so no table built from these runs can
+separate them. Section 51.3 said this; section 52 shows the data cannot rescue it.
+
+This also agrees with section 43, which measured the gap before the mute across the
+**seven** mutes of the first session and found 15.9, 14.9, 3.0, 0.7, 0.3 and 0.0
+minutes — every one under 16 minutes. Today's t1 result (9.5 min) is the same shape.
+
+### 52.4 Standing after 52 sections
+
+The operator's pacing intuition has real support in the *aggregate* table and no
+support at the *decisive* instant. Both readings are confounded with soak design.
+Recording it as unresolved rather than picking the reading that flatters the
+hypothesis.
+
+What remains genuinely open and testable is the d1 prediction (51.4): d1 is this
+agent's account, at **382 requests** as of 10-01 16:13, still clean. If the cumulative
+threshold (~400) is real, it is about to fire. If d1 passes ~600 clean, that specific
+number is dead. This needs no new traffic and no operator action.
