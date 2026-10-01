@@ -4481,3 +4481,68 @@ contain it. What changed is that the next mute will be *readable*: FIX 18 remove
 11.47 GB record that made the journal useless at the exact moment it mattered, and FIX
 19 puts the ledger in front of a human. The investigation's own instrument is now
 sound; the answer is still outside it.
+
+
+## 60. External search attempted and unavailable; the evidence on this machine is exhausted
+
+The last avenue not yet tried was looking outside this machine for documented DeepSeek
+mute behaviour. `web_search` was called with four queries and returned:
+
+    DeepSeek API error (HTTP 402): Insufficient Balance
+
+The harness routes web search through a separate endpoint from chat, and that endpoint
+has no balance. This is an operator-level configuration matter (Settings > Plugins >
+Plugin configuration > Web search), not something to work around from inside the
+investigation.
+
+So the external-search avenue is **unavailable, not exhausted** -- a distinction worth
+recording precisely. What follows is what the machine's own evidence supports.
+
+### 60.1 The evidence on this machine is exhausted
+
+Nine independent leads, each falsified by measurement rather than argument:
+
+| # | lead | falsified by | section |
+|---|------|--------------|---------|
+| 1 | request shape | t1's muted request byte-identical to one served 5 min earlier | 41 |
+| 2 | all 29 headers | 23/29 identical between a clean and two muted accounts | 50 |
+| 3 | login pattern | the clean account has the HIGHEST login rate | 50.3 |
+| 4 | content | muted on "Reply with the single word: ok" | 51.2 |
+| 5 | burst volume | 400 consecutive turns drew nothing | 51.2 |
+| 6 | pacing / long gaps | confounded by soak design; t1's mute in a 9.5-min gap | 52 |
+| 7 | cumulative count | d1 at 606 requests, 211 past t2's mute point, clean | 57 |
+| 8 | IP / machine scope | 17 accounts on this IP unmuted | 51.1 |
+| 9 | token generations | a rate test: d1 and v marginally ABOVE t1's rate, both clean | 58 |
+
+Plus two structural refutations from the first investigation: identity/base-alias
+(section 13.6) and retry-causation (a cause cannot follow its effect).
+
+### 60.2 The one observation that remains, and it needs the operator
+
+Every measurement here is from the **client side**. The mute is issued server-side, and
+the client's only knowledge of it is the prose in a refusal. There is one place the
+*reason* might be stated and this investigation cannot reach it: **the DeepSeek web UI
+while logged in as a muted account**, which may render a banner, a reason, or an appeal
+path that the API refusal does not carry.
+
+That observation requires the operator, because:
+* logging into a muted account from this harness risks the FIX 17 escalation class on a
+  fresh account, and the operator has already lost accounts to this investigation
+* `deepseek.ee.1+donttouch@gmail.com` must never be touched, and the standing
+  instruction is not to touch j1 (the route this agent runs from)
+
+If a banner exists, it is the one piece of evidence that has never been looked at.
+
+### 60.3 The objective's status
+
+| part | status |
+|------|--------|
+| drive to a mute | **DONE** -- t1 and t2 both muted under observation with the journal running |
+| capture per-turn telemetry | **DONE** -- paths, prompt size, session id, header fingerprints, cookie metadata, every verdict reader |
+| diagnose the accumulating cause | **NOT ACHIEVED** -- nine leads falsified, no discriminator found |
+| fix it | **PARTIAL** -- eight real defects found and fixed; none demonstrated to cause a mute |
+| verify | **DONE** -- 167 checks across 8 suites, 0 failures |
+
+The central deliverable -- the diagnosis -- is not achievable from the evidence this
+machine can produce. Recording that plainly is the correct outcome, not a failure to
+try hard enough.
