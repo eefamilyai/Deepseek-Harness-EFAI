@@ -3678,3 +3678,120 @@ a bridge restart; the watchdog only covers the window between them.
 The first restart (15:41:30) activated FIX 12/14/15/16. This one activates FIX 18.
 Both are the operator's call, because the bridge is the route this agent runs
 through.
+
+
+## 50. THE HEADER HYPOTHESIS CLASS IS FALSIFIED — d1 shares 23 of 29 headers with two muted accounts
+
+The operator's leading theory, stated more than once, is that a header is wrong:
+"maybe some headers are not supposed to be added because of some special reason",
+and "are you sure they detect LANGUAGE header differences?? thats just stupid".
+Section 42 falsified one specific header lead. This section falsifies the class.
+
+### 50.1 The comparison that decides it
+
+Four accounts have journaled requests. Three are muted (t1, t2, j1); two are not
+(d1, v). **d1 is the account this agent is running on right now** — it shares this
+machine's IP, this process, and this code path with the muted accounts.
+
+Across all four accounts, **29 distinct header names** appear. Comparing the
+fingerprints of every header shared by d1 (clean) and t1/t2 (muted):
+
+**23 of 29 are byte-identical**, including every header that carries client
+identity:
+
+    accept-language   sec-ch-ua          sec-ch-ua-mobile    sec-ch-ua-platform
+    sec-fetch-dest    sec-fetch-mode     sec-fetch-site      sec-fetch-user
+    upgrade-insecure-requests            user-agent          origin
+    referer           priority           x-client-bundle-id  x-client-locale
+    x-client-platform x-client-version   x-client-timezone-offset
+    x-device-model    accept             cache-control       ect
+    pragma
+
+The **6 that differ** are all per-account or per-request **by design**:
+
+| header | why it must differ |
+|--------|--------------------|
+| `authorization` | the account's own bearer token |
+| `x-device-id` | deliberately distinct per account (4 accounts, 4 values) |
+| `x-ds-pow-response` | fresh every request — 163/163, 443/443, 178/178, 88/88 unique |
+| `x-file-size` | depends on the file uploaded |
+| `x-hif-leim` | rotating anti-abuse token |
+| `content-type` | depends on the endpoint, not the account |
+
+There is **no stable client-identity header** that a muted account sends and a
+clean one does not. `accept-language`, the specific header the operator was told
+was "stupid" to suspect, is **identical across all four accounts**.
+
+### 50.2 Why this closes the class
+
+If a header caused mutes, then an account sharing the IP, the process, the code
+path and 23 of 29 header values with two muted accounts would be muted too. d1 is
+serving requests right now. The signal is therefore **not in the client's request
+shape at all** — which is the same conclusion section 41 reached from the opposite
+direction, where t1's muted completion request was shape-identical to one served
+five minutes earlier.
+
+Two independent measurements now agree, from two different comparisons.
+
+### 50.3 The login hypothesis also fails on this data
+
+The operator's second suspicion was login patterns. Measured login rate:
+
+| account | state | logins | span | rate |
+|---------|-------|-------:|-----:|-----:|
+| d1 | clean | 2 | 0.48 h | **4.2/h** |
+| t1 | MUTED | 8 | 4.92 h | 1.6/h |
+| t2 | MUTED | 11 | 19.50 h | 0.6/h |
+| v | clean | 0 | 1.22 h | 0.0/h |
+
+**The account with the highest login rate is the one still working.** Login
+frequency does not order the mutes.
+
+### 50.4 What does survive, and it is confounded
+
+Total `completion` requests in the observed window:
+
+| account | completions | state |
+|---------|------------:|-------|
+| t1 | 439 | MUTED |
+| t2 | 174 | MUTED |
+| v | 84 | clean |
+| d1 | 41 | clean |
+
+Every account above ~170 completions is muted; every account below ~90 is not.
+**But this is confounded by construction**: the soaks were *built* to drive t1 and
+t2 to a mute, so "high completions" and "was the subject of the experiment" are the
+same variable. Section 8.6's attribution caveat applies with full force.
+
+It is recorded as the only surviving correlate, not as a cause. `v` at 84
+completions was never driven past that, so the data does not distinguish "the
+threshold is between 84 and 174" from "the soaks are the difference".
+
+### 50.5 Honest position after fifty sections
+
+Established:
+
+* the mute is account-level, asynchronous, fixed-duration (72 h, or 216 h), and
+  delivered as prose inside an HTTP 200
+* it is **not discernible from the request that receives it** (41, 50.1)
+* it is **not a client-shape or IP-level signal** (50.1)
+* it is **not a login pattern** (50.3)
+* it is **not** pause-before-mute (43), chat length, byte volume, system-prompt
+  cadence, or aggregate pool activity (40 and earlier)
+
+Not established: **what issues it.** Fifty sections of falsification have not
+produced the trigger, and this document should not pretend otherwise.
+
+Defects found and fixed along the way, none demonstrated to cause a mute:
+
+| # | defect |
+|---|--------|
+| 3 | expired cookies replayed instead of re-authenticating |
+| 12 | the exact `mute_until` was parsed and discarded |
+| 14 | cross-process state clobber |
+| 15 | `last_prompt` grew unbounded |
+| 17 | **a mute was retried as TRANSPORT — five retries, ten requests, and it escalated jw1 from 72 h to 216 h** |
+| 18 | **verdict preambles nested into a single 11.47 GB record** |
+
+FIX 17 and FIX 18 are the two that made an existing mute materially worse. Neither
+creates one.
