@@ -352,46 +352,50 @@ try:
           "authorization" not in {k.lower() for k in login_headers},
           "an expired token on a fresh login is itself the failure being fixed")
 
-    # ── the chat paths send the TRIPLE, not the high-entropy nine ───
-    # Chrome sends the six high-entropy hints only to an origin that granted
-    # them via Accept-CH. Measured against chat.deepseek.com with real desktop
-    # Chrome: no response and no meta tag carries that grant, and Chrome sends
-    # the triple on every request. Six hints this origin never asked for
-    # describe a browser state that cannot exist here.
+    # ── chat.deepseek.com calls send all NINE hints ─────────────────
+    # The operator's capture of the real site (Chrome 153, Windows) carries all
+    # nine on 47 of 47 chat.deepseek.com requests. Only hif-* gets the triple.
     triple = di.client_hints()
-    check("the chat hint set is the triple", len(triple) == 3, repr(sorted(triple)))
+    check("the low-entropy set is the triple", len(triple) == 3, repr(sorted(triple)))
     _extra = set(di.client_hint_extras())
+    nine = di.client_hints_full()
     for name, hdrs in (("the request", headers), ("the login request", login_headers)):
-        check("%s carries the client-hint triple" % name,
-              all(hdrs.get(k) == v for k, v in triple.items()),
-              repr({k: hdrs.get(k) for k in triple if hdrs.get(k) != triple[k]}))
-        leaked = sorted(_extra & set(hdrs))
-        check("%s sends NO ungranted high-entropy hint" % name, not leaked,
-              "this origin grants no Accept-CH, so these advertise a browser "
-              "state that cannot exist: %s" % leaked)
+        check("%s carries all nine client hints" % name,
+              all(hdrs.get(k) == v for k, v in nine.items()),
+              repr({k: hdrs.get(k) for k in nine if hdrs.get(k) != nine[k]}))
+        missing = sorted(_extra - set(hdrs))
+        check("%s is missing no high-entropy hint" % name, not missing, repr(missing))
 
-    # The high-entropy half is DERIVED from the User-Agent, so the version in
-    # the hint and the version in the UA cannot drift apart. Nothing on the chat
-    # path sends it (see above), but the derivation is still held to the UA here
-    # so it stays sound for any origin that DOES grant the set.
-    full = di.client_hints_full()
-    check("the derivable set is still the triple plus six extras",
-          len(full) == 9 and set(full) == set(di.client_hints()) | _extra,
-          repr(sorted(full)))
-    check("the full-version hint is the User-Agent's version",
-          full["sec-ch-ua-full-version"] == '"%s"' % di._ua_version(),
-          "%s vs UA %s" % (full["sec-ch-ua-full-version"], di._ua_version()))
+    check("the derivable set is the triple plus six extras",
+          len(nine) == 9 and set(nine) == set(di.client_hints()) | _extra,
+          repr(sorted(nine)))
+    # The UA is frozen (150.0.0.0 / 10_15_7); the hints are the unfrozen values.
+    check("the full-version hint is a real build, not the frozen 150.0.0.0",
+          re.fullmatch(r'"150\.0\.\d{4,}\.\d+"', nine["sec-ch-ua-full-version"]),
+          repr(nine["sec-ch-ua-full-version"]))
+    check("the full-version hint is the same major as the User-Agent",
+          di.FULL_VERSION.split(".")[0] == re.search(r"Chrome/(\d+)", di.UA).group(1),
+          "FULL_VERSION %s vs UA %s" % (di.FULL_VERSION, di.UA))
+    check("the full-version hint is the module's FULL_VERSION",
+          nine["sec-ch-ua-full-version"] == '"%s"' % di.FULL_VERSION,
+          repr(nine["sec-ch-ua-full-version"]))
+    fvl = nine["sec-ch-ua-full-version-list"]
     check("the full-version LIST repeats the same brands as sec-ch-ua",
-          all(b in full["sec-ch-ua-full-version-list"] for b in ("Google Chrome",
-                                                                "Chromium")),
-          repr(full["sec-ch-ua-full-version-list"]))
+          all(b in fvl for b in ("Google Chrome", "Chromium", "Not;A=Brand")), repr(fvl))
+    check("the LIST gives both real brands the full build",
+          fvl.count('v="%s"' % di.FULL_VERSION) == 2, repr(fvl))
+    check("the LIST keeps the grease brand at 8.0.0.0",
+          '"Not;A=Brand";v="8.0.0.0"' in fvl, repr(fvl))
     check("the model hint is empty on desktop, like a real desktop Chrome",
-          full["sec-ch-ua-model"] == '""', repr(full["sec-ch-ua-model"]))
-    check("the arch hint agrees with the macOS User-Agent",
-          full["sec-ch-ua-arch"] == '"x86"', repr(full["sec-ch-ua-arch"]))
+          nine["sec-ch-ua-model"] == '""', repr(nine["sec-ch-ua-model"]))
+    check("the arch hint is arm on a macOS identity (the UA says Intel on every Mac)",
+          nine["sec-ch-ua-arch"] == '"arm"', repr(nine["sec-ch-ua-arch"]))
     check("the platform-version hint is a dotted OS version",
-          re.fullmatch(r'"\d+(?:\.\d+)+"', full["sec-ch-ua-platform-version"]),
-          repr(full["sec-ch-ua-platform-version"]))
+          re.fullmatch(r'"\d+(?:\.\d+)+"', nine["sec-ch-ua-platform-version"]),
+          repr(nine["sec-ch-ua-platform-version"]))
+    check("the platform-version hint is not the frozen 10.15.7",
+          nine["sec-ch-ua-platform-version"] != '"10.15.7"',
+          repr(nine["sec-ch-ua-platform-version"]))
 
     # ── the device headers: present on chat, on every request ───────
     # Both ride 47/47 chat.deepseek.com requests in the capture. Omitting one is

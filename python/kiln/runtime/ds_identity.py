@@ -84,28 +84,37 @@ def client_hints():
 
 
 # --- the high-entropy half of the client hints ---------------------------------
-# Six hints Chrome sends ONLY to an origin that has granted them, via `Accept-CH`
-# or its `<meta http-equiv>` equivalent. The grant is per-origin and persists in
-# a profile, so this set is a fact about the ORIGIN, not about the browser.
+# Six more hints beyond the triple. Measured against the operator's capture of the
+# real site (Chrome 153 on Windows, `chat.deepseek.com.har`): ALL NINE ride 47 of
+# 47 requests to `chat.deepseek.com`, and only the triple rides `hif-*.deepseek.com`.
+# So `chat.deepseek.com` calls send the nine and nothing else does.
 #
-# Measured against chat.deepseek.com with a real desktop Chrome: the site
-# advertises no `Accept-CH` in any response and no meta tag in its HTML, and
-# Chrome answers with the TRIPLE only, on every request. The nine-hint set is
-# therefore NOT what this origin receives, and a client that sends it presents a
-# browser state that cannot exist here -- a louder tell than sending too few.
+# An earlier revision of this comment said the opposite, citing "no Accept-CH in any
+# response". The capture records only fetch/XHR traffic, never the HTML document
+# that would carry the grant, so that absence proves nothing, while the requests
+# themselves are direct evidence of what the browser sends.
 #
-# The derivation below stays because it is sound for any origin that DOES grant
-# the set; nothing on the chat path sends these.
-#
-# Nothing here is invented. Chrome derives every one of these from the same two
-# facts this module already owns -- the browser version and the OS -- so they are
-# READ OUT of `UA` and `PLATFORM` rather than written down beside them. A
-# hand-written second copy is how the fingerprint drifted before: the version in
-# these headers and the version in the UA must come from one source or they
-# disagree the moment either is bumped.
+# The values are not invented. Chrome derives them from the browser version and
+# the OS, which this module already owns, so they are READ OUT of `UA` and
+# `PLATFORM`. Two of them cannot come from the UA, because the UA is frozen: its
+# version reads ``150.0.0.0`` and its macOS reads ``10_15_7`` on every machine.
+# The hints are the unfrozen values, and a hint that repeats the frozen one
+# (``sec-ch-ua-full-version: "150.0.0.0"``) is a value no real Chrome emits.
+FULL_VERSION = "150.0.7871.189"   # Chrome 150 stable on Mac, chromiumdash 2026-08-04
+MACOS_VERSION = "15.6.0"          # what a current Mac reports; the UA's 10_15_7 is frozen
+
+
 def _ua_version():
-    """The full ``Chrome/x.y.z.w`` version out of `UA`, or the major brand."""
+    """The full ``150.x.y.z`` version of the presented browser.
+
+    `FULL_VERSION` when it is the same major as the User-Agent, so bumping the UA
+    alone cannot leave a stale build number behind. Otherwise the UA's own
+    version, which is at least self-consistent.
+    """
     m = re.search(r"Chrome/(\d+(?:\.\d+)*)", UA)
+    major = m.group(1).split(".")[0] if m else ""
+    if major and FULL_VERSION.split(".")[0] == major:
+        return FULL_VERSION
     if m:
         return m.group(1)
     m = re.search(r'v="(\d+)"', SEC_CH_UA)
@@ -113,46 +122,58 @@ def _ua_version():
 
 
 def _ua_arch():
-    """``x86`` or ``arm``, from the CPU the User-Agent names.
+    """``x86`` or ``arm``, as Chrome reports it for this machine.
 
-    An Intel Mac and a Windows PC are both ``x86``; an Apple-silicon Mac is
-    ``arm``. Reporting the wrong one beside a platform string is exactly the
-    contradiction these hints exist to expose, so this is read from the UA
-    rather than assumed from the platform name.
+    The macOS User-Agent says ``Intel`` on every Mac, Apple silicon included, so
+    the UA cannot answer this; Chrome reads the CPU instead. Every Mac sold since
+    2020 is ``arm``, so a macOS identity reports ``arm``. Windows and Linux read
+    ``x86`` unless the UA names ARM.
     """
     if "Macintosh" in UA or "Mac OS X" in UA:
-        return "arm" if "ARM" in UA or "aarch64" in UA else "x86"
+        return "arm"
     return "arm" if "aarch64" in UA or "arm" in UA.lower() else "x86"
 
 
 def _ua_platform_version():
     """The OS version, in the dotted form the hint uses.
 
-    macOS arrives in the UA as ``10_15_7`` and is reported as ``10.15.7``;
-    Windows has no version in its UA at all, so it keeps the value a current
-    Windows 11 build reports.
+    The UA freezes macOS at ``10_15_7``; the hint carries the real one, so a
+    macOS identity reports `MACOS_VERSION` and never ``10.15.7`` (no Mac that
+    can run Chrome 150 reports that). Windows has no version in its UA at all, so
+    it keeps the value a current Windows 11 build reports.
     """
     if PLATFORM == "macOS":
-        m = re.search(r"Mac OS X (\d+(?:_\d+)*)", UA)
-        if m:
-            return m.group(1).replace("_", ".")
+        return MACOS_VERSION
     if PLATFORM == "Windows":
         return "19.0.0"
     return "0.0.0"
 
 
-def client_hint_extras():
-    """The six hints Chrome adds once an origin is granted the high-entropy set."""
+def _full_version_list():
+    """``sec-ch-ua`` with each real brand at its full version.
+
+    Chrome builds this list FROM the low-entropy one. The two real brands carry
+    the full build; the GREASE brand keeps its fixed ``8.0.0.0``, which is how the
+    capture shows it (``"Not_A Brand";v="8.0.0.0"``).
+    """
     full = _ua_version()
+
+    def _one(m):
+        brand, major = m.group(1), m.group(2)
+        if brand in ("Chromium", "Google Chrome"):
+            return '"%s";v="%s"' % (brand, full)
+        return '"%s";v="%s.0.0.0"' % (brand, major)
+
+    return re.sub(r'"([^"]+)";v="(\d+)"', _one, SEC_CH_UA)
+
+
+def client_hint_extras():
+    """The six hints that join the triple on ``chat.deepseek.com`` calls."""
     return {
         "sec-ch-ua-arch": '"%s"' % _ua_arch(),
         "sec-ch-ua-bitness": '"64"',
-        "sec-ch-ua-full-version": '"%s"' % full,
-        # Same brands as `sec-ch-ua`, each major version padded to the full
-        # four-part form -- Chrome builds this list FROM the low-entropy one, so
-        # deriving it here keeps the two from ever disagreeing.
-        "sec-ch-ua-full-version-list": re.sub(
-            r'v="(\d+)"', lambda m: 'v="%s"' % (m.group(1) + ".0.0.0"), SEC_CH_UA),
+        "sec-ch-ua-full-version": '"%s"' % _ua_version(),
+        "sec-ch-ua-full-version-list": _full_version_list(),
         # Always empty on desktop: the hint exists for phones and tablets.
         "sec-ch-ua-model": '""',
         "sec-ch-ua-platform-version": '"%s"' % _ua_platform_version(),
@@ -160,16 +181,13 @@ def client_hint_extras():
 
 
 def client_hints_full():
-    """All nine client hints -- the set a GRANTING origin receives.
+    """All nine client hints -- what ``chat.deepseek.com`` receives.
 
-    NOT for ``chat.deepseek.com``. That origin advertises no ``Accept-CH``, and
-    a real desktop Chrome answers it with the triple only, so ``client_hints()``
-    is what belongs on the chat path. Sending these nine there asserts a browser
-    state the origin cannot produce, and it was implicated in a mute storm
-    (commit 8b8e59fd7c moved all three call sites back to the triple).
-
-    Kept for an origin that DOES grant the set, where the triple would be the
-    mismatch instead. Nothing on the chat path may use it.
+    Every ``chat.deepseek.com`` API call sends these (login, session, pow
+    challenge, completion, settings): 47 of 47 in the capture of the real site.
+    ``hif-*.deepseek.com`` and the WAF page navigations get `client_hints()`
+    only. Commit 8b8e59fd7c cut the chat path to the triple on the claim that the
+    origin grants nothing; the capture contradicts that claim.
     """
     return {**client_hints(), **client_hint_extras()}
 

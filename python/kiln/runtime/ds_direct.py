@@ -1397,13 +1397,10 @@ class _Client:
             # Every browser sends this on every request; curl_cffi's impersonation
             # does not supply it, so leaving it out was a header gap.
             **ds_identity.browser_headers(),
-            # The TRIPLE, not the high-entropy nine. Chrome emits the six extra
-            # hints only after an origin grants them via Accept-CH; measured
-            # against this site, no response and no meta tag carries that grant,
-            # and real desktop Chrome sends the triple on every request. Six
-            # hints the origin never asked for describe a browser state that
-            # cannot exist here -- a louder tell than sending too few.
-            **ds_identity.client_hints(),
+            # All NINE, because the capture of the real site carries all nine on
+            # 47 of 47 chat.deepseek.com requests (and the triple only on the
+            # hif-* hosts). The values are the unfrozen ones -- see ds_identity.
+            **ds_identity.client_hints_full(),
             # The completion call is a same-origin XHR the chat page makes.
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
@@ -1458,9 +1455,8 @@ class _Client:
             # referer is /sign_in and not /.
             "referer": "https://chat.deepseek.com/sign_in",
             "user-agent": UA,
-            # Same triple as `_headers`, for the same measured reason: this
-            # origin grants no high-entropy hints, so a browser sends none.
-            **ds_identity.client_hints(),
+            # Same nine as `_headers`: login is a chat.deepseek.com call.
+            **ds_identity.client_hints_full(),
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
             **_NOT_A_NAVIGATION,
@@ -1696,7 +1692,7 @@ class _Client:
             # client/settings request in the capture.
             "referer": "https://chat.deepseek.com/",
             "user-agent": UA,
-            **ds_identity.client_hints(),
+            **ds_identity.client_hints_full(),
             **ds_identity.fetch_metadata("empty", "cors", "same-origin"),
             **ds_identity.client_headers(),
             **_NOT_A_NAVIGATION,
@@ -1927,12 +1923,14 @@ class _Client:
                    model_type, thinking, search, session_id,
                    parent_message_id, preempt)
         pow_response = solve_pow(self._pow())
+        # The browser's nine keys, in its order. `action` is always null and
+        # `preempt` always present: 5 of 5 completions in the capture carry both,
+        # where this body used to omit them and send seven.
         body = {"chat_session_id": session_id, "parent_message_id": parent_message_id,
-                "prompt": prompt, "ref_file_ids": list(ref_file_ids or []),
-                "thinking_enabled": thinking,
-                "search_enabled": search, "model_type": model_type}
-        if preempt:
-            body["preempt"] = True
+                "model_type": model_type, "prompt": prompt,
+                "ref_file_ids": list(ref_file_ids or []),
+                "thinking_enabled": thinking, "search_enabled": search,
+                "action": None, "preempt": bool(preempt)}
         # `hif=True` ONLY here. The browser carries the ``x-hif-*`` pair on this
         # call and on no other ``/api/v0/*`` route; every other caller of
         # `_headers` leaves them off, which is what the capture shows. The pair
