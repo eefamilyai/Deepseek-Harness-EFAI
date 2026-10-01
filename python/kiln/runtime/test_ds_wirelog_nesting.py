@@ -10,7 +10,7 @@ Measured on the live journal before the fix: ONE 11.47 GB line carrying
 1,048,545 nested mute verdicts, written by a single `f.write()` that took 28
 minutes to reach disk -- which is also why rotation never fired on it.
 
-Run:  .venv\Scripts\python.exe test_ds_wirelog_nesting.py
+Run:  .venv/Scripts/python.exe test_ds_wirelog_nesting.py
 """
 import json
 import os
