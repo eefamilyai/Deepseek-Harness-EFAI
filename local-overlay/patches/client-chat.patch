@@ -1,5 +1,5 @@
 diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css
-index 43af8243e1..6559bae61d 100644
+index 990aa985f6..a3cbecc5de 100644
 --- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css
 +++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css
 @@ -20,6 +20,14 @@
@@ -18,10 +18,10 @@ index 43af8243e1..6559bae61d 100644
     the whole transcript width instead of clipping at the 748px message
     column, while the table content keeps starting at its normal x (the lead
 diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
-index 1dd235d3c1..4e419d6d41 100644
+index 5d97a698f7..73a5bc390a 100644
 --- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
 +++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
-@@ -73,6 +73,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+@@ -78,6 +78,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
      if (groupPart === 'response' && block.kind === 'reasoning') continue
      switch (block.kind) {
        case 'text':
@@ -35,7 +35,7 @@ index 1dd235d3c1..4e419d6d41 100644
            <MarkdownText
              key={i}
 diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
-index 788322535c..8f7524ad58 100644
+index 6cfcfd2397..87f33da2e3 100644
 --- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
 +++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
 @@ -9,8 +9,24 @@
@@ -73,59 +73,6 @@ index 788322535c..8f7524ad58 100644
  }
  
  .source {
-diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
-index 49704cca03..2684b08b06 100644
---- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
-+++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.tsx
-@@ -37,6 +37,10 @@ export function ContextInjectionRow({ content, source, producer, form, t }: Cont
-   return (
-     <DisclosureRow
-       className={css.root}
-+      // DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row.
-+      rowClassName={css.row}
-+      leadingClassName={css.leading}
-+      titleClassName={css.title}
-       icon={producer.role === 'recall'
-         ? <span data-context-recall-icon><ReferenceIconRegular kind="session" /></span>
-         : <IconContextInjectionOutlineRegular size={14} />}
-diff --git a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-index f59c04e404..17bd22890a 100644
---- a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-+++ b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
-@@ -47,8 +47,23 @@
-   flex-shrink: 0;
- }
- 
-+/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
-+/* Think's seat in the flow-row accent set (--dsw-alias-flow-*,
-+   design-platform.css): one rebind carries the glyph and the title through
-+   DisclosureRow's contract, matching what ui-tool's ToolRow gives each tool
-+   family. */
-+.row {
-+  --dsh-row-accent: var(--dsw-alias-flow-think);
-+}
-+
-+/* Restated here rather than left to DisclosureRow's own read: that rule ships
-+   in the app bundle and this rebind ships in the plugin's injected stylesheet,
-+   so a row whose hue spans both artifacts loses it whenever only one is
-+   current. Two classes, so it outranks the primitive's rule either way. */
-+.root .leading,
-+.root .title,
- .chevron {
--  color: var(--dsw-alias-label-secondary);
-+  color: var(--dsh-row-accent);
- }
- 
- .title {
-@@ -61,7 +76,7 @@
-   height: 2px;
-   margin: 0 8px;
-   border-radius: 1px;
--  background: var(--dsw-alias-label-caption);
-+  background: var(--dsh-row-accent);
- }
- 
- /* Think text reads the secondary tier — one step under the body size
 diff --git a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
 index 0136acbfd9..3874237a16 100644
 --- a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx

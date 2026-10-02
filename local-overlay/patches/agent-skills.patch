@@ -1,8 +1,8 @@
 diff --git a/.agents/skills/dsh-code-review/SKILL.md b/.agents/skills/dsh-code-review/SKILL.md
-index 7453e110ef..370a98080a 100644
+index bc145e212a..28452a48ba 100644
 --- a/.agents/skills/dsh-code-review/SKILL.md
 +++ b/.agents/skills/dsh-code-review/SKILL.md
-@@ -50,3 +50,25 @@ description: Use when reviewing a pull request in the deepseek-harness repo —
+@@ -51,3 +51,25 @@ description: Use when reviewing a pull request in the deepseek-harness repo —
  ## Reporting findings
  
  State the defect, location, impact, and evidence. Place a localized defect inline on the tightest relevant diff range; use a PR-level comment for cross-cutting architecture, scope, or review-wide synthesis. Separate blockers from suggestions and omit issues already enforced by a green gate. Use the existing GitHub review thread for replies. When receiving review, verify each claim and fix or rebut it on technical grounds without performative agreement.

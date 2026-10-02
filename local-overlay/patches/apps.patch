@@ -1,5 +1,5 @@
 diff --git a/apps/cli/package.json b/apps/cli/package.json
-index b433c2407f..1772bdf5a4 100644
+index d2a403283c..ab80195da3 100644
 --- a/apps/cli/package.json
 +++ b/apps/cli/package.json
 @@ -38,6 +38,8 @@
@@ -9,10 +9,10 @@ index b433c2407f..1772bdf5a4 100644
 +    "@deepseek-ai/dsh-efai-base": "workspace:*",
 +    "@deepseek-ai/dsh-efai-web": "workspace:*",
      "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:*",
+     "@deepseek-ai/dsh-experimental-schedule-bundle": "workspace:*",
      "@deepseek-ai/dsh-fs-local": "workspace:*",
-     "@deepseek-ai/dsh-goal": "workspace:*",
 diff --git a/apps/web/tests/built-boot.expected.e2e.ts b/apps/web/tests/built-boot.expected.e2e.ts
-index 7ab01184fc..4238867943 100644
+index f645214133..06c9d78141 100644
 --- a/apps/web/tests/built-boot.expected.e2e.ts
 +++ b/apps/web/tests/built-boot.expected.e2e.ts
 @@ -61,20 +61,20 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn

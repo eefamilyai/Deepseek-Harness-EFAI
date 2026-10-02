@@ -140,7 +140,7 @@ index 27b2a7bffd..a43128e1fd 100644
 +  })
  })
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-index 0519f3b9cb..839c3439ca 100644
+index d707342258..31c6dff2c1 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
 +++ b/packages/core/tools/tests/gen-tool-catalog.spec.ts
 @@ -30,8 +30,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
@@ -155,5 +155,5 @@ index 0519f3b9cb..839c3439ca 100644
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
 +      'notebook_edit', 'plugin_manager', 'present', 'pwsh', 'pwsh', 'ralph',
        'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
-       'schedule_list', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
+       'schedule_list', 'schedule_update', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
        'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',

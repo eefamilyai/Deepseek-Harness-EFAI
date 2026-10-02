@@ -1,5 +1,5 @@
 diff --git a/packages/llm/llm/src/index.ts b/packages/llm/llm/src/index.ts
-index 5f633619ff..0529f73fee 100644
+index d67245d216..35573e9144 100644
 --- a/packages/llm/llm/src/index.ts
 +++ b/packages/llm/llm/src/index.ts
 @@ -11,6 +11,12 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
@@ -15,7 +15,7 @@ index 5f633619ff..0529f73fee 100644
    RequestMessage,
    LlmConfigurableProvider,
    LlmDiscoveredModel,
-@@ -334,6 +340,17 @@ export interface DirectoryRegistrationHandle {
+@@ -339,6 +345,17 @@ export interface DirectoryRegistrationHandle {
   * The abstract `llm` service: an adapter registry plus a streaming model-call
   * API, interceptable via the `llm/stream` waterfall.
   */
@@ -33,7 +33,7 @@ index 5f633619ff..0529f73fee 100644
  export class LlmRuntime extends TypertRemoteService {
    private adapters = new Map<string, AdapterRegistration>()
    private directory = new Map<string, LlmConfigurableProvider>()
-@@ -341,6 +358,8 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -346,6 +363,8 @@ export class LlmRuntime extends TypertRemoteService {
      string,
      (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
    >()
@@ -42,7 +42,7 @@ index 5f633619ff..0529f73fee 100644
  
    constructor(ctx: Context) {
      super(ctx, 'llm')
-@@ -621,6 +640,329 @@ export class LlmRuntime extends TypertRemoteService {
+@@ -626,6 +645,329 @@ export class LlmRuntime extends TypertRemoteService {
      return models
    }
  
@@ -373,10 +373,10 @@ index 5f633619ff..0529f73fee 100644
     * Remote adapter for one draft provider interrogation.
     * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/packages/llm/llm/src/types.ts b/packages/llm/llm/src/types.ts
-index dcd66d2868..0490e1df29 100644
+index 54453607f5..cf55def070 100644
 --- a/packages/llm/llm/src/types.ts
 +++ b/packages/llm/llm/src/types.ts
-@@ -228,6 +228,160 @@ export interface LlmProviderInfo {
+@@ -227,6 +227,160 @@ export interface LlmProviderInfo {
    name: string
  }
  
@@ -537,7 +537,7 @@ index dcd66d2868..0490e1df29 100644
  /** Merge-extensible provider model modality vocabulary. */
  export interface ModelModalityMap {
    text: 'text'
-@@ -306,6 +460,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
+@@ -305,6 +459,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
        readonly settingsNs: string
        readonly baseURL?: string
      }

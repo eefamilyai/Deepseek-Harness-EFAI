@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index a5a8570a51..ac66a29ed0 100644
+index 738ed0c5b4..361cefcd0e 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -130,6 +130,12 @@
+@@ -142,6 +142,12 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -17,10 +17,10 @@ index a5a8570a51..ac66a29ed0 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index c551469419..7b3c3e43db 100644
+index 5c5c81b7e0..d89dce60af 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -369,6 +369,7 @@
+@@ -394,6 +394,7 @@
      { "path": "./packages/compaction/compaction-basic" },
      { "path": "./packages/compaction/command-compact" },
      { "path": "./packages/compaction/compaction-tool-result-pruner" },
@@ -28,7 +28,7 @@ index c551469419..7b3c3e43db 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -451,6 +452,26 @@
+@@ -476,6 +477,26 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },

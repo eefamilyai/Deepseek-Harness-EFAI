@@ -1,15 +1,3 @@
-diff --git a/docs/subsystems/compaction.i18n.yaml b/docs/subsystems/compaction.i18n.yaml
-index 671930e3d1..bee9aff9d9 100644
---- a/docs/subsystems/compaction.i18n.yaml
-+++ b/docs/subsystems/compaction.i18n.yaml
-@@ -2,5 +2,5 @@
- # side as of the last confirmed-consistent state. Both languages carry equal authority;
- # after editing either side, bring the other along and re-record with:
- #   pnpm run verify-translation-pairing --write docs/subsystems/compaction.md
--compaction.md: 6e135025ab6095e2365e172847bc493d41c50774
--compaction.zh.md: 9b82fb7a7b9e55f2aefa6d561922948fd328c8e9
-+compaction.md: 528b33d2e5447fcf9313c93078bee47d73e76e99
-+compaction.zh.md: e9ad8ed40b0fa87ab724cae84170d3d06fc1a592
 diff --git a/docs/subsystems/compaction.md b/docs/subsystems/compaction.md
 index 6e135025ab..528b33d2e5 100644
 --- a/docs/subsystems/compaction.md
@@ -56,200 +44,10 @@ index 9b82fb7a7b..e9ad8ed40b 100644
  
  /**
   * Forcibly compact a range of surface nodes into a single summary node.
-diff --git a/docs/subsystems/llm-streaming.i18n.yaml b/docs/subsystems/llm-streaming.i18n.yaml
-index 757474dd41..fdf13fb1d3 100644
---- a/docs/subsystems/llm-streaming.i18n.yaml
-+++ b/docs/subsystems/llm-streaming.i18n.yaml
-@@ -2,5 +2,5 @@
- # side as of the last confirmed-consistent state. Both languages carry equal authority;
- # after editing either side, bring the other along and re-record with:
- #   pnpm run verify-translation-pairing --write docs/subsystems/llm-streaming.md
--llm-streaming.md: 07fc6599bc5d4eb5a4af9b566032004932052585
--llm-streaming.zh.md: 079a33599d1e5169af6402db2b2abdd7dc978369
-+llm-streaming.md: 5049e504cef7fb6d394056426657be50733208ca
-+llm-streaming.zh.md: a9e43d87654af7307391b81d1a728597f3971b99
 diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
-index 07fc6599bc..5049e504ce 100644
+index a8c7b47bd7..01501e723c 100644
 --- a/docs/subsystems/llm-streaming.md
 +++ b/docs/subsystems/llm-streaming.md
-@@ -917,7 +917,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
- 
- ### `ctx.llm` — `LlmRuntime`
- 
--The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
-+The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.
- 
- ```ts cordis-catalog
- /**
-@@ -976,6 +976,164 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
-  */
- async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
- 
-+/**
-+ * Register the handler that tests and adds a login for one account-pooling
-+ * provider route (`ds_direct` is the only one today). Mirrors
-+ * {@link registerModelDiscovery}: one handler per route, released with the
-+ * returned disposer. The handler owns making the new login selectable — it
-+ * re-registers its own routes — so the runtime only routes the call.
-+ * @param provider - the provider route that pools logins.
-+ * @param add - tests a login and, on success, adds it.
-+ * @returns a disposer that withdraws the handler.
-+ */
-+registerAccountProvider(provider: string, add: LlmAccountAdder): () => void
-+
-+/**
-+ * The provider routes that accept account additions, for a surface to offer.
-+ * @returns the registered account-provider routes, in registration order.
-+ */
-+listAccountProviders(): string[]
-+
-+/**
-+ * Test a login for one account-pooling provider and, on success, make it a
-+ * selectable route. The password is used only for the test and never stored
-+ * or returned here — the reply is the account id and its route, or a reason.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login to test.
-+ * @returns the added account and route, or the failure reason.
-+ */
-+async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
-+
-+/**
-+ * Register the account-ADMINISTRATION half of an account-pooling provider:
-+ * the read an operator surface lists, and the repairs it can ask for. Mirrors
-+ * {@link registerAccountProvider}: one admin per route, released with the
-+ * returned disposer, and a provider that pools accounts normally registers
-+ * both — the adder to create a login, the admin to inspect and repair one.
-+ * @param provider - the provider route that pools logins.
-+ * @param admin - the read and repair operations for that route's logins.
-+ * @returns a disposer that withdraws the admin.
-+ */
-+registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void
-+
-+/**
-+ * Every login one provider pools, for an operator surface to list and expand.
-+ * @param provider - the provider route that pools logins.
-+ * @returns one row per login, in the provider's own order.
-+ */
-+async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>
-+
-+/**
-+ * Re-authenticate one login, so a session that has gone stale works again.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login id to re-authenticate.
-+ * @returns whether the login now works, or a plain reason it does not.
-+ */
-+async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-+
-+/**
-+ * Replace one login's browser identity, so it presents as a different device.
-+ * The repair for a flagged fingerprint is a NEW identity, not the same one.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login id to re-profile.
-+ * @returns whether a fresh identity is in place, or a plain reason it is not.
-+ */
-+async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-+
-+/**
-+ * The debug trail recorded since a sequence number, oldest first. Every entry
-+ * names its account, which is what makes two logins running at once legible.
-+ * @param provider - the provider route that pools logins.
-+ * @param since - return only entries with a higher sequence number.
-+ * @returns the entries, in recording order.
-+ */
-+async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
-+
-+/**
-+ * Forget one login, or one orphaned identity, from a provider's list.
-+ *
-+ * The repair for an entry that should not be there at all — a login that was
-+ * replaced, or a profile a removed one left behind. `account` is empty for an
-+ * orphan: the login id it was configured under is exactly what is gone, so its
-+ * slug is the only handle left. The browser profile survives unless `purge` is
-+ * set — it cost a real login to mint, and a replacement account can still
-+ * present it.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login id to forget; '' when only a slug is known.
-+ * @param slug - the profile slug, which is all an orphan carries.
-+ * @param purge - also delete the browser profile.
-+ * @returns whether the entry is gone, or a plain reason it is not.
-+ */
-+async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
-+
-+/**
-+ * Remote read of the routes that accept account additions.
-+ * @returns the registered account-provider routes, in registration order.
-+ */
-+@Remote('listAccountProviders') async remoteListAccountProviders(): Promise<string[]>
-+
-+/**
-+ * Remote adapter that tests and adds one account login. The password rides
-+ * this call only and is never stored or returned; the reply is the new
-+ * account id and route, or a plain failure reason.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login to test.
-+ * @returns the added account and route, or the failure reason.
-+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts,
-+ *   or when the draft is missing a password or an email/mobile.
-+ */
-+@Remote('addAccount') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
-+
-+/**
-+ * Remote read of one provider's pooled logins, for an operator surface to
-+ * list and expand. Every row reports identity — including the device the
-+ * login presents from — and only whether a credential is PRESENT.
-+ * @param provider - the provider route that pools logins.
-+ * @returns one row per login, in the provider's own order.
-+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
-+ */
-+@Remote('listAccounts') async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]>
-+
-+/**
-+ * Remote adapter that re-authenticates one pooled login.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login id to re-authenticate.
-+ * @returns whether the login now works, or a plain reason it does not.
-+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
-+ */
-+@Remote('reloginAccount') async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-+
-+/**
-+ * Remote adapter that replaces one pooled login's browser identity.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login id to re-profile.
-+ * @returns whether a fresh identity is in place, or a plain reason it is not.
-+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
-+ */
-+@Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-+
-+/**
-+ * Remote adapter that forgets one pooled login, or one orphaned identity.
-+ * @param provider - the provider route that pools logins.
-+ * @param account - the login id to forget; '' when only a slug is known.
-+ * @param slug - the profile slug, which is all an orphan carries.
-+ * @param purge - also delete the browser profile.
-+ * @returns whether the entry is gone, or a plain reason it is not.
-+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
-+ */
-+@Remote('removeAccount') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
-+
-+/**
-+ * Remote read of one provider's account debug trail. A poll passes the last
-+ * sequence number it saw and receives only what is new, so two logins running
-+ * at once stay attributable per account rather than interleaved.
-+ * @param provider - the provider route that pools logins.
-+ * @param since - return only entries with a higher sequence number.
-+ * @returns the entries, in recording order.
-+ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
-+ */
-+@Remote('accountLog') async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]>
-+
- /**
-  * Remote adapter for one draft provider interrogation.
-  * @param settingsNs - namespace whose registered discovery serves this draft.
-diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
-index 079a33599d..a9e43d8765 100644
---- a/docs/subsystems/llm-streaming.zh.md
-+++ b/docs/subsystems/llm-streaming.zh.md
 @@ -923,7 +923,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
  
  ### `ctx.llm` — `LlmRuntime`
@@ -424,8 +222,186 @@ index 079a33599d..a9e43d8765 100644
  /**
   * Remote adapter for one draft provider interrogation.
   * @param settingsNs - namespace whose registered discovery serves this draft.
+diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
+index 89148283d9..4e99a98700 100644
+--- a/docs/subsystems/llm-streaming.zh.md
++++ b/docs/subsystems/llm-streaming.zh.md
+@@ -929,7 +929,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
+ 
+ ### `ctx.llm` — `LlmRuntime`
+ 
+-The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
++The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.
+ 
+ ```ts cordis-catalog
+ /**
+@@ -988,6 +988,164 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
+  */
+ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
+ 
++/**
++ * Register the handler that tests and adds a login for one account-pooling
++ * provider route (`ds_direct` is the only one today). Mirrors
++ * {@link registerModelDiscovery}: one handler per route, released with the
++ * returned disposer. The handler owns making the new login selectable — it
++ * re-registers its own routes — so the runtime only routes the call.
++ * @param provider - the provider route that pools logins.
++ * @param add - tests a login and, on success, adds it.
++ * @returns a disposer that withdraws the handler.
++ */
++registerAccountProvider(provider: string, add: LlmAccountAdder): () => void
++
++/**
++ * The provider routes that accept account additions, for a surface to offer.
++ * @returns the registered account-provider routes, in registration order.
++ */
++listAccountProviders(): string[]
++
++/**
++ * Test a login for one account-pooling provider and, on success, make it a
++ * selectable route. The password is used only for the test and never stored
++ * or returned here — the reply is the account id and its route, or a reason.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login to test.
++ * @returns the added account and route, or the failure reason.
++ */
++async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
++
++/**
++ * Register the account-ADMINISTRATION half of an account-pooling provider:
++ * the read an operator surface lists, and the repairs it can ask for. Mirrors
++ * {@link registerAccountProvider}: one admin per route, released with the
++ * returned disposer, and a provider that pools accounts normally registers
++ * both — the adder to create a login, the admin to inspect and repair one.
++ * @param provider - the provider route that pools logins.
++ * @param admin - the read and repair operations for that route's logins.
++ * @returns a disposer that withdraws the admin.
++ */
++registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void
++
++/**
++ * Every login one provider pools, for an operator surface to list and expand.
++ * @param provider - the provider route that pools logins.
++ * @returns one row per login, in the provider's own order.
++ */
++async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>
++
++/**
++ * Re-authenticate one login, so a session that has gone stale works again.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to re-authenticate.
++ * @returns whether the login now works, or a plain reason it does not.
++ */
++async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
++
++/**
++ * Replace one login's browser identity, so it presents as a different device.
++ * The repair for a flagged fingerprint is a NEW identity, not the same one.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to re-profile.
++ * @returns whether a fresh identity is in place, or a plain reason it is not.
++ */
++async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
++
++/**
++ * The debug trail recorded since a sequence number, oldest first. Every entry
++ * names its account, which is what makes two logins running at once legible.
++ * @param provider - the provider route that pools logins.
++ * @param since - return only entries with a higher sequence number.
++ * @returns the entries, in recording order.
++ */
++async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
++
++/**
++ * Forget one login, or one orphaned identity, from a provider's list.
++ *
++ * The repair for an entry that should not be there at all — a login that was
++ * replaced, or a profile a removed one left behind. `account` is empty for an
++ * orphan: the login id it was configured under is exactly what is gone, so its
++ * slug is the only handle left. The browser profile survives unless `purge` is
++ * set — it cost a real login to mint, and a replacement account can still
++ * present it.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to forget; '' when only a slug is known.
++ * @param slug - the profile slug, which is all an orphan carries.
++ * @param purge - also delete the browser profile.
++ * @returns whether the entry is gone, or a plain reason it is not.
++ */
++async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
++
++/**
++ * Remote read of the routes that accept account additions.
++ * @returns the registered account-provider routes, in registration order.
++ */
++@Remote('listAccountProviders') async remoteListAccountProviders(): Promise<string[]>
++
++/**
++ * Remote adapter that tests and adds one account login. The password rides
++ * this call only and is never stored or returned; the reply is the new
++ * account id and route, or a plain failure reason.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login to test.
++ * @returns the added account and route, or the failure reason.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts,
++ *   or when the draft is missing a password or an email/mobile.
++ */
++@Remote('addAccount') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
++
++/**
++ * Remote read of one provider's pooled logins, for an operator surface to
++ * list and expand. Every row reports identity — including the device the
++ * login presents from — and only whether a credential is PRESENT.
++ * @param provider - the provider route that pools logins.
++ * @returns one row per login, in the provider's own order.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('listAccounts') async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]>
++
++/**
++ * Remote adapter that re-authenticates one pooled login.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to re-authenticate.
++ * @returns whether the login now works, or a plain reason it does not.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('reloginAccount') async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
++
++/**
++ * Remote adapter that replaces one pooled login's browser identity.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to re-profile.
++ * @returns whether a fresh identity is in place, or a plain reason it is not.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
++
++/**
++ * Remote adapter that forgets one pooled login, or one orphaned identity.
++ * @param provider - the provider route that pools logins.
++ * @param account - the login id to forget; '' when only a slug is known.
++ * @param slug - the profile slug, which is all an orphan carries.
++ * @param purge - also delete the browser profile.
++ * @returns whether the entry is gone, or a plain reason it is not.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('removeAccount') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
++
++/**
++ * Remote read of one provider's account debug trail. A poll passes the last
++ * sequence number it saw and receives only what is new, so two logins running
++ * at once stay attributable per account rather than interleaved.
++ * @param provider - the provider route that pools logins.
++ * @param since - return only entries with a higher sequence number.
++ * @returns the entries, in recording order.
++ * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
++ */
++@Remote('accountLog') async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]>
++
+ /**
+  * Remote adapter for one draft provider interrogation.
+  * @param settingsNs - namespace whose registered discovery serves this draft.
 diff --git a/docs/tool-catalog.zh.md b/docs/tool-catalog.zh.md
-index 0995196921..ac44a2d3a5 100644
+index cf2e667cac..345addc2ea 100644
 --- a/docs/tool-catalog.zh.md
 +++ b/docs/tool-catalog.zh.md
 @@ -34,6 +34,7 @@
@@ -435,7 +411,7 @@ index 0995196921..ac44a2d3a5 100644
 +| `@deepseek-ai/dsh-tool-notebook-edit` | `notebook_edit` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`fs/write-intent for mutations`、`tool/result` | - | notebook_edit 以独占方式注册：对同一文件的两次重叠编辑会丢失其中一次。路径必须是绝对路径，修改经过已挂载的文件系统策略。 |
  | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 |
  | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
- | `@deepseek-ai/dsh-schedule` | `schedule_create`、`schedule_delete`、`schedule_list` | `ctx.tools`、`ctx.sessions`、Session 持久化、未来创建的 live 根 Agent | `tool/call`、`schedule/change create or delete`、`tool/result` | - | 仅在选择启用的 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。 |
+ | `@deepseek-ai/dsh-schedule` | `schedule_create`、`schedule_delete`、`schedule_list`、`schedule_update` | `ctx.tools`、`ctx.schedule`、live 根 Agent | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | Schedule 服务加载期间，在 live 根 Agent scope 内注册。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。 |
 @@ -49,6 +50,7 @@
  | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
  | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
@@ -444,7 +420,7 @@ index 0995196921..ac44a2d3a5 100644
  
  <a id="deepseek-aidsh-plugin-manager"></a>
  
-@@ -1113,6 +1115,124 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
+@@ -1124,6 +1126,124 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
  
  glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。
  
@@ -569,7 +545,7 @@ index 0995196921..ac44a2d3a5 100644
  <a id="deepseek-aidsh-tool-terminal"></a>
  
  ## `@deepseek-ai/dsh-tool-terminal`
-@@ -2522,3 +2642,34 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
+@@ -2729,3 +2849,34 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
  来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
  
  web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
