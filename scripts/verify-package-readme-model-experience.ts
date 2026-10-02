@@ -89,6 +89,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
   'packages/session/command-session-info': { kind: 'none', reason: 'The command is operator-facing and registers no prompt, tool, schema, or session event.' },
   'packages/llm/ai-accounts': { kind: 'none', reason: 'The account surface registers no prompt section, tool schema, or Session event; a login changes which provider routes exist.' },
+  'packages/client/ui-brand-efai': { kind: 'none', reason: 'Two sidebar slot occupants; the brand a person reads registers nothing model-facing.' },
   'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },
   'packages/experimental/ptc-runtime-python': { kind: 'indirect', reason: 'Explicit source-checkout compositions delegate model rendering to PTC mode in dsh-tools.' },
   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },

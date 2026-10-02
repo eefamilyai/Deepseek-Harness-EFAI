@@ -170,3 +170,122 @@ seam on it is retired in the tree (`git diff <base> -- packages/llm/llm` is empt
    asar. The singular row was removed. `- id: ui-settings / enabled: false` stays:
    that field is `Volatile<boolean>` = "developer tools enabled", not the Settings
    page.
+
+### Verified end to end (2026-10-02, second session)
+
+Committed as `2e3965b03f` (with `8beccb08d8` for the gate-driven manifest
+normalization). Host and client faces both build clean; `verify-fork-overlay` is
+green at 17 patches / 60 Tier-2 files; the 13 new package specs pass.
+
+The proof that the shadowing is defeated is a **desktop-profile host booted in a
+separate process**, so the running Desktop app was never disturbed:
+
+    node apps/cli/lib/bin.js web --no-open --port 50124      # DSH_PROFILE=desktop is inherited
+
+Settings → Accounts then lists the route and every pooled login
+(`.recon/accounts-tab-verified.png`):
+
+    Account pool:  kiln-deepseek        ("The provider route that accepts new logins.")
+    Existing accounts: 11 accounts      (Configured rows, Relogin / Reprofile / Remove)
+    Account debug log: (empty)
+
+That exercises `listAccountProviders` and `listAccounts` over the `aiAccounts`
+namespace, i.e. the exact calls that reported "Could not read the provider list."
+against the asar's `dsh-llm`.
+
+### OPERATOR ACTION: restart the Desktop app once
+
+`ai-accounts` is mounted by rows in `packages/bundle/efai-base` and `efai-web`,
+and **bundle-layer rows do not hot-reload** — only the profile and home patch
+layers are watched (`patchReload: live`). The app that is running now booted
+before those rows existed, so its composition has no `aiAccounts` service. Quit
+and relaunch `DeepSeek Harness.exe` after this commit; no profile edit is needed
+(the bundles already carry both rows).
+
+An alternative that avoids the restart is to add both rows to
+`~/.dsh/profiles/desktop/cordis.patch.yml` (the live layer), but the browser
+still has to re-read the boot graph for the client half, so it is not obviously
+cheaper than one restart.
+
+### Next phase: the remaining Tier-2 UI edits
+
+Measured with `git diff --numstat <base> -- packages/client/`: 68 paths, but
+most are fork-owned *added* files (the accounts section, `ui-effects`,
+`ui-flow-accents`, `ui-settings-tools`) which are Tier 1 and already load. The
+upstream files the fork still modifies are the conversion target:
+
+| Package | Upstream file | Δ | What it does |
+|---|---|---|---|
+| `ui-sidebar` | `src/client/SidebarRoot.module.css` | +28 −9 | sidebar row accents/geometry |
+| `ui-chat` | `src/client/chat/ContextInjectionRow.module.css` | +18 −2 | row accent |
+| `ui-chat` | `src/client/chat/AssistantMarkdown.module.css`, `AssistantMarkdown.tsx`, `SystemPromptRow.tsx` | +18 | markdown/row styling |
+| `ui-brand-official` | `src/client/Brand.tsx`, `src/client/index.ts`, `Brand.module.css` (added) | +16 −4 | the fork's own brand mark, which upstream gates behind `DSH_CLIENT_BUILD_PROFILE=official` |
+| `ui-conversation` | `src/client/skeleton/EmptyHero.tsx`, `src/client/locales.ts` | +5 −2 | empty-hero copy |
+| `ui-settings` | `src/client/config-form.ts` | +36 −3 | config-form behaviour |
+| `ui-tool` | `src/client/tool/models/tool-call-model.ts` | +3 | kernel tool-call model row |
+| `ui-skill`, `ui-input-trigger`, `ui-primitives` | tests only | — | spec coverage, not product behaviour |
+
+Each one goes through the mechanism ladder in `dsh-harness-edit`
+(composition row → extension point in a fork package → Config field → upstream
+PR → recorded seam). `ui-flow-accents` and `ui-effects` are the working
+precedents: a theme override layer and a slot registration, both fork-owned. The
+whale backdrop stays where it is — explicitly out of scope.
+
+### Conversion round 1 (2026-10-02, third session)
+
+The `pnpm run test:gui` baseline after the 0.2.0-rc.2 merge was 14 failing files
+/ 20 tests, and **six of those failures were this fork's own Tier-2 UI edits** —
+the merge had kept the fork's specs and dropped the rules they assert. What the
+first conversion round changed:
+
+**Retired as dead** (the merge moved on; nothing reads them):
+
+| Edit | Why it could simply go |
+|---|---|
+| `ui-model-selection/src/client/locales.ts` (15 keys) | only the definitions remain — nothing in the tree reads `provider.accounts`, `account.testAdd`, or any sibling key |
+| `ui-input-trigger/src/client/MenuView.module.css` + its spec | the CSS classes style `button[data-trigger-heading]` toggle markup that upstream's `MenuView.tsx` no longer renders; the spec asserted it and failed |
+
+**Restored as merge fallout** (the fork's own rules, dropped by the merge): the
+flow-row accent rules in `ui-tool`'s `ToolRow.module.css` (12 lines),
+`ui-primitives`' `DisclosureRow.module.css` (3), `ui-chat`'s
+`ReasoningRow.module.css` (3), and `ui-tool`'s `bash-sample.module.css` (5).
+Sixteen accent assertions across four specs went green. `.chevron` is no longer
+restored in `ToolRow.module.css`: upstream's `ToolRow.tsx` stopped passing
+`chevronClassName`, so that rule had no consumer and its assertion was dropped
+instead.
+
+**Converted into a fork-owned package**: the sidebar brand.
+`packages/client/ui-brand-efai` owns the whale mark and the live-text wordmark,
+registers `sidebar.brand.mark`/`sidebar.brand.name` unconditionally, and
+`efai-web` mounts it while switching upstream's `ui-brand-official` row off. The
+five-file edit on upstream's brand package is retired, and its two
+fork-added files (`Brand.module.css`, `css-modules.d.ts`) moved into the new
+package. Verified live on a spare-port host: the plugin inventory reads
+`ui-brand-official  Disabled` / `ui-brand-efai  Enabled`, and the sidebar renders
+the fork's mark and wordmark.
+
+**What a plugin cannot carry, and why** — the remaining 17 upstream client files
+fall into two groups:
+
+1. *Needs a DOM hook upstream does not emit.* The accent system binds
+   `--dsh-row-accent` on the row element and reads it in the row's own
+   `.leading`/`.title`/`.chevron`/`.sep` rules. A fork-injected stylesheet
+   cannot reach those parts: `ui-tool` emits `data-variant`/`data-tool` on the
+   row root only, and the inner spans carry hashed CSS-module classes
+   (`[hash]_[local]`), for which a selector would have to match on the local-name
+   suffix — brittle enough to be worse than the seam. Two ways out, both real:
+   upstream sets `data-row-family` on each row (or reads `--dsh-row-accent` in
+   `DisclosureRow`), or the fork owns the rows.
+2. *Ownable as fork components.* `tool.call.toolview` is a **keyed slot whose
+   registration replaces the view**: "Registering an occupied key replaces its
+   view; unclaimed keys use the generic row." A fork package can therefore own
+   `kernel`, `bash`, `think`, and each context row outright — its own component,
+   its own stylesheet, its own accent — with no upstream edit at all. That is the
+   next round's work, and it also covers the `EmptyHero` badge, the
+   `AssistantMarkdown` empty-block rule, and the `ui-conversation` copy, because
+   those are the same rows' chrome.
+
+`ui-settings/src/client/config-form.ts` stays a seam: it is a memoization fix
+inside an upstream class, with no extension point between construction and use,
+and its EXIT is an upstream PR. `ui-tool`'s `kernel` variant/title map is the
+same kind of three-line internal constant.

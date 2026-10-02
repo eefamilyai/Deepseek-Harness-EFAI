@@ -33,24 +33,6 @@ export const zh = {
   'search.empty': '没有匹配的模型。',
   'empty.models': '没有可用的模型。',
   'empty.efforts': '当前模型未提供推理等级。',
-  // DSH-FORK(browser): fork edit on an upstream-owned file. EXIT: upstream ships account-route copy.
-  'provider.accounts': '{count} 个账号',
-  'provider.models': '{count} 个模型',
-  'provider.noModels': '未查询到模型',
-  'provider.configure': '请在设置中配置该提供方以加载模型。',
-  'account.add': '添加账号',
-  'account.needEmail': '请先输入邮箱。',
-  'account.needPassword': '请先输入密码。',
-  'account.testing': '正在测试登录…',
-  'account.added': '已添加 {account}，在上方点击即可使用。',
-  'account.failed': '登录测试失败。',
-  'account.emailPlaceholder': 'name@company.com',
-  'account.passwordPlaceholder': '密码',
-  'account.testAdd': '测试并添加',
-  'account.cancel': '取消',
-  // The unpinned pooled route: no single login is pinned, so it must not read
-  // as one of the logins listed around it.
-  'account.auto': '自动（任选账号）',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -81,19 +63,4 @@ export const en = {
   'search.empty': 'No matching models.',
   'empty.models': 'No models available.',
   'empty.efforts': 'This model provides no reasoning effort levels.',
-  'provider.accounts': '{count} accounts',
-  'provider.models': '{count} models',
-  'provider.noModels': 'No models yet',
-  'provider.configure': 'Configure this provider in Settings to load its models.',
-  'account.add': 'Add account',
-  'account.needEmail': 'Enter an email first.',
-  'account.needPassword': 'Enter a password first.',
-  'account.testing': 'Testing sign-in…',
-  'account.added': 'Added {account} — tap it above to use it.',
-  'account.failed': 'The login test failed.',
-  'account.emailPlaceholder': 'name@company.com',
-  'account.passwordPlaceholder': 'Password',
-  'account.testAdd': 'Test and add',
-  'account.cancel': 'Cancel',
-  'account.auto': 'Automatic (any account)',
 } satisfies Record<ModelKey, string>

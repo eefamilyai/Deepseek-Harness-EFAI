@@ -29,6 +29,7 @@
     // under its own tsconfig boundary.
     "paths": {
       "@deepseek-ai/dsh-client-ui-effects": ["./packages/client/ui-effects/src"],
+      "@deepseek-ai/dsh-client-ui-brand-efai": ["./packages/client/ui-brand-efai/src"],
       "@deepseek-ai/dsh-client-ui-settings-tools": ["./packages/client/ui-settings-tools/src"],
       "@deepseek-ai/dsh-client-ui-settings-accounts": ["./packages/client/ui-settings-accounts/src"],
       "@deepseek-ai/dsh-client-ui-flow-accents": ["./packages/client/ui-flow-accents/src"],

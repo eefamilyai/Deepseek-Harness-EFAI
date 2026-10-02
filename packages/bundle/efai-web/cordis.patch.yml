@@ -5,6 +5,14 @@
 # A profile without it runs upstream's Web surface unchanged.
 
 - insert:
+    # The sidebar brand. Upstream's occupant registers only in an `official`
+    # client build, so every other build falls through to the shell's
+    # "DSH Local Build" label; this row is the fork's own package, which
+    # registers the whale mark and the product wordmark unconditionally. The
+    # upstream row is switched off below rather than left to lose a race with it.
+    - id: ui-brand-efai
+      name: '@deepseek-ai/dsh-client-ui-brand-efai'
+
     # Which commit the running host was started from, at GET /version. Upstream's
     # web-app row carries no such route, and an operator confirming that the page
     # they are looking at is the code they just edited should not have to read the
@@ -38,3 +46,8 @@
     # instead of editing ds_config.json by hand.
     - id: ui-settings-accounts
       name: '@deepseek-ai/dsh-client-ui-settings-accounts'
+
+# Upstream's sidebar brand, replaced rather than restyled: `ui-brand-efai` above
+# registers the same two occupants for every build profile.
+- id: ui-brand-official
+  disabled: true

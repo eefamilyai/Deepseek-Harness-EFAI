@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 738ed0c5b4..5eac54a907 100644
+index 738ed0c5b4..de1b3d046b 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -142,6 +142,13 @@
+@@ -142,6 +142,14 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -10,6 +10,7 @@ index 738ed0c5b4..5eac54a907 100644
 +    { "path": "./apps/web" },
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/client/ui-effects" },
++    { "path": "./packages/client/ui-brand-efai" },
 +    { "path": "./packages/client/ui-settings-tools" },
 +    { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
 +    { "path": "./packages/client/ui-settings-accounts" },

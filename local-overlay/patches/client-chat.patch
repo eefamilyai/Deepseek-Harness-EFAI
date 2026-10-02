@@ -35,13 +35,15 @@ index 5d97a698f7..73a5bc390a 100644
            <MarkdownText
              key={i}
 diff --git a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
-index 6cfcfd2397..87f33da2e3 100644
+index 6cfcfd2397..f4adf0950c 100644
 --- a/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
 +++ b/packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css
-@@ -9,8 +9,24 @@
+@@ -9,8 +9,14 @@
    padding-bottom: 4px;
  }
  
+-.chevron {
+-  color: var(--dsw-alias-label-secondary);
 +/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
 +/* Instruction material's seat in the flow-row accent set (--dsw-alias-flow-*,
 +   design-platform.css), shared with the skill row: an injected instruction
@@ -50,21 +52,10 @@ index 6cfcfd2397..87f33da2e3 100644
 +   however it was produced. Rebound on `.row` per DisclosureRow's contract. */
 +.row {
 +  --dsh-row-accent: var(--dsw-alias-flow-instruct);
-+}
-+
-+/* Restated here rather than left to DisclosureRow's own read: that rule ships
-+   in the app bundle and this rebind ships in the plugin's injected stylesheet,
-+   so a row whose hue spans both artifacts loses it whenever only one is
-+   current. Two classes, so it outranks the primitive's rule either way. */
-+.root .leading,
-+.root .title,
- .chevron {
--  color: var(--dsw-alias-label-secondary);
-+  color: var(--dsh-row-accent);
  }
  
  /* Separator and producer name beside the role title: ToolRow's summary geometry,
-@@ -21,7 +37,7 @@
+@@ -21,7 +27,7 @@
    height: 2px;
    margin: 0 8px;
    border-radius: 1px;
@@ -73,6 +64,35 @@ index 6cfcfd2397..87f33da2e3 100644
  }
  
  .source {
+diff --git a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
+index 402a9effc1..e23d9f1c08 100644
+--- a/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
++++ b/packages/client/ui-chat/src/client/chat/ReasoningRow.module.css
+@@ -25,6 +25,15 @@
+   flex-shrink: 0;
+ }
+ 
++/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
++/* Think's seat in the flow-row accent set (--dsw-alias-flow-*,
++   design-platform.css): one rebind carries the glyph and the title through
++   DisclosureRow's contract, matching what ui-tool's ToolRow gives each tool
++   family. */
++.row {
++  --dsh-row-accent: var(--dsw-alias-flow-think);
++}
++
+ .title {
+   font-weight: 400;
+ }
+@@ -35,7 +44,7 @@
+   height: 2px;
+   margin: 0 8px;
+   border-radius: 1px;
+-  background: var(--dsw-alias-label-caption);
++  background: var(--dsh-row-accent);
+ }
+ 
+ /* Think text reads the secondary tier — one step under the body size
 diff --git a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx b/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx
 index 0136acbfd9..3874237a16 100644
 --- a/packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx

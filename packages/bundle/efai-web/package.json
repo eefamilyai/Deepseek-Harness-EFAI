@@ -34,6 +34,7 @@
     }
   },
   "dependencies": {
+    "@deepseek-ai/dsh-client-ui-brand-efai": "workspace:^",
     "@deepseek-ai/dsh-client-ui-effects": "workspace:^",
     "@deepseek-ai/dsh-client-ui-flow-accents": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-accounts": "workspace:^",

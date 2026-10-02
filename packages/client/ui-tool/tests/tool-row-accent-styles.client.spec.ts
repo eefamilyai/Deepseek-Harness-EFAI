@@ -50,15 +50,13 @@ describe('ToolRow.module.css family accents', () => {
     }
   })
 
-  it('colours all four parts from this sheet, not across the artifact split', () => {
-    // DisclosureRow's own `.leading`/`.title` read the accent too, but that
-    // rule ships in the app bundle while the rebind ships in this plugin's
-    // injected stylesheet. Relying on it alone means a row loses its hue
-    // whenever only one of the two artifacts is current — the failure that
-    // left every row but the self-contained skill row grey.
-    expect(declarationText).toMatch(/\.root \.leading,\s*\.root \.title\s*\{\s*color: var\(--dsh-row-accent\);/)
-    expect(declarationText).toMatch(/\.chevron\s*\{\s*color: var\(--dsh-row-accent, var\(--dsw-alias-label-secondary\)\);/)
+  it('colours the separator dot here and leaves row text to the shared header', () => {
+    // DisclosureRow owns the row TEXT colour and reads the token this sheet
+    // rebinds (`.leading`/`.title` fall back to the neutral label tokens).
+    // Restating a `.title` colour here would pin one hover state against the
+    // shared process-row colours, which ui-tool's own style spec rejects.
     expect(declarationText).toMatch(/background: var\(--dsh-row-accent, var\(--dsw-alias-label-caption\)\);/)
+    expect(declarationText).not.toMatch(/\.(leading|title|summary|summarySuffix)\s*\{[^{}]*\bcolor:/)
   })
 
   it('reaches the keyed bash view, which replicates the chrome instead of composing it', () => {
@@ -70,12 +68,12 @@ describe('ToolRow.module.css family accents', () => {
       'utf8',
     ).replace(/\/\*[\s\S]*?\*\//g, ' ')
     expect(bash).toMatch(/--dsh-row-accent: var\(--dsw-alias-flow-shell\);/)
-    for (const part of ['.leading', '.chevron', '.title']) {
-      expect(bash, `${part} must take the rebound accent`).toMatch(
-        new RegExp(`\\${part}\\s*\\{[^}]*color: var\\(--dsh-row-accent\\)`),
-      )
-    }
     expect(bash).toMatch(/\.sep\s*\{[^}]*background: var\(--dsh-row-accent\)/)
+    // It replicates the header's markup, so it must also replicate the header's
+    // rule that row text follows the shared colour: the glyph and the title stay
+    // on `inherit`, and no text rule restates a colour.
+    expect(bash).toMatch(/\.leading\s*\{[^}]*color: inherit;/)
+    expect(bash).not.toMatch(/\.(title|summary|summarySuffix)\s*\{[^{}]*\bcolor:/)
   })
 
   it('orders the cordis tool override after the variant rules it overrides', () => {

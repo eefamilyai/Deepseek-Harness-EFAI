@@ -154,7 +154,7 @@ index bf0ddab2d0..a12114c882 100644
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
-index 2ca3653361..1d7e257497 100644
+index 2ca3653361..c3380a2285 100644
 --- a/scripts/verify-package-readme-model-experience.ts
 +++ b/scripts/verify-package-readme-model-experience.ts
 @@ -37,6 +37,10 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
@@ -168,7 +168,7 @@ index 2ca3653361..1d7e257497 100644
  }
  
  /**
-@@ -78,6 +82,13 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+@@ -78,6 +82,14 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
    'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
    'packages/ptc-runtime/ptc-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
    'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
@@ -179,6 +179,7 @@ index 2ca3653361..1d7e257497 100644
 +  'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
 +  'packages/session/command-session-info': { kind: 'none', reason: 'The command is operator-facing and registers no prompt, tool, schema, or session event.' },
 +  'packages/llm/ai-accounts': { kind: 'none', reason: 'The account surface registers no prompt section, tool schema, or Session event; a login changes which provider routes exist.' },
++  'packages/client/ui-brand-efai': { kind: 'none', reason: 'Two sidebar slot occupants; the brand a person reads registers nothing model-facing.' },
    'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },
    'packages/experimental/ptc-runtime-python': { kind: 'indirect', reason: 'Explicit source-checkout compositions delegate model rendering to PTC mode in dsh-tools.' },
    'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },

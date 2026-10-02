@@ -2916,6 +2916,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'sidebar\' (client-ui-sidebar), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-brand-efai EfaiBrandMark',
       'client-ui-brand-official OfficialBrandMark',
     ],
     replaceRisk: 'shadows-shipped-ui',
@@ -2947,6 +2948,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'sidebar\' (client-ui-sidebar), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-brand-efai EfaiBrandName',
       'client-ui-brand-official OfficialBrandName',
     ],
     replaceRisk: 'shadows-shipped-ui',

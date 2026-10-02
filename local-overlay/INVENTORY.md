@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **60** in **17** patch(es).
+Tier-2 files: **56** in **14** patch(es).
 
 ## Patches
 
@@ -61,39 +61,24 @@ Tier-2 files: **60** in **17** patch(es).
 - `packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts`
 - `packages/compaction/compaction/src/index.ts`
 
-### `patches/client-chat.patch` — 4 file(s)
+### `patches/client-chat.patch` — 5 file(s)
 
 - `packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css`
 - `packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx`
 - `packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css`
+- `packages/client/ui-chat/src/client/chat/ReasoningRow.module.css`
 - `packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx`
 
-### `patches/client-input-trigger.patch` — 2 file(s)
+### `patches/client-primitives.patch` — 2 file(s)
 
-- `packages/client/ui-input-trigger/src/client/MenuView.module.css`
-- `packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx`
-
-### `patches/client-model-selection.patch` — 1 file(s)
-
-- `packages/client/ui-model-selection/src/client/locales.ts`
-
-### `patches/client-primitives.patch` — 1 file(s)
-
+- `packages/client/ui-primitives/src/DisclosureRow.module.css`
 - `packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts`
 
 ### `patches/client-settings.patch` — 1 file(s)
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
-### `patches/client-brand.patch` — 5 file(s)
-
-- `packages/client/ui-brand-official/README.md`
-- `packages/client/ui-brand-official/README.zh.md`
-- `packages/client/ui-brand-official/src/client/Brand.tsx`
-- `packages/client/ui-brand-official/src/client/index.ts`
-- `packages/client/ui-brand-official/tests/browser-plugin.client.spec.tsx`
-
-### `patches/client-shell.patch` — 7 file(s)
+### `patches/client-shell.patch` — 9 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
@@ -101,7 +86,9 @@ Tier-2 files: **60** in **17** patch(es).
 - `packages/client/ui-sidebar/src/client/SidebarRoot.module.css`
 - `packages/client/ui-skill/src/client/index.ts`
 - `packages/client/ui-skill/tests/browser-plugin.client.spec.ts`
+- `packages/client/ui-tool/src/client/tool/components/ToolRow.module.css`
 - `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
+- `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
 
 ### `patches/session-format-migration.patch` — 4 file(s)
 
@@ -157,7 +144,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 501 paths do not exist upstream, so no patch covers them and none can conflict.
+These 496 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -313,10 +300,7 @@ These 501 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/agent-skills.patch`
 - `local-overlay/patches/apps.patch`
 - `local-overlay/patches/build.patch`
-- `local-overlay/patches/client-brand.patch`
 - `local-overlay/patches/client-chat.patch`
-- `local-overlay/patches/client-input-trigger.patch`
-- `local-overlay/patches/client-model-selection.patch`
 - `local-overlay/patches/client-primitives.patch`
 - `local-overlay/patches/client-settings.patch`
 - `local-overlay/patches/client-shell.patch`
@@ -350,8 +334,6 @@ These 501 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/bundle/efai-web/package.json`
 - `packages/bundle/efai-web/src/index.ts`
 - `packages/bundle/efai-web/tsconfig.json`
-- `packages/client/ui-brand-official/src/client/Brand.module.css`
-- `packages/client/ui-brand-official/src/css-modules.d.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
 - `packages/client/ui-effects/README.md`
 - `packages/client/ui-effects/package.json`

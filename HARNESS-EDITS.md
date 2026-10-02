@@ -39,6 +39,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Text-channel tool-call reader | `packages/llm/llm-text-toolcalls` | 22 files |
 | System prompt as a file upload (work in progress) | `packages/llm/llm-system-file` | 10 files |
 | Account-pool registry and its `aiAccounts` Remote namespace | `packages/llm/ai-accounts` | 10 files |
+| The fork's sidebar brand occupants | `packages/client/ui-brand-efai` | 10 files |
 | Python runtime (providers, `ds_direct`, WAF, browser identity, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 56 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
@@ -66,9 +67,9 @@ rather than a partition. The Agent Notes row is the exception to the section's p
 `.agents/notes/implemented/` and keeps 926 files there, and the notes counted here are fork-owned
 only because upstream holds no file by those names.
 
-Five files are still *added inside* packages upstream owns — two in `ui-brand-official`, one each in
-`ui-chat`, `ui-primitives`, and `ui-tool`. They never conflict, which is exactly the risk: if
-upstream restructures the package, the file survives the merge and fails to compile far from the
+Two files are still *added inside* packages upstream owns — one each in `ui-chat` and
+`ui-tool`. They never conflict, which is exactly the risk: if upstream restructures the
+package, the file survives the merge and fails to compile far from the
 cause. The four that used to sit inside `ui-settings-general` and `ui-theme` are gone — they moved
 into fork packages, and the `ui-primitives` terminal bridge went with the fork's code-block chrome
 in the 0.1.7-alpha.2 merge. See T2-J.
@@ -350,7 +351,7 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 9 | `core/agent/src/model-selection.ts` | `fix` | **upstream bug** — accessor re-entrancy on resume | **Upstream PR** |
 | 10 | `tsdown.config.ts` | `fix` | **upstream bug** — manifest-less workspace members | **Upstream PR** |
 | ~~11~~ | `core/system-prompt/src/index.ts` | `brand` | **RETIRED** — `packages/core/efai-identity` rewrites the opener on `system-prompt/assemble`, and upstream's own tests pass unmodified again | done |
-| 12 | 2 CSS modules, 3 `locales.ts` | `brand` | styling and copy inside upstream components; the *token* half retired into `packages/client/ui-flow-accents` | Upstream adopts the chrome, or the components are forked |
+| 12 | 7 CSS modules, `ui-conversation` copy, 3 `.tsx`, 4 specs | `brand` | flow-row accents, spacing, and copy inside upstream components; the *token* half retired into `packages/client/ui-flow-accents`, the brand into `packages/client/ui-brand-efai` | Upstream adopts the chrome, or the components are forked |
 | 13 | 3 `scripts/gen-*.ts` | `kernel` | generators must see fork packages | Upstream PR if the change is general |
 | 14 | `tsconfig.{host,client}.json` | `all` | project references | Contiguous fenced block (Rule 6) |
 | 15 | `pnpm-lock.yaml` | `all` | dependencies | `merge=ours` + regenerate (Rule 7) |
@@ -368,7 +369,8 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | ~~27~~ | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | **RETIRED** — `agent-memory` mounts and unmounts the engine from the live setting, in `efai-base`; `apps/cli` now declares only the two fork bundles | done |
 | 28 | `.agents/skills/dsh-code-review/SKILL.md`, `.agents/skills/dsh-pre-push-checks/SKILL.md` | `all` | upstream's review and pre-push skills cannot know about this fork: the tier split, the `DSH-FORK` marker, `local-overlay/`, or the `verify-fork-overlay` gate. Each carries one added section plus its marker. | Permanent fork delta: the upstream skills would need a fork-extensibility mechanism for these sections to move out. |
 | 29 | `scripts/verify-package-readme-model-experience.ts` | `all` | the fork ships package READMEs for fork-owned packages, so the audited `NO_MODEL_EXPERIENCE_SECTION` / `SENTENCE_MODEL_EXPERIENCE` allowlists must name them; without entries the gate rejects a correct README. | Upstream accepts a model-experience declaration inside each package manifest, so the allowlists stop being a central file. |
-| 30 | `client/ui-brand-official/**` (3 `README*`, `src/client/Brand.tsx`, `src/client/index.ts`, `tests/browser-plugin.client.spec.tsx`), `apps/web/tests/built-boot.expected.e2e.ts` | `brand` | the sidebar brand is the fork's in **every** build profile — upstream gates the registration behind `DSH_CLIENT_BUILD_PROFILE=official`, so an unprofiled build falls through to the shell's `DSH Local Build` label and its version badge; the name is live text carrying a specular sweep rather than the upstream name artwork, and the built-boot smoke pins that wordmark instead of the profile-dependent shell brand | A fork-owned client package owns the sidebar chrome, so the registration stops being a gate on an upstream package |
+| ~~30~~ | `client/ui-brand-official/**` (3 `README*`, `src/client/Brand.tsx`, `src/client/index.ts`, `tests/browser-plugin.client.spec.tsx`) | `brand` | **RETIRED** — the brand occupants moved to the fork-owned `packages/client/ui-brand-efai`, which `efai-web` mounts while switching upstream's row off. A package the official Desktop also ships cannot carry the fork's identity: the installed copy wins at boot, so the edit never rendered there | done |
+| 30b | `apps/web/tests/built-boot.expected.e2e.ts` | `brand` | the built-boot smoke pins the fork's wordmark instead of the profile-dependent shell brand | Upstream stops making the brand a function of the build profile |
 | 31 | `client/ui-settings/src/client/config-form.ts` | `settings-freeze` | memoizes a decoded settings section per raw value and rehydrates the namespace schema once, so a settings write does not re-validate every section on the main thread; carried across upstream's `settings-scope.ts` → `config-form.ts` rename | **Upstream PR** |
 | 32 | `packages/compaction/{compaction,compaction-basic,command-compact}/**` (5 source files) | `kiln` | the summarizer's request holds the role in the system slot, quotes the replayed transcript as ONE user turn, and offers no tool channel, because a replayed transcript with its own roles intact read as a turn in progress and the summarizer continued the agent's voice — a tool call or a fenced code block instead of a checkpoint; the same files carry `/compact <text>` through to the summarizer. The request's own turns are also pinned (`packages/llm/llm-kiln/src/adapter.ts`, fork-owned): they carry no `source`, so `PINNED_SOURCE_KINDS` never matched them and the sidecar's oldest-first clip dropped the whole quoted transcript, leaving the summarizer the instruction alone | **Upstream PR** — upstream states the summarizer role on every route, pins a compaction request's own turns, and accepts a compaction instruction argument |
 

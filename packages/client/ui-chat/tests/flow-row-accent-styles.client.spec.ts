@@ -1,10 +1,10 @@
 /**
- * The think and context rows' family-accent wiring as CSS text. Both compose
- * DisclosureRow, whose `.leading`/`.title` read `--dsh-row-accent` — but that
- * rule ships in the app bundle while these rebinds ship in this plugin's
- * injected stylesheet. The two are independent build artifacts, so a row that
- * spans them loses its hue whenever only one is current; each sheet must
- * therefore carry both the rebind and the colour.
+ * The think and context rows' family-accent wiring as CSS text. A row binds
+ * `--dsh-row-accent` on its own `.row` and colours its separator dot with it;
+ * the row TEXT colour is DisclosureRow's (`.leading`/`.title` read the token,
+ * with the neutral label tokens as the fallback). That split is upstream's: a
+ * tool sheet that restates `.title` colour pins one hover state against the
+ * shared process-row colours, which ui-tool's own style spec rejects.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -25,9 +25,9 @@ describe('ui-chat flow-row accents', () => {
     expect(sheet(name)).toMatch(new RegExp(`\\.row\\s*\\{\\s*--dsh-row-accent: var\\(${token}\\);`))
   })
 
-  it.each(rows)('%s colours its own glyph, title, chevron, and dot', (name, _token, dot) => {
+  it.each(rows)('%s colours its own dot and leaves row text to the shared header', (name, _token, dot) => {
     const css = sheet(name)
-    expect(css).toMatch(/\.root \.leading,\s*\.root \.title,\s*\.chevron\s*\{\s*color: var\(--dsh-row-accent\);/)
     expect(css).toMatch(new RegExp(`\\${dot}\\s*\\{[^}]*background: var\\(--dsh-row-accent\\)`))
+    expect(css).not.toMatch(/\.(leading|title|chevron)\s*\{[^{}]*\bcolor:/)
   })
 })
