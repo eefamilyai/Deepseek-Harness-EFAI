@@ -15,75 +15,12 @@
   flex-shrink: 0;
 }
 
-/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
-/* Family accent (--dsw-alias-flow-*, design-platform.css): the leading glyph,
-   the title, the hover chevron, and the separator dot carry one hue per row
-   family, so a scrolled transcript indexes by colour. The summary keeps its
-   neutral tone — it is the row's content, not its kind. Write and edit share
-   the mutate hue: they are one family, already drawn with one icon.
-   `--dsh-row-accent` binds on `.row`, not `.root`, because subcalls render as
-   nested rows under the same `.root` and would inherit their parent's hue
-   (DisclosureRow.module.css owns the rebinding contract). */
-.root[data-variant='search'] .row {
-  --dsh-row-accent: var(--dsw-alias-flow-search);
-}
-
-.root[data-variant='read'] .row {
-  --dsh-row-accent: var(--dsw-alias-flow-read);
-}
-
-.root[data-variant='write'] .row,
-.root[data-variant='edit'] .row {
-  --dsh-row-accent: var(--dsw-alias-flow-mutate);
-}
-
-.root[data-variant='bash'] .row {
-  --dsh-row-accent: var(--dsw-alias-flow-shell);
-}
-
-.root[data-variant='code'] .row {
-  --dsh-row-accent: var(--dsw-alias-flow-code);
-}
-
-/* Unclassified calls are still calls, and they are common enough here (goal,
-   RLM, and preset tools all land on this variant) that leaving them grey put
-   the busiest rows outside the index. */
-.root[data-variant='others'] .row {
-  --dsh-row-accent: var(--dsw-alias-flow-generic);
-}
-
-/* Cordis lifecycle tools retain their generic row mechanics while carrying a
-   shared product accent and tool-owned action title. Tool-scoped, so it must
-   follow the variant rules it overrides — both are one class plus one
-   attribute plus one class, and the cascade resolves the tie by order. */
-.root[data-tool^='cordis_'] .row {
-  --dsh-row-accent: var(--dsw-alias-state-business-primary);
-}
-
 .root[data-tool^='cordis_'] .title {
   font-weight: 500;
 }
 
-/* DisclosureRow's own `.leading`/`.title` already read --dsh-row-accent, but
-   that rule ships in the app bundle while the rebind above ships in this
-   plugin's injected stylesheet. The two are independent build artifacts, and
-   when only one is current the row silently loses its colour. Restating the
-   read here (two classes, so it outranks the primitive's single-class rule
-   either way) keeps each row's hue in the same stylesheet as its rebind. */
-.root .leading,
-.root .title {
-  color: var(--dsh-row-accent);
-}
-
-/* The hover/open chevron replaces the leading glyph in place, so it takes the
-   same accent — a neutral chevron would drain the row's colour on hover. */
-.chevron {
-  color: var(--dsh-row-accent, var(--dsw-alias-label-secondary));
-}
-
 .title {
   font-weight: 400;
-  transition: color 100ms ease;
 }
 
 .sep {
@@ -92,7 +29,7 @@
   height: 2px;
   border-radius: 1px;
   margin: 0 8px;
-  background: var(--dsh-row-accent, var(--dsw-alias-label-caption));
+  background: var(--dsw-alias-label-caption);
 }
 
 .summary {
@@ -103,8 +40,6 @@
   white-space: nowrap;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-tertiary);
-  transition: color 100ms ease;
 }
 
 /* Trailing summary fragment kept out of .summary's ellipsis, for a count whose
@@ -118,29 +53,27 @@
   white-space: nowrap;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-tertiary);
-  transition: color 100ms ease;
-}
-
-.row:hover .title,
-.row:hover .summary:not(.errorSummary):not(.stoppedSummary),
-.row:hover .summarySuffix {
-  color: var(--dsw-alias-label-primary);
 }
 
 /* Diff-row +/- totals: the code font, matching the diff body the numbers
    summarize; a wider gap keeps the digits from reading as part of the path.
    Two px under the secondary tier (still riding the axis): mono digits read
-   optically larger than the sans path at the same size. Caption, one step
-   dimmer than the suffix's tertiary, so the digits stay behind the path. The
+   optically larger than the sans path at the same size. The
    half-pixel nudge closes the baseline gap the size difference leaves under
    the row's box-centering (a transform, so flex layout is untouched). */
 .diffStat {
   margin-left: 10px;
   font-family: var(--ds-font-family-code);
   font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 2px);
-  color: var(--dsw-alias-label-caption);
   transform: translateY(0.5px);
+}
+
+.row:is(:hover, [aria-expanded='true']) .diffAdded {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.row:is(:hover, [aria-expanded='true']) .diffRemoved {
+  color: var(--dsw-alias-state-error-primary);
 }
 
 /* File-tool path: same type as .summary, with a persistent link affordance.
@@ -162,19 +95,12 @@
   text-align: left;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  color: var(--dsw-alias-label-secondary);
+  color: inherit;
   text-decoration: underline dotted;
-  text-decoration-color: var(--dsw-alias-label-tertiary);
+  text-decoration-color: currentColor;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   cursor: pointer;
-  transition: color 100ms ease;
-}
-
-.row:hover .fileLink,
-.fileLink:hover {
-  color: var(--dsw-alias-label-primary);
-  text-decoration-color: currentColor;
 }
 
 /* Error row's collapsed summary: the failure's first line in the error color. */
@@ -257,7 +183,7 @@
   flex-direction: column;
   margin: 4px 0 4px 4px;
   border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-markdown-code-block);
   font: var(--dsw-font-markdown-code-block-small);
 }
@@ -280,7 +206,7 @@
 .ioSection::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 6px;
+  border-radius: var(--dsw-radius-sm);
 }
 
 /* Track end-margins keep the thumb's travel out of the rounded corners. */

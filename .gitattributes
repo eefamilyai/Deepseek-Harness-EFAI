@@ -6,21 +6,8 @@
 * text=auto eol=lf
 *.cmd text eol=crlf
 
-# DSH-FORK(all): fork edit on an upstream-owned file. EXIT: CRLF for *.cmd/*.bat is permanent; append at end of file only.
-# cmd.exe misparses batch files with LF line endings (multi-line if/for blocks
-# break into gibberish). The in-repo form stays LF; checkout presents CRLF.
-*.cmd text eol=crlf
-*.bat text eol=crlf
-
 *.pdf binary
 
-# Pairing records are generated from the three confirmed owner-blob pairs.
-# The worktree-local installer registers the fail-closed driver command.
-*.i18n.yaml merge=dsh-translation-pairing
-
-# Patch data files are unified diffs: a leading '+ ' is content, not a
-# whitespace error. Exempt them from the whitespace check.
-*.patch -whitespace
 # The persistence catalog is the readable projection of these generated schemas.
 docs/persistence-schema.json linguist-generated=true
 docs/persistence-changes/*.schema.json linguist-generated=true

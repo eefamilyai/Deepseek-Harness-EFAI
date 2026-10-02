@@ -1,79 +1,62 @@
-# DeepSeek Harness EFAI
-
-<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
+# DeepSeek Harness
 
 English | [中文](README.zh.md)
 
-**DeepSeek Harness EFAI** is a community fork of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`). It keeps the upstream everything-is-a-plugin architecture and adds a Python kernel, a multi-provider LLM registry, browser tools, a sidebar surface, and a notebook-edit tool.
+DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 
-The fork's full change contract lives in [HARNESS-EDITS.md](HARNESS-EDITS.md).
+It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
 
-<a id="run"></a>
+Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
 
-## Install
+## Developer preview
 
-### One command
+DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
 
-macOS or Linux:
+Review the [safety notice](SAFETY.md) before running the project.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.sh | bash
-```
+## Run
 
-Windows PowerShell:
+### Run from `npm`
 
-```powershell
-irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.ps1 | iex
-```
-
-The installer clones the fork to `~/.deepseek-harness` (Windows: `%USERPROFILE%\.deepseek-harness`), installs and builds, and adds `dsh` and `dsh-update` to `PATH`. Run the same command again to update in place.
-
-<a id="run-from-source"></a>
-
-### From source
+Install `Node.js`, then run:
 
 ```sh
-git clone https://github.com/eefamilyai/Deepseek-Harness-EFAI.git
-cd Deepseek-Harness-EFAI
+npx @deepseek-ai/dsh web
+```
+
+The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
+
+### Run from source
+
+To run from a repository checkout:
+
+```sh
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
 pnpm install
 pnpm run build
 pnpm dsh web
 ```
 
-`pnpm run build` prepares the repository artifacts; `pnpm dsh web` starts the Web UI.
+`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 
-## Start the server
+## Community and support
 
-Windows:
+- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
+- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
+- Join <a href="https://discord.gg/4MrtZUhpxg">DeepSeek Harness Discord community</a>.
 
-```powershell
-.\start.cmd
-```
+## Contributing
 
-macOS or Linux:
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```sh
-./start.sh
-```
+## Development
 
-The launchers provision the bundled Python runtime, install dependencies, build once when needed, and start the Web UI at `http://127.0.0.1:3080`. Pass `--port 3100` to use another port, or `--build` to force a rebuild.
-
-After a one-command install, run `dsh web` instead; add `--port 3100` to change the port.
+Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
 
 `pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
 
 For agents, follow [AGENTS.md](AGENTS.md).
-
-## What this fork adds
-
-- A Python kernel that executes code cells through the kernel tools.
-- A multi-provider LLM registry with account pooling.
-- A self-hosted, text-first browser tool.
-- A notebook-edit tool.
-
-## Upstream
-
-This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Read [HARNESS-EDITS.md](HARNESS-EDITS.md) before merging a new upstream release, so the fork's local features are not clobbered.
 
 ## Citation
 
@@ -89,4 +72,6 @@ This fork tracks [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/d
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE)
+
+Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

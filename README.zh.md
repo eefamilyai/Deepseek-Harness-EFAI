@@ -1,79 +1,81 @@
-# DeepSeek Harness EFAI
-
-<!-- DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: the fork's product identity line moves to a prompt section. -->
+# DeepSeek Harness
 
 [English](README.md) | 中文
 
-**DeepSeek Harness EFAI** 是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）的社区分支。它保留上游“一切皆插件”的架构，并新增 Python 内核、多提供商 LLM 注册表、浏览器工具、侧边栏桥接，以及笔记本编辑工具。
+DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
 
-本分支的完整改动契约见 [HARNESS-EDITS.md](HARNESS-EDITS.md)。
+它构建于**一切皆插件**的架构之上，由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512)。
+
+文档：[https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+
+## 开发者预览
+
+DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来将出现破坏兼容性的变更。**
+
+运行本项目前，请阅读[安全说明](SAFETY.zh.md)。
 
 <a id="run"></a>
 
-## 安装
+## 运行
 
-### 一条命令
+### 通过 `npm` 运行
 
-macOS 或 Linux：
+安装 `Node.js`，然后运行：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.sh | bash
+npx @deepseek-ai/dsh web
 ```
 
-Windows PowerShell：
-
-```powershell
-irm https://raw.githubusercontent.com/eefamilyai/Deepseek-Harness-EFAI/master/install.ps1 | iex
-```
-
-安装程序会把分支克隆到 `~/.deepseek-harness`（Windows 为 `%USERPROFILE%\.deepseek-harness`），完成安装与构建，并把 `dsh` 和 `dsh-update` 加入 `PATH`。再次运行同一命令即可原地更新。
+该命令默认会在 `http://127.0.0.1:3080` 启动 Web UI，本机启动时还会用默认浏览器打开页面。通过 SSH 启动时只打印宿主机 URL，因为本地转发地址由 SSH 客户端或编辑器持有。传入 `--no-open` 可仅运行服务器而不打开浏览器。详见 [Web UI 指南](docs/user/guide/index.zh.md)。
 
 <a id="run-from-source"></a>
 
-### 从源码构建
+### 从源码运行
+
+如需从仓库源码运行：
 
 ```sh
-git clone https://github.com/eefamilyai/Deepseek-Harness-EFAI.git
-cd Deepseek-Harness-EFAI
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
 pnpm install
 pnpm run build
 pnpm dsh web
 ```
 
-`pnpm run build` 准备仓库产物；`pnpm dsh web` 启动 Web UI。
+`pnpm run build` 会准备仓库产物。`pnpm dsh web` 会直接使用这些已构建产物，不会重新构建。
 
-## 启动服务器
+## 社区与支持
 
-Windows：
+- 通过 [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions) 提交反馈或 bug 报告。
+- 为你的插件仓库添加 [`dsh-plugin`](https://github.com/topics/dsh-plugin) 话题，便于被发现。
+- 欢迎加入 DeepSeek Harness 企微群！扫描下方二维码填写入群问卷，小助手会定期发送入群邀请。
 
-```powershell
-.\start.cmd
-```
+<table>
+  <thead>
+    <tr>
+      <th align="center">入群问卷</th>
+      <th align="center">微信公众号</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center"><a href="https://trtgsjkv6r.feishu.cn/share/base/form/shrcnIt5twSVdLGD52KJBckGCgg"><img src="https://cdn.deepseek.com/harness/readme/community-wecom-survey.png" alt="DeepSeek Harness 入群问卷二维码" width="180" height="180"></a></td>
+      <td align="center"><img src="https://cdn.deepseek.com/harness/readme/community-wechat-official-account.png" alt="DeepSeek Harness 团队微信公众号二维码" width="180" height="180"></td>
+    </tr>
+  </tbody>
+</table>
 
-macOS 或 Linux：
+## 参与贡献
 
-```sh
-./start.sh
-```
+参见 [CONTRIBUTING.md](CONTRIBUTING.zh.md)。
 
-启动脚本会准备内置 Python 运行时、安装依赖、在需要时先构建，然后启动 Web UI，默认地址为 `http://127.0.0.1:3080`。传入 `--port 3100` 可更换端口，传入 `--build` 可强制重新构建。
+## 开发
 
-通过一条命令安装后，改运行 `dsh web`；加上 `--port 3100` 可更换端口。
+请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
 
 `pnpm run dev:web` 会在一个终端里完成构建、启动，并在源码修改时重建 client bundle；`make help` 列出 Web 与 Desktop 对应的 Make target。完整表格见开发指南的「应用命令」一节。
 
 面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
-
-## 本分支新增内容
-
-- 通过内核工具执行代码单元的 Python 内核。
-- 带账户池化的多提供商 LLM 注册表。
-- 自托管的文本优先浏览器工具。
-- 笔记本编辑工具。
-
-## 上游
-
-本分支跟踪 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。合并新的上游版本前，请先阅读 [HARNESS-EDITS.md](HARNESS-EDITS.md)，以免覆盖本分支的本地功能。
 
 ## 引用
 
@@ -89,4 +91,6 @@ macOS 或 Linux：
 
 ## 许可证
 
-见 [LICENSE](LICENSE)。
+[MIT](LICENSE)
+
+第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

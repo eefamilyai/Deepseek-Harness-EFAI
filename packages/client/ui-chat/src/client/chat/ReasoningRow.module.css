@@ -9,7 +9,6 @@
 }
 
 .row {
-  position: relative;
   overflow: hidden;
 }
 
@@ -22,48 +21,8 @@
   background: var(--dsw-alias-bg-base);
 }
 
-.root[data-state='running'] .row::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 300px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
-    transparent 100%
-  );
-  animation: dsh-reasoning-row-sweep 2.6s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes dsh-reasoning-row-sweep {
-  0% { left: -300px; }
-  90%, 100% { left: 100%; }
-}
-
 .leading {
   flex-shrink: 0;
-}
-
-/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
-/* Think's seat in the flow-row accent set (--dsw-alias-flow-*,
-   design-platform.css): one rebind carries the glyph and the title through
-   DisclosureRow's contract, matching what ui-tool's ToolRow gives each tool
-   family. */
-.row {
-  --dsh-row-accent: var(--dsw-alias-flow-think);
-}
-
-/* Restated here rather than left to DisclosureRow's own read: that rule ships
-   in the app bundle and this rebind ships in the plugin's injected stylesheet,
-   so a row whose hue spans both artifacts loses it whenever only one is
-   current. Two classes, so it outranks the primitive's rule either way. */
-.root .leading,
-.root .title,
-.chevron {
-  color: var(--dsh-row-accent);
 }
 
 .title {
@@ -76,7 +35,7 @@
   height: 2px;
   margin: 0 8px;
   border-radius: 1px;
-  background: var(--dsh-row-accent);
+  background: var(--dsw-alias-label-caption);
 }
 
 /* Think text reads the secondary tier — one step under the body size
@@ -86,7 +45,6 @@
   min-width: 0;
   overflow: hidden;
   flex: 1 1 auto;
-  color: var(--dsw-alias-label-tertiary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   white-space: nowrap;
@@ -116,10 +74,4 @@
   /* Indent under the title, which starts at leading (16 + delta) + gap 6. */
   padding: 4px 0 4px calc(22px + var(--dsh-content-font-delta, 0px));
   min-width: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .root[data-state='running'] .row::after {
-    animation: none;
-  }
 }
