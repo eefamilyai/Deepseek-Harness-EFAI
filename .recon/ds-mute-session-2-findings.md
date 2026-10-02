@@ -5366,3 +5366,19 @@ timing lead is unsupported and the cause lies elsewhere (account-level, section 
   overnight-idle-then-burst shape the operator described does not by itself mute a fresh
   account on the FIX 24/25 wire.
 * Pause 1 of the relaunch (54 min) runs 08:48 -> ~09:42.
+
+
+### 72.2 Interim (2026-10-02 16:00 local)
+
+* Soaks died once (around 14:03, mid-pause 4, both at the same instant; no verdict, no error --
+  the harness's background-job list was empty afterwards). Relaunched at 14:22 as detached
+  processes (`Start-Process`), 4 more bursts, same seed. Because the restart cut pause 4 to
+  42 min and re-drew the schedule, burst numbers below restart at 1.
+* Heartbeat re-verified after the restart: claude1 sent 4 `client/settings` scopes at
+  14:27:27, 14:32:28, ... (300 s); claude2 sent none.
+* Resumes so far, per account (identical for both): ~10.7 h idle, 54 min, 83 min, 87 min,
+  42 min, 54 min = 6 resumes, each followed by a full burst (19-25 min) with 0 errors and
+  **0 mutes on either account**. Completions so far: 147 each.
+* The 16-24 min post-resume window in which j1, t1, v and d1 were penalised has now been
+  crossed five times by each account without a verdict. Remaining: pause 2 (83 min, to
+  ~17:25), then two more bursts.
