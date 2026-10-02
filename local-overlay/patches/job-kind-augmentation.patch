@@ -1,0 +1,48 @@
+diff --git a/packages/shell/tool-pwsh/src/index.ts b/packages/shell/tool-pwsh/src/index.ts
+index cbebd6dc2a..310097c376 100644
+--- a/packages/shell/tool-pwsh/src/index.ts
++++ b/packages/shell/tool-pwsh/src/index.ts
+@@ -40,7 +40,10 @@ import { processJob, processOutcome, processSources, ringDelta } from './backgro
+ import { renderPwshJobRead, renderPwshPromoted, renderPwshResult } from './render.ts'
+ import type { RenderablePwshResult } from './render.ts'
+ 
+-declare module '@deepseek-ai/dsh-jobs' {
++// DSH-FORK(all): JobKindMap is declared in the dsh-jobs/view leaf, not the bare
++// dsh-jobs specifier, so the augmentation must name that module or `pty-send`
++// never joins JobKind. EXIT: upstream repoints these augmentations at /view.
++declare module '@deepseek-ai/dsh-jobs/view' {
+   interface JobKindMap {
+     pwsh: 'pwsh'
+   }
+diff --git a/packages/terminal/tool-terminal/src/index.ts b/packages/terminal/tool-terminal/src/index.ts
+index 6da2af03fe..4a2b5eeb5c 100644
+--- a/packages/terminal/tool-terminal/src/index.ts
++++ b/packages/terminal/tool-terminal/src/index.ts
+@@ -16,7 +16,10 @@ import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+ import { sendSource } from './background.ts'
+ import { boundTerminalText, renderList, renderRead, renderSend, renderSpawn } from './render.ts'
+ 
+-declare module '@deepseek-ai/dsh-jobs' {
++// DSH-FORK(all): JobKindMap is declared in the dsh-jobs/view leaf, not the bare
++// dsh-jobs specifier, so the augmentation must name that module or `pty-send`
++// never joins JobKind. EXIT: upstream repoints these augmentations at /view.
++declare module '@deepseek-ai/dsh-jobs/view' {
+   interface JobKindMap {
+     'pty-send': 'pty-send'
+   }
+diff --git a/packages/workflow/tool-workflow/src/index.ts b/packages/workflow/tool-workflow/src/index.ts
+index d6ca7140ec..c8ee833e57 100644
+--- a/packages/workflow/tool-workflow/src/index.ts
++++ b/packages/workflow/tool-workflow/src/index.ts
+@@ -31,7 +31,10 @@ import type {
+   ToolWorkflowRunEndData, ToolWorkflowRunStartData,
+ } from './types.ts'
+ 
+-declare module '@deepseek-ai/dsh-jobs' {
++// DSH-FORK(all): JobKindMap is declared in the dsh-jobs/view leaf, not the bare
++// dsh-jobs specifier, so the augmentation must name that module or `pty-send`
++// never joins JobKind. EXIT: upstream repoints these augmentations at /view.
++declare module '@deepseek-ai/dsh-jobs/view' {
+   interface JobKindMap {
+     workflow: 'workflow'
+   }

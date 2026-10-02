@@ -8,9 +8,15 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **56** in **17** patch(es).
+Tier-2 files: **60** in **18** patch(es).
 
 ## Patches
+
+### `patches/job-kind-augmentation.patch` — 3 file(s)
+
+- `packages/shell/tool-pwsh/src/index.ts`
+- `packages/terminal/tool-terminal/src/index.ts`
+- `packages/workflow/tool-workflow/src/index.ts`
 
 ### `patches/root-meta.patch` — 4 file(s)
 
@@ -46,13 +52,14 @@ Tier-2 files: **56** in **17** patch(es).
 - `packages/llm/llm/src/index.ts`
 - `packages/llm/llm/src/types.ts`
 
-### `patches/compaction.patch` — 8 file(s)
+### `patches/compaction.patch` — 9 file(s)
 
 - `packages/compaction/command-compact/src/index.ts`
 - `packages/compaction/command-compact/tests/command-compact.spec.ts`
 - `packages/compaction/command-compact/tests/loader-composition.spec.ts`
 - `packages/compaction/compaction-basic/src/index.ts`
 - `packages/compaction/compaction-basic/src/region.ts`
+- `packages/compaction/compaction-basic/src/summarizer.ts`
 - `packages/compaction/compaction-basic/tests/compaction-basic.spec.ts`
 - `packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts`
 - `packages/compaction/compaction/src/index.ts`

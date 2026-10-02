@@ -40,7 +40,10 @@ import { processJob, processOutcome, processSources, ringDelta } from './backgro
 import { renderPwshJobRead, renderPwshPromoted, renderPwshResult } from './render.ts'
 import type { RenderablePwshResult } from './render.ts'
 
-declare module '@deepseek-ai/dsh-jobs' {
+// DSH-FORK(all): JobKindMap is declared in the dsh-jobs/view leaf, not the bare
+// dsh-jobs specifier, so the augmentation must name that module or `pty-send`
+// never joins JobKind. EXIT: upstream repoints these augmentations at /view.
+declare module '@deepseek-ai/dsh-jobs/view' {
   interface JobKindMap {
     pwsh: 'pwsh'
   }

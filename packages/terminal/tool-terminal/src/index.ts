@@ -16,7 +16,10 @@ import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { sendSource } from './background.ts'
 import { boundTerminalText, renderList, renderRead, renderSend, renderSpawn } from './render.ts'
 
-declare module '@deepseek-ai/dsh-jobs' {
+// DSH-FORK(all): JobKindMap is declared in the dsh-jobs/view leaf, not the bare
+// dsh-jobs specifier, so the augmentation must name that module or `pty-send`
+// never joins JobKind. EXIT: upstream repoints these augmentations at /view.
+declare module '@deepseek-ai/dsh-jobs/view' {
   interface JobKindMap {
     'pty-send': 'pty-send'
   }

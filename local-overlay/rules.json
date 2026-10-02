@@ -7,6 +7,14 @@
   ],
   "patchGroups": [
     {
+      "name": "job-kind-augmentation",
+      "paths": [
+        "packages/terminal/tool-terminal/",
+        "packages/shell/tool-pwsh/",
+        "packages/workflow/tool-workflow/"
+      ]
+    },
+    {
       "name": "root-meta",
       "paths": [
         ".gitattributes",
