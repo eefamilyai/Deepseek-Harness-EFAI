@@ -66,12 +66,6 @@
       ]
     },
     {
-      "name": "client-primitives",
-      "paths": [
-        "packages/client/ui-primitives/"
-      ]
-    },
-    {
       "name": "client-settings",
       "paths": [
         "packages/client/ui-settings-general/",

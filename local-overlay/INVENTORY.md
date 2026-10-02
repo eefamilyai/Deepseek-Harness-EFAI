@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **54** in **14** patch(es).
+Tier-2 files: **47** in **13** patch(es).
 
 ## Patches
 
@@ -61,32 +61,22 @@ Tier-2 files: **54** in **14** patch(es).
 - `packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts`
 - `packages/compaction/compaction/src/index.ts`
 
-### `patches/client-chat.patch` — 5 file(s)
+### `patches/client-chat.patch` — 2 file(s)
 
 - `packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css`
 - `packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx`
-- `packages/client/ui-chat/src/client/chat/ContextInjectionRow.module.css`
-- `packages/client/ui-chat/src/client/chat/ReasoningRow.module.css`
-- `packages/client/ui-chat/src/client/chat/SystemPromptRow.tsx`
-
-### `patches/client-primitives.patch` — 2 file(s)
-
-- `packages/client/ui-primitives/src/DisclosureRow.module.css`
-- `packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts`
 
 ### `patches/client-settings.patch` — 1 file(s)
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
-### `patches/client-shell.patch` — 7 file(s)
+### `patches/client-shell.patch` — 5 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
 - `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
 - `packages/client/ui-sidebar/src/client/SidebarRoot.module.css`
-- `packages/client/ui-tool/src/client/tool/components/ToolRow.module.css`
 - `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
-- `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
 
 ### `patches/session-format-migration.patch` — 4 file(s)
 
@@ -142,7 +132,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 506 paths do not exist upstream, so no patch covers them and none can conflict.
+These 511 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -299,7 +289,6 @@ These 506 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/apps.patch`
 - `local-overlay/patches/build.patch`
 - `local-overlay/patches/client-chat.patch`
-- `local-overlay/patches/client-primitives.patch`
 - `local-overlay/patches/client-settings.patch`
 - `local-overlay/patches/client-shell.patch`
 - `local-overlay/patches/compaction.patch`
@@ -342,7 +331,6 @@ These 506 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-brand-efai/tests/browser-plugin.client.spec.tsx`
 - `packages/client/ui-brand-efai/tsconfig.json`
 - `packages/client/ui-brand-efai/tsdown.config.ts`
-- `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
 - `packages/client/ui-effects/README.md`
 - `packages/client/ui-effects/package.json`
 - `packages/client/ui-effects/src/client/EffectsSettingsRow.module.css`
@@ -386,7 +374,14 @@ These 506 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-tools/src/index.ts`
 - `packages/client/ui-settings-tools/tsconfig.json`
 - `packages/client/ui-settings-tools/tsdown.config.ts`
-- `packages/client/ui-tool/tests/tool-row-accent-styles.client.spec.ts`
+- `packages/client/ui-skill-mention/README.md`
+- `packages/client/ui-skill-mention/package.json`
+- `packages/client/ui-skill-mention/src/client/index.ts`
+- `packages/client/ui-skill-mention/src/client/locales.ts`
+- `packages/client/ui-skill-mention/src/index.ts`
+- `packages/client/ui-skill-mention/tests/browser-plugin.client.spec.ts`
+- `packages/client/ui-skill-mention/tsconfig.json`
+- `packages/client/ui-skill-mention/tsdown.config.ts`
 - `packages/compaction/compaction-basic/tests/summarizer-instruction.spec.ts`
 - `packages/compaction/output-masking/README.i18n.yaml`
 - `packages/compaction/output-masking/README.md`

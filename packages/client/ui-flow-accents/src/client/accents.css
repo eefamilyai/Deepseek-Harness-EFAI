@@ -1,0 +1,64 @@
+/* Flow-row family accents: the binding half of the palette `tokens.ts` declares.
+ *
+ * Upstream owns the row chrome, so this sheet binds each family's hue on the
+ * row and lets the row's own `color: inherit` glyph, title, and chevron follow
+ * it — the same shape upstream's shared disclosure header already uses. Every
+ * selector is keyed on an attribute upstream emits for styling or tests, never
+ * on a CSS-module class name: the module classes are hashed per bundle
+ * (`[hash]_[local]`), and this stylesheet is injected from a plugin bundle that
+ * upstream does not build. A row whose family attribute disappears upstream
+ * keeps the neutral label tone, which is the intended degradation.
+ *
+ * The tokens are declared once per family on the family ROOT, not on the row.
+ * Custom properties inherit, so a subcall row nested inside another call's root
+ * resolves the nearest root's value by itself — a rule that bound the row
+ * directly would need to know which ancestor is nearest, which CSS cannot ask.
+ */
+
+/* Tool rows (upstream's ToolRow root carries the classified variant) and think
+   rows (ReasoningRow's root carries `think`). */
+[data-variant='search'] { --dsh-row-accent: var(--dsw-alias-flow-search); }
+[data-variant='read'] { --dsh-row-accent: var(--dsw-alias-flow-read); }
+[data-variant='write'],
+[data-variant='edit'] { --dsh-row-accent: var(--dsw-alias-flow-mutate); }
+[data-variant='bash'] { --dsh-row-accent: var(--dsw-alias-flow-shell); }
+[data-variant='code'] { --dsh-row-accent: var(--dsw-alias-flow-code); }
+[data-variant='others'] { --dsh-row-accent: var(--dsw-alias-flow-generic); }
+[data-variant='think'] { --dsh-row-accent: var(--dsw-alias-flow-think); }
+
+/* A Cordis lifecycle tool keeps the generic row mechanics and takes the product
+   accent. Tool-scoped, so it must follow the variant rules it overrides: both
+   are one attribute selector, and the cascade resolves the tie by order. */
+[data-tool^='cordis_'] { --dsh-row-accent: var(--dsw-alias-state-business-primary); }
+
+/* The keyed bash view replicates the disclosure chrome instead of composing it,
+   so it carries `data-sample` on its own root; a real shell call never reaches
+   ToolRow's variant rule. */
+[data-sample='bash'] { --dsh-row-accent: var(--dsw-alias-flow-shell); }
+
+/* Instruction material: the system prompt keeps its `system-prompt` chat node,
+   and a context injection names its producer in `data-context-source` (or its
+   tool delta in `data-context-summary`) inside the row itself. An injected
+   instruction file, a skill catalog, a recalled session, and the complete
+   system prompt are all text placed in the model's instructions — one kind of
+   row however it was produced. */
+[data-chat-node-key='system-prompt'] { --dsh-row-accent: var(--dsw-alias-flow-instruct); }
+[data-disclosure-row]:has([data-context-source]),
+[data-disclosure-row]:has([data-context-summary]) { --dsh-row-accent: var(--dsw-alias-flow-instruct); }
+
+/* The read. Scoped to rows inside a family root, so every other disclosure row
+   keeps upstream's own rest and hover colours untouched. */
+[data-variant] [data-disclosure-row],
+[data-chat-node-key='system-prompt'] [data-disclosure-row],
+[data-disclosure-row]:has([data-context-source]),
+[data-disclosure-row]:has([data-context-summary]),
+[data-sample='bash'][class] { color: var(--dsh-row-accent, var(--dsw-alias-label-tertiary)); }
+
+/* The separator dot beside the title. Upstream marks it with
+   `data-shimmer-decoration` so its background can follow the shimmer; inside a
+   family root the family hue takes that seat instead. */
+[data-variant] [data-shimmer-decoration],
+[data-chat-node-key='system-prompt'] [data-shimmer-decoration],
+[data-disclosure-row]:has([data-context-source]) [data-shimmer-decoration],
+[data-disclosure-row]:has([data-context-summary]) [data-shimmer-decoration],
+[data-sample='bash'] [data-shimmer-decoration] { background: var(--dsh-row-accent); }

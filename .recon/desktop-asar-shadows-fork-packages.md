@@ -296,7 +296,48 @@ listener notification + unsubscribe, scope-birth prewarm, preset-switch
 invalidation, connection-reset clearing every key, a failed fetch not poisoning
 the key, and the pick text.
 
-**What a plugin cannot carry, and why** — the remaining 15 upstream client files
+**Converted into a fork-owned package**: the whole flow-row accent binding.
+The palette was already a fork package (`ui-flow-accents`); the *binding* — the
+rebind each family needs and the one read that makes it visible — lived as
+Tier-2 rules inside six upstream sheets. It is now
+`ui-flow-accents/src/client/accents.css`, injected by that package's own client
+bundle, and every one of those six files is pristine:
+
+| Retired seam | Was |
+|---|---|
+| `ui-tool/.../ToolRow.module.css` | per-variant rebinds + dot |
+| `ui-tool/.../toolviews/bash-sample.module.css` | shell rebind for the keyed view |
+| `ui-chat/.../ReasoningRow.module.css` | think rebind + dot |
+| `ui-chat/.../ContextInjectionRow.module.css` | instruction rebind + dot |
+| `ui-chat/.../SystemPromptRow.tsx` | class props plumbing |
+| `ui-primitives/DisclosureRow.module.css` + its spec | the shared read |
+
+What makes it work is that upstream already emits the identity in the DOM for
+its own styling and tests, so the sheet never has to name a hashed module class:
+`data-variant` (`search`/`read`/`write`/`edit`/`bash`/`code`/`others`/`think`) on
+each row root, `data-tool` for the Cordis product accent, `data-sample='bash'` on
+the keyed shell view, `data-chat-node-key='system-prompt'` on the system-prompt
+node, `data-context-source`/`data-context-summary` inside a context-injection
+row, and `data-shimmer-decoration` on every separator dot.
+
+Two design points the sheet encodes rather than inherits:
+
+* **The token is declared on the family ROOT, not on the row.** Custom
+  properties inherit, so a subcall row nested inside another call's root
+  resolves the nearest root by itself; a rule that bound the row directly would
+  have to know which ancestor is nearest, and equal-specificity rules cannot
+  answer that (a nested `others` row inside a `read` root proves it).
+* **The read is scoped to family rows.** A bare `[data-disclosure-row]` rule
+  would override upstream's hover colour for *every* disclosure in the app, so
+  each read selector names a family marker, and a spec asserts that.
+
+Seven spec assertions guard the sheet: every tool variant upstream classifies is
+bound, every declared hue is bound (and only the one deliberate product accent
+is not a flow hue), the cordis binding follows the variants it overrides, no read
+selector is a bare row, no selector matches a hashed class, and the dot is keyed
+on its own attribute.
+
+**What a plugin cannot carry, and why** — the remaining 9 upstream client files
 fall into two groups:
 
 1. *Needs a DOM hook upstream does not emit.* The accent system has two halves:

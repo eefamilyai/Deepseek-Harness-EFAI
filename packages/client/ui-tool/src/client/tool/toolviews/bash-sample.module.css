@@ -84,13 +84,7 @@
   cursor: pointer;
 }
 
-/* DSH-FORK(brand): fork edit on an upstream-owned file. EXIT: a fork-owned client package owns this row chrome. */
-/* This row replicates the DisclosureRow structure rather than composing it
-   (see the TODO on .leading below), so it rebinds the shell family accent
-   itself instead of inheriting ToolRow's `[data-variant='bash']` rule — that
-   rule never reaches a real bash call, which dispatches to this keyed view. */
 .root {
-  --dsh-row-accent: var(--dsw-alias-flow-shell);
   display: flex;
   align-items: center;
   height: calc(24px + var(--dsh-content-font-delta, 0px));
@@ -172,7 +166,7 @@
   height: 2px;
   border-radius: 1px;
   margin: 0 8px;
-  background: var(--dsh-row-accent);
+  background: var(--dsw-alias-label-caption);
 }
 
 .summary {
