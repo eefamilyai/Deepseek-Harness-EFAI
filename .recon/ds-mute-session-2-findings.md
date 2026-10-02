@@ -5351,3 +5351,18 @@ Reading the result: if exactly one account is muted, the heartbeat is implicated
 pair is weak evidence, not proof). Both muted -> the pause pattern is not rescued by the
 heartbeat. Neither after 7 h (longer than any muted stint in section 70) -> the pause
 timing lead is unsupported and the cause lies elsewhere (account-level, section 68).
+
+
+### 72.1 Interim (2026-10-02 08:50 local)
+
+* The first launch (`HS_HOURS=7`) ended after ONE burst. The machine slept through the 54-min
+  pause (system clock Thursday 21:46 -> Friday 08:27), and on wake the 7-hour wall-clock
+  deadline had passed, so `run_bursts` returned "completed 21 turns, 1 bursts, no mute".
+  That was a harness defect, not a result. `_humansoak.py` now takes `HS_BURSTS` (a count)
+  instead of `HS_HOURS`; both soaks were relaunched with `HS_BURSTS=6`, same seed, same
+  conversations.
+* Side result: both accounts resumed after **~10.7 h idle** (21:42 -> 08:28) and ran a full
+  19-minute burst (21 more turns each, 0 errors) with NO mute, heartbeat or not. The
+  overnight-idle-then-burst shape the operator described does not by itself mute a fresh
+  account on the FIX 24/25 wire.
+* Pause 1 of the relaunch (54 min) runs 08:48 -> ~09:42.

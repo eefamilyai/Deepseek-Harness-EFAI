@@ -46,7 +46,10 @@ WALK_AWAY_P = float(os.environ.get("HS_WALK_AWAY_P", "0.06"))
 # the same seed follow the same schedule and differ only in what the experiment varies.
 MODE = os.environ.get("HS_MODE", "").strip()
 SEED = int(os.environ.get("HS_SEED", "1"))
-HOURS = float(os.environ.get("HS_HOURS", "6"))
+# A burst COUNT, not a wall-clock deadline: a machine that sleeps through a pause
+# wakes past any deadline and would silently end the run after one burst, which is
+# exactly how the first claude1/claude2 attempt ended.
+BURSTS = int(os.environ.get("HS_BURSTS", "6"))
 BURST_MIN = float(os.environ.get("HS_BURST_MIN", "15"))
 BURST_MAX = float(os.environ.get("HS_BURST_MAX", "30"))
 PAUSE_MIN = float(os.environ.get("HS_PAUSE_MIN", "45"))
@@ -171,10 +174,9 @@ def one_turn(st, i, prompt):
 
 def run_bursts(st):
     rng = random.Random(SEED)
-    end = time.time() + HOURS * 3600.0
     i = st["done"]
     n_burst = 0
-    while time.time() < end:
+    while n_burst < BURSTS:
         n_burst += 1
         blen = rng.uniform(BURST_MIN, BURST_MAX) * 60.0
         pause = rng.uniform(PAUSE_MIN, PAUSE_MAX) * 60.0
@@ -192,7 +194,7 @@ def run_bursts(st):
                 return 3
             save_state(st)
             time.sleep(rng.uniform(15, 120))
-        if time.time() + pause >= end:
+        if n_burst >= BURSTS:
             break
         log(event="pause", n=n_burst, pause_s=round(pause), account=st["account"])
         print("  ... pause %.0f min" % (pause / 60), flush=True)
