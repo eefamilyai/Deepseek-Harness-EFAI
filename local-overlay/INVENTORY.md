@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **47** in **13** patch(es).
+Tier-2 files: **46** in **13** patch(es).
 
 ## Patches
 
@@ -70,12 +70,11 @@ Tier-2 files: **47** in **13** patch(es).
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
-### `patches/client-shell.patch` — 5 file(s)
+### `patches/client-shell.patch` — 4 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
 - `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
-- `packages/client/ui-sidebar/src/client/SidebarRoot.module.css`
 - `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
 
 ### `patches/session-format-migration.patch` — 4 file(s)
@@ -132,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 511 paths do not exist upstream, so no patch covers them and none can conflict.
+These 515 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -346,10 +345,14 @@ These 511 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-effects/src/invariant.ts`
 - `packages/client/ui-effects/tsconfig.json`
 - `packages/client/ui-effects/tsdown.config.ts`
+- `packages/client/ui-flow-accents/README.md`
 - `packages/client/ui-flow-accents/package.json`
+- `packages/client/ui-flow-accents/src/client/accents.css`
 - `packages/client/ui-flow-accents/src/client/index.ts`
 - `packages/client/ui-flow-accents/src/client/tokens.ts`
+- `packages/client/ui-flow-accents/src/css-modules.d.ts`
 - `packages/client/ui-flow-accents/src/index.ts`
+- `packages/client/ui-flow-accents/tests/flow-accent-binding.client.spec.ts`
 - `packages/client/ui-flow-accents/tests/flow-accent-tokens.client.spec.ts`
 - `packages/client/ui-flow-accents/tsconfig.json`
 - `packages/client/ui-flow-accents/tsdown.config.ts`

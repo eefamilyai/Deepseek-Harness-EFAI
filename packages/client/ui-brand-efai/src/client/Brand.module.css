@@ -1,3 +1,12 @@
+/* The brand blue belongs to the mark, not to the slot the sidebar happens to
+   mount it in: the real lockup is a blue whale beside a text-ink wordmark, and
+   owning the colour here keeps it with the package that owns the mark instead of
+   an upstream sidebar rule the plugin cannot reach. */
+.mark {
+  display: inline-flex;
+  color: var(--dsw-alias-state-business-primary);
+}
+
 /* The wordmark is live text so it can carry a specular sweep. The gradient is
    painted into the glyphs, so the highlight travels through the letters rather
    than across a box behind them, and the ink stays the primary label colour on

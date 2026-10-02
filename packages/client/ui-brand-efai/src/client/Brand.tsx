@@ -7,11 +7,17 @@ export const BRAND_NAME = 'DeepSeek Harness'
 
 /**
  * Render the brand mark with the presentation requested by its host surface.
+ * The wrapper carries the brand blue: the lockup is a blue whale beside a
+ * text-ink wordmark, and the slot this mounts in belongs to another package.
  * @param props - Host-supplied mark presentation.
- * @returns the whale mark.
+ * @returns the whale mark in the brand colour.
  */
 export function EfaiBrandMark({ size }: SidebarBrandMarkOwnerProps) {
-  return <FishLogo size={size} />
+  return (
+    <span className={css.mark}>
+      <FishLogo size={size} />
+    </span>
+  )
 }
 
 /**

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
@@ -91,5 +93,19 @@ describe('efai browser-brand plugin', () => {
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('34')
     mark.rerender(<EfaiBrandMark size={24} />)
     expect(mark.container.querySelector('svg')?.getAttribute('width')).toBe('24')
+  })
+
+  it('carries the brand blue on the mark, not on the slot that mounts it', () => {
+    // The sidebar's mark slot belongs to another package and is classed there,
+    // so the colour has to travel with the mark itself.
+    const wrapper = render(<EfaiBrandMark size={24} />).container.firstElementChild
+    expect(wrapper?.tagName).toBe('SPAN')
+    expect(wrapper?.className).toBeTruthy()
+    expect(wrapper?.querySelector('svg')).not.toBeNull()
+    const sheet = readFileSync(
+      resolve(process.cwd(), 'packages/client/ui-brand-efai/src/client/Brand.module.css'),
+      'utf8',
+    )
+    expect(sheet).toMatch(/\.mark\s*\{[^}]*color: var\(--dsw-alias-state-business-primary\)/)
   })
 })
