@@ -28,6 +28,9 @@
     },
     {
       "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../llm/ai-accounts/tsconfig.host.json"
     }
   ]
 }

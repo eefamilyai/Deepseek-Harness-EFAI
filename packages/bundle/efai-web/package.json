@@ -38,7 +38,8 @@
     "@deepseek-ai/dsh-client-ui-flow-accents": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-accounts": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-tools": "workspace:^",
-    "@deepseek-ai/dsh-host-version-route": "workspace:^"
+    "@deepseek-ai/dsh-host-version-route": "workspace:^",
+    "@deepseek-ai/dsh-ai-accounts": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

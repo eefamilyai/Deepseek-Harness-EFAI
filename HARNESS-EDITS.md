@@ -38,6 +38,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Kiln LLM provider registry | `packages/llm/llm-kiln` | 11 files |
 | Text-channel tool-call reader | `packages/llm/llm-text-toolcalls` | 22 files |
 | System prompt as a file upload (work in progress) | `packages/llm/llm-system-file` | 10 files |
+| Account-pool registry and its `aiAccounts` Remote namespace | `packages/llm/ai-accounts` | 10 files |
 | Python runtime (providers, `ds_direct`, WAF, browser identity, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 56 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
@@ -103,7 +104,7 @@ It is gone. The fork's rows live in `packages/bundle/efai-base/cordis.patch.yml`
 
 | File | Δ | What it adds |
 |---|---|---|
-| `packages/llm/llm/src/index.ts` | +91 | `LlmAccountDraft`/`LlmAccountAdder`/`registerAccountProvider` — account pooling on the upstream `LlmRuntime` service |
+| ~~`packages/llm/llm/src/index.ts`~~ | ~~+91~~ | **RETIRED** — account pooling now lives on the fork-owned `@deepseek-ai/dsh-ai-accounts` service (`ctx.aiAccounts`), whose own Remote namespace the Desktop's `app.asar` cannot shadow |
 | `packages/compaction/compaction-basic/src/summarizer.ts` | +186 −20 | the compaction directive, the quoted-transcript request shape, and summary parsing |
 | `packages/compaction/compaction-basic/tests/compaction-basic.spec.ts` | +48 −10 | pins the summarizer REQUEST: the role in the system slot, the whole transcript one quoted user turn, no tool channel |
 | `packages/llm/token-meter/src/usage-projection.ts` | +85 −29 | usage projection |
@@ -341,7 +342,7 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | ~~1~~ | 4 preset `agent.cordis.yml` | `kernel` | **RETIRED** — the fork rosters were retired in turn by the 0.1.7-alpha.2 merge: upstream declares presets as `agent-preset` rows, and the kernel tool is a host row every preset agent sees | done |
 | ~~2~~ | `bundle/{base,web-app}/cordis.patch.yml` | `kernel` `kiln` | **RETIRED** — every fork row moved to `packages/bundle/efai-base` and `efai-web` | done |
 | ~~3~~ | `boot/app-boot/src/index.ts` | `kernel` | **RETIRED** — no composition row reads a setting any more, so `dshSettingFlag` was deleted; the three switches decide at runtime | done |
-| 4 | `llm/llm/src/index.ts` | `kiln` | `registerAccountProvider` on `LlmRuntime` | Upstream PR, or a fork-owned service that wraps it |
+| ~~4~~ | `llm/llm/src/index.ts` | `kiln` | **RETIRED** — the account surface moved to the fork-owned `packages/llm/ai-accounts`, which publishes its own `aiAccounts` Remote namespace; a package the Desktop's `app.asar` also ships cannot carry a fork seam, so the surface had to leave `dsh-llm` to work there at all | done |
 | ~~5~~ | `compaction-basic/{index,summarizer}.ts` | `kiln` | **RETIRED** — first into `compaction-efai`; then, when presets began isolating their own `compaction-basic`, its summarizer statement moved into `llm-kiln` (keyed on `purpose: 'compaction'`) and the package was removed | done |
 | ~~6~~ | `llm/token-meter/**` (3 files) | `kiln` | **RETIRED** — `packages/llm/token-usage-lifetime` registers its own projection unit beside upstream's | done |
 | ~~7~~ | `extensions/tool-cordis/src/api-catalog.ts` | `kernel` | **RETIRED** — the file is generated (`gen-cordis-api`), so it is declared generated and regenerated rather than patched; the client slot catalog went with it | done |
@@ -353,7 +354,7 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 13 | 3 `scripts/gen-*.ts` | `kernel` | generators must see fork packages | Upstream PR if the change is general |
 | 14 | `tsconfig.{host,client}.json` | `all` | project references | Contiguous fenced block (Rule 6) |
 | 15 | `pnpm-lock.yaml` | `all` | dependencies | `merge=ours` + regenerate (Rule 7) |
-| 16 | `.gitignore`, `.gitattributes` | `all` | credentials, CRLF for `*.cmd` | Permanent; append at end of file only |
+| 16 | `.gitattributes` | `all` | the committed patch set is a unified diff, and that format writes a context line for an empty line as one space, so `git diff --cached --check` fails on content the format requires; `local-overlay/patches/*.patch whitespace=-blank-at-eol` is the exemption. `.gitignore` is retired — it matches upstream. | Permanent while `local-overlay/patches` is committed here; append at end of file only |
 | 17 | `docs/subsystems/llm-streaming.*` | `kiln` | hand-written docs for a fork feature | Move to fork-owned `docs/` pages |
 | 18 | 8 test files | various | mirror 3–6 above | Follows whatever those become |
 | ~~19~~ | 2 files inside `client/ui-settings-general` | `kernel` | **RETIRED** — see row 8 | done |

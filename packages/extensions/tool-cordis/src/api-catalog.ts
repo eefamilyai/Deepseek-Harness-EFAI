@@ -385,6 +385,73 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'aiAccounts',
+    summary: 'The `ctx.aiAccounts` service: the account-pool registry and its Remote face.',
+    description: 'The `ctx.aiAccounts` service: the account-pool registry and its Remote face. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.',
+    methods: [
+      {
+        signature: 'registerAccountProvider(provider: string, add: AccountAdder): () => void',
+        description: 'Register the handler that tests and adds a login for one account-pooling provider route (`ds_direct` is the only one today). One handler per route, released with the returned disposer. The handler owns making the new login selectable — it re-registers its own routes — so this service only routes the call.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'add', description: 'tests a login and, on success, adds it.' }],
+        returns: 'a disposer that withdraws the handler.',
+      },
+      {
+        signature: 'registerAccountAdmin(provider: string, admin: AccountAdmin): () => void',
+        description: 'Register the account-ADMINISTRATION half of an account-pooling provider: the read an operator surface lists, and the repairs it can ask for. Mirrors registerAccountProvider: one admin per route, released with the returned disposer, and a provider that pools accounts normally registers both — the adder to create a login, the admin to inspect and repair one.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'admin', description: 'the read and repair operations for that route\'s logins.' }],
+        returns: 'a disposer that withdraws the admin.',
+      },
+      {
+        signature: '@Remote listAccountProviders(): string[]',
+        description: 'The provider routes that accept account additions, for a surface to offer.',
+        parameters: [],
+        returns: 'the registered account-provider routes, in registration order.',
+      },
+      {
+        signature: '@Remote async addAccount(provider: string, account: AccountDraft): Promise<AccountAddResult>',
+        description: 'Test a login for one account-pooling provider and, on success, make it a selectable route. The password is used only for the test and never stored or returned here — the reply is the account id and its route, or a reason.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
+        returns: 'the added account and route, or the failure reason.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts, or when the draft is missing a password or an email/mobile.'],
+      },
+      {
+        signature: '@Remote async listAccounts(provider: string): Promise<AccountInfo[]>',
+        description: 'Every login one provider pools, for an operator surface to list and expand.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }],
+        returns: 'one row per login, in the provider\'s own order.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async reloginAccount(provider: string, account: string): Promise<AccountOpResult>',
+        description: 'Re-authenticate one login, so a session that has gone stale works again.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-authenticate.' }],
+        returns: 'whether the login now works, or a plain reason it does not.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async reprofileAccount(provider: string, account: string): Promise<AccountOpResult>',
+        description: 'Replace one login\'s browser identity, so it presents as a different device. The repair for a flagged fingerprint is a NEW identity, not the same one.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
+        returns: 'whether a fresh identity is in place, or a plain reason it is not.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<AccountOpResult>',
+        description: 'Forget one login, or one orphaned identity, from a provider\'s list.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to forget; \'\' when only a slug is known.' }, { name: 'slug', description: 'the profile slug, which is all an orphan carries.' }, { name: 'purge', description: 'also delete the browser profile.' }],
+        returns: 'whether the entry is gone, or a plain reason it is not.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async accountLog(provider: string, since: number): Promise<AccountLogEntry[]>',
+        description: 'The debug trail recorded since a sequence number, oldest first. Every entry names its account, which is what makes two logins running at once legible.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'since', description: 'return only entries with a higher sequence number.' }],
+        returns: 'the entries, in recording order.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+    ],
+  },
+  {
     key: 'approval',
     summary: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session.',
     description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
@@ -1411,8 +1478,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'llm',
-    summary: 'The `ctx.llm` service: the registry every model-facing capability resolves through.',
-    description: 'The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.',
+    summary: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
+    description: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
     methods: [
       {
         signature: 'registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle',
@@ -1449,108 +1516,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Interrogate one provider endpoint for the models it advertises. The request describes a draft, not a stored route, so nothing here reads or writes settings or credentials — the caller owns both, and the reply is candidate metadata a surface may offer for adoption.',
         parameters: [{ name: 'settingsNs', description: 'namespace whose registered discovery serves this draft.' }, { name: 'request', description: 'the endpoint, protocol, and one-shot credential to use.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'the advertised models, deduplicated in endpoint order.',
-      },
-      {
-        signature: 'registerAccountProvider(provider: string, add: LlmAccountAdder): () => void',
-        description: 'Register the handler that tests and adds a login for one account-pooling provider route (`ds_direct` is the only one today). Mirrors registerModelDiscovery: one handler per route, released with the returned disposer. The handler owns making the new login selectable — it re-registers its own routes — so the runtime only routes the call.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'add', description: 'tests a login and, on success, adds it.' }],
-        returns: 'a disposer that withdraws the handler.',
-      },
-      {
-        signature: 'listAccountProviders(): string[]',
-        description: 'The provider routes that accept account additions, for a surface to offer.',
-        parameters: [],
-        returns: 'the registered account-provider routes, in registration order.',
-      },
-      {
-        signature: 'async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>',
-        description: 'Test a login for one account-pooling provider and, on success, make it a selectable route. The password is used only for the test and never stored or returned here — the reply is the account id and its route, or a reason.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
-        returns: 'the added account and route, or the failure reason.',
-      },
-      {
-        signature: 'registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void',
-        description: 'Register the account-ADMINISTRATION half of an account-pooling provider: the read an operator surface lists, and the repairs it can ask for. Mirrors registerAccountProvider: one admin per route, released with the returned disposer, and a provider that pools accounts normally registers both — the adder to create a login, the admin to inspect and repair one.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'admin', description: 'the read and repair operations for that route\'s logins.' }],
-        returns: 'a disposer that withdraws the admin.',
-      },
-      {
-        signature: 'async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>',
-        description: 'Every login one provider pools, for an operator surface to list and expand.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }],
-        returns: 'one row per login, in the provider\'s own order.',
-      },
-      {
-        signature: 'async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
-        description: 'Re-authenticate one login, so a session that has gone stale works again.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-authenticate.' }],
-        returns: 'whether the login now works, or a plain reason it does not.',
-      },
-      {
-        signature: 'async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
-        description: 'Replace one login\'s browser identity, so it presents as a different device. The repair for a flagged fingerprint is a NEW identity, not the same one.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
-        returns: 'whether a fresh identity is in place, or a plain reason it is not.',
-      },
-      {
-        signature: 'async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>',
-        description: 'The debug trail recorded since a sequence number, oldest first. Every entry names its account, which is what makes two logins running at once legible.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'since', description: 'return only entries with a higher sequence number.' }],
-        returns: 'the entries, in recording order.',
-      },
-      {
-        signature: 'async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>',
-        description: 'Forget one login, or one orphaned identity, from a provider\'s list.\n\nThe repair for an entry that should not be there at all — a login that was replaced, or a profile a removed one left behind. `account` is empty for an orphan: the login id it was configured under is exactly what is gone, so its slug is the only handle left. The browser profile survives unless `purge` is set — it cost a real login to mint, and a replacement account can still present it.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to forget; \'\' when only a slug is known.' }, { name: 'slug', description: 'the profile slug, which is all an orphan carries.' }, { name: 'purge', description: 'also delete the browser profile.' }],
-        returns: 'whether the entry is gone, or a plain reason it is not.',
-      },
-      {
-        signature: '@Remote(\'listAccountProviders\') async remoteListAccountProviders(): Promise<string[]>',
-        description: 'Remote read of the routes that accept account additions.',
-        parameters: [],
-        returns: 'the registered account-provider routes, in registration order.',
-      },
-      {
-        signature: '@Remote(\'addAccount\') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>',
-        description: 'Remote adapter that tests and adds one account login. The password rides this call only and is never stored or returned; the reply is the new account id and route, or a plain failure reason.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
-        returns: 'the added account and route, or the failure reason.',
-        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts, or when the draft is missing a password or an email/mobile.'],
-      },
-      {
-        signature: '@Remote(\'listAccounts\') async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]>',
-        description: 'Remote read of one provider\'s pooled logins, for an operator surface to list and expand. Every row reports identity — including the device the login presents from — and only whether a credential is PRESENT.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }],
-        returns: 'one row per login, in the provider\'s own order.',
-        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
-      },
-      {
-        signature: '@Remote(\'reloginAccount\') async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
-        description: 'Remote adapter that re-authenticates one pooled login.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-authenticate.' }],
-        returns: 'whether the login now works, or a plain reason it does not.',
-        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
-      },
-      {
-        signature: '@Remote(\'reprofileAccount\') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>',
-        description: 'Remote adapter that replaces one pooled login\'s browser identity.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
-        returns: 'whether a fresh identity is in place, or a plain reason it is not.',
-        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
-      },
-      {
-        signature: '@Remote(\'removeAccount\') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>',
-        description: 'Remote adapter that forgets one pooled login, or one orphaned identity.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to forget; \'\' when only a slug is known.' }, { name: 'slug', description: 'the profile slug, which is all an orphan carries.' }, { name: 'purge', description: 'also delete the browser profile.' }],
-        returns: 'whether the entry is gone, or a plain reason it is not.',
-        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
-      },
-      {
-        signature: '@Remote(\'accountLog\') async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]>',
-        description: 'Remote read of one provider\'s account debug trail. A poll passes the last sequence number it saw and receives only what is new, so two logins running at once stay attributable per account rather than interleaved.',
-        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'since', description: 'return only entries with a higher sequence number.' }],
-        returns: 'the entries, in recording order.',
-        throws: ['RemoteError with `llm/account-rejected` when no route pools accounts.'],
       },
       {
         signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
@@ -4560,6 +4525,18 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
+    name: 'AccountAdder',
+    declaration: 'export type AccountAdder = (account: AccountDraft) => Promise<AccountAddResult>;',
+  },
+  {
+    name: 'AccountAddResult',
+    declaration: 'export interface AccountAddResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly route?: string;\n    readonly message?: string;\n}',
+  },
+  {
+    name: 'AccountAdmin',
+    declaration: 'export interface AccountAdmin {\n    list: () => Promise<readonly AccountInfo[]>;\n    relogin: (account: string) => Promise<AccountOpResult>;\n    reprofile: (account: string) => Promise<AccountOpResult>;\n    remove: (account: string, slug: string, purge: boolean) => Promise<AccountOpResult>;\n    log: (since: number) => Promise<readonly AccountLogEntry[]>;\n}',
+  },
+  {
     name: 'AccountBonusBatch',
     declaration: 'export interface AccountBonusBatch {\n    readonly accountId: AccountUserId;\n    readonly bonuses: readonly AccountBonusNotification[];\n}',
   },
@@ -4580,8 +4557,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountDetails {\n    readonly profile: {\n        readonly status: \'ready\';\n        readonly value: AccountProfile;\n    } | {\n        readonly status: \'failed\';\n    };\n    readonly balance: {\n        readonly status: \'ready\';\n        readonly value: readonly AccountWallet[];\n        readonly bonusWallets: readonly AccountWallet[];\n    } | {\n        readonly status: \'failed\';\n    };\n}',
   },
   {
+    name: 'AccountDraft',
+    declaration: 'export interface AccountDraft {\n    readonly email?: string;\n    readonly mobile?: string;\n    readonly area_code?: string;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'AccountField',
+    declaration: 'export interface AccountField {\n    readonly label: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'AccountInfo',
+    declaration: 'export interface AccountInfo {\n    readonly id: string;\n    readonly slug: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly configured: boolean;\n    readonly fields: readonly AccountField[];\n}',
+  },
+  {
     name: 'AccountLinks',
     declaration: 'export interface AccountLinks {\n    readonly usageUrl: string;\n    readonly topUpUrl: string;\n}',
+  },
+  {
+    name: 'AccountLogEntry',
+    declaration: 'export interface AccountLogEntry {\n    readonly seq: number;\n    readonly at: number;\n    readonly account: string;\n    readonly event: string;\n    readonly level: string;\n    readonly detail: string;\n}',
+  },
+  {
+    name: 'AccountOpResult',
+    declaration: 'export interface AccountOpResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly message?: string;\n}',
   },
   {
     name: 'AccountProfile',
@@ -5748,38 +5745,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n}',
   },
   {
-    name: 'LlmAccountAdder',
-    declaration: 'export type LlmAccountAdder = (account: LlmAccountDraft) => Promise<LlmAccountAddResult>;',
-  },
-  {
-    name: 'LlmAccountAddResult',
-    declaration: 'export interface LlmAccountAddResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly route?: string;\n    readonly message?: string;\n}',
-  },
-  {
-    name: 'LlmAccountAdmin',
-    declaration: 'export interface LlmAccountAdmin {\n    list: () => Promise<readonly LlmAccountInfo[]>;\n    relogin: (account: string) => Promise<LlmAccountOpResult>;\n    reprofile: (account: string) => Promise<LlmAccountOpResult>;\n    remove: (account: string, slug: string, purge: boolean) => Promise<LlmAccountOpResult>;\n    log: (since: number) => Promise<readonly LlmAccountLogEntry[]>;\n}',
-  },
-  {
-    name: 'LlmAccountDraft',
-    declaration: 'export interface LlmAccountDraft {\n    readonly email?: string;\n    readonly mobile?: string;\n    readonly area_code?: string;\n    readonly password: string;\n}',
-  },
-  {
-    name: 'LlmAccountField',
-    declaration: 'export interface LlmAccountField {\n    readonly label: string;\n    readonly value: string;\n}',
-  },
-  {
-    name: 'LlmAccountInfo',
-    declaration: 'export interface LlmAccountInfo {\n    readonly id: string;\n    readonly slug: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly configured: boolean;\n    readonly fields: readonly LlmAccountField[];\n}',
-  },
-  {
-    name: 'LlmAccountLogEntry',
-    declaration: 'export interface LlmAccountLogEntry {\n    readonly seq: number;\n    readonly at: number;\n    readonly account: string;\n    readonly event: string;\n    readonly level: string;\n    readonly detail: string;\n}',
-  },
-  {
-    name: 'LlmAccountOpResult',
-    declaration: 'export interface LlmAccountOpResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly message?: string;\n}',
-  },
-  {
     name: 'LlmAdapter',
     declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
@@ -5845,7 +5810,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerAccountProvider(provider: string, add: LlmAccountAdder): () => void;\n    listAccountProviders(): string[];\n    async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>;\n    registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void;\n    async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>;\n    async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>;\n    async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>;\n    async removeAccount(provider: string, account: string, slug: string, purge: boolean): Promise<LlmAccountOpResult>;\n    @Remote(\'listA /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions) /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',

@@ -1,17 +1,18 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index 9bcbcda614..f984722f54 100644
+index 9bcbcda614..33a1a07c03 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
-@@ -73,6 +73,8 @@ export const SERVICE_PAGE: Record<string, string> = {
+@@ -73,6 +73,9 @@ export const SERVICE_PAGE: Record<string, string> = {
    shellEnv: 'shell.md',
    clientModules: 'client-modules.md',
    ptcRuntime: 'ptc-runtime.md',
 +  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
 +  kernel: 'ptc-runtime.md',
++  aiAccounts: 'llm-streaming.md',
    browserUse: 'browser-use.md',
    computerUse: 'computer-use.md',
    commands: 'commands.md',
-@@ -168,6 +170,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+@@ -168,6 +171,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
    appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
    appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
    cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -19,21 +20,21 @@ index 9bcbcda614..f984722f54 100644
    configuredAgentIdentities: 'not a service: launcher-provided boot-context value (ConfiguredAgentIdentities | undefined) — packages/core/agent-loop/README.md owns this launcher contract',
    launcherSessionQueryPath: 'not a service: launcher-provided boot-context value (string | undefined) — packages/session-query/session-query-sqlite/README.md owns this launcher contract',
    dshHomePath: 'not a service: boot-provided root accessor function (typeof dshHomePath | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
-@@ -344,6 +347,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+@@ -344,6 +348,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmConfigurableProvider: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
-+  LlmAccountAdder: 'llm-streaming.md',
-+  LlmAccountDraft: 'llm-streaming.md',
-+  LlmAccountAddResult: 'llm-streaming.md',
-+  LlmAccountInfo: 'llm-streaming.md',
-+  LlmAccountLogEntry: 'llm-streaming.md',
-+  LlmAccountOpResult: 'llm-streaming.md',
-+  LlmAccountAdmin: 'llm-streaming.md',
++  AccountAdder: 'llm-streaming.md',
++  AccountDraft: 'llm-streaming.md',
++  AccountAddResult: 'llm-streaming.md',
++  AccountInfo: 'llm-streaming.md',
++  AccountLogEntry: 'llm-streaming.md',
++  AccountOpResult: 'llm-streaming.md',
++  AccountAdmin: 'llm-streaming.md',
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -866,6 +876,12 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -866,6 +877,12 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-preset-registry/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
@@ -47,10 +48,10 @@ index 9bcbcda614..f984722f54 100644
    ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
    ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',
 diff --git a/scripts/gen-doc-graphs.ts b/scripts/gen-doc-graphs.ts
-index 57ba922462..2d13dc5974 100644
+index 57ba922462..30e90618fe 100644
 --- a/scripts/gen-doc-graphs.ts
 +++ b/scripts/gen-doc-graphs.ts
-@@ -201,10 +201,20 @@ const SERVICE_ROLES: ServiceRole[] = [
+@@ -201,10 +201,31 @@ const SERVICE_ROLES: ServiceRole[] = [
      pkg: 'llm',
      title: 'LLM adapter registry',
      mode: 'seam',
@@ -60,6 +61,17 @@ index 57ba922462..2d13dc5974 100644
      consumers: ['agent-loop', 'compaction-basic'],
      note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
    },
++  {
++    key: 'aiAccounts',
++    pkg: 'ai-accounts',
++    title: 'Account-pool registry',
++    mode: 'seam',
++    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream carries an account-pool
++    // service with its own Remote namespace, so the fork no longer declares one.
++    implementations: ['llm-kiln'],
++    consumers: ['client-ui-settings-accounts'],
++    note: 'A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service\'s own aiAccounts Remote namespace.',
++  },
 +  {
 +    key: 'kernel',
 +    pkg: 'kernel',
@@ -141,3 +153,32 @@ index bf0ddab2d0..a12114c882 100644
  ]
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
+diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
+index 2ca3653361..1d7e257497 100644
+--- a/scripts/verify-package-readme-model-experience.ts
++++ b/scripts/verify-package-readme-model-experience.ts
+@@ -37,6 +37,10 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
+   'packages/util/workspace-path': 'The package only formats Workspace paths for browser UI; it never constructs model input.',
+   'packages/util/values': 'The package only validates, snapshots, compares, freezes, or rejects caller-owned values; consumers own every model-facing use.',
+   'packages/util/code-language': 'The package only maps a filename suffix to a syntax-highlighting language id; the read consumer owns the persisted hint.',
++  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
++  // audited allowlists must name them; without entries the gate rejects a correct README.
++  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
++  'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
+ }
+ 
+ /**
+@@ -78,6 +82,13 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+   'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
+   'packages/ptc-runtime/ptc-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
+   'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
++  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
++  // audited allowlists must name them; without entries the gate rejects a correct README.
++  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
++  'packages/kernel/kernel': { kind: 'indirect', reason: 'The Service Definition delegates model rendering to dsh-tool-kernel, exactly as dsh-web delegates to dsh-tool-web.' },
++  'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
++  'packages/session/command-session-info': { kind: 'none', reason: 'The command is operator-facing and registers no prompt, tool, schema, or session event.' },
++  'packages/llm/ai-accounts': { kind: 'none', reason: 'The account surface registers no prompt section, tool schema, or Session event; a login changes which provider routes exist.' },
+   'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },
+   'packages/experimental/ptc-runtime-python': { kind: 'indirect', reason: 'Explicit source-checkout compositions delegate model rendering to PTC mode in dsh-tools.' },
+   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },

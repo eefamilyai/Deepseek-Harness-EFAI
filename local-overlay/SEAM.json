@@ -10,6 +10,7 @@
     ".agents/skills/dsh-code-review/SKILL.md",
     ".agents/skills/dsh-pre-push-checks/SKILL.md",
     ".claude/skills",
+    ".gitattributes",
     ".github/dependabot.yml",
     ".gitignore",
     "apps/cli/package.json",
@@ -53,8 +54,6 @@
     "packages/core/agent/src/model-selection.ts",
     "packages/core/agent/tests/model-selection.spec.ts",
     "packages/core/tools/tests/gen-tool-catalog.spec.ts",
-    "packages/llm/llm/src/index.ts",
-    "packages/llm/llm/src/types.ts",
     "packages/session/session-format-v0-to-v1/src/payload-validation.ts",
     "packages/session/session-format-v0-to-v1/src/relationships.ts",
     "packages/session/session-format-v0-to-v1/src/validation.ts",
@@ -65,6 +64,7 @@
     "scripts/gen-cordis-catalog.ts",
     "scripts/gen-doc-graphs.ts",
     "scripts/gen-tool-catalog.ts",
+    "scripts/verify-package-readme-model-experience.ts",
     "tsconfig.client.json",
     "tsconfig.host.json"
   ]

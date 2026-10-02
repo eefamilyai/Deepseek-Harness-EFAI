@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **60** in **18** patch(es).
+Tier-2 files: **60** in **17** patch(es).
 
 ## Patches
 
@@ -18,9 +18,10 @@ Tier-2 files: **60** in **18** patch(es).
 - `packages/terminal/tool-terminal/src/index.ts`
 - `packages/workflow/tool-workflow/src/index.ts`
 
-### `patches/root-meta.patch` — 4 file(s)
+### `patches/root-meta.patch` — 5 file(s)
 
 - `.claude/skills`
+- `.gitattributes`
 - `.github/dependabot.yml`
 - `.gitignore`
 - `package.json`
@@ -30,11 +31,12 @@ Tier-2 files: **60** in **18** patch(es).
 - `tsconfig.client.json`
 - `tsconfig.host.json`
 
-### `patches/build.patch` — 3 file(s)
+### `patches/build.patch` — 4 file(s)
 
 - `scripts/gen-cordis-catalog.ts`
 - `scripts/gen-doc-graphs.ts`
 - `scripts/gen-tool-catalog.ts`
+- `scripts/verify-package-readme-model-experience.ts`
 
 ### `patches/apps.patch` — 2 file(s)
 
@@ -46,11 +48,6 @@ Tier-2 files: **60** in **18** patch(es).
 - `packages/core/agent/src/model-selection.ts`
 - `packages/core/agent/tests/model-selection.spec.ts`
 - `packages/core/tools/tests/gen-tool-catalog.spec.ts`
-
-### `patches/llm.patch` — 2 file(s)
-
-- `packages/llm/llm/src/index.ts`
-- `packages/llm/llm/src/types.ts`
 
 ### `patches/compaction.patch` — 9 file(s)
 
@@ -160,7 +157,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 489 paths do not exist upstream, so no patch covers them and none can conflict.
+These 501 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -187,7 +184,9 @@ These 489 paths do not exist upstream, so no patch covers them and none can conf
 - `.merge-port/MERGE-STATUS.md`
 - `.merge-port/apiproxy-and-fixtures.patch`
 - `.recon/OPERATOR-SUMMARY-ds-mute.md`
+- `.recon/accounts-tab-verified.png`
 - `.recon/accounts-tab.md`
+- `.recon/desktop-asar-shadows-fork-packages.md`
 - `.recon/ds-direct-auth-verdict.md`
 - `.recon/ds-direct-flagging.md`
 - `.recon/ds-direct-mute-investigation.md`
@@ -324,7 +323,7 @@ These 489 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/compaction.patch`
 - `local-overlay/patches/core.patch`
 - `local-overlay/patches/docs.patch`
-- `local-overlay/patches/llm.patch`
+- `local-overlay/patches/job-kind-augmentation.patch`
 - `local-overlay/patches/root-meta.patch`
 - `local-overlay/patches/session-format-migration.patch`
 - `local-overlay/patches/tsconfig.patch`
@@ -457,6 +456,16 @@ These 489 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/tool-kernel/tests/background.spec.ts`
 - `packages/kernel/tool-kernel/tests/images.spec.ts`
 - `packages/kernel/tool-kernel/tsconfig.json`
+- `packages/llm/ai-accounts/README.md`
+- `packages/llm/ai-accounts/package.json`
+- `packages/llm/ai-accounts/src/client/index.ts`
+- `packages/llm/ai-accounts/src/index.ts`
+- `packages/llm/ai-accounts/src/types.ts`
+- `packages/llm/ai-accounts/tests/ai-accounts.spec.ts`
+- `packages/llm/ai-accounts/tsconfig.client.json`
+- `packages/llm/ai-accounts/tsconfig.host.json`
+- `packages/llm/ai-accounts/tsconfig.json`
+- `packages/llm/ai-accounts/tsdown.config.ts`
 - `packages/llm/llm-kiln/README.md`
 - `packages/llm/llm-kiln/package.json`
 - `packages/llm/llm-kiln/src/adapter.ts`

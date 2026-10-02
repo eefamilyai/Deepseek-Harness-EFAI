@@ -207,6 +207,17 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
   },
   {
+    key: 'aiAccounts',
+    pkg: 'ai-accounts',
+    title: 'Account-pool registry',
+    mode: 'seam',
+    // DSH-FORK(kiln): fork edit on an upstream-owned file. EXIT: upstream carries an account-pool
+    // service with its own Remote namespace, so the fork no longer declares one.
+    implementations: ['llm-kiln'],
+    consumers: ['client-ui-settings-accounts'],
+    note: 'A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service\'s own aiAccounts Remote namespace.',
+  },
+  {
     key: 'kernel',
     pkg: 'kernel',
     title: 'Persistent code-execution kernel',

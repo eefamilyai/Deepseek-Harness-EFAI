@@ -50,6 +50,9 @@ flowchart LR
   pkg_llm_replay["llm-replay"]
   pkg_agent_loop["agent-loop"]
   pkg_compaction_basic["compaction-basic"]
+  pkg_ai_accounts["ai-accounts"]
+  svc_aiAccounts["ctx.aiAccounts<br/>Account-pool registry"]
+  pkg_client_ui_settings_accounts["client-ui-settings-accounts"]
   pkg_kernel["kernel"]
   svc_kernel["ctx.kernel<br/>Persistent code-execution kernel"]
   pkg_kernel_python["kernel-python"]
@@ -285,6 +288,7 @@ flowchart LR
   pkg_agent_default_model --> svc_agentDefaultModel
   pkg_agent_loop --> svc_agentLoop
   pkg_agent_preset_registry --> svc_agentPresets
+  pkg_ai_accounts --> svc_aiAccounts
   pkg_api_gateway --> svc_typertGateway
   pkg_api_job_controller --> svc_jobController
   pkg_api_session_controller --> svc_sessionController
@@ -353,6 +357,7 @@ flowchart LR
   pkg_kernel_python --> svc_kernel
   pkg_llm --> svc_llm
   pkg_llm_deepseek --> svc_llm
+  pkg_llm_kiln --> svc_aiAccounts
   pkg_llm_kiln --> svc_llm
   pkg_llm_pi_ai --> svc_llm
   pkg_llm_replay --> svc_llm
@@ -441,6 +446,7 @@ flowchart LR
   svc_agents --> pkg_acp
   svc_agents --> pkg_agent_loop
   svc_agents --> pkg_subagent_in_process_driver
+  svc_aiAccounts --> pkg_client_ui_settings_accounts
   svc_approval --> pkg_acp
   svc_approval --> pkg_tool_bash
   svc_approval --> pkg_tools
@@ -598,6 +604,7 @@ flowchart LR
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-kiln`](../packages/llm/llm-kiln), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
+| `ctx.aiAccounts` | `seam` | [`ai-accounts`](../packages/llm/ai-accounts) | [`llm-kiln`](../packages/llm/llm-kiln) | [`client-ui-settings-accounts`](../packages/client/ui-settings-accounts) | - | A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service's own aiAccounts Remote namespace. |
 | `ctx.kernel` | `seam` | [`kernel`](../packages/kernel/kernel) | [`kernel-python`](../packages/kernel/kernel-python) | [`tool-kernel`](../packages/kernel/tool-kernel) | - | A backend owns one namespace that survives across calls; the tool runs a cell in it and returns the captured output. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |

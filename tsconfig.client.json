@@ -146,6 +146,7 @@
     // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
     { "path": "./packages/client/ui-effects" },
     { "path": "./packages/client/ui-settings-tools" },
+    { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-accounts" },
     { "path": "./packages/client/ui-flow-accents" },
     // DSH-FORK end

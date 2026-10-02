@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 738ed0c5b4..361cefcd0e 100644
+index 738ed0c5b4..5eac54a907 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -142,6 +142,12 @@
+@@ -142,6 +142,13 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -11,13 +11,14 @@ index 738ed0c5b4..361cefcd0e 100644
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/client/ui-effects" },
 +    { "path": "./packages/client/ui-settings-tools" },
++    { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
 +    { "path": "./packages/client/ui-settings-accounts" },
 +    { "path": "./packages/client/ui-flow-accents" },
 +    // DSH-FORK end
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 5c5c81b7e0..d89dce60af 100644
+index 5c5c81b7e0..b365df3de5 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
 @@ -394,6 +394,7 @@
@@ -28,7 +29,7 @@ index 5c5c81b7e0..d89dce60af 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -476,6 +477,26 @@
+@@ -476,6 +477,27 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -37,6 +38,7 @@ index 5c5c81b7e0..d89dce60af 100644
 +    // DSH-FORK(all): fork packages. Keep contiguous — one conflict hunk, not five.
 +    { "path": "./packages/session/command-session-info" },
 +    { "path": "./packages/llm/llm-text-toolcalls" },
++    { "path": "./packages/llm/ai-accounts/tsconfig.host.json" },
 +    { "path": "./packages/llm/llm-kiln" },
 +    { "path": "./packages/llm/llm-system-file" },
 +    { "path": "./packages/fs/tool-notebook-edit" },

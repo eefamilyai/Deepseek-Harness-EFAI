@@ -28,6 +28,12 @@
     - id: ui-settings-tools
       name: '@deepseek-ai/dsh-client-ui-settings-tools'
 
+    # The account-pool Remote namespace, mounted by the package that owns it.
+    # It cannot ride the shared `dsh-api-remotes` assembly: that package is one
+    # the official Desktop also ships, and the installed copy wins at boot.
+    - id: ai-accounts
+      name: '@deepseek-ai/dsh-ai-accounts'
+
     # The Accounts settings section — add a DeepSeek web login from the UI
     # instead of editing ds_config.json by hand.
     - id: ui-settings-accounts

@@ -1,7 +1,7 @@
 /**
  * Host loader entry for the browser implementation exported from `./client`.
  *
- * The Accounts section talks to the Host entirely through the `llm` Remote
+ * The Accounts section talks to the Host entirely through the `aiAccounts` Remote
  * namespace, so this host half registers nothing of its own.
  */
 

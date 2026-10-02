@@ -59,6 +59,12 @@
     # holding its key, resolved per request by the Python sidecar. A route with
     # no key stays visible and selectable, and fails per request with the
     # registry's own message naming the variable to set.
+    # The account-pool registry: which routes accept a login, and the Remote
+    # surface a settings page uses to add, inspect, and repair one. Mounted
+    # ahead of the providers that register into it.
+    - id: ai-accounts
+      name: '@deepseek-ai/dsh-ai-accounts'
+
     - id: llm-kiln
       name: '@deepseek-ai/dsh-llm-kiln'
       config:

@@ -45,9 +45,11 @@ import type {} from '@deepseek-ai/dsh-settings'
 // The Loader's `loader/volatile-update` event and `fiber.entry`.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {
-  AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmAccountAdder, LlmAccountAdmin,
-  LlmAccountField, LlmAccountInfo, LlmAccountLogEntry, LlmAccountOpResult,
+  AdapterRegistrationHandle, DirectoryRegistrationHandle,
 } from '@deepseek-ai/dsh-llm'
+import type {
+  AccountAdder, AccountAdmin, AccountField, AccountInfo, AccountLogEntry, AccountOpResult,
+} from '@deepseek-ai/dsh-ai-accounts'
 import { KilnAdapter } from './adapter.ts'
 import { KilnBridge } from './bridge.ts'
 import type { KilnAccountRow, KilnLogEntry, KilnProvider } from './bridge.ts'
@@ -367,7 +369,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * @param account - the login to test: email or mobile, plus the password.
    * @returns the added account id and its new route, or the failure reason.
    */
-  const addAccount: LlmAccountAdder = async (account) => {
+  const addAccount: AccountAdder = async (account) => {
     const kilnId = 'deepseek'                 // registered only for the DeepSeek route
     const result = await bridge.addAccount(kilnId, account)
     if (!result.ok || result.account === undefined) {
@@ -377,14 +379,13 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     handle.replace([...routes.keys()])        // publishes llm/adapters-updated → picker refreshes
     return { ok: true, account: result.account, route: accountRoute(prefix, kilnId, result.account) }
   }
-  const accountHandle = ctx.llm.registerAccountProvider(`${prefix}deepseek`, addAccount)
 
   /**
    * The account-ADMINISTRATION half of the same route: what the Accounts
    * settings page lists and expands, and the two repairs it can ask for.
    *
    * This is where a `KilnAccountRow` becomes the provider-neutral
-   * `LlmAccountInfo` the runtime speaks. The device identity rows are the point
+   * `AccountInfo` the runtime speaks. The device identity rows are the point
    * of the expansion: `x_device_id`, the Shumei `device_id` and its origin, and
    * the `did` are three DIFFERENT values on purpose, and an operator debugging a
    * flagged account needs to see which one it presented. Credentials stay
@@ -392,8 +393,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * @param row - one sidecar account row.
    * @returns the same account as the boundary reports it.
    */
-  const toAccountInfo = (row: KilnAccountRow): LlmAccountInfo => {
-    const identity: LlmAccountField[] = []
+  const toAccountInfo = (row: KilnAccountRow): AccountInfo => {
+    const identity: AccountField[] = []
     const push = (label: string, value: string): void => {
       if (value.length > 0) identity.push({ label, value })
     }
@@ -433,7 +434,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * @param entry - one sidecar log entry.
    * @returns the same entry as the boundary reports it.
    */
-  const toLogEntry = (entry: KilnLogEntry): LlmAccountLogEntry => ({
+  const toLogEntry = (entry: KilnLogEntry): AccountLogEntry => ({
     seq: entry.seq,
     at: entry.at,
     account: entry.account,
@@ -448,7 +449,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * @param account - the login id to re-authenticate.
    * @returns whether the login now works, or a plain reason it does not.
    */
-  const reloginAccount = async (account: string): Promise<LlmAccountOpResult> => {
+  const reloginAccount = async (account: string): Promise<AccountOpResult> => {
     const result = await bridge.reloginAccount(account)
     return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
   }
@@ -460,7 +461,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * @param account - the login id to re-profile.
    * @returns whether a fresh identity is in place, or a plain reason it is not.
    */
-  const reprofileAccount = async (account: string): Promise<LlmAccountOpResult> => {
+  const reprofileAccount = async (account: string): Promise<AccountOpResult> => {
     const result = await bridge.reprofileAccount(account)
     return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
   }
@@ -476,19 +477,28 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
    * @param purge - also delete the browser profile.
    * @returns whether the entry is gone, or a plain reason it is not.
    */
-  const removeAccount = async (account: string, slug: string, purge: boolean): Promise<LlmAccountOpResult> => {
+  const removeAccount = async (account: string, slug: string, purge: boolean): Promise<AccountOpResult> => {
     const result = await bridge.removeAccount(account, slug, purge)
     return { ok: result.ok, ...result.message === undefined ? {} : { message: result.message } }
   }
 
-  const accountAdmin: LlmAccountAdmin = {
+  const accountAdmin: AccountAdmin = {
     list: async () => (await bridge.listAccounts()).map(toAccountInfo),
     relogin: reloginAccount,
     reprofile: reprofileAccount,
     remove: removeAccount,
     log: async since => (await bridge.accountLog(since)).map(toLogEntry),
   }
-  const adminHandle = ctx.llm.registerAccountAdmin(`${prefix}deepseek`, accountAdmin)
+
+  // The account surface is optional the same way `attachments` is: a
+  // composition that mounts no ai-accounts service still gets its text routes,
+  // so this is not an `inject` on the whole plugin. Registering inside
+  // ctx.inject gives the routes to whichever composition mounts that service,
+  // in either mounting order, and releases them with this plugin's fiber.
+  ctx.inject(['aiAccounts'], (accountScope) => {
+    accountScope.aiAccounts.registerAccountProvider(`${prefix}deepseek`, addAccount)
+    accountScope.aiAccounts.registerAccountAdmin(`${prefix}deepseek`, accountAdmin)
+  })
 
   // Releasing the routes does not stop the sidecar, so all three are torn down
   // in one fiber-scoped effect: routes first, so no request can arrive at a
@@ -496,8 +506,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   ctx.effect(function* () {
     yield () => {
       handle()
-      accountHandle()
-      adminHandle()
       directory?.()
       bridge.dispose()
     }

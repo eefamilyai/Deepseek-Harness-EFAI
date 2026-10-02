@@ -37,6 +37,10 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   'packages/util/workspace-path': 'The package only formats Workspace paths for browser UI; it never constructs model input.',
   'packages/util/values': 'The package only validates, snapshots, compares, freezes, or rejects caller-owned values; consumers own every model-facing use.',
   'packages/util/code-language': 'The package only maps a filename suffix to a syntax-highlighting language id; the read consumer owns the persisted hint.',
+  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
+  // audited allowlists must name them; without entries the gate rejects a correct README.
+  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
+  'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
 }
 
 /**
@@ -78,6 +82,13 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
   'packages/ptc-runtime/ptc-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
   'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
+  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
+  // audited allowlists must name them; without entries the gate rejects a correct README.
+  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
+  'packages/kernel/kernel': { kind: 'indirect', reason: 'The Service Definition delegates model rendering to dsh-tool-kernel, exactly as dsh-web delegates to dsh-tool-web.' },
+  'packages/kernel/kernel-python': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-kernel, as the other executor and provider backends do.' },
+  'packages/session/command-session-info': { kind: 'none', reason: 'The command is operator-facing and registers no prompt, tool, schema, or session event.' },
+  'packages/llm/ai-accounts': { kind: 'none', reason: 'The account surface registers no prompt section, tool schema, or Session event; a login changes which provider routes exist.' },
   'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },
   'packages/experimental/ptc-runtime-python': { kind: 'indirect', reason: 'Explicit source-checkout compositions delegate model rendering to PTC mode in dsh-tools.' },
   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },

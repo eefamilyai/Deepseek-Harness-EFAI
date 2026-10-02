@@ -16,6 +16,8 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge and its fixed Host facts.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+// Type-only: the `aiAccounts` namespace this section calls.
+import type {} from '@deepseek-ai/dsh-ai-accounts/remote'
 // Type-only: pulls ctx.locale into this program.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -46,7 +48,7 @@ const SECTION_ID = 'accounts'
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; the registration depends on it through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'remote', 'remote.llm']
+export const inject = ['slots', 'locale', 'remote', 'remote.aiAccounts']
 
 /**
  * Register the Accounts section once its slot declaration is on the ledger.
@@ -58,11 +60,11 @@ export function apply(ctx: ClientContext): void {
 
   const injected = (): AccountsSectionInjected => ({
     listProviders: async () => {
-      const result = await ctx.remote.llm.listAccountProviders()
+      const result = await ctx.remote.aiAccounts.listAccountProviders()
       return result.ok ? result.value : undefined
     },
     addAccount: async (provider, account) => {
-      const result = await ctx.remote.llm.addAccount(provider, account)
+      const result = await ctx.remote.aiAccounts.addAccount(provider, account)
       if (!result.ok) return { ok: false, message: result.error.message }
       // A refused login answers `ok: false` in the payload rather than as a
       // Remote failure, so the reason rides through untouched.
@@ -71,27 +73,27 @@ export function apply(ctx: ClientContext): void {
         : { ok: false, message: result.value.message ?? t('accounts.needIdentifier') }
     },
     listAccounts: async (provider) => {
-      const result = await ctx.remote.llm.listAccounts(provider)
+      const result = await ctx.remote.aiAccounts.listAccounts(provider)
       return result.ok ? result.value : undefined
     },
     reloginAccount: async (provider, account) => {
-      const result = await ctx.remote.llm.reloginAccount(provider, account)
+      const result = await ctx.remote.aiAccounts.reloginAccount(provider, account)
       // A refused repair answers `ok: false` in the payload; a Remote failure
       // is the route itself being unavailable, and its message is the reason.
       return result.ok ? result.value : { ok: false, message: result.error.message }
     },
     reprofileAccount: async (provider, account) => {
-      const result = await ctx.remote.llm.reprofileAccount(provider, account)
+      const result = await ctx.remote.aiAccounts.reprofileAccount(provider, account)
       return result.ok ? result.value : { ok: false, message: result.error.message }
     },
     removeAccount: async (provider, account, slug, purge) => {
-      const result = await ctx.remote.llm.removeAccount(provider, account, slug, purge)
+      const result = await ctx.remote.aiAccounts.removeAccount(provider, account, slug, purge)
       // A refused removal answers `ok: false` in the payload; a Remote failure
       // is the route itself being unavailable, and its message is the reason.
       return result.ok ? result.value : { ok: false, message: result.error.message }
     },
     accountLog: async (provider, since) => {
-      const result = await ctx.remote.llm.accountLog(provider, since)
+      const result = await ctx.remote.aiAccounts.accountLog(provider, since)
       return result.ok ? result.value : undefined
     },
   })

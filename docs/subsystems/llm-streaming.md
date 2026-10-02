@@ -892,6 +892,106 @@ declare abstract class LlmAdapter {
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxaiaccounts--aiaccounts"></a>
+
+### `ctx.aiAccounts` — `AiAccounts`
+
+The `ctx.aiAccounts` service: the account-pool registry and its Remote face. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.
+
+```ts cordis-catalog
+/**
+ * Register the handler that tests and adds a login for one account-pooling
+ * provider route (`ds_direct` is the only one today). One handler per route,
+ * released with the returned disposer. The handler owns making the new login
+ * selectable — it re-registers its own routes — so this service only routes
+ * the call.
+ * @param provider - the provider route that pools logins.
+ * @param add - tests a login and, on success, adds it.
+ * @returns a disposer that withdraws the handler.
+ */
+registerAccountProvider(provider: string, add: AccountAdder): () => void
+
+/**
+ * Register the account-ADMINISTRATION half of an account-pooling provider:
+ * the read an operator surface lists, and the repairs it can ask for. Mirrors
+ * {@link registerAccountProvider}: one admin per route, released with the
+ * returned disposer, and a provider that pools accounts normally registers
+ * both — the adder to create a login, the admin to inspect and repair one.
+ * @param provider - the provider route that pools logins.
+ * @param admin - the read and repair operations for that route's logins.
+ * @returns a disposer that withdraws the admin.
+ */
+registerAccountAdmin(provider: string, admin: AccountAdmin): () => void
+
+/**
+ * The provider routes that accept account additions, for a surface to offer.
+ * @returns the registered account-provider routes, in registration order.
+ */
+@Remote listAccountProviders(): string[]
+
+/**
+ * Test a login for one account-pooling provider and, on success, make it a
+ * selectable route. The password is used only for the test and never stored
+ * or returned here — the reply is the account id and its route, or a reason.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login to test.
+ * @returns the added account and route, or the failure reason.
+ * @throws RemoteError with `aiAccounts/account-rejected` when no route pools
+ *   accounts, or when the draft is missing a password or an email/mobile.
+ */
+@Remote async addAccount(provider: string, account: AccountDraft): Promise<AccountAddResult>
+
+/**
+ * Every login one provider pools, for an operator surface to list and expand.
+ * @param provider - the provider route that pools logins.
+ * @returns one row per login, in the provider's own order.
+ * @throws RemoteError with `aiAccounts/account-rejected` when no route pools accounts.
+ */
+@Remote async listAccounts(provider: string): Promise<AccountInfo[]>
+
+/**
+ * Re-authenticate one login, so a session that has gone stale works again.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to re-authenticate.
+ * @returns whether the login now works, or a plain reason it does not.
+ * @throws RemoteError with `aiAccounts/account-rejected` when no route pools accounts.
+ */
+@Remote async reloginAccount(provider: string, account: string): Promise<AccountOpResult>
+
+/**
+ * Replace one login's browser identity, so it presents as a different device.
+ * The repair for a flagged fingerprint is a NEW identity, not the same one.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to re-profile.
+ * @returns whether a fresh identity is in place, or a plain reason it is not.
+ * @throws RemoteError with `aiAccounts/account-rejected` when no route pools accounts.
+ */
+@Remote async reprofileAccount(provider: string, account: string): Promise<AccountOpResult>
+
+/**
+ * Forget one login, or one orphaned identity, from a provider's list.
+ * @param provider - the provider route that pools logins.
+ * @param account - the login id to forget; '' when only a slug is known.
+ * @param slug - the profile slug, which is all an orphan carries.
+ * @param purge - also delete the browser profile.
+ * @returns whether the entry is gone, or a plain reason it is not.
+ * @throws RemoteError with `aiAccounts/account-rejected` when no route pools accounts.
+ */
+@Remote async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<AccountOpResult>
+
+/**
+ * The debug trail recorded since a sequence number, oldest first. Every entry
+ * names its account, which is what makes two logins running at once legible.
+ * @param provider - the provider route that pools logins.
+ * @param since - return only entries with a higher sequence number.
+ * @returns the entries, in recording order.
+ * @throws RemoteError with `aiAccounts/account-rejected` when no route pools accounts.
+ */
+@Remote async accountLog(provider: string, since: number): Promise<AccountLogEntry[]>
+```
+
+Source: [`packages/llm/ai-accounts/src/index.ts`](../../packages/llm/ai-accounts/src/index.ts)
+
 <a id="ctxdeepseekllmapiextensions--deepseekllmapiextensionregistry"></a>
 
 ### `ctx.deepseekLlmApiExtensions` — `DeepSeekLlmApiExtensionRegistry`
@@ -923,7 +1023,7 @@ Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages
 
 ### `ctx.llm` — `LlmRuntime`
 
-The `ctx.llm` service: the registry every model-facing capability resolves through. It holds the adapter registrations that turn a route into a live client, the configurable-provider directory a settings surface reads, the per-provider model discoveries, and the account adders that turn a tested login into a selectable route.
+The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.
 
 ```ts cordis-catalog
 /**
@@ -981,164 +1081,6 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
  * @returns the advertised models, deduplicated in endpoint order.
  */
 async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
-
-/**
- * Register the handler that tests and adds a login for one account-pooling
- * provider route (`ds_direct` is the only one today). Mirrors
- * {@link registerModelDiscovery}: one handler per route, released with the
- * returned disposer. The handler owns making the new login selectable — it
- * re-registers its own routes — so the runtime only routes the call.
- * @param provider - the provider route that pools logins.
- * @param add - tests a login and, on success, adds it.
- * @returns a disposer that withdraws the handler.
- */
-registerAccountProvider(provider: string, add: LlmAccountAdder): () => void
-
-/**
- * The provider routes that accept account additions, for a surface to offer.
- * @returns the registered account-provider routes, in registration order.
- */
-listAccountProviders(): string[]
-
-/**
- * Test a login for one account-pooling provider and, on success, make it a
- * selectable route. The password is used only for the test and never stored
- * or returned here — the reply is the account id and its route, or a reason.
- * @param provider - the provider route that pools logins.
- * @param account - the login to test.
- * @returns the added account and route, or the failure reason.
- */
-async addAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
-
-/**
- * Register the account-ADMINISTRATION half of an account-pooling provider:
- * the read an operator surface lists, and the repairs it can ask for. Mirrors
- * {@link registerAccountProvider}: one admin per route, released with the
- * returned disposer, and a provider that pools accounts normally registers
- * both — the adder to create a login, the admin to inspect and repair one.
- * @param provider - the provider route that pools logins.
- * @param admin - the read and repair operations for that route's logins.
- * @returns a disposer that withdraws the admin.
- */
-registerAccountAdmin(provider: string, admin: LlmAccountAdmin): () => void
-
-/**
- * Every login one provider pools, for an operator surface to list and expand.
- * @param provider - the provider route that pools logins.
- * @returns one row per login, in the provider's own order.
- */
-async listAccounts(provider: string): Promise<readonly LlmAccountInfo[]>
-
-/**
- * Re-authenticate one login, so a session that has gone stale works again.
- * @param provider - the provider route that pools logins.
- * @param account - the login id to re-authenticate.
- * @returns whether the login now works, or a plain reason it does not.
- */
-async reloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-
-/**
- * Replace one login's browser identity, so it presents as a different device.
- * The repair for a flagged fingerprint is a NEW identity, not the same one.
- * @param provider - the provider route that pools logins.
- * @param account - the login id to re-profile.
- * @returns whether a fresh identity is in place, or a plain reason it is not.
- */
-async reprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-
-/**
- * The debug trail recorded since a sequence number, oldest first. Every entry
- * names its account, which is what makes two logins running at once legible.
- * @param provider - the provider route that pools logins.
- * @param since - return only entries with a higher sequence number.
- * @returns the entries, in recording order.
- */
-async accountLog(provider: string, since: number): Promise<readonly LlmAccountLogEntry[]>
-
-/**
- * Forget one login, or one orphaned identity, from a provider's list.
- *
- * The repair for an entry that should not be there at all — a login that was
- * replaced, or a profile a removed one left behind. `account` is empty for an
- * orphan: the login id it was configured under is exactly what is gone, so its
- * slug is the only handle left. The browser profile survives unless `purge` is
- * set — it cost a real login to mint, and a replacement account can still
- * present it.
- * @param provider - the provider route that pools logins.
- * @param account - the login id to forget; '' when only a slug is known.
- * @param slug - the profile slug, which is all an orphan carries.
- * @param purge - also delete the browser profile.
- * @returns whether the entry is gone, or a plain reason it is not.
- */
-async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
-
-/**
- * Remote read of the routes that accept account additions.
- * @returns the registered account-provider routes, in registration order.
- */
-@Remote('listAccountProviders') async remoteListAccountProviders(): Promise<string[]>
-
-/**
- * Remote adapter that tests and adds one account login. The password rides
- * this call only and is never stored or returned; the reply is the new
- * account id and route, or a plain failure reason.
- * @param provider - the provider route that pools logins.
- * @param account - the login to test.
- * @returns the added account and route, or the failure reason.
- * @throws RemoteError with `llm/account-rejected` when no route pools accounts,
- *   or when the draft is missing a password or an email/mobile.
- */
-@Remote('addAccount') async remoteAddAccount(provider: string, account: LlmAccountDraft): Promise<LlmAccountAddResult>
-
-/**
- * Remote read of one provider's pooled logins, for an operator surface to
- * list and expand. Every row reports identity — including the device the
- * login presents from — and only whether a credential is PRESENT.
- * @param provider - the provider route that pools logins.
- * @returns one row per login, in the provider's own order.
- * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
- */
-@Remote('listAccounts') async remoteListAccounts(provider: string): Promise<LlmAccountInfo[]>
-
-/**
- * Remote adapter that re-authenticates one pooled login.
- * @param provider - the provider route that pools logins.
- * @param account - the login id to re-authenticate.
- * @returns whether the login now works, or a plain reason it does not.
- * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
- */
-@Remote('reloginAccount') async remoteReloginAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-
-/**
- * Remote adapter that replaces one pooled login's browser identity.
- * @param provider - the provider route that pools logins.
- * @param account - the login id to re-profile.
- * @returns whether a fresh identity is in place, or a plain reason it is not.
- * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
- */
-@Remote('reprofileAccount') async remoteReprofileAccount(provider: string, account: string): Promise<LlmAccountOpResult>
-
-/**
- * Remote adapter that forgets one pooled login, or one orphaned identity.
- * @param provider - the provider route that pools logins.
- * @param account - the login id to forget; '' when only a slug is known.
- * @param slug - the profile slug, which is all an orphan carries.
- * @param purge - also delete the browser profile.
- * @returns whether the entry is gone, or a plain reason it is not.
- * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
- */
-@Remote('removeAccount') async remoteRemoveAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<LlmAccountOpResult>
-
-/**
- * Remote read of one provider's account debug trail. A poll passes the last
- * sequence number it saw and receives only what is new, so two logins running
- * at once stay attributable per account rather than interleaved.
- * @param provider - the provider route that pools logins.
- * @param since - return only entries with a higher sequence number.
- * @returns the entries, in recording order.
- * @throws RemoteError with `llm/account-rejected` when no route pools accounts.
- */
-@Remote('accountLog') async remoteAccountLog(provider: string, since: number): Promise<LlmAccountLogEntry[]>
 
 /**
  * Remote adapter for one draft provider interrogation.

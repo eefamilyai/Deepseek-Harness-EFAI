@@ -48,7 +48,8 @@
     "@deepseek-ai/dsh-tool-kernel": "workspace:^",
     "@deepseek-ai/dsh-tool-roster": "workspace:^",
     "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:^",
-    "@deepseek-ai/dsh-web-browser": "workspace:^"
+    "@deepseek-ai/dsh-web-browser": "workspace:^",
+    "@deepseek-ai/dsh-ai-accounts": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

@@ -13,3 +13,10 @@ docs/persistence-schema.json linguist-generated=true
 docs/persistence-changes/*.schema.json linguist-generated=true
 docs/persistence-changes/releases/*.schema.json linguist-generated=true
 docs/persistence-changes/historical-formats/*.schema.json linguist-generated=true
+
+# DSH-FORK(all): the fork's mod layer is committed as unified diffs, and the format
+# writes a context line for an empty line as a single space, so the patch set cannot
+# satisfy the blank-at-eol check its own format demands.
+# EXIT: the patch set stops being committed here (local-overlay/patches is published
+# elsewhere, or upstream's local-overlay absorbs it), so no format exemption is needed.
+local-overlay/patches/*.patch whitespace=-blank-at-eol
