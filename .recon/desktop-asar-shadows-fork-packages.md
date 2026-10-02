@@ -245,14 +245,28 @@ first conversion round changed:
 | `ui-model-selection/src/client/locales.ts` (15 keys) | only the definitions remain — nothing in the tree reads `provider.accounts`, `account.testAdd`, or any sibling key |
 | `ui-input-trigger/src/client/MenuView.module.css` + its spec | the CSS classes style `button[data-trigger-heading]` toggle markup that upstream's `MenuView.tsx` no longer renders; the spec asserted it and failed |
 
-**Restored as merge fallout** (the fork's own rules, dropped by the merge): the
-flow-row accent rules in `ui-tool`'s `ToolRow.module.css` (12 lines),
+**Restored as merge fallout, in upstream's own shape.** The merge dropped the
+flow-row accent rebinds from `ui-tool`'s `ToolRow.module.css` (12 lines),
 `ui-primitives`' `DisclosureRow.module.css` (3), `ui-chat`'s
-`ReasoningRow.module.css` (3), and `ui-tool`'s `bash-sample.module.css` (5).
-Sixteen accent assertions across four specs went green. `.chevron` is no longer
-restored in `ToolRow.module.css`: upstream's `ToolRow.tsx` stopped passing
-`chevronClassName`, so that rule had no consumer and its assertion was dropped
-instead.
+`ReasoningRow.module.css` (3), and `ui-tool`'s `bash-sample.module.css` (5). The
+first restoration also brought back each row's *restated* text colours, and that
+was wrong: upstream has since moved row text colour into the shared header
+("leaves row text color to the shared disclosure header" in
+`ui-tool/tests/tool-row-styles.client.spec.ts`, which the restoration made fail).
+The shape that satisfies both is:
+
+* `DisclosureRow` reads `var(--dsh-row-accent, <neutral label token>)` for
+  `.leading` and `.title` — one file, and it is what makes the token mean
+  anything;
+* each row family rebinds `--dsh-row-accent` on its own `.row`
+  (`[data-variant='read']`, `[data-variant='bash']`, cordis tools after the
+  variant rules) and colours only its own separator dot;
+* no row sheet restates a `.title`/`.leading` colour, so hover keeps following
+  the shared process-row colours.
+
+`ToolRow`'s `.chevron` rule stays out entirely: upstream stopped passing
+`chevronClassName`, so the rule had no consumer. Sixteen accent assertions and
+upstream's two row-style specs pass.
 
 **Converted into a fork-owned package**: the sidebar brand.
 `packages/client/ui-brand-efai` owns the whale mark and the live-text wordmark,
@@ -267,15 +281,14 @@ the fork's mark and wordmark.
 **What a plugin cannot carry, and why** — the remaining 17 upstream client files
 fall into two groups:
 
-1. *Needs a DOM hook upstream does not emit.* The accent system binds
-   `--dsh-row-accent` on the row element and reads it in the row's own
-   `.leading`/`.title`/`.chevron`/`.sep` rules. A fork-injected stylesheet
-   cannot reach those parts: `ui-tool` emits `data-variant`/`data-tool` on the
-   row root only, and the inner spans carry hashed CSS-module classes
-   (`[hash]_[local]`), for which a selector would have to match on the local-name
-   suffix — brittle enough to be worse than the seam. Two ways out, both real:
-   upstream sets `data-row-family` on each row (or reads `--dsh-row-accent` in
-   `DisclosureRow`), or the fork owns the rows.
+1. *Needs a DOM hook upstream does not emit.* The accent system has two halves:
+   the header's read of `--dsh-row-accent`, and each family's rebind on `.row`.
+   A fork-injected stylesheet can reach neither — `ui-tool` puts
+   `data-variant`/`data-tool` on the row ROOT, so a global rule cannot address
+   `.row` (whose class is hashed as `[hash]_[local]`), and matching on the
+   local-name suffix would break the moment upstream renames a class. Two ways
+   out, both real: upstream sets `data-row-family` on the row element (or reads
+   `--dsh-row-accent` in `DisclosureRow`), or the fork owns the rows.
 2. *Ownable as fork components.* `tool.call.toolview` is a **keyed slot whose
    registration replaces the view**: "Registering an occupied key replaces its
    view; unclaimed keys use the generic row." A fork package can therefore own
@@ -289,3 +302,11 @@ fall into two groups:
 inside an upstream class, with no extension point between construction and use,
 and its EXIT is an upstream PR. `ui-tool`'s `kernel` variant/title map is the
 same kind of three-line internal constant.
+
+**Evidence for the round** (committed as `ffcd461cbe`): the client tree's failing
+files went from 14/20 to 6/8, and all six files that were this fork's own edits
+are green — `menu-view`, `disclosure-row-styles`, `tool-row-accent-styles`,
+`flow-row-accent-styles`, `skill-row-styles`, and `ui-brand-official`'s
+browser-plugin spec. `ui-tool`, `ui-chat`, and `ui-primitives` run 2395 tests
+green, the new brand package runs 6, `verify-fork-overlay` is green at 14 patches
+/ 56 Tier-2 files, and the client face plus the web shell rebuild clean.
