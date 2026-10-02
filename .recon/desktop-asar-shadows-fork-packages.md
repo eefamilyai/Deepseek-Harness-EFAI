@@ -362,10 +362,53 @@ inside an upstream class, with no extension point between construction and use,
 and its EXIT is an upstream PR. `ui-tool`'s `kernel` variant/title map is the
 same kind of three-line internal constant.
 
-**Evidence for the round** (committed as `ffcd461cbe`): the client tree's failing
-files went from 14/20 to 6/8, and all six files that were this fork's own edits
-are green — `menu-view`, `disclosure-row-styles`, `tool-row-accent-styles`,
-`flow-row-accent-styles`, `skill-row-styles`, and `ui-brand-official`'s
-browser-plugin spec. `ui-tool`, `ui-chat`, and `ui-primitives` run 2395 tests
-green, the new brand package runs 6, `verify-fork-overlay` is green at 14 patches
-/ 56 Tier-2 files, and the client face plus the web shell rebuild clean.
+### Conversion status: complete for everything convertible
+
+Seam at the end of this work: **46 upstream files**, down from 60 when the port
+started. Everything that can be a plugin is one:
+
+| Converted | Package |
+|---|---|
+| account pool + its own Remote namespace | `packages/llm/ai-accounts` |
+| sidebar brand (occupants + the mark's colour) | `packages/client/ui-brand-efai` |
+| `@skill` picker over `ctx.inputTriggers` | `packages/client/ui-skill-mention` |
+| flow-row accent palette **and** binding | `packages/client/ui-flow-accents` |
+| retired as dead: 15 locale keys, menu-toggle CSS + its spec, sidebar chrome, the six accent sheets | upstream pristine again |
+
+Seven upstream client files remain, and none of them is convertible as written:
+
+| File | Why not |
+|---|---|
+| `ui-chat/AssistantMarkdown.{tsx,module.css}` | an upstream defect — a text block that trims to empty still claims one `.body` flex gap, doubling the space above the next row. Both halves live inside upstream's renderer and its `.body` class; owning `AssistantMarkdown` means owning the whole markdown pipeline. Upstream PR. |
+| `ui-conversation/skeleton/EmptyHero.tsx` + its spec | the "Preview" badge is upstream chrome with no hook: the hero declares no `data-*` attribute, and its slots (`conversation.hero.brand.mark`, `.workspace`, `.agentPreset`) do not include the headline row. Asks: make the badge a slot or a config value. |
+| `ui-conversation/src/client/locales.ts` (`tool.title.kernel`) and `ui-tool/.../tool-call-model.ts` | a pair: the map entry picks the locale key, and neither is a registry. The keyed `tool.call.toolview` slot could own the row instead, but `ToolRow` is not exported, so the fork would reimplement a 400-line cell view to change one title. Upstream PR. |
+| `ui-settings/src/client/config-form.ts` | a memoization fix inside an upstream class; no extension point between construction and use. Upstream PR. |
+
+**Why the accent conversion will render in the Desktop even though `ui-tool` and
+`ui-chat` there come from `app.asar`**: the sheet selects on upstream's own DOM
+attributes, and the shipped client contains them. Probed directly out of
+`D:\Deepseek-Desktop\resources\app.asar` (121 MB, raw ASCII scan):
+
+```
+data-disclosure-row      4
+data-shimmer-decoration 10
+data-variant            12
+data-chat-node-key       1
+data-sample              1
+--dsh-row-accent         0   <- the fork's own token, absent upstream as expected
+```
+
+**Deployment note**: `$DSH_HOME/profiles/node_modules/@deepseek-ai` is a tree of
+junctions into `apps/cli/node_modules/...`, and the three new packages had none.
+They were created (`dsh-ai-accounts`, `dsh-client-ui-brand-efai`,
+`dsh-client-ui-skill-mention`), and a desktop-profile host then booted clean with
+all three resolving from that tree — without them the app's next boot depends on
+the nested-layout fallback alone.
+
+**Still unverified, and why**: the accents have not been seen *painted* on a live
+row. Every model account is currently `ACCOUNT_MUTED`, so no turn can run to
+produce rows, and the sidebar's session rows are not addressable through the
+browser tool (they expose no button role), so an existing transcript cannot be
+opened either. Structure, bundle content, spec assertions, and the asar attribute
+probe all pass; the paint check waits on a healthy account or the operator's own
+session.
