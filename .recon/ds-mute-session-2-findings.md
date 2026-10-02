@@ -5415,3 +5415,46 @@ by itself it is weak. What makes it worth acting on is the context: across all p
 minutes into a post-pause burst, and the one account that has run it through six resumes
 and two bursts past the 22-minute mark has not been. claude1 continues through its
 remaining bursts; its result is the test of the reading.
+
+
+### 72.4 RESULT: claude1 (heartbeat) was muted too -- the heartbeat reading is falsified
+
+claude1's soak process died at ~16:38 (it was a child of the harness; the harness's tool
+interruption at ~16:47 is the likeliest cause; its last journal line is a heartbeat at
+16:37:44). It was relaunched at 20:58 and its first completion returned
+`user is muted (until 2026-10-05 08:02 UTC)`: a 72 h penalty, issue instant in
+**[16:02:00, 16:03:00) local**, i.e. between its last accepted completion (16:02:13, turn 149)
+and the minute boundary. The penalty therefore landed **while the heartbeat was running**: the
+four `client/settings` scopes were answered HTTP 200 at 16:02:39 and every 300 s after, and a
+muted account still gets 200 there (the settings route does not carry the verdict).
+
+| | claude1 (heartbeat) | claude2 (no heartbeat) |
+|---|---|---|
+| issue instant (local) | 16:02:15-16:02:59 | 15:58:15-15:58:59 |
+| burst / minutes into burst | burst 2 / ~26 of 25-min burst (last turns) | burst 2 / ~22 |
+| accepted completions before | 150 | 147 |
+| resumes survived before | 6 | 6 |
+| gap issue - last accepted completion | <= 46 s | <= 45 s |
+
+Conclusions:
+
+1. **The 300 s settings heartbeat does not prevent the penalty.** Both accounts, same
+   schedule, were muted four minutes apart in the same burst. The heartbeat reading
+   (section 71.3/72.3) is retracted. FIX 26 stays opt-in and OFF; there is no evidence it
+   helps, so it must not become the default.
+2. **The pause-then-burst reading is also unsupported as a cause.** Each account crossed
+   the 16-24 min post-resume mark five times without a verdict; the penalty came in the
+   SECOND burst after the relaunch, on the second-longest burst, ~18.6 h after the account's
+   first request, at 147/150 completions.
+3. **Two accounts, one fleet.** claude1 and claude2 share a base address
+   (`deepseek.ee.1+...`), machine, IP, schedule and prompts, and were muted four minutes
+   apart. Across the whole record the same-base accounts were penalised in clusters
+   (t1 00:40 / t2 04:53; j1, v, f; now claude1/claude2), which is what an
+   adjudication of LINKED accounts looks like. This is the section 68 reading again; it is
+   still unproven but is now the only lead that has not been falsified by measurement.
+4. The wire was the full FIX 24/25 browser shape (nine hints, nine body keys, own device id
+   and `did` per account), so request shape cannot be the explanation either.
+
+What remains testable, and needs the operator: one account on a DIFFERENT base address and
+a different IP, driven identically. Nothing else on this machine can separate "the traffic"
+from "the account's relationship to the others".
