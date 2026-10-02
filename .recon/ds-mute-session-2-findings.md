@@ -5382,3 +5382,36 @@ timing lead is unsupported and the cause lies elsewhere (account-level, section 
 * The 16-24 min post-resume window in which j1, t1, v and d1 were penalised has now been
   crossed five times by each account without a verdict. Remaining: pause 2 (83 min, to
   ~17:25), then two more bursts.
+
+
+### 72.3 First split: claude2 (no heartbeat) muted, claude1 (heartbeat) clean
+
+**claude2 was muted in burst 2, turn 147.** Verdict `user is muted (until 2026-10-05 07:58 UTC)`,
+a 72 h penalty, so the issue instant is in [07:58:00, 07:59:00) UTC = **15:58:00-15:58:59
+local**. Its journal:
+
+* 15:36 burst 2 starts, resuming from the 54-minute pause (so the issue is ~22 min into the
+  burst, inside the 16-24 min window of j1/t1/v/d1);
+* 15:58:14.765 last accepted completion (turn 146, HTTP 200);
+* 15:59:38.460 `create_pow_challenge` answered 200, then the client re-logged in (token
+  rejected; WAF challenge solved; `/users/login` 200 at 15:59:40.104);
+* 15:59:40.481 `chat/completion` -> `user is muted` verdict.
+
+Gap since last activity at issue: **<= 45 s** (last accepted completion 15:58:14.8, issue
+before 15:59:00). The token died in the same minute as the penalty, exactly as on d1
+(section 71): in both cases the first sign was a rejected token followed by a forced
+re-login, and the verdict arrived on the first completion after it. The re-login is
+therefore a CONSEQUENCE of the penalty (the server revoked the token when it issued it),
+not its cause.
+
+**claude1, same schedule to the second (`HS_SEED=7`), same machine, same IP, same prompts,
+same bursts, 150 completions, is still clean**, and sent its prompts at 15:58:15 within
+the same second as claude2's last accepted one. The ONLY difference between them is the
+300 s `client/settings` heartbeat on claude1.
+
+How much this proves: one pair. A coin flip would produce this outcome half the time, so
+by itself it is weak. What makes it worth acting on is the context: across all prior data
+(section 70/71) no account ever ran the heartbeat, seven accounts were penalised 16-24
+minutes into a post-pause burst, and the one account that has run it through six resumes
+and two bursts past the 22-minute mark has not been. claude1 continues through its
+remaining bursts; its result is the test of the reading.
