@@ -167,9 +167,21 @@ seam on it is retired in the tree (`git diff <base> -- packages/llm/llm` is empt
    carried two `- id: ui-settings-account` rows: the fork's
    `@deepseek-ai/dsh-client-ui-settings-accounts` and upstream's singular
    `@deepseek-ai/dsh-client-ui-settings-account`, whose only copy lives inside the
-   asar. The singular row was removed. `- id: ui-settings / enabled: false` stays:
-   that field is `Volatile<boolean>` = "developer tools enabled", not the Settings
-   page.
+   asar. The singular row was removed once — and **the running Desktop app wrote
+   it back** (file mtime 21:48, ten minutes after the edit, with the row gone
+   from the edit and present again afterwards). The app persists the composed row
+   set into this layer, so a hand edit to the desktop profile is not durable while
+   the app runs.
+
+   It is also not fatal, which is worth knowing before "fixing" it again: the
+   spare host at 22:05 read that same file **with both rows present** and rendered
+   the fork's section — route `kiln-deepseek` and its 11 pooled logins — so
+   upstream's singular row does not displace the fork's `ui-settings-accounts`.
+   The fork's Accounts row belongs in `packages/bundle/efai-web` precisely because
+   a profile rewrite cannot drop it.
+
+   `- id: ui-settings / enabled: false` stays in that profile: the field is
+   `Volatile<boolean>` = "developer tools enabled", not the Settings page.
 
 ### Verified end to end (2026-10-02, second session)
 
