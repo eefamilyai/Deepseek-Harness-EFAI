@@ -66,15 +66,7 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
   const openResource = vi.fn()
   ctx.provide('sidebarRight', { openResource })
   let captured: InputTriggerSource | undefined
-  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows packages/client/ui-skill/src/client/index.ts.
-  let atCaptured: InputTriggerSource | undefined
-  ctx.provide('inputTriggers', {
-    registerSource: (src: InputTriggerSource) => {
-      if (src.trigger === '/' && src.name === 'skill') captured = src
-      else if (src.trigger === '@' && src.name === 'skills') atCaptured = src
-      return () => {}
-    },
-  })
+  ctx.provide('inputTriggers', { registerSource: (src: InputTriggerSource) => { captured = src; return () => {} } })
   const sessions = new TestSessions(async (action) => { await action() }, ctx)
   ctx.provide('sessions', sessions)
   onTestFinished(async () => {
@@ -92,7 +84,7 @@ async function bench(list: ListFn, addressed?: SessionId, opening: Pick<SessionF
   const fiber = ctx.plugin({ inject: [...inject], apply })
   onTestFinished(async () => { await fiber.dispose() })
   await fiber.await()
-  return { ctx, source: captured!, atSource: atCaptured!, remote, fiber, openResource, sessions }
+  return { ctx, source: captured!, remote, fiber, openResource, sessions }
 }
 
 const CATALOG: SkillRow[] = [
@@ -548,33 +540,5 @@ describe('reference preview', () => {
     expect(source.openReference!(proj('child'), { ref: '/review' })).toBe(false)
     expect(list).not.toHaveBeenCalled()
     expect(openResource).not.toHaveBeenCalled()
-  })
-})
-
-describe('@skills source', () => {
-  it('filters by the name after the @skill prefix and lands @skill <name>', async () => {
-    const { atSource } = await bench(listOk(CATALOG))
-    // Typing @skill lists the whole catalog; typing a prefix filters it.
-    const all = await atSource.candidates(proj('s1'), req(''))
-    expect(all.map(item => item.name)).toEqual(['commit-helper', 'code-review', 'deploy'])
-    const narrowed = await atSource.candidates(proj('s1'), req('co'))
-    expect(narrowed.map(item => item.name)).toEqual(['commit-helper', 'code-review'])
-
-    const outcome = atSource.onPick({
-      candidate: { name: 'commit-helper', description: 'commit flow' },
-      session: proj('s1'),
-      position: 'leading',
-      via: 'menu',
-      action: 'pick',
-      span: { start: 0, end: 6, draftRev: 1 },
-    })
-    expect(outcome).toEqual({ text: '@skill commit-helper ' })
-  })
-
-  it('never fetches Agent-bound skills for an addressed child', async () => {
-    const { list, payloads } = countingList()
-    const { atSource } = await bench(list, sid('child'))
-    await expect(atSource.candidates(proj('child'), req(''))).resolves.toEqual([])
-    expect(payloads).toEqual([])
   })
 })

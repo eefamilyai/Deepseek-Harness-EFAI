@@ -278,7 +278,25 @@ package. Verified live on a spare-port host: the plugin inventory reads
 `ui-brand-official  Disabled` / `ui-brand-efai  Enabled`, and the sidebar renders
 the fork's mark and wordmark.
 
-**What a plugin cannot carry, and why** — the remaining 17 upstream client files
+**Converted into a fork-owned package**: the `@skill` mention source.
+`packages/client/ui-skill-mention` registers what the fork previously added
+inside upstream's `dsh-client-ui-skill`: the same trigger (`@`), group name
+(`skills`), order (3), prefix filter, user-only marker, and plain-text pick
+(`@skill <name> `). It owns its own dictionary namespace (`skillMention`), its
+own session-keyed single-flight catalog cache over `ctx.remote.skills.list`, and
+its own `SessionReferenceSourceMap` key (`skillMentionCatalog`). Upstream's
+package is pristine again, and its 31-test suite passes unmodified.
+
+The spec runs 14 tests against the real `TestSessions`/`TestRemote` runtime:
+registration and the `(trigger, name)` seat (a rival registration throws until the
+fiber is disposed), prefix filtering on the remainder after `skill ` and on a
+bare query, one RPC per session however many keystrokes filter it, addressed-child
+suppression with no RPC, a superseded keystroke yielding empty, lexicon settle +
+listener notification + unsubscribe, scope-birth prewarm, preset-switch
+invalidation, connection-reset clearing every key, a failed fetch not poisoning
+the key, and the pick text.
+
+**What a plugin cannot carry, and why** — the remaining 15 upstream client files
 fall into two groups:
 
 1. *Needs a DOM hook upstream does not emit.* The accent system has two halves:

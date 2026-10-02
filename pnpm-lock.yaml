@@ -2311,6 +2311,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings-tools':
         specifier: workspace:^
         version: link:../../client/ui-settings-tools
+      '@deepseek-ai/dsh-client-ui-skill-mention':
+        specifier: workspace:^
+        version: link:../../client/ui-skill-mention
       '@deepseek-ai/dsh-host-version-route':
         specifier: workspace:^
         version: link:../../host/version-route
@@ -6028,6 +6031,30 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+
+  packages/client/ui-skill-mention:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:*
+        version: link:../../api/remotes
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: workspace:*
+        version: link:../../api/session-controller
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:*
+        version: link:../locale
+      '@deepseek-ai/dsh-client-ui-input-trigger':
+        specifier: workspace:*
+        version: link:../ui-input-trigger
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:*
+        version: link:../ui-slots
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:*
+        version: link:../../core/session
 
   packages/client/ui-slots:
     devDependencies:

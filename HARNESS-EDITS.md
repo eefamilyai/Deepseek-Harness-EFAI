@@ -40,6 +40,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | System prompt as a file upload (work in progress) | `packages/llm/llm-system-file` | 10 files |
 | Account-pool registry and its `aiAccounts` Remote namespace | `packages/llm/ai-accounts` | 10 files |
 | The fork's sidebar brand occupants | `packages/client/ui-brand-efai` | 10 files |
+| The `@skill` mention source over `ctx.inputTriggers` | `packages/client/ui-skill-mention` | 9 files |
 | Python runtime (providers, `ds_direct`, WAF, browser identity, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 56 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
@@ -362,8 +363,8 @@ The table is the human-facing record. `local-overlay/rules.json` is the machine-
 | 20 | `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}` | `browser` | collapsible per-provider groups in the model dropdown, with account routes folded under a single base-provider header and an account picker | Upstream adopts provider collapse and account grouping in `ModelSelect` |
 | ~~21~~ | `packages/skill/tool-skill/src/index.ts` | `kernel` | **RETIRED** — the `@skill <name>` gesture is a second `agent/pre-step` listener in `packages/skill/skill-injection` | done |
 | ~~22~~ | `packages/skill/tool-skill/src/index.ts` | `kernel` | **RETIRED** — `alwaysLoadSkills` moved to `packages/skill/skill-injection`, which re-injects a pruned body from the same hook | done |
-| 23 | `packages/client/ui-skill/src/client/index.ts` | `kernel` | `@skills` picker registers a second trigger source beside `skill` | Upstream PR, or a fork-owned client package |
-| 24 | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | collapsible `@` trigger-menu sections (the highlighted section is expanded by default; the rest start minimized) | Upstream adopts collapsible trigger-menu sections |
+| ~~23~~ | `packages/client/ui-skill/src/client/index.ts` | `kernel` | **RETIRED** — the `@skills` picker is now a fork-owned package (`packages/client/ui-skill-mention`) registering the same source through the public trigger registry, so it also renders in the Desktop build, where the installed copy of `ui-skill` wins at boot | done |
+| ~~24~~ | `packages/client/ui-input-trigger/src/client/{MenuView.tsx,MenuView.module.css}` and `tests/menu-view.client.spec.tsx` | `browser` | **RETIRED** — the CSS styled `button[data-trigger-heading]` toggle markup upstream's `MenuView.tsx` no longer renders, so the edit was dead and its spec asserted the missing markup; both are back to upstream and the suite is green | done |
 | ~~25~~ | `packages/bundle/base/cordis.patch.yml` + 4 preset `agent.cordis.yml` | `kernel` | **RETIRED** — every fork row moved into `efai-base`; `tool-roster` decides per turn which tools are the acting surface | done |
 | ~~26~~ | `client/ui-chat` turn-process fold (6 sources, 2 tests) | `brand` | **RETIRED** by upstream: 0.1.7-alpha.2 renders the process row for a running Turn, handles partly-loaded history, and keeps interleaved input visible with the row held open | done |
 | ~~27~~ | `packages/bundle/base/cordis.patch.yml`, `apps/cli/package.json` | `memory` | **RETIRED** — `agent-memory` mounts and unmounts the engine from the live setting, in `efai-base`; `apps/cli` now declares only the two fork bundles | done |

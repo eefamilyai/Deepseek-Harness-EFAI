@@ -47,6 +47,14 @@
     - id: ui-settings-accounts
       name: '@deepseek-ai/dsh-client-ui-settings-accounts'
 
+    # The `@skill` picker: the session skill catalog as an `@` trigger source
+    # beside @file/@session. Upstream registers the same source inside a package
+    # the official Desktop also ships, so the fork's registration is what renders
+    # there; both register under (trigger '@', name 'skills'), and upstream's own
+    # package registers the '/' form only.
+    - id: ui-skill-mention
+      name: '@deepseek-ai/dsh-client-ui-skill-mention'
+
 # Upstream's sidebar brand, replaced rather than restyled: `ui-brand-efai` above
 # registers the same two occupants for every build profile.
 - id: ui-brand-official

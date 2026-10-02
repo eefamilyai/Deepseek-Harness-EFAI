@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **56** in **14** patch(es).
+Tier-2 files: **54** in **14** patch(es).
 
 ## Patches
 
@@ -78,14 +78,12 @@ Tier-2 files: **56** in **14** patch(es).
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
-### `patches/client-shell.patch` — 9 file(s)
+### `patches/client-shell.patch` — 7 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
 - `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
 - `packages/client/ui-sidebar/src/client/SidebarRoot.module.css`
-- `packages/client/ui-skill/src/client/index.ts`
-- `packages/client/ui-skill/tests/browser-plugin.client.spec.ts`
 - `packages/client/ui-tool/src/client/tool/components/ToolRow.module.css`
 - `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
 - `packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css`
@@ -144,7 +142,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 496 paths do not exist upstream, so no patch covers them and none can conflict.
+These 506 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -334,6 +332,16 @@ These 496 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/bundle/efai-web/package.json`
 - `packages/bundle/efai-web/src/index.ts`
 - `packages/bundle/efai-web/tsconfig.json`
+- `packages/client/ui-brand-efai/README.md`
+- `packages/client/ui-brand-efai/package.json`
+- `packages/client/ui-brand-efai/src/client/Brand.module.css`
+- `packages/client/ui-brand-efai/src/client/Brand.tsx`
+- `packages/client/ui-brand-efai/src/client/index.ts`
+- `packages/client/ui-brand-efai/src/css-modules.d.ts`
+- `packages/client/ui-brand-efai/src/index.ts`
+- `packages/client/ui-brand-efai/tests/browser-plugin.client.spec.tsx`
+- `packages/client/ui-brand-efai/tsconfig.json`
+- `packages/client/ui-brand-efai/tsdown.config.ts`
 - `packages/client/ui-chat/tests/flow-row-accent-styles.client.spec.ts`
 - `packages/client/ui-effects/README.md`
 - `packages/client/ui-effects/package.json`

@@ -33,8 +33,6 @@
     "packages/client/ui-primitives/tests/disclosure-row-styles.client.spec.ts",
     "packages/client/ui-settings/src/client/config-form.ts",
     "packages/client/ui-sidebar/src/client/SidebarRoot.module.css",
-    "packages/client/ui-skill/src/client/index.ts",
-    "packages/client/ui-skill/tests/browser-plugin.client.spec.ts",
     "packages/client/ui-tool/src/client/tool/components/ToolRow.module.css",
     "packages/client/ui-tool/src/client/tool/models/tool-call-model.ts",
     "packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css",

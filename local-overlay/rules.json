@@ -66,18 +66,6 @@
       ]
     },
     {
-      "name": "client-input-trigger",
-      "paths": [
-        "packages/client/ui-input-trigger/"
-      ]
-    },
-    {
-      "name": "client-model-selection",
-      "paths": [
-        "packages/client/ui-model-selection/"
-      ]
-    },
-    {
       "name": "client-primitives",
       "paths": [
         "packages/client/ui-primitives/"
@@ -88,12 +76,6 @@
       "paths": [
         "packages/client/ui-settings-general/",
         "packages/client/ui-settings/"
-      ]
-    },
-    {
-      "name": "client-brand",
-      "paths": [
-        "packages/client/ui-brand-official/"
       ]
     },
     {
