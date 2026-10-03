@@ -379,17 +379,24 @@ export function ToolsSection({ t, roster, kernel, browser, listPresets }: ToolsS
         {presets === undefined && <p className={css.hint}>{t('tools.presets.loading')}</p>}
         {presetsFailed && <p className={css.hint}>{t('tools.presets.failed')}</p>}
         {!presetsFailed && presets?.length === 0 && <p className={css.hint}>{t('tools.presets.empty')}</p>}
-        {presets?.map(preset => (
-          <div className={css.row} key={preset.id}>
-            <span className={css.text}>
-              <span className={css.label}>
-                {preset.name ?? preset.id}
-                {preset.isDefault === true && <span className={css.tag}>{t('tools.presets.default')}</span>}
+        {presets?.map((preset) => {
+          const title = preset.name ?? preset.id
+          // The registry answers with the preset's id as its description when the
+          // preset declares none, so the row would otherwise print the same word
+          // twice for every composed preset.
+          const described = preset.description === title ? undefined : preset.description
+          return (
+            <div className={css.row} key={preset.id}>
+              <span className={css.text}>
+                <span className={css.label}>
+                  {title}
+                  {preset.isDefault === true && <span className={css.tag}>{t('tools.presets.default')}</span>}
+                </span>
+                {described !== undefined && <span className={css.hint}>{described}</span>}
               </span>
-              <span className={css.hint}>{preset.description ?? (preset.name === undefined ? preset.id : '')}</span>
-            </span>
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </Group>
     </div>
   )
