@@ -14,7 +14,7 @@ import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { EFFECTS_SETTINGS_NAMESPACE, type EffectsSettings } from '../effects-settings.ts'
 import { EffectsSettingsPolicy } from './settings-store.ts'
-import { EffectsOverlay } from './Overlay.tsx'
+import { EffectsOverlay, SCENE_CATALOG, type EffectsOverlayCopy } from './Overlay.tsx'
 import { EffectsSettingsRow, type EffectsSettingsRowInjected } from './EffectsSettingsRow.tsx'
 import { en, zh } from './locales.ts'
 
@@ -38,6 +38,7 @@ export function apply(ctx: ClientContext): void {
   )
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-effects: settings dictionaries')
+  const t = ctx.locale.bind(NS)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -60,6 +61,21 @@ export function apply(ctx: ClientContext): void {
     }),
   }, EffectsSettingsRow))
 
+  /**
+   * The overlay's copy, resolved from this plugin's dictionaries.
+   * @returns every string the overlay shows, in the active locale.
+   */
+  const copy = (): EffectsOverlayCopy => ({
+    focusEnter: t('effects.focus.enter'),
+    focusButton: t('effects.focus.button'),
+    focusDialog: t('effects.focus.dialog'),
+    focusLocked: t('effects.focus.locked'),
+    focusHint: t('effects.focus.hint'),
+    focusPasscode: t('effects.focus.passcode'),
+    focusUnlock: t('effects.focus.unlock'),
+    scenes: Object.fromEntries(SCENE_CATALOG.map(scene => [scene.id, t(scene.key)])),
+  })
+
   ctx.effect(() => {
     let host = document.getElementById(ROOT_ID)
     if (host === null) {
@@ -68,14 +84,22 @@ export function apply(ctx: ClientContext): void {
       document.body.append(host)
     }
     const root = createRoot(host)
-    root.render(createElement(EffectsOverlay, {
-      whaleEnabled: policy.whaleEnabled,
-      focusEnabled: policy.focusEnabled,
-      whaleOpacity: policy.whaleOpacity,
-      whaleSize: policy.whaleSize,
-      whaleStatic: policy.whaleStatic,
-    }))
+    const draw = (): void => {
+      root.render(createElement(EffectsOverlay, {
+        whaleEnabled: policy.whaleEnabled,
+        focusEnabled: policy.focusEnabled,
+        whaleOpacity: policy.whaleOpacity,
+        whaleSize: policy.whaleSize,
+        whaleStatic: policy.whaleStatic,
+        copy: copy(),
+      }))
+    }
+    draw()
+    // The overlay lives outside the render machinery, so nothing else redraws it
+    // when the reader switches language.
+    const settled = ctx.on('locale/change', () => { draw() })
     return () => {
+      settled()
       root.unmount()
       host?.remove()
     }

@@ -11,6 +11,7 @@
 import { useSyncExternalStore, useState } from 'react'
 import { FishLogo } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { EffectsKey } from './locales.ts'
 import styles from './overlay.module.css'
 
 /** CSS-module lookup with a stable fallback (noUncheckedIndexedAccess). */
@@ -38,7 +39,7 @@ const SCENE_QUERY = '?w=3000&q=85&auto=format&fit=crop'
 /** One photographic nature scene, rotated on every lock. */
 interface Scene {
   id: string
-  label: string
+  key: EffectsKey
   url: string
 }
 
@@ -51,33 +52,59 @@ interface Scene {
  * width; the lock layer adds a translucent tone gradient over each photo and
  * the CSS keeps a dark fallback color, so an offline lock still degrades
  * gracefully.
+ *
+ * The catalog is locale-free: a scene's name is the copy key `effects.scene.<id>`
+ * in this plugin's dictionaries, so the labels travel with the rest of the copy.
  */
 const SCENES: Scene[] = [
-  { id: 'aurora', label: 'Aurora', url: `${SCENE_SOURCE}photo-1531366936337-7c912a4589a7${SCENE_QUERY}` },
-  { id: 'alpine-lake', label: 'Alpine Lake', url: `${SCENE_SOURCE}photo-1508672019048-805c876b67e2${SCENE_QUERY}` },
-  { id: 'misty-pines', label: 'Misty Pines', url: `${SCENE_SOURCE}photo-1448375240586-882707db888b${SCENE_QUERY}` },
-  { id: 'turquoise-coast', label: 'Turquoise Coast', url: `${SCENE_SOURCE}photo-1505142468610-359e7d316be0${SCENE_QUERY}` },
-  { id: 'dunes', label: 'Desert Dunes', url: `${SCENE_SOURCE}photo-1509316785289-025f5b846b35${SCENE_QUERY}` },
-  { id: 'dolomites', label: 'Dolomites', url: `${SCENE_SOURCE}photo-1520769945061-0a448c463865${SCENE_QUERY}` },
-  { id: 'autumn-woods', label: 'Autumn Woods', url: `${SCENE_SOURCE}photo-1507783548227-544c3b8fc065${SCENE_QUERY}` },
-  { id: 'cliff-coast', label: 'Cliff Coast', url: `${SCENE_SOURCE}photo-1507525428034-b723cf961d3e${SCENE_QUERY}` },
-  { id: 'canyon', label: 'Canyon', url: `${SCENE_SOURCE}photo-1469854523086-cc02fe5d8800${SCENE_QUERY}` },
-  { id: 'starry-night', label: 'Starry Night', url: `${SCENE_SOURCE}photo-1470071459604-3b5ec3a7fe05${SCENE_QUERY}` },
-  { id: 'snow-peaks', label: 'Snow Peaks', url: `${SCENE_SOURCE}photo-1483728642387-6c3bdd6c93e5${SCENE_QUERY}` },
-  { id: 'bamboo', label: 'Bamboo Grove', url: `${SCENE_SOURCE}photo-1503785640985-f62e3aeee448${SCENE_QUERY}` },
-  { id: 'still-lake', label: 'Still Lake', url: `${SCENE_SOURCE}photo-1439066615861-d1af74d74000${SCENE_QUERY}` },
-  { id: 'desert-rock', label: 'Desert Rock', url: `${SCENE_SOURCE}photo-1473580044384-7ba9967e16a0${SCENE_QUERY}` },
-  { id: 'green-hills', label: 'Green Hills', url: `${SCENE_SOURCE}photo-1472214103451-9374bd1c798e${SCENE_QUERY}` },
-  { id: 'alpine-dawn', label: 'Alpine Dawn', url: `${SCENE_SOURCE}photo-1469474968028-56623f02e42e${SCENE_QUERY}` },
-  { id: 'redwood', label: 'Redwood', url: `${SCENE_SOURCE}photo-1511497584788-876760111969${SCENE_QUERY}` },
-  { id: 'waterfall', label: 'Waterfall', url: `${SCENE_SOURCE}photo-1432405972618-c60b0225b8f9${SCENE_QUERY}` },
-  { id: 'tropical-island', label: 'Tropical Island', url: `${SCENE_SOURCE}photo-1505228395891-9a51e7e86bf6${SCENE_QUERY}` },
-  { id: 'iceland-falls', label: 'Iceland Falls', url: `${SCENE_SOURCE}photo-1483347756197-71ef80e95f73${SCENE_QUERY}` },
-  { id: 'sunset-valley', label: 'Sunset Valley', url: `${SCENE_SOURCE}photo-1500530855697-b586d89ba3ee${SCENE_QUERY}` },
-  { id: 'reef', label: 'Reef', url: `${SCENE_SOURCE}photo-1544551763-46a013bb70d5${SCENE_QUERY}` },
-  { id: 'pine-forest', label: 'Pine Forest', url: `${SCENE_SOURCE}photo-1441974231531-c6227db76b6e${SCENE_QUERY}` },
-  { id: 'mountain-night', label: 'Mountain Night', url: `${SCENE_SOURCE}photo-1519681393784-d120267933ba${SCENE_QUERY}` },
+  { id: 'aurora', key: 'effects.scene.aurora', url: `${SCENE_SOURCE}photo-1531366936337-7c912a4589a7${SCENE_QUERY}` },
+  { id: 'alpine-lake', key: 'effects.scene.alpine-lake', url: `${SCENE_SOURCE}photo-1508672019048-805c876b67e2${SCENE_QUERY}` },
+  { id: 'misty-pines', key: 'effects.scene.misty-pines', url: `${SCENE_SOURCE}photo-1448375240586-882707db888b${SCENE_QUERY}` },
+  { id: 'turquoise-coast', key: 'effects.scene.turquoise-coast', url: `${SCENE_SOURCE}photo-1505142468610-359e7d316be0${SCENE_QUERY}` },
+  { id: 'dunes', key: 'effects.scene.dunes', url: `${SCENE_SOURCE}photo-1509316785289-025f5b846b35${SCENE_QUERY}` },
+  { id: 'dolomites', key: 'effects.scene.dolomites', url: `${SCENE_SOURCE}photo-1520769945061-0a448c463865${SCENE_QUERY}` },
+  { id: 'autumn-woods', key: 'effects.scene.autumn-woods', url: `${SCENE_SOURCE}photo-1507783548227-544c3b8fc065${SCENE_QUERY}` },
+  { id: 'cliff-coast', key: 'effects.scene.cliff-coast', url: `${SCENE_SOURCE}photo-1507525428034-b723cf961d3e${SCENE_QUERY}` },
+  { id: 'canyon', key: 'effects.scene.canyon', url: `${SCENE_SOURCE}photo-1469854523086-cc02fe5d8800${SCENE_QUERY}` },
+  { id: 'starry-night', key: 'effects.scene.starry-night', url: `${SCENE_SOURCE}photo-1470071459604-3b5ec3a7fe05${SCENE_QUERY}` },
+  { id: 'snow-peaks', key: 'effects.scene.snow-peaks', url: `${SCENE_SOURCE}photo-1483728642387-6c3bdd6c93e5${SCENE_QUERY}` },
+  { id: 'bamboo', key: 'effects.scene.bamboo', url: `${SCENE_SOURCE}photo-1503785640985-f62e3aeee448${SCENE_QUERY}` },
+  { id: 'still-lake', key: 'effects.scene.still-lake', url: `${SCENE_SOURCE}photo-1439066615861-d1af74d74000${SCENE_QUERY}` },
+  { id: 'desert-rock', key: 'effects.scene.desert-rock', url: `${SCENE_SOURCE}photo-1473580044384-7ba9967e16a0${SCENE_QUERY}` },
+  { id: 'green-hills', key: 'effects.scene.green-hills', url: `${SCENE_SOURCE}photo-1472214103451-9374bd1c798e${SCENE_QUERY}` },
+  { id: 'alpine-dawn', key: 'effects.scene.alpine-dawn', url: `${SCENE_SOURCE}photo-1469474968028-56623f02e42e${SCENE_QUERY}` },
+  { id: 'redwood', key: 'effects.scene.redwood', url: `${SCENE_SOURCE}photo-1511497584788-876760111969${SCENE_QUERY}` },
+  { id: 'waterfall', key: 'effects.scene.waterfall', url: `${SCENE_SOURCE}photo-1432405972618-c60b0225b8f9${SCENE_QUERY}` },
+  { id: 'tropical-island', key: 'effects.scene.tropical-island', url: `${SCENE_SOURCE}photo-1505228395891-9a51e7e86bf6${SCENE_QUERY}` },
+  { id: 'iceland-falls', key: 'effects.scene.iceland-falls', url: `${SCENE_SOURCE}photo-1483347756197-71ef80e95f73${SCENE_QUERY}` },
+  { id: 'sunset-valley', key: 'effects.scene.sunset-valley', url: `${SCENE_SOURCE}photo-1500530855697-b586d89ba3ee${SCENE_QUERY}` },
+  { id: 'reef', key: 'effects.scene.reef', url: `${SCENE_SOURCE}photo-1544551763-46a013bb70d5${SCENE_QUERY}` },
+  { id: 'pine-forest', key: 'effects.scene.pine-forest', url: `${SCENE_SOURCE}photo-1441974231531-c6227db76b6e${SCENE_QUERY}` },
+  { id: 'mountain-night', key: 'effects.scene.mountain-night', url: `${SCENE_SOURCE}photo-1519681393784-d120267933ba${SCENE_QUERY}` },
 ]
+
+/** The catalog as the mount reads it: each scene's id with the copy key for its name. */
+export const SCENE_CATALOG: readonly { id: string; key: EffectsKey }[] = SCENES
+
+/** Every string this overlay shows, resolved by the plugin from its dictionaries. */
+export interface EffectsOverlayCopy {
+  /** Accessible name of the focus button. */
+  focusEnter: string
+  /** Visible label of the focus button. */
+  focusButton: string
+  /** Accessible name of the lock surface. */
+  focusDialog: string
+  /** Title of the passcode gate. */
+  focusLocked: string
+  /** Hint above the passcode input. */
+  focusHint: string
+  /** Accessible name of the passcode input. */
+  focusPasscode: string
+  /** Label of the unlock button. */
+  focusUnlock: string
+  /** Scene name by scene id, for the caption and the image's accessible name. */
+  scenes: Readonly<Record<string, string>>
+}
 
 /** The unlock passcode. Cosmetic focus aid, never a security boundary. */
 const UNLOCK_CODE = '1234'
@@ -88,13 +115,16 @@ export interface EffectsOverlayProps {
   whaleOpacity: SnapshotStore<number>
   whaleSize: SnapshotStore<number>
   whaleStatic: SnapshotStore<boolean>
+  copy: EffectsOverlayCopy
 }
 
 /**
  * Render the whole effects overlay.
- * @param props - reactive settings stores shared with the Settings row.
+ * @param props - reactive settings stores shared with the Settings row, and the localized copy.
  */
-export function EffectsOverlay({ whaleEnabled, focusEnabled, whaleOpacity, whaleSize, whaleStatic }: EffectsOverlayProps) {
+export function EffectsOverlay({
+  whaleEnabled, focusEnabled, whaleOpacity, whaleSize, whaleStatic, copy,
+}: EffectsOverlayProps) {
   const showWhale = useStore(whaleEnabled)
   const showFocus = useStore(focusEnabled)
   const opacity = useStore(whaleOpacity)
@@ -105,6 +135,8 @@ export function EffectsOverlay({ whaleEnabled, focusEnabled, whaleOpacity, whale
   const [sceneSeq, setSceneSeq] = useState(0)
   const [code, setCode] = useState('')
   const [shake, setShake] = useState(false)
+
+  const sceneName = (target: Scene): string => copy.scenes[target.id] ?? target.id
 
   const lock = (): void => {
     setScene(SCENES[sceneSeq % SCENES.length] as Scene)
@@ -149,29 +181,29 @@ export function EffectsOverlay({ whaleEnabled, focusEnabled, whaleOpacity, whale
             type="button"
             className={css('focusButton')}
             onClick={lock}
-            aria-label="Enter focus mode"
+            aria-label={copy.focusEnter}
           >
             <span className={css('focusButtonIcon')}><FishLogo size={18} /></span>
-            <span className={css('focusButtonLabel')}>Focus</span>
+            <span className={css('focusButtonLabel')}>{copy.focusButton}</span>
           </button>
         )
         : null}
 
       {showFocus && locked
         ? (
-          <div className={css('lock')} role="dialog" aria-modal="true" aria-label="Focus lock">
+          <div className={css('lock')} role="dialog" aria-modal="true" aria-label={copy.focusDialog}>
             <div
               className={css('scene')}
               style={{ backgroundImage: `linear-gradient(rgba(5, 13, 26, 0.10) 0%, rgba(5, 13, 26, 0.38) 100%), url("${scene.url}")` }}
               role="img"
-              aria-label={scene.label}
+              aria-label={sceneName(scene)}
             />
-            <div className={css('sceneLabel')}>{scene.label}</div>
+            <div className={css('sceneLabel')}>{sceneName(scene)}</div>
             <div className={css('vignette')} />
             <div className={`${css('gate')} ${shake ? css('gateShake') : ''}`}>
               <FishLogo size={34} />
-              <div className={css('gateTitle')}>Focus locked</div>
-              <div className={css('gateHint')}>Enter passcode to unlock</div>
+              <div className={css('gateTitle')}>{copy.focusLocked}</div>
+              <div className={css('gateHint')}>{copy.focusHint}</div>
               <input
                 className={css('codeInput')}
                 type="password"
@@ -184,9 +216,9 @@ export function EffectsOverlay({ whaleEnabled, focusEnabled, whaleOpacity, whale
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && code.length === 4) submit()
                 }}
-                aria-label="Focus lock passcode"
+                aria-label={copy.focusPasscode}
               />
-              <button type="button" className={css('unlockButton')} onClick={submit}>Unlock</button>
+              <button type="button" className={css('unlockButton')} onClick={submit}>{copy.focusUnlock}</button>
             </div>
           </div>
         )
