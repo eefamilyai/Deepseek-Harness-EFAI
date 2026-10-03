@@ -625,3 +625,92 @@ Where that lands in the current implementation:
 3. One correctness note for the move: the chosen account and the chosen model are two
    halves of one selection (`provider` + `model`), so a bubble click must submit the
    same `ModelSelection` the row click does, not a bare account id.
+
+### Model dropdown: the pool is one provider group per login, and the fold (2026-10-03)
+
+The container hook above is **resolved, and the premise was wrong**. There is no
+separate account list in the markup. A session-log snapshot of the open menu
+(`.recon` grep of `session-59771944…` at seq 3261, taken before the accordion
+existed) shows every row of the dropdown, and the free-web pool is **eleven provider
+groups**:
+
+    DeepSeek (free web)                              <- base route, 4 models
+    DeepSeek (free web) (deepseek.ee.1+hunt@gmail.com)     <- one group per login,
+    DeepSeek (free web) (deepseek.ee.1+v@gmail.com)           4 models each, all
+    … nine more …                                             `menuitemradio`
+
+So `state.groups` carries one provider route per pooled login (kiln registers
+`ds_direct` per account), each group renders through `MenuGroup` exactly like any other
+provider, and the "plain buttons with chevrons" an earlier pass saw were the root pane's
+drill-in cells - not the accounts. Nothing was unreachable: the accounts were simply ten
+more collapsed groups below the fold.
+
+**The fold, as built** (`packages/client/ui-polish/src/client/account-picker.ts`):
+
+- The pool is derived from the **titles**: a section is the base route when another
+  section's title is its own title followed by a parenthesised account. Ten suffixed
+  siblings is a pool; one is a naming coincidence and is left alone. No provider name is
+  hardcoded, so any provider that pools logins folds the same way.
+- The group holding the **checked row** keeps its place (it is the group the sheet
+  already opens), its heading is rewritten to the base title, and the choice row is
+  inserted directly after that heading. Every other pool section is **hidden**, never
+  moved or rebuilt.
+- A choice is a **click on the row it stands for**: the same model (`title` attribute)
+  under the chosen route, falling back to that route's first enabled row. Upstream's own
+  `choose()` then submits the same `ModelSelection` a row click would — account and model
+  stay two halves of one selection, and a `disabled` row (selection in flight) is never
+  clicked.
+- Choice labels are data, not copy: the account's own name (`deepseek.ee.1+hunt@gmail.com`
+  → `hunt`, what the operator calls these accounts), with the full route title as the
+  hover title. The two strings the plugin does own live in
+  `src/client/locales.ts` (`polish.account.legend`, `polish.account.auto`), registered
+  through `ctx.locale`; without that service the base choice falls back to the provider's
+  own name.
+
+**Contraction is now armed on the enhancer's marker.** The sheet's group rules select
+`[role='menu'][data-dsh-group-keys='true'] > [data-menu-group] …`, the attribute
+`model-groups.ts` writes on the menu it wired. Before this, the stylesheet would contract
+groups even where the enhancer never ran - and with no enhancer there is no click
+handler, so every other provider's rows would have been unreachable behind an
+un-openable title. With the marker, that deployment keeps upstream's flat column.
+
+**Verified live** on a spare web host (`node apps/cli/lib/bin.js web --no-open --port 50140`,
+fresh client bundles): the dropdown renders as `DeepSeek Account`, `DeepSeek`, `google`,
+`nvidia`, `anthropic`, `Token Harbor`, `Deepseek API`, `openrouter`, then the pooled
+provider as **one** `DeepSeek (free web)` group holding the two-line choice row
+`Auto hunt v f j1 t1 t2 / d1 claude1 claude2 merge` followed by exactly the four model
+rows. Clicking `hunt` moved the selection (the menu closed, no error), and reopening the
+menu showed `hunt` carrying the selected pill and the checked row scrolled into view;
+clicking `merge` restored the account the operator was on. Evidence:
+`.recon/polish-after-account-fold.png` (the fold), `polish-after-account-choice.png` (after
+choosing `hunt`), `polish-after-account-fold-zoom.png` (the pills at 4x). The card stayed
+its own 244px wide - the picker's `max-width: 15rem` keeps the wrap from sizing the card
+to its content.
+
+Two defects the live check caught, both fixed:
+
+1. **The pool level.** The titles nest: this deployment serves plain `DeepSeek`
+   (V4.1 routes) *and* `DeepSeek (free web)`, and the ten logins of the latter are titled
+   `DeepSeek (free web) (…+hunt@…)`. A longest-list heuristic therefore read the ten
+   logins as accounts of plain `DeepSeek` too, hid the real free web route, relabelled the
+   group on screen `DeepSeek`, and emitted a `free web` choice that pointed at the wrong
+   provider. A candidate's members must now be **leaves** - the parenthesised text carries
+   no further parentheses - so only the innermost pool folds and `DeepSeek` is left
+   untouched.
+2. **The selected pill's contrast.** The accent is a light blue (`deepseek-500`,
+   `deepseek-400`); as 11px text on the accent wash it measures ~3.2:1 in light and ~2.8:1
+   in dark, under AA. Selection is now an accent outline, an accent wash, a leading accent
+   dot and a heavier weight, with the text left on `--dsw-alias-label-primary`, which is
+   the menu's own high-contrast colour in both palettes.
+
+`tests/account-picker.client.spec.ts` (10 specs) covers the DOM behavior against jsdom,
+including the click-through, the fallback row, the base-route case, idempotence, the
+no-pool case, and the nested-title trap above.
+
+**A build trap worth remembering** (it cost a verification round): the client bundle
+inlines **`lib/types/**/*.js`**, not the sources - `dsh-tsc-sourcemap` loads the emitted
+file and its map. `pnpm exec tsdown --env.DSH_BUILD_FACE client` alone therefore rebundles
+whatever `tsc` last emitted, so a source edit needs
+`tsc -b tsconfig.client.json` **first**, and a stale bundle looks exactly like a fix that
+did not work (the CSS, which is read from source, updates in the same build, so the sheet
+and the script disagree).

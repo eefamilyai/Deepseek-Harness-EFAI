@@ -16,6 +16,11 @@ options, and tints selection, caret, and native controls from the product accent
 It selects only on design tokens, ARIA roles and states, the app frame's state
 attributes, and element selectors — never on a CSS-module class.
 
+One document observer adds the two affordances a stylesheet cannot express, both
+in the model dropdown: each provider group contracts to the one in use, and a
+provider that serves one route per login folds into a single group with one row
+of account choices.
+
 ## Table of Contents
 
 - [Use this package](#use-this-package)
@@ -47,6 +52,13 @@ panel state as attributes. A CSS-module class would be the one tempting,
 unavailable option: those are hashed per bundle and belong to packages this
 plugin does not build.
 
+The observer is the other half of the same decision, and it stays as narrow as the
+sheet: it reads the two attributes the group primitive publishes, writes the group
+titles' state and the account choices, and clicks the account row a choice stands
+for. It registers nothing, renders no React, and holds no state between menus — the
+dropdown is portalled and unmounted on close, so folding a menu is work that is
+re-done, not work that is stored.
+
 <a id="what-it-changes"></a>
 ## What it changes
 
@@ -57,6 +69,7 @@ plugin does not build.
 | Materials | `--dsw-shadow-lv*` and `--dsw-elevation-*` become layered contact/ambient/wide shadows; dark mode separates by hairline instead of black on black |
 | Overlays | `[role='dialog' | 'menu' | 'listbox' | 'tooltip']` gain a short pop-in, and `[data-closing]` a matching exit |
 | Controls | menus and options acknowledge a press with travel; disabled controls drop the pointer affordance; tabs and switches take the standard duration |
+| Model menu | provider groups contract to the provider in use, each title toggling on a click, Enter or Space, and a provider that pools logins folds into one group whose accounts are one row of choices |
 | Typography | font smoothing, `text-wrap: pretty` for prose and `balance` for headings, tabular code numerals, accent-tinted selection, caret, and native controls |
 
 Two rules are load-bearing and asserted by specs: the sheet never sets the
@@ -64,11 +77,17 @@ Two rules are load-bearing and asserted by specs: the sheet never sets the
 sets `animation-timing-function` (which would ease the shimmer, marquee, and
 spinner loops that are linear on purpose).
 
+The sheet's model-menu rules are armed on the marker the observer writes on the
+menu it wired. Contraction with no way to open a group would leave every other
+provider's rows unreachable, so a menu the observer never reached — no locale
+service, markup that renders no group sections — keeps upstream's flat column.
+
 No runtime invariant companion is published because the package holds no state
-and registers no service: it injects one stylesheet, and its specs assert the
-sheet's contract — the selectors it may use, the tokens it must retune, the two
-rules above, and that the reduced-motion block collapses every duration it
-introduces.
+and registers no service: it injects one stylesheet, registers two words for the
+account choices, and installs one observer, and its specs assert the sheet's
+contract — the selectors it may use, the tokens it must retune, the two rules
+above, the fold's DOM behavior, and that the reduced-motion block collapses every
+duration it introduces.
 
 ## Model Experience
 
@@ -83,5 +102,8 @@ No model request prefix changes.
 <a id="known-limitations-and-deferred-work"></a>
 
 - The app frame animates `grid-template-columns` while a panel toggles, which is a layout animation and cannot be replaced from here: the track width is the panel's layout, and only the owning component can animate a transform instead. Retuning the curve and duration is what this layer can do.
+- The account fold is DOM-level and needs the titles to name the logins: a provider whose groups do not render as `Base (account)` pairs keeps its per-login groups, because no name-independent signal distinguishes them.
+- The fold lives inside the group the menu renders, so a search query that filters that group out of the menu takes the row of choices with it; reopening the menu rebuilds both.
+- A choice clicks the row it stands for, so a deployment where those rows are `disabled` — a selection already in flight — takes no choice until it settles.
 - Exit animations cover the components that publish a closing state; a menu that unmounts with no such state still disappears at once, because CSS cannot delay an unmount.
 - Elevation is retuned per palette through `--dsw-shadow-*`; a surface that hardcodes its own shadow instead of reading a token keeps it.

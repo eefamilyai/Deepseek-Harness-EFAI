@@ -1,25 +1,25 @@
 /**
- * Provider-group keyboard and pointer affordances for the model dropdown.
+ * The model dropdown's menu affordances: the provider groups' keys and the account
+ * pool's row of choices.
  *
- * The sheet beside this module contracts every provider group except the one in
- * use, and leaves hover and focus as the way to open the others. That is enough to
- * look right and not enough to use: a group has to open on a click or a key, and a
- * contracted group must not leave its rows in the arrow-key order, where upstream's
- * roving focus would land on rows the operator cannot see.
+ * The sheet beside this module contracts every provider group except the one in use.
+ * That is enough to look right and not enough to use: a group has to open on a click or
+ * a key, and a contracted group must not leave its rows in the arrow-key order, where
+ * upstream's roving focus would land on rows the operator cannot see.
+ * `account-picker.ts` folds a provider's per-login routes into one row of choices.
  *
- * This module adds both, and adds nothing else. It reads the contract the group
- * primitive publishes — `data-menu-group` on the section, `data-menu-group-heading`
- * on its title, `menuitemradio` rows inside — and never touches upstream's element
- * identity, its classes, or its React state. A deployment whose menu lacks those
- * attributes gets the stylesheet alone: no headings are wired and the arrow keys
- * are left to the component.
+ * This module reads the contract the group primitive publishes — `data-menu-group` on
+ * the section, `data-menu-group-heading` on its title, `menuitemradio` rows inside — and
+ * never touches upstream's element identity, its classes, or its React state. A
+ * deployment whose menu lacks those attributes gets the stylesheet alone: no headings
+ * are wired and the arrow keys are left to the component.
  *
- * Rows are hidden by CSS, so this module cannot mark them `disabled` or
- * `tabindex="-1"`: React owns both properties and would overwrite them on its next
- * render. Instead the arrow keys are intercepted on the menu container and moved
- * between the rows that are actually visible, which is a no-op while every group is
- * open.
+ * Rows are hidden by CSS, so this module cannot mark them `disabled` or `tabindex="-1"`:
+ * React owns both properties and would overwrite them on its next render. Instead the
+ * arrow keys are intercepted on the menu container and moved between the rows that are
+ * actually visible, which is a no-op while every group is open.
  */
+import { wireAccountPicker, type AccountPickerCopy } from './account-picker.ts'
 
 /** Attribute the group primitive puts on each provider section. */
 const GROUP = 'data-menu-group'
@@ -74,8 +74,8 @@ function wire(group: HTMLElement): void {
  * @returns whether focus moved.
  */
 function step(menu: HTMLElement, step: number): boolean {
-  // Every row is a button: model rows carry `menuitemradio`, account rows drill in
-  // as plain buttons. Group headings are divs, so they never enter this list.
+  // Every row is a button: model rows and the account choices carry `menuitemradio`.
+  // Group headings are divs, so they never enter this list.
   const rows = [...menu.querySelectorAll<HTMLElement>('button')].filter(visible)
   if (rows.length === 0) return false
   const current = rows.findIndex(row => row === document.activeElement)
@@ -87,19 +87,25 @@ function step(menu: HTMLElement, step: number): boolean {
 }
 
 /**
- * Wire every provider group inside one menu, and keep its arrow keys honest.
+ * Wire every provider group inside one menu, fold its account pool, and keep its
+ * arrow keys honest.
  * @param menu - the element carrying `role="menu"`.
- * @returns nothing; the listener lives as long as the element does.
+ * @param copy - the owning plugin's localized copy for the account choices.
+ * @returns nothing; the listeners live as long as the element does.
  */
-function wireMenu(menu: HTMLElement): void {
-  if (menu.dataset.dshGroupKeys === 'true') return
-  menu.dataset.dshGroupKeys = 'true'
-  for (const group of menu.querySelectorAll<HTMLElement>(`:scope > [${GROUP}]`)) wire(group)
-  menu.addEventListener('keydown', (event) => {
-    const delta = STEPS[event.key]
-    if (delta === undefined) return
-    if (step(menu, delta)) event.stopPropagation()
-  }, true)
+function wireMenu(menu: HTMLElement, copy: AccountPickerCopy): void {
+  if (menu.dataset.dshGroupKeys !== 'true') {
+    menu.dataset.dshGroupKeys = 'true'
+    for (const group of menu.querySelectorAll<HTMLElement>(`:scope > [${GROUP}]`)) wire(group)
+    menu.addEventListener('keydown', (event) => {
+      const delta = STEPS[event.key]
+      if (delta === undefined) return
+      if (step(menu, delta)) event.stopPropagation()
+    }, true)
+  }
+  // A group can be rendered into a menu that already exists, so the pool is folded on
+  // every scan; a menu already folded returns from this immediately.
+  wireAccountPicker(menu, copy)
 }
 
 /**
@@ -108,17 +114,22 @@ function wireMenu(menu: HTMLElement): void {
  * The dropdown is portalled to the document body and unmounted when it closes, so
  * there is nothing to subscribe to and nothing to hold: every scan is idempotent,
  * and disposal only stops the observer.
+ * @param copy - the owning plugin's localized copy for the account choices.
  * @returns disposer that disconnects the observer.
  */
-export function installModelGroups(): () => void {
-  const scan = (root: ParentNode): void => {
-    for (const menu of root.querySelectorAll<HTMLElement>('[role="menu"]')) wireMenu(menu)
-  }
-  scan(document)
+export function installModelGroups(copy: AccountPickerCopy = {}): () => void {
+  const scan = (menu: HTMLElement): void => { wireMenu(menu, copy) }
+  for (const menu of document.querySelectorAll<HTMLElement>('[role="menu"]')) scan(menu)
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       for (const node of record.addedNodes) {
-        if (node instanceof HTMLElement) scan(node.matches('[role="menu"]') ? node.parentNode ?? document : node)
+        if (!(node instanceof HTMLElement)) continue
+        if (node.matches('[role="menu"]')) scan(node)
+        for (const menu of node.querySelectorAll<HTMLElement>('[role="menu"]')) scan(menu)
+        // A group rendered into a menu that is already on screen reaches it through
+        // the ancestor chain rather than through this subtree.
+        const owner = node.closest<HTMLElement>('[role="menu"]')
+        if (owner !== null) scan(owner)
       }
     }
   })

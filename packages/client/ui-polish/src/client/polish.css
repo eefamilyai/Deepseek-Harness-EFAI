@@ -225,12 +225,17 @@ body:not([data-ds-dark-theme]) {
  *
  * Rows contract per provider instead. `MenuGroup` publishes `data-menu-group` on the
  * section and `data-menu-group-heading` on its title, and everything else the section
- * holds is a row: `menuitemradio` for a model, a plain button that drills into its
- * own pane for an account route. So a row is anything that is not the title or the
- * position sentinel, which is also what keeps this correct if a provider ever renders
- * a wrapper instead of bare buttons. The current model's `aria-checked` marks the
- * provider in use, and the default is exactly what was asked for: everything closed
- * except that one.
+ * holds is a row: `menuitemradio` for a model, and the choice row `account-picker.ts`
+ * builds for a provider that pools logins. So a row is anything that is not the title
+ * or the position sentinel, which is also what keeps this correct if a provider ever
+ * renders a wrapper instead of bare buttons. The current model's `aria-checked` marks
+ * the provider in use, and the default is exactly what was asked for: everything
+ * closed except that one.
+ *
+ * Every rule in this section is armed on the marker the enhancer writes on the menu it
+ * wired. Contraction with no way to open a group would leave every other provider's
+ * rows unreachable, so a menu the enhancer did not reach keeps upstream's flat column
+ * instead of a list of titles that cannot be opened.
  *
  * Opening is deliberate and nothing else: the group holding the current model, or a
  * click (or Enter and Space) through the enhancer. Hover is absent because the
@@ -240,14 +245,17 @@ body:not([data-ds-dark-theme]) {
  *
  * `display` is the property that hides a row, not `visibility`: a hidden row must
  * leave the layout entirely, and the enhancer in `model-groups.ts` is what keeps the
- * keyboard honest by disabling rows it has hidden. */
-[data-menu-group] > :not([data-menu-group-heading], [data-menu-group-start]) {
+ * keyboard honest by moving focus between the rows that are on screen. */
+[role='menu'][data-dsh-group-keys='true']
+  > [data-menu-group] > :not([data-menu-group-heading], [data-menu-group-start]) {
   display: none;
 }
 
-[data-menu-group]:has(> [aria-checked='true'])
+[role='menu'][data-dsh-group-keys='true']
+  > [data-menu-group]:has(> [aria-checked='true'])
   > :not([data-menu-group-heading], [data-menu-group-start]),
-[data-menu-group]:has(> [data-menu-group-heading][aria-expanded='true'])
+[role='menu'][data-dsh-group-keys='true']
+  > [data-menu-group]:has(> [data-menu-group-heading][aria-expanded='true'])
   > :not([data-menu-group-heading], [data-menu-group-start]) {
   display: flex;
 }
@@ -279,14 +287,86 @@ body:not([data-ds-dark-theme]) {
 }
 
 /* A provider with many routes scrolls inside its own box instead of stretching the
- * dropdown: the pool's eleven accounts are the case this exists for, and it keys on
- * the count rather than on the provider's name, so a localized label cannot miss it.
- * The group's own heading is sticky, so the box keeps its title while it scrolls. */
-[data-menu-group]:has(> :nth-child(n + 12)) {
+ * dropdown, and it keys on the row count rather than on the provider's name, so a
+ * localized label cannot miss it. The group's own heading is sticky, so the box keeps
+ * its title while it scrolls. */
+[role='menu'][data-dsh-group-keys='true'] > [data-menu-group]:has(> :nth-child(n + 12)) {
   max-height: 15rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   border-radius: var(--dsw-radius-sm);
+}
+
+/* A provider that pools logins is one group with one row of account choices, not one
+ * group per login: the enhancer hides every pool section except the one in use and puts
+ * its choice row under that section's title. Hidden rather than removed — a choice
+ * clicks the row it stands for, which is what keeps the account and the model two
+ * halves of one selection. */
+[data-menu-group][data-dsh-pool-hidden] {
+  display: none;
+}
+
+/* The choice row: wrapping pills with a scroll cap. Its width is capped in `rem` rather
+ * than set to `100%`, because a wrapping flex container's intrinsic width is one line of
+ * every choice and the dropdown card is sized to its content — uncapped, an
+ * eleven-account pool would widen the card to its maximum. */
+[data-dsh-picker] {
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 15rem;
+  max-height: 5rem;
+  margin: 2px 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A capsule radius, so it states the circular arc back to the theme's universal
+ * superellipse, which would otherwise square off the pill's ends. */
+[data-dsh-picker] > [role='menuitemradio'] {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 1px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--ds-transition-duration-fast);
+  transition-timing-function: var(--ds-ease-standard);
+}
+
+[data-dsh-picker] > [role='menuitemradio']:hover {
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The route in use: an accent outline, an accent wash, a leading dot, and a heavier
+ * weight. The text stays the menu's own label colour, because the accent is a light
+ * blue that clears 4.5:1 on neither palette's menu surface, and this pill is 11px.
+ * The dot states its own circular arc back to the theme's superellipse. */
+[data-dsh-picker] > [role='menuitemradio'][aria-checked='true'] {
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+[data-dsh-picker] > [role='menuitemradio'][aria-checked='true']::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-state-business-primary);
 }
 
 /* ----------------------------------------------------------------------------

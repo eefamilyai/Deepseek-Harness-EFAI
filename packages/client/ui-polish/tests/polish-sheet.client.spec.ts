@@ -12,12 +12,19 @@ import { describe, expect, it } from 'vitest'
 
 const SHEET = readFileSync(resolve(process.cwd(), 'packages/client/ui-polish/src/client/polish.css'), 'utf8')
 const CSS = SHEET.replace(/\/\*[\s\S]*?\*\//g, ' ')
+/** The same text with whitespace runs collapsed, so a selector list that wraps reads as one string. */
+const FLAT = CSS.replace(/\s+/g, ' ')
 
 /** The declarations of one rule, so an assertion reads as the rule it checks. */
 function ruleFor(css: string, selector: string): string {
   const start = css.indexOf(`${selector} {`)
   if (start < 0) return ''
   return css.slice(start, css.indexOf('}', start))
+}
+
+/** The declarations of one rule whose selector may wrap across lines. */
+function flatRule(selector: string): string {
+  return ruleFor(FLAT, selector)
 }
 
 describe('polish sheet', () => {
@@ -73,12 +80,13 @@ describe('polish sheet', () => {
   it('contracts provider groups except the one in use', () => {
     // The group primitive's own attributes are the contract: a section, a heading,
     // and menuitemradio rows whose aria-checked marks the current one.
-    const contracted = ruleFor(CSS, '[data-menu-group] > :not([data-menu-group-heading], [data-menu-group-start])')
+    const armed = "[role='menu'][data-dsh-group-keys='true'] > [data-menu-group]"
+    const contracted = flatRule(`${armed} > :not([data-menu-group-heading], [data-menu-group-start])`)
     expect(contracted).toContain('display: none')
     // The open state is one arm of a selector list, so it is read from the sheet.
     // A row is anything but the title and the position sentinel, so the rule holds
     // whether a provider renders bare buttons or a wrapper.
-    expect(CSS).toContain("[data-menu-group]:has(> [aria-checked='true'])")
+    expect(FLAT).toContain(`${armed}:has(> [aria-checked='true'])`)
     // Only two openers: the checked row's group, and the heading's own state, which
     // the enhancer writes. Hover would open groups the pointer merely crossed, and
     // `:focus-within` would open whichever group the menu focuses first.
@@ -86,15 +94,46 @@ describe('polish sheet', () => {
     expect(CSS).not.toContain(':focus-within > :not(')
     // The enhancer writes aria-expanded on the heading, so the sheet must read it there.
     expect(CSS).toContain("[data-menu-group-heading][aria-expanded='true']")
+    // Contraction is armed on the marker the enhancer writes on the menu it wired: a
+    // menu it never reached would otherwise show titled groups that cannot be opened.
+    expect(CSS).not.toMatch(/^\[data-menu-group\] > :not\(/m)
   })
 
   it('gives a many-route provider its own scroll box', () => {
     // Keyed on the row count, never on a localized provider name.
-    expect(CSS).toContain('[data-menu-group]:has(> :nth-child(n + 12))')
-    const box = ruleFor(CSS, '[data-menu-group]:has(> :nth-child(n + 12))')
+    const box = flatRule("[role='menu'][data-dsh-group-keys='true'] > [data-menu-group]:has(> :nth-child(n + 12))")
     expect(box).toContain('max-height')
     expect(box).toContain('overflow-y: auto')
     expect(box).toContain('overscroll-behavior: contain')
+  })
+
+  it('folds a provider that pools logins into one row of account choices', () => {
+    // The enhancer hides every pool route but the one in use; the row it builds under
+    // that route's title is the only place this plugin paints its own control.
+    expect(flatRule('[data-menu-group][data-dsh-pool-hidden]')).toContain('display: none')
+    const picker = flatRule('[data-dsh-picker]')
+    expect(picker).toContain('flex-wrap: wrap')
+    expect(picker).toContain('max-height')
+    expect(picker).toContain('overflow-y: auto')
+    expect(picker).toContain('overscroll-behavior: contain')
+    // A wrapping flex container's intrinsic width is one line of every choice, so the
+    // cap has to be a length: the dropdown card is sized to its content.
+    expect(picker).toContain('max-width: 15rem')
+    // Capsule ends need the circular arc back, which the theme's superellipse would
+    // otherwise square off.
+    const pill = flatRule("[data-dsh-picker] > [role='menuitemradio']")
+    expect(pill).toContain('border-radius: 999px')
+    expect(pill).toContain('corner-shape: round')
+    // The choice in use reads from tokens both palettes carry, never a literal colour,
+    // and keeps its text on the menu's label colour: the accent is a light blue that
+    // clears 4.5:1 on neither palette's menu surface at this size.
+    const checked = flatRule("[data-dsh-picker] > [role='menuitemradio'][aria-checked='true']")
+    expect(checked).toContain('border-color: var(--dsw-alias-state-business-primary)')
+    expect(checked).toContain('background: var(--dsw-alias-interactive-bg-hover-accent)')
+    expect(checked).toContain('color: var(--dsw-alias-label-primary)')
+    const dot = flatRule("[data-dsh-picker] > [role='menuitemradio'][aria-checked='true']::before")
+    expect(dot).toContain('background: var(--dsw-alias-state-business-primary)')
+    expect(dot).toContain('corner-shape: round')
   })
 
   it('leaves the panel choreography alone', () => {
