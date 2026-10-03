@@ -674,18 +674,27 @@ groups even where the enhancer never ran - and with no enhancer there is no clic
 handler, so every other provider's rows would have been unreachable behind an
 un-openable title. With the marker, that deployment keeps upstream's flat column.
 
-**Verified live** on a spare web host (`node apps/cli/lib/bin.js web --no-open --port 50140`,
-fresh client bundles): the dropdown renders as `DeepSeek Account`, `DeepSeek`, `google`,
-`nvidia`, `anthropic`, `Token Harbor`, `Deepseek API`, `openrouter`, then the pooled
-provider as **one** `DeepSeek (free web)` group holding the two-line choice row
-`Auto hunt v f j1 t1 t2 / d1 claude1 claude2 merge` followed by exactly the four model
-rows. Clicking `hunt` moved the selection (the menu closed, no error), and reopening the
-menu showed `hunt` carrying the selected pill and the checked row scrolled into view;
-clicking `merge` restored the account the operator was on. Evidence:
-`.recon/polish-after-account-fold.png` (the fold), `polish-after-account-choice.png` (after
-choosing `hunt`), `polish-after-account-fold-zoom.png` (the pills at 4x). The card stayed
-its own 244px wide - the picker's `max-width: 15rem` keeps the wrap from sizing the card
-to its content.
+**Verified live** on a spare web host (spare hosts on `50140` and `50144`, fresh client
+bundles): the dropdown renders as `DeepSeek Account`, `DeepSeek`, `google`, `nvidia`,
+`anthropic`, `Token Harbor`, `Deepseek API`, `openrouter`, then the pooled provider as
+**one** `DeepSeek (free web)` group holding the choice row followed by exactly the four
+model rows. Clicking `hunt` moved the selection (the menu closed, no error), and reopening
+the menu showed `hunt` carrying the selected pill; clicking `merge` restored the account the
+operator was on. Evidence: `.recon/polish-after-account-fold.png` (the fold),
+`polish-after-account-choice.png` (after choosing `hunt`), `polish-after-account-equal.png`
+and `-equal-zoom.png` (the equal-size row, the state now shipped). The card stayed its own
+244px wide - the picker's `max-width: 15rem` keeps the wrap from sizing the card to its
+content.
+
+The operator then asked for the pills to be **consistent**: equal size, or one per line.
+They are equal now: one fixed `4.5rem` cell per choice with the label centred, so a pool
+reads as a block of equal pills three across and a narrow name cannot sit off to one side of
+its own pill; the dot marking the route in use is painted out of flow so the label keeps the
+centre its neighbours have. The block is taller than the ragged row it replaced, and the
+model rows paid for it - the component scrolls the row in use into view when the pane opens,
+which happens *before* this module inserts the choice row, so ten accounts pushed the models
+below the fold of a menu nobody had scrolled yet. The fold now scrolls that row back into
+view, and the spec asserts both the call and the element it targets.
 
 Two defects the live check caught, both fixed:
 
