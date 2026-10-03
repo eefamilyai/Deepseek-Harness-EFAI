@@ -696,6 +696,17 @@ which happens *before* this module inserts the choice row, so ten accounts pushe
 below the fold of a menu nobody had scrolled yet. The fold now scrolls that row back into
 view, and the spec asserts both the call and the element it targets.
 
+The operator then asked what a login with no `+` tag looks like - the base account, or a
+mobile number. It was the weak spot of the label rule: the tag is what makes a label short,
+so an untagged login fell back to its address, and an address longer than a `4.5rem` cell was
+cut by the cell's own ellipsis, which keeps the *front*: `deepseek.ee.1@gmail.com` beside
+`deepseek.ee.2@gmail.com` would both have read `deepseek…`. An over-long label now keeps its
+**tail** with a leading ellipsis (`…seek.ee.1` beside `…seek.ee.2`), so it is marked as
+shortened and two logins that share a prefix stay apart; a leading `+` counts as a dialling
+code rather than a tag, so a mobile login keeps its shape. Four tagless shapes are covered by
+the spec and the choice's tooltip still carries the full route name. The pool this deployment
+serves is unaffected - every label in it is seven characters or fewer.
+
 Two defects the live check caught, both fixed:
 
 1. **The pool level.** The titles nest: this deployment serves plain `DeepSeek`
