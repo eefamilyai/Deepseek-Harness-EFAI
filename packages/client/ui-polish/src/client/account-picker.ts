@@ -250,4 +250,8 @@ export function wireAccountPicker(menu: HTMLElement, copy: AccountPickerCopy): v
   const picker = build(routes, marked, current, copy)
   if (heading === null) open.section.prepend(picker)
   else heading.after(picker)
+  // The row of choices takes the space the row in use was occupying, and the component
+  // scrolled that row into view before this one existed — with a pool of ten, the models
+  // would sit below the fold of a menu the operator has not scrolled yet.
+  current?.scrollIntoView({ block: 'nearest' })
 }

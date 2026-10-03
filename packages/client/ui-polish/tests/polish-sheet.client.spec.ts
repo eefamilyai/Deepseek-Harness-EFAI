@@ -124,6 +124,10 @@ describe('polish sheet', () => {
     const pill = flatRule("[data-dsh-picker] > [role='menuitemradio']")
     expect(pill).toContain('border-radius: 999px')
     expect(pill).toContain('corner-shape: round')
+    // One size for every choice: a pool's logins differ in length, and letting each
+    // pill size to its own text wraps the row into a ragged edge.
+    expect(pill).toContain('flex: 0 0 4.5rem')
+    expect(pill).toContain('text-align: center')
     // The choice in use reads from tokens both palettes carry, never a literal colour,
     // and keeps its text on the menu's label colour: the accent is a light blue that
     // clears 4.5:1 on neither palette's menu surface at this size.
@@ -134,6 +138,8 @@ describe('polish sheet', () => {
     const dot = flatRule("[data-dsh-picker] > [role='menuitemradio'][aria-checked='true']::before")
     expect(dot).toContain('background: var(--dsw-alias-state-business-primary)')
     expect(dot).toContain('corner-shape: round')
+    // Out of flow, so the label keeps the centre its neighbours have.
+    expect(dot).toContain('position: absolute')
   })
 
   it('leaves the panel choreography alone', () => {

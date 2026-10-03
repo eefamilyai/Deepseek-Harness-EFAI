@@ -306,29 +306,31 @@ body:not([data-ds-dark-theme]) {
   display: none;
 }
 
-/* The choice row: wrapping pills with a scroll cap. Its width is capped in `rem` rather
- * than set to `100%`, because a wrapping flex container's intrinsic width is one line of
- * every choice and the dropdown card is sized to its content — uncapped, an
- * eleven-account pool would widen the card to its maximum. */
+/* The choice row: equal pills that wrap into a block, with a scroll cap. Its width is
+ * capped in `rem` rather than set to `100%`, because a wrapping flex container's
+ * intrinsic width is one line of every choice and the dropdown card is sized to its
+ * content — uncapped, an eleven-account pool would widen the card to its maximum. */
 [data-dsh-picker] {
   flex-wrap: wrap;
   gap: 3px;
   max-width: 15rem;
-  max-height: 5rem;
+  max-height: 6.5rem;
   margin: 2px 0 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-/* A capsule radius, so it states the circular arc back to the theme's universal
- * superellipse, which would otherwise square off the pill's ends. */
+/* One size for every choice, fixed in `rem`: a pool's logins differ in length
+ * (`v` beside `claude1`), and letting each pill size to its own text wraps the row into
+ * a ragged edge. A capsule radius states the circular arc back to the theme's universal
+ * superellipse, which would otherwise square off the pill's ends, and the label is
+ * centred in its cell so a narrow name does not sit off to one side. */
 [data-dsh-picker] > [role='menuitemradio'] {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
+  position: relative;
+  display: block;
+  flex: 0 0 4.5rem;
   min-height: 22px;
-  padding: 1px 8px;
+  padding: 2px 6px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px;
   corner-shape: round;
@@ -336,7 +338,10 @@ body:not([data-ds-dark-theme]) {
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 16px;
+  text-align: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition-property: background-color, border-color, color;
   transition-duration: var(--ds-transition-duration-fast);
@@ -351,7 +356,8 @@ body:not([data-ds-dark-theme]) {
 /* The route in use: an accent outline, an accent wash, a leading dot, and a heavier
  * weight. The text stays the menu's own label colour, because the accent is a light
  * blue that clears 4.5:1 on neither palette's menu surface, and this pill is 11px.
- * The dot states its own circular arc back to the theme's superellipse. */
+ * The dot states its own circular arc back to the theme's superellipse, and it is
+ * painted out of flow so the label keeps the centre its neighbours have. */
 [data-dsh-picker] > [role='menuitemradio'][aria-checked='true'] {
   border-color: var(--dsw-alias-state-business-primary);
   background: var(--dsw-alias-interactive-bg-hover-accent);
@@ -361,9 +367,12 @@ body:not([data-ds-dark-theme]) {
 
 [data-dsh-picker] > [role='menuitemradio'][aria-checked='true']::before {
   content: '';
-  flex: 0 0 auto;
+  position: absolute;
+  top: 50%;
+  left: 7px;
   width: 5px;
   height: 5px;
+  margin-top: -2.5px;
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-alias-state-business-primary);

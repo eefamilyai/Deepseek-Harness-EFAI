@@ -6,8 +6,16 @@
  * row of account choices, the models untouched — and the click-through that keeps a
  * choice a click on the row it stands for.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { wireAccountPicker } from '../src/client/account-picker.ts'
+
+/** jsdom implements no layout, so the scroll a fold performs for the row in use is recorded. */
+const scrolledIntoView = vi.fn<(options?: boolean | ScrollIntoViewOptions) => void>()
+
+beforeEach(() => {
+  scrolledIntoView.mockClear()
+  Element.prototype.scrollIntoView = scrolledIntoView
+})
 
 /** The four routes the free web provider serves under every login. */
 const MODELS = ['DeepSeek', 'DeepSeek · Thinking', 'DeepSeek · Search', 'DeepSeek · Thinking + Search']
@@ -105,6 +113,7 @@ function choices(root: HTMLElement): HTMLElement[] {
 describe('account picker', () => {
   it('folds ten login routes into one group and one row of choices', () => {
     const root = menu({ route: 3, model: 'DeepSeek · Thinking' })
+    const inUse = root.querySelector('[role="menuitemradio"][aria-checked="true"]')
     wireAccountPicker(root, { legend: 'Account', auto: 'Auto' })
     const picker = root.querySelector<HTMLElement>('[data-dsh-picker]')
     expect(picker?.getAttribute('aria-label')).toBe('Account')
@@ -125,6 +134,10 @@ describe('account picker', () => {
     expect(choices(root)[4]?.getAttribute('aria-checked')).toBe('true')
     expect(root.querySelector('[data-dsh-picker] [aria-checked="true"]')?.getAttribute('title'))
       .toBe('DeepSeek (free web) (deepseek.ee.1+j1@gmail.com)')
+    // The row in use was scrolled into the menu before the choices took its space, so the
+    // fold puts it back in view — otherwise ten choices push the models below the fold.
+    expect(scrolledIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    expect(scrolledIntoView.mock.instances.at(-1)).toBe(inUse)
   })
 
   it('clicks the row a choice stands for, under the model in use', () => {
@@ -150,6 +163,8 @@ describe('account picker', () => {
     expect(root.children[0]?.querySelector('[data-menu-group-heading]')?.textContent).toBe('DeepSeek (free web)')
     expect(choices(root).filter(choice => choice.getAttribute('aria-checked') === 'true')).toHaveLength(0)
     expect([...root.children].filter(section => section.hasAttribute('data-dsh-pool-hidden'))).toHaveLength(10)
+    // Nothing is in use, so there is no row to bring back into view.
+    expect(scrolledIntoView).not.toHaveBeenCalled()
   })
 
   it('names the unpinned route by the provider when the plugin has no copy', () => {
