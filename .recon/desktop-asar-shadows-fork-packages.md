@@ -835,3 +835,40 @@ boot, so turns after the next restart get the repair; the built `lib/` was verif
 The two failed attempts along the way were mine, not the fix's - a probe asserted the delimiter
 regex on a slice that began at a dash instead of at the run's pipe, and the first guard required
 the header to end with a pipe, which the real text does not have.
+
+### The table repair, second attempt: every route, not one adapter (2026-10-03)
+
+The first attempt (`a23fb23acf`) put the repair in the Kiln adapter. The operator restarted,
+the bundle carried it, and the first table still arrived glued - because **the session was not
+running on a Kiln route at all**: the log of that turn reads
+`"provider":"deepseek-account"`, served by `llm-deepseek-account` over `llm-deepseek`, and the
+Kiln adapter never saw the text. Reverted in `244ddb1c00`.
+
+The repair now lives in **`packages/llm/llm-markdown-fidelity`** (`ffd953998f`), a fork-owned
+row on `llm/stream` - the waterfall every provider route passes through, API or text channel.
+Wiring is the standard fork set: a row in `packages/bundle/efai-base` right after
+`llm-text-toolcalls` (inside it, because that reader rebuilds a block from the deltas below it
+and would discard a repair applied to the block alone), the dependency in that bundle's
+manifest, one reference line in the host aggregate (carried by the overlay's own
+`tsconfig.patch`), a junction in `~/.dsh/profiles/node_modules/@deepseek-ai`, and the
+generators' catalogs. The seam still verifies frozen at 46 files.
+
+A glue can be split across deltas, so the pass withholds only the tail that could still turn
+out to be a delimiter row - from the first pipe whose remainder is delimiter material - and
+settles it when a character no run can contain arrives. That gives the property the specs
+assert: the same repaired stream however the source cut the text, including one character at a
+time. 20 specs: 12 on the whole-text repair (alignment, indentation, three columns, prose,
+fences, column mismatch, a header with nothing under it) and 8 on the pass (every split, the
+block it hands over, chunks it must not touch, a block the source built another way).
+
+**Live check, honestly bounded.** A spare host booted with the row and answered a prompt that
+asked for the glued form as a real table: recorded text
+`| Route title | Choice \n|---|---|\n| DeepSeek (free web) | Auto |\n| hunt@example.com | hunt |`.
+Reading the deltas of that turn shows the *model* wrote the healthy form itself
+(`"| Choice", " ", "\n|---|---|\n"`), so that run proves the pass composes and breaks nothing,
+not the repair path - the model would not reproduce the malformed input on demand. The repair
+path itself is proven by the specs, including the verbatim glue from turn 24 of this session.
+
+**It needs one more restart**: the row is new, so the running app has not loaded it. After the
+restart, the next table is the end-to-end proof, and it can be checked in the log rather than
+by eye.
