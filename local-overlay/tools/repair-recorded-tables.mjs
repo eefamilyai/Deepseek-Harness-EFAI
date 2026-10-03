@@ -15,8 +15,10 @@
  *
  * It runs on a Session *file*, so it must not run while the owning host writes it: the host
  * holds the authoritative log in memory and rewrites the file as it compacts, which would
- * silently revert an edit made underneath it. Pass `--wait-for-pid` to have the tool wait for
- * a host to exit first.
+ * silently revert an edit made underneath it. `--wait-for-pid` waits for a host to exit;
+ * `--held <session-id>` names the session that host will reopen, which this tool leaves for a
+ * later pass once no host is running at all; and a log modified inside `--settle` seconds is
+ * skipped as possibly being written right now.
  *
  * Every changed file is backed up beside itself (`<name>.bak-<stamp>`) and verified after the
  * write: the event count, every event `seq`, and every repaired text are read back before the
@@ -25,8 +27,9 @@
  * Usage:
  *   node local-overlay/tools/repair-recorded-tables.mjs                     # report only
  *   node local-overlay/tools/repair-recorded-tables.mjs --apply             # rewrite
- *   node local-overlay/tools/repair-recorded-tables.mjs --apply --wait-for-pid 18296
- *   node local-overlay/tools/repair-recorded-tables.mjs --sessions <dir> --apply
+ *   node local-overlay/tools/repair-recorded-tables.mjs --apply --wait-for-pid 18296 \
+ *     --held session-59771944-fd85-4f04-9dbe-e738901702f2
+ *   node local-overlay/tools/repair-recorded-tables.mjs --sessions <dir> --apply --settle 0
  */
 
 import fs from 'node:fs'
@@ -44,16 +47,20 @@ const REPAIR_MODULE = path.resolve(HERE, '../../packages/llm/llm-markdown-fideli
 function options(argv) {
   const parsed = {
     apply: false,
-    allowRunning: false,
     sessions: path.join(process.env.DSH_HOME ?? path.join(os.homedir(), '.dsh'), 'sessions'),
     waitForPid: undefined,
+    held: undefined,
+    settleSeconds: 120,
+    holdMs: 6 * 60 * 60 * 1000,
   }
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index]
     if (flag === '--apply') parsed.apply = true
-    else if (flag === '--allow-running') parsed.allowRunning = true
     else if (flag === '--sessions') parsed.sessions = argv[++index]
     else if (flag === '--wait-for-pid') parsed.waitForPid = Number(argv[++index])
+    else if (flag === '--held') parsed.held = argv[++index]
+    else if (flag === '--settle') parsed.settleSeconds = Number(argv[++index])
+    else if (flag === '--hold-ms') parsed.holdMs = Number(argv[++index])
     else throw new Error(`unknown argument ${flag}`)
   }
   return parsed
@@ -234,16 +241,8 @@ function verify(units, repairTableLines) {
   return unfixed === 0 ? null : `${String(unfixed)} text block(s) still misread after repair`
 }
 
-/**
- * Wait until the named host pid is gone and no host of that image is running.
- *
- * A repair edits a file the host owns: the host holds the authoritative log in memory and
- * rewrites the file as it compacts, so an edit made underneath it is silently reverted at
- * best. Waiting for every host of the image — not just the pid named — covers the restart the
- * operator may have performed while this waited, and the appending writer of the replacement.
- * @param pid - the host process to wait for.
- */
-async function waitForExit(pid) {
+/** Wait until the named host pid is gone. */
+async function waitForPid(pid) {
   const alive = (candidate) => {
     try {
       process.kill(candidate, 0)
@@ -252,10 +251,27 @@ async function waitForExit(pid) {
       return false
     }
   }
-  for (;;) {
-    if (!alive(pid) && !hostRunning()) return
-    await new Promise(resolve => setTimeout(resolve, 5000))
+  while (alive(pid)) await new Promise(resolve => setTimeout(resolve, 2000))
+}
+
+/**
+ * Wait until no host of the app image is running, or the budget runs out.
+ *
+ * The first two minutes are polled every second: a restart closes and reopens the app, and
+ * the window with no host is the only safe moment to rewrite the log that host will reopen.
+ * @param timeoutMs - how long to wait.
+ * @returns whether the wait succeeded.
+ */
+async function waitForNoHost(timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  let waited = 0
+  while (hostRunning()) {
+    if (Date.now() > deadline) return false
+    const interval = waited < 120_000 ? 1000 : 5000
+    waited += interval
+    await new Promise(resolve => setTimeout(resolve, interval))
   }
+  return true
 }
 
 /** Write one repaired log, with a backup, and roll back when the result does not verify. */
@@ -279,34 +295,70 @@ function applyLog(file, units, repairTableLines, stamp) {
   }
 }
 
-async function main(argv) {
-  const config = options(argv)
-  if (config.waitForPid !== undefined) {
-    if (!Number.isSafeInteger(config.waitForPid)) throw new Error(`invalid --wait-for-pid ${String(config.waitForPid)}`)
-    console.log(`[repair] waiting for host pid ${String(config.waitForPid)} to exit`)
-    await waitForExit(config.waitForPid)
-  }
-  const { repairTableLines } = await import(pathToFileURL(REPAIR_MODULE).href)
+/**
+ * Repair every log the selector accepts.
+ *
+ * A log the host may be writing is never touched: the host holds the authoritative copy in
+ * memory and rewrites the file as it compacts, so an edit underneath it is reverted at best.
+ * Two guards say "possibly written": the session named `--held` (the one this repair was
+ * scheduled from, which the restarted host reopens) and any log whose modification time is
+ * inside the settle window.
+ * @param config - parsed command line.
+ * @param repairTableLines - the shared repair.
+ * @param select - which logs this pass owns.
+ * @param label - how the pass names itself in the report.
+ * @returns how many messages the pass repaired.
+ */
+function repairLogs(config, repairTableLines, select, label) {
   const stamp = new Date().toISOString().replaceAll(/[:.]/gu, '-')
-  const logs = logsUnder(config.sessions)
-  console.log(`[repair] ${String(logs.length)} session log(s) under ${config.sessions}`)
   let files = 0
   let messages = 0
-  for (const file of logs) {
+  for (const file of logsUnder(config.sessions)) {
     try {
-      if (config.apply && !config.allowRunning && hostRunning()) {
-        console.log('[repair] a host started while this ran; stopping before the next write')
-        break
+      if (!select(file)) continue
+      if (config.apply && Date.now() - fs.statSync(file).mtimeMs < config.settleSeconds * 1000) {
+        console.log(`[repair] ${label} SKIP (written recently) ${file}`)
+        continue
       }
       const read = readLog(file)
       const { units, repaired } = repairUnits(read.units, repairTableLines)
       if (repaired === 0) continue
       files += 1
       messages += repaired
-      console.log(`[repair] ${read.compressed ? '' : 'plain '}${file}: ${String(repaired)} message(s)`)
+      console.log(`[repair] ${label} ${read.compressed ? '' : 'plain '}${file}: ${String(repaired)} message(s)`)
       if (config.apply) applyLog(file, units, repairTableLines, stamp)
     } catch (error) {
-      console.log(`[repair] SKIP ${file}: ${error instanceof Error ? error.message : String(error)}`)
+      console.log(`[repair] ${label} SKIP ${file}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return { files, messages }
+}
+
+async function main(argv) {
+  const config = options(argv)
+  if (config.waitForPid !== undefined) {
+    if (!Number.isSafeInteger(config.waitForPid)) throw new Error(`invalid --wait-for-pid ${String(config.waitForPid)}`)
+    console.log(`[repair] waiting for host pid ${String(config.waitForPid)} to exit`)
+    await waitForPid(config.waitForPid)
+  }
+  const { repairTableLines } = await import(pathToFileURL(REPAIR_MODULE).href)
+  const held = config.held
+  const isHeld = (file) => held !== undefined && path.basename(path.dirname(file)) === held
+  let files = 0
+  let messages = 0
+  const first = repairLogs(config, repairTableLines, file => !isHeld(file), '')
+  files += first.files
+  messages += first.messages
+  if (config.apply) {
+    console.log(`[repair] holding ${held ?? 'the rest'} until no host is running`)
+    if (await waitForNoHost(config.holdMs)) {
+      // Nothing is writing now, so every log this pass skipped for being recently touched is
+      // safe to repair here too.
+      const settled = repairLogs({ ...config, settleSeconds: 0 }, repairTableLines, () => true, 'settled ')
+      files += settled.files
+      messages += settled.messages
+    } else {
+      console.log(`[repair] gave up waiting for a host-free window after ${String(config.holdMs)} ms`)
     }
   }
   console.log(`[repair] ${String(messages)} message(s) in ${String(files)} file(s); ${config.apply ? 'applied' : 'dry run'}`)
