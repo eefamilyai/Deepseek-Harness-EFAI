@@ -424,3 +424,41 @@ browser tool (they expose no button role), so an existing transcript cannot be
 opened either. Structure, bundle content, spec assertions, and the asar attribute
 probe all pass; the paint check waits on a healthy account or the operator's own
 session.
+
+### Reaching a running host: the encrypted access file (2026-10-03)
+
+The relaunch at 07:26 closed the session's last hope of driving the app's GUI: the
+Web host mints one token per boot, prints it once to stdout, and keeps it in
+memory. Recovering it was tried four ways and all failed — the app's own log
+directory holds only a shutdown stub, the Electron userData `Cookies` database is
+locked, the webview's local storage holds no token, and the host's process
+command line carries no URL. A raw ASCII probe of the 121 MB `app.asar` found the
+DOM attributes the accent sheet binds, but no credential.
+
+So the fork publishes it. `packages/host/web-access` writes
+`$DSH_HOME/run/web-access.json` once the Loader tree is ready:
+
+```json
+{ "version": 1, "pid": 46820, "profile": "desktop", "algorithm": "aes-256-gcm",
+  "salt": "…", "iv": "…", "tag": "…", "sealed": "…", "hint": "node scripts/web-access.mjs" }
+```
+
+`sealed` is the URL and token under AES-256-GCM, keyed by scrypt over a key file
+plus the machine and user names, so the pair is useless copied elsewhere. Verified
+on a live host: the file carried no plaintext, and `node scripts/web-access.mjs`
+returned exactly the URL the host printed. A file whose pid is gone is reported as
+stale rather than trusted, because a killed process never runs the withdrawal —
+the specs cover the withdrawal and the "another host published over me" guard,
+which a `taskkill` cannot exercise.
+
+Two traps worth remembering from the same round:
+
+- **A spec that touches a Client face must be named `*.client.spec.ts`.** The host
+  aggregate includes `packages/*/*/tests/**/*.ts` and excludes only the
+  `*.client.*` suffixes, so `ai-accounts.spec.ts` — which mounts the client half —
+  pulled the Connection and Gateway Client faces into the host program and broke
+  the whole host typecheck with `TS6307` storms in files it never mentioned. The
+  case is now `client-mount.client.spec.ts`; the host build is green again.
+- **A host row cannot import the connection package.** Its `Context` merge lives
+  in the Client face, so `web-access` declares the one method it calls
+  structurally instead.
