@@ -47,6 +47,7 @@ import {
   trailingReasoningCalls,
 } from '@deepseek-ai/dsh-llm-text-toolcalls'
 import type { KilnBridge, KilnMessage, KilnProvider, KilnStreamEvent, KilnStreamRequest, KilnUploadFile } from './bridge.ts'
+import { repairGluedTableDelimiter } from './markdown-fidelity.ts'
 
 /** Constructor options: the sidecar and the route mapping the plugin owns. */
 export interface KilnAdapterOptions {
@@ -973,8 +974,11 @@ class ChunkEmitter {
   private *close(): Generator<StreamChunk> {
     const open = this.open
     if (open === undefined) return
+    // The visible block is what the client renders as markdown and what the session keeps,
+    // so a table whose delimiter row arrived glued to its header is repaired before either
+    // sees it (see `markdown-fidelity.ts`).
     const block: ContentBlock = open === 'text'
-      ? { type: 'text', text: this.buffer }
+      ? { type: 'text', text: repairGluedTableDelimiter(this.buffer) }
       : { type: 'reasoning', text: this.buffer }
     yield { type: 'block-end', index: this.index, block }
     this.open = undefined

@@ -159,6 +159,22 @@ One line on the turns that need one. Each note then stays in the flattened trans
 
 Appended after the block it describes, so it extends the prefix rather than invalidating it; append-only.
 
+### A table whose delimiter row arrived glued to its header
+
+#### What the model sees
+
+Nothing: the repair is silent, and it only puts a newline back where markdown asks for one. A GFM table needs `| a | b |` and `| --- | --- |` on separate lines, and a DeepSeek web session has produced the pair on one line — `| Route title | Choice|---|---|` — which every renderer reads as a paragraph of pipes, so the table never appears. The visible text block is repaired as it closes, so the answer that reaches the client and the session log is the table the model wrote.
+
+Nothing in the path drops that newline: the DSML translator emits text character by character, the sidecar concatenates its fragments as they arrive, and this adapter passes deltas through verbatim. The glue is in what the model wrote, and the block's own text is the last place it can be seen whole. The match is deliberately narrow: a line that starts as a table row, whose trailing delimiter run describes the same number of columns as the header it is glued to, with a row after it. Prose that mentions pipes, a fenced block that quotes one, and a table that already arrived correctly are all left alone.
+
+#### Token effect
+
+None. The repair inserts one newline inside a block the model already wrote, and adds no text of its own.
+
+#### KV Cache effect
+
+None on the request prefix. The repaired block is what later turns replay as that assistant message, so the prefix is the same one a correctly written answer would have produced.
+
 ## Known Limitations and Deferred Work
 
 These limits define what this package does not provide. They are current package constraints, not a roadmap.
