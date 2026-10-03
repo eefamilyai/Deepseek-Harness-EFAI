@@ -40,6 +40,24 @@ describe('repairTableLines', () => {
       .toBe('| a | b\n|---|---|\n| r1 | s1 |\n')
   })
 
+  it('removes a blank line standing between a header and its delimiter row', () => {
+    // Verbatim from the message that prompted this: a blank line where markdown requires none,
+    // and the merged row that follows it.
+    const standoff = '| Left | Right\n\n|---|---|\n| alpha | beta | gamma | delta |\n'
+    expect(repairTableLines(standoff))
+      .toBe('| Left | Right\n|---|---|\n| alpha | beta |\n| gamma | delta |\n')
+  })
+
+  it('keeps a blank line when the delimiter row below it does not match the header', () => {
+    const unmatched = '| Left | Right\n\n|---|---|---|\n| a | b | c |\n'
+    expect(repairTableLines(unmatched)).toBe(unmatched)
+  })
+
+  it('keeps a blank line that separates a row from prose', () => {
+    const prose = '| a | b |\n\nnot a table either\n'
+    expect(repairTableLines(prose)).toBe(prose)
+  })
+
   it('reads a delimiter whose cells carry alignment', () => {
     expect(repairTableLines('| a | b |:--|--:|\n| 1 | 2 |\n')).toBe('| a | b\n|:--|--:|\n| 1 | 2 |\n')
   })

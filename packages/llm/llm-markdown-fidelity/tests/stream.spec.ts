@@ -68,15 +68,28 @@ describe('readMarkdownFidelity', () => {
   })
 
   it('hands over prose as it arrives, and holds a row until its line ends', () => {
-    // Only a line that looks like a table row is buffered; prose streams on untouched.
+    // Only a line that looks like a table row is buffered; prose and its breaks stream on.
     const repair = new TableLineRepair()
     expect(repair.push('an answer that is ')).toBe('an answer that is ')
     expect(repair.push('still arriving')).toBe('still arriving')
+    expect(repair.push('\n')).toBe('\n')
     // A row waits for the newline that says how many rows the line holds, then comes out
     // whole. Nothing is split here: a table's column count comes from its delimiter row, and
     // this line is all the pass has seen.
-    expect(repair.push('\n| a | b |')).toBe('')
-    expect(repair.push(' c | d |\n')).toBe('\n| a | b | c | d |\n')
+    expect(repair.push('| a | b |')).toBe('')
+    expect(repair.push(' c | d |\n')).toBe('| a | b | c | d |\n')
+  })
+
+  it('removes a blank line standing between a header and its delimiter row', async () => {
+    // Verbatim from the message that prompted this: the blank line the model wrote where
+    // markdown requires none, and the merged row that follows it.
+    const standoff = '| Left | Right\n\n|---|---|\n| alpha | beta | gamma | delta |\n'
+    expect(await textOf([standoff])).toBe('| Left | Right\n|---|---|\n| alpha | beta |\n| gamma | delta |\n')
+  })
+
+  it('keeps a blank line when the delimiter row below it does not match the header', async () => {
+    const unmatched = '| Left | Right\n\n|---|---|---|\n| a | b | c |\n'
+    expect(await textOf([unmatched])).toBe(unmatched)
   })
 
   it('hands over the block it assembled, not the glued one', async () => {

@@ -13,7 +13,7 @@
  */
 
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { FENCE, columnsOf, repairTableLine } from './repair.ts'
+import { FENCE, cells, columnsOf, isHeaderSegment, repairTableLine } from './repair.ts'
 
 /** Text a stream buffers while it waits to see the whole of a table line. */
 export class TableLineRepair {
@@ -25,6 +25,12 @@ export class TableLineRepair {
   private columns: number | null = null
   /** Whether the answer is inside a fenced block, where pipes are text and not markdown. */
   private fenced = false
+  /** A blank line held back, while the header above it may still claim it. */
+  private blank = ''
+  /** The column count of a header line that began its block, or null. */
+  private header: number | null = null
+  /** Whether the line being settled begins its block. */
+  private blockStart = true
 
   /**
    * Feed one delta.
@@ -39,8 +45,13 @@ export class TableLineRepair {
       const segment = end < 0 ? rest : rest.slice(0, end + 1)
       rest = end < 0 ? '' : rest.slice(end + 1)
       this.line += segment
-      // Leading whitespace cannot decide yet: a table row inside a list item is indented.
-      if (!this.buffered && /^\s*$/.test(this.line)) continue
+      // A line that is only whitespace and has ended holds nothing to decide: a blank line or
+      // a paragraph break belongs to the reader now, and holding it back would delay prose.
+      if (/^\s*$/.test(this.line)) {
+        if (!this.line.includes('\n')) continue
+        out += this.settle()
+        continue
+      }
       // A line starting as a table row or as a fence is settled whole: only its end says
       // whether it holds one row or several, and a fence decides whether rows exist at all.
       if (!this.buffered) this.buffered = /^\s*[|`~]/.test(this.line)
@@ -60,9 +71,10 @@ export class TableLineRepair {
    * @returns the text to emit, repaired where it is a table line.
    */
   flush(): string {
-    const out = this.buffered ? this.settle() : this.line
+    const out = (this.buffered || this.line !== '' ? this.settle() : '') + this.blank
     this.line = ''
     this.buffered = false
+    this.blank = ''
     return out
   }
 
@@ -71,10 +83,29 @@ export class TableLineRepair {
     const line = this.line
     this.line = ''
     this.buffered = false
-    const repaired = this.fenced ? [line] : repairTableLine(line, this.columns)
+    // A line that is only whitespace and has ended is a blank line or a paragraph break.
+    if (line.trim() === '') {
+      this.blockStart = true
+      // A header above it may still be claimed by a delimiter row: markdown requires the pair
+      // adjacent, so a blank line between them is a table that never became one.
+      if (this.header !== null) {
+        this.blank = line
+        return ''
+      }
+      return line
+    }
+    const count = columnsOf(line)
+    let out = this.blank
+    if (out !== '' && count !== null && this.header === count) out = ''
+    this.blank = ''
+    out += this.fenced ? line : repairTableLine(line, this.columns).join('\n')
     if (FENCE.test(line)) this.fenced = !this.fenced
-    this.columns = columnsOf(line) ?? (line.trimStart().startsWith('|') ? this.columns : null)
-    return repaired.join('\n')
+    this.header = !this.fenced && this.blockStart && count === null && line.trimStart().startsWith('|') && isHeaderSegment(line)
+      ? cells(line).length
+      : null
+    this.columns = count ?? (line.trimStart().startsWith('|') ? this.columns : null)
+    this.blockStart = false
+    return out
   }
 }
 

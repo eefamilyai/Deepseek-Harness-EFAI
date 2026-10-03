@@ -182,8 +182,8 @@ export const FENCE = /^\s*(?:```|~~~)/
 /**
  * Repair every table line in one text block.
  * @param text - one whole visible text block.
- * @returns the same text with a merged delimiter row separated and merged rows split, and
- * nothing else changed.
+ * @returns the same text with a merged delimiter row separated, merged rows split, and a blank
+ * line between a header and its delimiter row removed — and nothing else changed.
  */
 export function repairTableLines(text: string): string {
   if (!text.includes('|')) return text
@@ -191,12 +191,32 @@ export function repairTableLines(text: string): string {
   const out: string[] = []
   let columns: number | null = null
   let fenced = false
+  let header: number | null = null
+  let blockStart = true
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? ''
     if (FENCE.test(line)) fenced = !fenced
+    if (line.trim() === '') {
+      // A blank line between a header and its delimiter row is a table that never became one:
+      // markdown requires the pair adjacent, and the header's own column count says the
+      // delimiter row below was meant for it.
+      const standoff = header !== null && columnsOf(lines[index + 1] ?? '') === header
+        && (lines[index + 2] ?? '').trimStart().startsWith('|')
+      if (!fenced && standoff) continue
+      out.push(line)
+      columns = null
+      header = null
+      blockStart = true
+      continue
+    }
     const rowsFollow = (lines[index + 1] ?? '').trimStart().startsWith('|')
     out.push(...(fenced ? [line] : repairTableLine(line, columns, rowsFollow)))
-    columns = columnsOf(line) ?? (line.trimStart().startsWith('|') ? columns : null)
+    const count = columnsOf(line)
+    header = !fenced && blockStart && count === null && line.trimStart().startsWith('|') && isHeaderSegment(line)
+      ? cells(line).length
+      : null
+    columns = count ?? (line.trimStart().startsWith('|') ? columns : null)
+    blockStart = false
   }
   return out.join('\n')
 }
