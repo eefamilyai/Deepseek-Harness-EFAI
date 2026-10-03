@@ -49,6 +49,17 @@
         reasoningRecovery: true
         excludeProviders: []
 
+    # Markdown fidelity for the answer itself, on every route: a table whose
+    # delimiter row arrived glued to its header (`| a | b |---|---|`) has written
+    # a paragraph of pipes, and no renderer can guess the table back. The pass
+    # inserts the newline markdown asks for and changes nothing else.
+    #
+    # It sits inside the text-toolcall reader rather than outside it: that reader
+    # rebuilds a block from the deltas below it, so a repair applied to the block
+    # alone would be dropped on the routes it manages.
+    - id: llm-markdown-fidelity
+      name: '@deepseek-ai/dsh-llm-markdown-fidelity'
+
     # The Kiln provider registry: sixteen presets (Anthropic, OpenAI, Gemini,
     # OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together,
     # Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio) plus

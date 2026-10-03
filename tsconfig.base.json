@@ -434,6 +434,7 @@
       "@deepseek-ai/dsh-llm-deepseek-api-key": ["./packages/llm/llm-deepseek-api-key/src"],
       "@deepseek-ai/dsh-llm-kiln": ["./packages/llm/llm-kiln/src"],
       "@deepseek-ai/dsh-llm-kiln/invariant": ["./packages/llm/llm-kiln/src/invariant.ts"],
+      "@deepseek-ai/dsh-llm-markdown-fidelity": ["./packages/llm/llm-markdown-fidelity/src"],
       "@deepseek-ai/dsh-llm-mock-server": ["./packages/test-support/llm-mock-server/src"],
       "@deepseek-ai/dsh-llm-pi-ai": ["./packages/llm/llm-pi-ai/src"],
       "@deepseek-ai/dsh-llm-replay": ["./packages/test-support/llm-replay/src"],

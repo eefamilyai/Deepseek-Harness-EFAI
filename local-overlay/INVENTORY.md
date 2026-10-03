@@ -131,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 522 paths do not exist upstream, so no patch covers them and none can conflict.
+These 554 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -157,16 +157,35 @@ These 522 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/skills/dsh-session-history/session-read.mjs`
 - `.merge-port/MERGE-STATUS.md`
 - `.merge-port/apiproxy-and-fixtures.patch`
+- `.recon/CONTINUE-model-dropdown.md`
 - `.recon/OPERATOR-SUMMARY-ds-mute.md`
+- `.recon/accounts-in-running-desktop-app.png`
 - `.recon/accounts-tab-verified.png`
 - `.recon/accounts-tab.md`
+- `.recon/corner-after-bottom.png`
+- `.recon/corner-after-top.png`
+- `.recon/corner-before-bottom.png`
+- `.recon/corner-before-top.png`
 - `.recon/desktop-asar-shadows-fork-packages.md`
+- `.recon/dock-corner-after.png`
+- `.recon/dock-corner-before.png`
 - `.recon/ds-direct-auth-verdict.md`
 - `.recon/ds-direct-flagging.md`
 - `.recon/ds-direct-mute-investigation.md`
 - `.recon/ds-mute-findings-summary.md`
 - `.recon/ds-mute-session-2-findings.md`
 - `.recon/dsml-parser-repair.md`
+- `.recon/polish-after-account-choice.png`
+- `.recon/polish-after-account-equal-zoom.png`
+- `.recon/polish-after-account-equal.png`
+- `.recon/polish-after-account-fold.png`
+- `.recon/polish-after-dock-dark.png`
+- `.recon/polish-after-dock-light.png`
+- `.recon/polish-after-menu.png`
+- `.recon/polish-before-dark-band-bug.png`
+- `.recon/polish-before-default.png`
+- `.recon/polish-before-dock-corners.png`
+- `.recon/polish-before-menu.png`
 - `.recon/probe-operator.mjs`
 - `.recon/probe-salvage-built.mjs`
 - `.recon/probe_fresh_identity.py`
@@ -356,6 +375,19 @@ These 522 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-flow-accents/tests/flow-accent-tokens.client.spec.ts`
 - `packages/client/ui-flow-accents/tsconfig.json`
 - `packages/client/ui-flow-accents/tsdown.config.ts`
+- `packages/client/ui-polish/README.md`
+- `packages/client/ui-polish/package.json`
+- `packages/client/ui-polish/src/client/account-picker.ts`
+- `packages/client/ui-polish/src/client/index.ts`
+- `packages/client/ui-polish/src/client/locales.ts`
+- `packages/client/ui-polish/src/client/model-groups.ts`
+- `packages/client/ui-polish/src/client/polish.css`
+- `packages/client/ui-polish/src/css-modules.d.ts`
+- `packages/client/ui-polish/src/index.ts`
+- `packages/client/ui-polish/tests/account-picker.client.spec.ts`
+- `packages/client/ui-polish/tests/polish-sheet.client.spec.ts`
+- `packages/client/ui-polish/tsconfig.json`
+- `packages/client/ui-polish/tsdown.config.ts`
 - `packages/client/ui-settings-accounts/README.md`
 - `packages/client/ui-settings-accounts/package.json`
 - `packages/client/ui-settings-accounts/src/client/AccountsSection.module.css`

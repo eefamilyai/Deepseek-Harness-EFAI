@@ -21,7 +21,7 @@ index 738ed0c5b4..7bcf239b77 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 5c5c81b7e0..9f90082b7f 100644
+index 5c5c81b7e0..f681a0d2aa 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
 @@ -394,6 +394,7 @@
@@ -32,7 +32,7 @@ index 5c5c81b7e0..9f90082b7f 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -476,6 +477,28 @@
+@@ -476,6 +477,29 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -43,6 +43,7 @@ index 5c5c81b7e0..9f90082b7f 100644
 +    { "path": "./packages/llm/llm-text-toolcalls" },
 +    { "path": "./packages/llm/ai-accounts/tsconfig.host.json" },
 +    { "path": "./packages/llm/llm-kiln" },
++    { "path": "./packages/llm/llm-markdown-fidelity" },
 +    { "path": "./packages/llm/llm-system-file" },
 +    { "path": "./packages/fs/tool-notebook-edit" },
 +    { "path": "./packages/web/web-browser" },

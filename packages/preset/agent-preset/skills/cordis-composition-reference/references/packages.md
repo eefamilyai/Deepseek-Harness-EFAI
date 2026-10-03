@@ -311,6 +311,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-llm-deepseek-account` | yes | DeepSeek account provider authentication and discovery |
 | `@deepseek-ai/dsh-llm-deepseek-api-key` | yes | DeepSeek api-key provider authentication and discovery |
 | `@deepseek-ai/dsh-llm-kiln` | yes | Kiln multi-provider LLM adapter (16 presets plus ds_direct, DeepSeek's free web session) for the DeepSeek Harness |
+| `@deepseek-ai/dsh-llm-markdown-fidelity` | no | Markdown fidelity for a model's text stream: a table's delimiter row goes back on its own line |
 | `@deepseek-ai/dsh-llm-pi-ai` | yes | pi-ai-backed DeepSeek adapter for the DeepSeek Harness LLM seam (design-verification twin of dsh-llm-deepseek) |
 | `@deepseek-ai/dsh-llm-retry` | yes | Provider-routed LLM request retry policy for the DeepSeek Harness |
 | `@deepseek-ai/dsh-llm-text-toolcalls` | yes | Provider-neutral DSML tool-call reader: parses text-channel tool calls out of any adapter's stream for the DeepSeek Harness |

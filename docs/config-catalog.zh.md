@@ -1572,7 +1572,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-web-access`
 
 - `inject`: `connection` · `webServer`
-- `source`: [`packages/host/web-access/src/index.ts:97`](../packages/host/web-access/src/index.ts)
+- `source`: [`packages/host/web-access/src/index.ts:105`](../packages/host/web-access/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the access file and its key live. */
@@ -1581,7 +1581,9 @@ export interface Config {
    * The lock file holding the encrypted URL. Defaults to
    * `$DSH_HOME/run/web-access.json`, which is where an operator or agent looks
    * for a host this process did not start. The file is removed when the row
-   * unmounts, so a stale file means a host that died without shutting down.
+   * unmounts, so a stale file means a host that died without shutting down. A
+   * second live host sharing this path publishes beside it instead of over it;
+   * see {@link portScopedPath}.
    */
   path?: string
   /**
@@ -4889,6 +4891,7 @@ export interface Config {
 | `@deepseek-ai/dsh-host-directory-picker-native` | — | [`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts) |
 | `@deepseek-ai/dsh-host-plugin-inventory` | `loader` | [`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts) |
 | `@deepseek-ai/dsh-llm` | — | [`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts) |
+| `@deepseek-ai/dsh-llm-markdown-fidelity` | `llm` | [`packages/llm/llm-markdown-fidelity/src/index.ts`](../packages/llm/llm-markdown-fidelity/src/index.ts) |
 | `@deepseek-ai/dsh-lsp` | — | [`packages/lsp/lsp/src/index.ts`](../packages/lsp/lsp/src/index.ts) |
 | `@deepseek-ai/dsh-mcp-resources` | `tools` | [`packages/mcp/mcp-resources/src/index.ts`](../packages/mcp/mcp-resources/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |

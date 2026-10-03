@@ -483,6 +483,7 @@
     { "path": "./packages/llm/llm-text-toolcalls" },
     { "path": "./packages/llm/ai-accounts/tsconfig.host.json" },
     { "path": "./packages/llm/llm-kiln" },
+    { "path": "./packages/llm/llm-markdown-fidelity" },
     { "path": "./packages/llm/llm-system-file" },
     { "path": "./packages/fs/tool-notebook-edit" },
     { "path": "./packages/web/web-browser" },

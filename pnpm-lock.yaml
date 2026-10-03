@@ -2262,6 +2262,9 @@ importers:
       '@deepseek-ai/dsh-llm-kiln':
         specifier: workspace:^
         version: link:../../llm/llm-kiln
+      '@deepseek-ai/dsh-llm-markdown-fidelity':
+        specifier: workspace:^
+        version: link:../../llm/llm-markdown-fidelity
       '@deepseek-ai/dsh-llm-text-toolcalls':
         specifier: workspace:^
         version: link:../../llm/llm-text-toolcalls
@@ -10287,6 +10290,15 @@ importers:
       '@deepseek-ai/dsh-settings':
         specifier: workspace:^
         version: link:../../settings/settings
+
+  packages/llm/llm-markdown-fidelity:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../llm
 
   packages/llm/llm-pi-ai:
     dependencies:
