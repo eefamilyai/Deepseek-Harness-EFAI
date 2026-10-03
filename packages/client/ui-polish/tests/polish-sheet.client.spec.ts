@@ -13,6 +13,13 @@ import { describe, expect, it } from 'vitest'
 const SHEET = readFileSync(resolve(process.cwd(), 'packages/client/ui-polish/src/client/polish.css'), 'utf8')
 const CSS = SHEET.replace(/\/\*[\s\S]*?\*\//g, ' ')
 
+/** The declarations of one rule, so an assertion reads as the rule it checks. */
+function ruleFor(css: string, selector: string): string {
+  const start = css.indexOf(`${selector} {`)
+  if (start < 0) return ''
+  return css.slice(start, css.indexOf('}', start))
+}
+
 describe('polish sheet', () => {
   it('never selects a hashed CSS-module class', () => {
     // A class selector here would work in a source checkout and do nothing in a
@@ -32,15 +39,20 @@ describe('polish sheet', () => {
     }
   })
 
-  it('retunes the shell motion scale and the elevation tokens', () => {
+  it('retunes the shell curve and the elevation tokens, not the clock', () => {
     for (const token of [
-      '--ds-ease-in-out', '--ds-ease-out', '--ds-transition-duration',
-      '--ds-transition-duration-fast', '--ds-transition-duration-slow',
+      '--ds-ease-in-out', '--ds-ease-out', '--ds-ease-standard', '--ds-ease-spring',
       '--dsw-shadow-lv1', '--dsw-shadow-lv2', '--dsw-shadow-lv3',
       '--dsw-elevation-soft', '--dsw-elevation-panel', '--dsw-elevation-prominent',
     ]) {
       expect(CSS, `missing ${token}`).toMatch(new RegExp(`${token}\\s*:`))
     }
+    // Durations stay the shell's own: its collapse choreography is sequenced
+    // against them (150ms fade + 150ms rail entry against a 300ms track), so
+    // redeclaring one desynchronises the sequence. The reduced-motion block is the
+    // only place allowed to move them, and it collapses rather than retimes.
+    const motion = CSS.slice(0, CSS.indexOf('prefers-reduced-motion'))
+    expect(motion).not.toMatch(/--ds-transition-duration[a-z-]*:\s*\d+ms/)
     // Both palettes: a dark theme that keeps black-on-black elevation reads flat.
     const dark = CSS.slice(CSS.indexOf('[data-ds-dark-theme]'))
     expect(dark).toContain('--dsw-shadow-lv3')
@@ -56,6 +68,81 @@ describe('polish sheet', () => {
     // The fallback has to outweigh a single class selector to beat a component's
     // own shorthand.
     expect(CSS).toMatch(/:root:root \*/)
+  })
+
+  it('leaves the panel choreography alone', () => {
+    // The collapse is a sequenced animation (150ms fade, then 150ms rail entry
+    // against a 300ms track). Zeroing durations inside the frame during
+    // `[data-animating]` — an earlier revision did — snapped it into two jumps,
+    // so no rule may key on that attribute.
+    expect(CSS).not.toContain('[data-animating]')
+  })
+
+  it('gives the dock a fill of its own and rounds its leading edge', () => {
+    // Without a fill the dock is the canvas colour, so its rounded corners would
+    // be invisible and its edge would stay a bare rule.
+    const push = "[data-sidebar-right-panel='push']"
+    const dock = "[data-dockkit-host='dock']"
+    const surface = ruleFor(CSS, `${push} [data-dockkit-surface]`)
+    expect(surface).toContain('border-top-left-radius: var(--dsw-radius-lg)')
+    expect(surface).toContain('border-bottom-left-radius: var(--dsw-radius-lg)')
+    expect(surface).toContain('overflow: clip')
+
+    const leading = ruleFor(CSS, `${push} ${dock}[data-dockkit-column] > section`)
+    expect(leading).toContain('background: var(--dsw-specific-sidebar-fill)')
+
+    // The repeated attribute is deliberate: the component's own rule carries a
+    // class on both the cell and its child, so this is what outweighs it.
+    const edge = `${push}[data-sidebar-right-panel] ${dock}[data-dockkit-column='0'] > section`
+    expect(ruleFor(CSS, edge)).toContain('border-left-color: var(--dsw-alias-border-l2)')
+
+    // Never unscoped: a bare surface selector would round bottom docks and floats.
+    expect(CSS).not.toMatch(/^\[data-dockkit-surface\]/m)
+    expect(ruleFor(CSS, '[data-disclosure-row]:hover')).toContain('border-radius: var(--dsw-radius-sm)')
+  })
+
+  it('never leaves a transform on a dialog', () => {
+    // `fill-mode: both` keeps the final keyframe, and a transform — even the
+    // identity one — makes an element a containing block for fixed descendants,
+    // which would misplace a picker opened inside the dialog.
+    const dialog = CSS.slice(CSS.indexOf("[role='dialog'] {"), CSS.indexOf('@keyframes dsh-polish-fade-in'))
+    expect(dialog).toContain('dsh-polish-fade-in')
+    expect(dialog).not.toContain('transform')
+    expect(dialog).not.toContain('pop-in')
+  })
+
+  it('covers the reading surfaces and the drag handles', () => {
+    for (const contract of [
+      '[data-side]::after', '[data-side]:hover::after', '[data-side][data-dragging]::after',
+      '[data-disclosure-row]:hover', '[data-chat-flow]', "[role='alert']",
+    ]) {
+      expect(CSS, `missing ${contract}`).toContain(contract)
+    }
+    // The opaque token: rows inside an expanded reasoning block are sticky, and a
+    // translucent wash would let scrolled content show through them.
+    expect(CSS).toContain('background-color: var(--dsw-alias-interactive-bg-hover-solid)')
+    expect(CSS).not.toContain('background-color: var(--dsw-alias-interactive-bg-hover)')
+    // The theme curves every rounded surface along a superellipse, which squares
+    // off a capsule end, so an uncapped radius has to opt out. The theme's own
+    // `corner-shape-styles` spec enforces the pair across every client sheet; this
+    // is the one such radius here.
+    expect(CSS).toMatch(/\[data-side\]::after\s*\{[^}]*border-radius:\s*999px;[^}]*corner-shape:\s*round;/)
+  })
+
+  it('restores surface order in the light palette only', () => {
+    expect(CSS).toContain('body:not([data-ds-dark-theme])')
+    const light = CSS.slice(CSS.indexOf('body:not([data-ds-dark-theme])'))
+    expect(light).toContain('--dsw-alias-bg-layer-1')
+    expect(light).toContain('--dsw-alias-bg-layer-3')
+    // The canvas axis is painted on the conversation body, which does not scroll,
+    // and it sets only the background image so the canvas colour survives.
+    expect(CSS).toContain('[data-conversation-content]')
+    expect(CSS).toMatch(/\[data-conversation-content\]\s*\{[^}]*background-image:/)
+    expect(CSS).not.toMatch(/\[data-conversation-content\]\s*\{[^}]*background:/)
+    // No literal colours anywhere in the sheet: every value is a token or a
+    // shadow alpha, so both palettes keep working.
+    const values = CSS.replace(/--dsw-shadow-[a-z0-9-]+:[^;]+;/g, '')
+    expect(values).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
   })
 
   it('collapses its own motion when the viewer asked for less', () => {

@@ -40,12 +40,13 @@
      it lagged before it moved. */
   --ds-ease-in-out: var(--ds-ease-standard);
 
-  /* Durations: the shell's own three, slightly rebalanced. Fast stays fast
-     (hover and colour must not lag the pointer), standard grows enough to let
-     the new curve be visible, and slow carries the panel tracks. */
-  --ds-transition-duration-fast: 110ms;
-  --ds-transition-duration: 240ms;
-  --ds-transition-duration-slow: 380ms;
+  /* Durations are deliberately NOT redeclared. The shell's three values are the
+     ones its own choreography is sequenced against: the sidebar's collapse fades
+     its frozen-width content over 150ms and brings the rail controls in over the
+     remaining 150ms of the 300ms track transition. Lengthening the track — an
+     earlier revision of this sheet set 380ms — leaves that sequence finishing
+     before the track settles, which reads as two separate movements. The curve is
+     the part of motion this layer owns; the clock belongs to the components. */
 
   /* This layer's own scale. */
   --dsh-polish-press: 0.985;
@@ -127,6 +128,94 @@ body[data-ds-dark-theme] {
 }
 
 /* ----------------------------------------------------------------------------
+ * 3b. Surface hierarchy
+ * ------------------------------------------------------------------------- */
+
+/* The frame paints one flat canvas token, so the window has no top light and no
+ * vertical axis: the header area and the transcript sit at the same depth. A soft
+ * tint that resolves into the canvas within a few hundred pixels restores one.
+ *
+ * It is painted on the conversation body rather than the frame: the body does not
+ * scroll — the transcript scroller is its child — so the tint stays where it is
+ * while content moves under it, and it fades to transparent so whichever canvas
+ * colour the palette supplies shows through.
+ *
+ * The tint reads `layer-1`, which is a step above the canvas in the light palette
+ * (`bg-layer-1` is retuned below) and a step above it in the dark palette too, so
+ * the window gains the same axis in both. The neutral scale cannot do this: its
+ * step is light in both palettes, which painted a bright band across the top of a
+ * dark window. */
+
+[data-conversation-content] {
+  background-image: linear-gradient(
+    180deg,
+    var(--dsw-alias-bg-layer-1) 0,
+    transparent 320px
+  );
+}
+
+/* Light mode gives the canvas and all three layer tokens the same white, which is
+ * why the app reads flat: a dialog, a card inside it, an input, and the page are
+ * one colour, separated only by hairlines. The layer tokens are semantically
+ * ordered (`layer-1` inset controls, `layer-2` floating panels, `layer-3` content
+ * inside a panel), so tinting the two that mean "recessed" restores the ordering
+ * without touching a single component.
+ *
+ * Scoped to the light palette: the static scale already flips under
+ * `[data-ds-dark-theme]`, where the layers are separated by value, and overriding
+ * it there would flatten the dark theme instead. */
+body:not([data-ds-dark-theme]) {
+  --dsw-alias-bg-layer-1: var(--dsw-static-neutral-bluish-50);
+  --dsw-alias-bg-layer-3: var(--dsw-static-neutral-bluish-50);
+  /* The sidebar is the one panel with its own fill token, so it can carry a
+   * clearer step than the canvas without inventing a surface. */
+  --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-75);
+}
+
+/* ----------------------------------------------------------------------------
+ * 3c. Corners
+ * ------------------------------------------------------------------------- */
+
+/* The dock is a full-height sheet butted against the conversation, and it is the
+ * one large surface in the shell that never got a fill of its own: it paints the
+ * same canvas token as the page, so it reads as a slab of the background cut off
+ * by a 0.5px rule rather than as a panel. It takes the panel fill the sidebar
+ * already uses — the two side panels are parallel surfaces, so they carry the
+ * same value — and with a fill of its own, its leading corners can be rounded
+ * without the rounding going unseen.
+ *
+ * Two details make the corners work. The clip is required rather than decorative:
+ * the corner is painted by the tab host inside the surface, and the surface paints
+ * nothing itself, so without clipping the host draws its own square corner
+ * straight over the rounded one. And the scope is the `push` panel only — dockkit
+ * also hosts fullscreen panes, bottom docks and floating windows, where the
+ * leading edge is a different side and the same corners would be asymmetric.
+ *
+ * The dock's drop hints are positioned inside the pane body (`inset: 0` on the
+ * body), so clipping the surface to its own rounded box does not cut them.
+ *
+ * Selectors are `> section` because that is the tab host's element, and the
+ * attribute count is what outweighs the component's own class rule for the same
+ * two properties. */
+[data-sidebar-right-panel='push'] [data-dockkit-surface] {
+  border-top-left-radius: var(--dsw-radius-lg);
+  border-bottom-left-radius: var(--dsw-radius-lg);
+  overflow: clip;
+}
+
+[data-sidebar-right-panel='push'] [data-dockkit-host='dock'][data-dockkit-column] > section {
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+/* The leading edge keeps a separator, one step lighter than the component's own:
+ * against two fills this close, the original rule is the hardest line on screen.
+ * The repeated panel attribute is what outweighs the component's rule, which
+ * carries a class on both the cell and its child. */
+[data-sidebar-right-panel='push'][data-sidebar-right-panel] [data-dockkit-host='dock'][data-dockkit-column='0'] > section {
+  border-left-color: var(--dsw-alias-border-l2);
+}
+
+/* ----------------------------------------------------------------------------
  * 4. Overlay entrances
  * ------------------------------------------------------------------------- */
 
@@ -158,11 +247,22 @@ body[data-ds-dark-theme] {
 
 [role='menu'],
 [role='listbox'],
-[role='dialog'],
 [role='tooltip'] {
   animation: dsh-polish-pop-in var(--dsh-polish-pop) var(--ds-ease-out) both;
   /* Overlays never scroll the page behind them. */
   overscroll-behavior: contain;
+}
+
+/* A dialog can open a menu or a picker inside itself, and any transform — even
+ * the identity one a finished animation leaves behind under `fill-mode: both` —
+ * makes the element a containing block for `position: fixed` descendants, which
+ * would misplace that menu. Dialogues therefore fade, and only the small
+ * popovers travel. */
+[role='dialog'] {
+  animation: dsh-polish-fade-in var(--dsh-polish-pop) var(--ds-ease-out) both;
+  /* A dialog whose body grows past the fold keeps one content width instead of
+   * shifting sideways the moment it becomes scrollable. */
+  scrollbar-gutter: stable;
 }
 
 /* Tooltips follow the pointer: travel reads as lag there, so they fade only. */
@@ -283,6 +383,95 @@ pre {
 /* Placeholders should read as empty, not as disabled content. */
 ::placeholder {
   opacity: 0.7;
+}
+
+/* ----------------------------------------------------------------------------
+ * 5b. Panel toggles
+ * ------------------------------------------------------------------------- */
+
+/* A panel toggle animates the frame's grid track, which is a layout animation:
+ * every row inside re-wraps as the width changes, and no stylesheet can make that
+ * composited — the track width *is* the panel's layout, and only the owning
+ * component can animate a transform instead.
+ *
+ * An earlier revision of this sheet tried to compensate by collapsing every
+ * descendant's transition duration while `[data-animating]` was set, so that
+ * nothing competed with the track for frames. That was wrong: the sidebar's
+ * collapse is deliberately sequenced — its frozen-width content fades out over
+ * 150ms, and at that settle the rail controls enter over the remaining 150ms of
+ * the 300ms track — so zeroing those durations snapped the choreography into two
+ * jumps. Nothing here touches it now. What this layer contributes is the curve:
+ * a decelerating easing makes the same 300ms start decisively and settle, without
+ * moving a single timing the components are sequenced against. */
+
+/* The drag handles are 8px strips with no state of their own, so while a resize
+ * is in progress the only feedback is the panel following the pointer, and
+ * before it starts there is nothing at all to find. A hairline that fades in on
+ * hover and holds while dragging is the affordance.
+ *
+ * `corner-shape: round` is required, not decorative: the theme curves every
+ * rounded surface along a superellipse, which squares off a capsule end, so an
+ * uncapped radius has to opt out and the theme's own spec enforces the pair. */
+[data-side]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 2px;
+  margin: 0 auto;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: var(--ds-transition-duration-fast);
+  transition-timing-function: var(--ds-ease-standard);
+}
+
+[data-side]:hover::after {
+  opacity: 0.45;
+}
+
+[data-side][data-dragging]::after {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------------------------
+ * 6b. Reading surfaces
+ * ------------------------------------------------------------------------- */
+
+/* A transcript row changed only its text colour on hover, which reads as a text
+ * effect rather than as something you can hit. The whole row takes a wash, from
+ * the opaque token: rows inside an expanded reasoning block are sticky over the
+ * scrolled content, and a translucent fill would let that content show through
+ * the row. */
+[data-disclosure-row] {
+  transition-property: background-color, color;
+  transition-duration: var(--ds-transition-duration-fast);
+  transition-timing-function: var(--ds-ease-standard);
+}
+
+[data-disclosure-row]:hover {
+  background-color: var(--dsw-alias-interactive-bg-hover-solid);
+  /* A wash with square corners on a row that sits in a rounded column is the one
+   * edge this rule could add, so the row takes the same rounding as the rest of
+   * the shell's rows. */
+  border-radius: var(--dsw-radius-sm);
+}
+
+/* The transcript is the longest scroll surface in the app, so a flick at its end
+ * must not travel on to the shell behind it. A stable gutter is deliberately not
+ * set here: with the themed scrollbar the bar already occupies its own space
+ * whenever there is one, and reserving it unconditionally would narrow the
+ * column while the transcript still fits. */
+[data-chat-flow] {
+  overscroll-behavior: contain;
+}
+
+/* Toasts are the one floating surface that arrives without being asked for, so
+ * they get the same entrance as a menu. `role='alert'` also carries inline
+ * validation text, where a short lift is harmless and makes it noticed. */
+[role='alert'] {
+  animation: dsh-polish-pop-in var(--dsh-polish-pop) var(--ds-ease-out) both;
 }
 
 /* ----------------------------------------------------------------------------

@@ -462,3 +462,102 @@ Two traps worth remembering from the same round:
 - **A host row cannot import the connection package.** Its `Context` merge lives
   in the Client face, so `web-access` declares the one method it calls
   structurally instead.
+
+### The GUI polish layer: what was actually wrong (2026-10-03)
+
+`packages/client/ui-polish` is one injected stylesheet. Three findings decided what
+it does, and each came from reading the design system rather than the screenshots.
+
+**There is no motion scale, only one shared curve.** The shell defines exactly
+three durations and one easing (`--ds-transition-duration-fast/-/-slow` and
+`--ds-ease-in-out`) in `ui-theme/src/styles/base.css`. Forty-three component
+transitions read them; the other eighty hardcode `ease` or `ease-in-out`, and the
+whole client holds 123 transition declarations across twelve durations. The stock
+curve is the Material S-curve, which eases *in* — on a panel toggle that reads as
+hesitation before the movement starts. Retuning the tokens moves the shell;
+re-pointing `transition-timing-function` on every element moves the rest, because
+a longhand overrides a component's shorthand timing without touching the property
+list that decides what animates.
+
+**Light mode has no surface hierarchy at all.** `--dsw-alias-bg-base` and all three
+layer tokens resolve to `neutral-bluish-00`: canvas, dialog, card inside the
+dialog, and input are the same white, separated only by hairlines. The layer tokens
+are semantically ordered, so tinting the two that mean "recessed" (`layer-1` inset
+controls, `layer-3` content inside a panel) restores the order everywhere at once.
+Scoped to `body:not([data-ds-dark-theme])`: the static scale already separates the
+layers by value in dark, and overriding it there flattens the theme instead.
+
+**The panel tracks animate a layout property.** `AppFrame.module.css` transitions
+`grid-template-columns` on `.frame[data-animating]`, and the drag handles transition
+`left`. Neither can be replaced from here — the track width *is* the panel's layout,
+and only the owning component can animate a transform instead — so what this layer
+legitimately contributes is the curve: a decelerating easing makes the same 300ms
+start decisively and settle.
+
+An earlier revision tried to compensate by collapsing every descendant's transition
+duration while `[data-animating]` was set, so nothing competed with the track for
+frames. That was the wrong fix and it is reverted. The sidebar's collapse is a
+*sequenced* animation — the comment in `SidebarRoot.module.css` states it: the
+frozen-width content fades out in place over 150ms, and at that settle the rail
+controls enter over the remaining 150ms of the 300ms track transition — so zeroing
+those durations snapped the choreography into two jumps. For the same reason the
+durations are no longer retuned (an earlier revision raised the track to 380ms,
+which leaves the sequence finishing 80ms before the track settles). The curve is the
+part of motion this layer owns; the clock belongs to the components.
+
+Two bugs the visual check caught, both worth remembering:
+
+- **A Client half with no `apply` fails the whole plugin load.** The first build
+  exported only the imported stylesheet, and the running app answered "invalid
+  plugin, expect function or object with an apply method" on a blank page. The
+  row's body is now an empty `apply`; the stylesheet is what evaluating the module
+  injects.
+- **A neutral-scale token is light in *both* palettes.** The canvas axis first read
+  `--dsw-static-neutral-bluish-50`, which painted a bright band across the top of a
+  dark window (`polish-before-dark-band-bug.png`). It now reads `--dsw-alias-bg-layer-1`,
+  which is a step above the canvas in each palette, so one rule serves both themes.
+
+Stable hooks found while writing it, each verified in source before use: the app
+frame publishes `data-animating`, `data-dragging`, `data-sidebar-collapsed`,
+`data-rightbar-collapsed/-fullscreen/-instant` and `data-side` on its drag handles;
+the conversation publishes `data-conversation-content` (the body, which does *not*
+scroll — its child does), `data-conversation-scroll`, `data-composer-seat`,
+`data-phase` and `data-content-phase`; the dock publishes `data-dockkit-surface`,
+`data-dockkit-host`, `data-dockkit-column`, `data-dockkit-cell` and
+`data-sidebar-right-panel`; overlays are named by their ARIA roles. `data-window-drag`
+is *not* a sidebar hook — the plugin manager, onboarding surface, platform overlay
+and conversation header all carry it, so a column selector keyed on it would have
+matched the wrong element.
+
+### The sharp edge on the right panel (2026-10-03)
+
+The operator's complaint was specific: the right panel has no corner treatment and
+the shell is full of hard edges. Measuring the running app, rather than reading the
+stylesheet, found the cause — and it was not a missing radius.
+
+Pixel samples of the dock at 1280×720: canvas `(255,255,255)`, dock `(255,255,255)`,
+sidebar `(241,243,245)`. The dock painted **the same token as the page**
+(`.tabHost:not(.float) { background: var(--dsw-alias-bg-base) }`), so it read as a
+slab of background cut off by a rule rather than as a panel, and a rounded corner on
+it would have been invisible. Three fixes, each verified by re-measuring:
+
+- **A fill of its own.** The dock takes `--dsw-specific-sidebar-fill`, the same panel
+  value the sidebar already uses — the two side panels are parallel surfaces and now
+  measure identically (light `241,243,245`; dark `27,27,28` against a `20,20,23`
+  canvas).
+- **Rounded leading corners, and the clip that makes them visible.** The corner is
+  painted by the tab host *inside* `[data-dockkit-surface]`, which paints nothing
+  itself, so without `overflow: clip` the host draws its own square corner over the
+  rounded one. Measured: the dock's fill recedes from x=714 at y=0 to x=704 by y=9,
+  mirrored at the bottom. Scoped to `[data-sidebar-right-panel='push']` — dockkit also
+  hosts fullscreen, bottom and floating panes, where the leading edge is a different
+  side.
+- **A softer rule.** The 0.5px left border moved from `border-l4` to `border-l3`
+  (measured: `202` → `216` over the new fill). This needed a specific weight: the
+  component's rule is `.tabCell[data-dockkit-host='dock'][data-dockkit-column='0'] > .tabHost`,
+  which is four class-or-attribute selectors, so the override repeats the panel
+  attribute to outweigh it.
+
+Evidence: `.recon/polish-after-dock-light.png`, `-after-dock-dark.png`,
+`dock-corner-before.png`, `dock-corner-after.png` (both at 5x),
+`polish-before-dock-corners.png`.
