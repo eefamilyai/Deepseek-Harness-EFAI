@@ -561,3 +561,35 @@ it would have been invisible. Three fixes, each verified by re-measuring:
 Evidence: `.recon/polish-after-dock-light.png`, `-after-dock-dark.png`,
 `dock-corner-before.png`, `dock-corner-after.png` (both at 5x),
 `polish-before-dock-corners.png`.
+
+### Model selector: the accordion and the account box (findings, 2026-10-03)
+
+The operator asked for collapsible provider groups (all collapsed except the one in
+use) and for the account pool to become one provider whose accounts are picked from
+a scrollable box. What the code says about that:
+
+- **It was already a fork patch, and the patch is gone.** `HARNESS-EDITS.md` row 20
+  describes exactly this feature on
+  `client/ui-model-selection/src/client/{ModelSelect.tsx,ModelSelect.module.css}`:
+  "collapsible per-provider groups in the model dropdown, with account routes folded
+  under a single base-provider header and an account picker". No patch file carries
+  it now, `ui-model-selection` is absent from `SEAM.json`, and the source is pristine
+  upstream - the patch group was pruned in an earlier round as "emptied". Row 20 is
+  therefore stale documentation, and the feature has to be rebuilt either way.
+- **It cannot be a plugin.** The selector is upstream's `ModelSelect`; it exposes no
+  slot for restructuring its provider list, and an accordion needs state, so a
+  stylesheet cannot express it. Only a seam patch (the mechanism row 20 used) or a
+  DOM-rewriting plugin (a hack) can do it.
+- **The account pool already arrives as its own provider group.** `state.groups`
+  comes from the model catalog, and the render special-cases
+  `group.id === 'deepseek-account'` for its label (`t('provider.account')`), so "one
+  DeepSeek Web provider whose contents are the accounts" is a rendering change over
+  data that already exists: the pool's entries are that group's `models`.
+- **Four specifics any implementation must get right.** `MenuGroup`'s `label` is a
+  `string`, not a `ReactNode`, so a clickable group header needs custom markup
+  instead of the primitive; `modelIndex++` is incremented while rendering models, so
+  collapsed groups must not consume indices or the arrow-key roving focus lands on
+  hidden rows; `IconChevronDownOutlineRegular` and `IconChevronRightOutlineRegular`
+  are already imported for the drill-in; and `observeStickyMenuGroups` only tracks
+  direct `MenuGroup` children, so custom headers lose stickiness unless it is
+  extended.
