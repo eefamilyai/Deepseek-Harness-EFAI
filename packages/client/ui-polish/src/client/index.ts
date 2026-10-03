@@ -14,9 +14,19 @@
 // Tagged style injection owned by the client bundle: imported for its effect,
 // deduplicated by the build's `data-plugin-css` tag.
 import './polish.css'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import { installModelGroups } from './model-groups.ts'
 
 /**
- * The row's body. The stylesheet is the whole plugin — evaluating this module is
- * what injects it — so there is nothing to register and no service to wait for.
+ * The row's body: inject the stylesheet and install the model menu's group keys.
+ *
+ * Evaluating this module is what injects the sheet. The enhancer is one document
+ * observer with no service to wait for, so it installs here too and its disposer
+ * goes on the caller's fiber — a client row that is unloaded must leave no
+ * observer behind.
+ *
+ * @param ctx - client root context, used only to scope the observer to this row.
  */
-export function apply(): void {}
+export function apply(ctx: ClientContext): void {
+  ctx.effect(() => installModelGroups(), 'ui-polish: model group keys')
+}

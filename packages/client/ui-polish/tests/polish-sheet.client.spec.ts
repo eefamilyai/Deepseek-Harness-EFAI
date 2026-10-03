@@ -70,6 +70,33 @@ describe('polish sheet', () => {
     expect(CSS).toMatch(/:root:root \*/)
   })
 
+  it('contracts provider groups except the one in use', () => {
+    // The group primitive's own attributes are the contract: a section, a heading,
+    // and menuitemradio rows whose aria-checked marks the current one.
+    const contracted = ruleFor(CSS, '[data-menu-group] > :not([data-menu-group-heading], [data-menu-group-start])')
+    expect(contracted).toContain('display: none')
+    // The open state is one arm of a selector list, so it is read from the sheet.
+    // A row is anything but the title and the position sentinel, so the rule holds
+    // whether a provider renders bare buttons or a wrapper.
+    expect(CSS).toContain("[data-menu-group]:has(> [aria-checked='true'])")
+    // Only two openers: the checked row's group, and the heading's own state, which
+    // the enhancer writes. Hover would open groups the pointer merely crossed, and
+    // `:focus-within` would open whichever group the menu focuses first.
+    expect(CSS).not.toContain(':hover > :not(')
+    expect(CSS).not.toContain(':focus-within > :not(')
+    // The enhancer writes aria-expanded on the heading, so the sheet must read it there.
+    expect(CSS).toContain("[data-menu-group-heading][aria-expanded='true']")
+  })
+
+  it('gives a many-route provider its own scroll box', () => {
+    // Keyed on the row count, never on a localized provider name.
+    expect(CSS).toContain('[data-menu-group]:has(> :nth-child(n + 12))')
+    const box = ruleFor(CSS, '[data-menu-group]:has(> :nth-child(n + 12))')
+    expect(box).toContain('max-height')
+    expect(box).toContain('overflow-y: auto')
+    expect(box).toContain('overscroll-behavior: contain')
+  })
+
   it('leaves the panel choreography alone', () => {
     // The collapse is a sequenced animation (150ms fade, then 150ms rail entry
     // against a 300ms track). Zeroing durations inside the frame during

@@ -216,6 +216,80 @@ body:not([data-ds-dark-theme]) {
 }
 
 /* ----------------------------------------------------------------------------
+ * 3d. Provider groups in the model dropdown
+ * ------------------------------------------------------------------------- */
+
+/* The dropdown lists every route of every provider as one flat column, which for a
+ * deployment with an eleven-account pool is a wall: the account the operator wants
+ * sits below providers they never pick.
+ *
+ * Rows contract per provider instead. `MenuGroup` publishes `data-menu-group` on the
+ * section and `data-menu-group-heading` on its title, and everything else the section
+ * holds is a row: `menuitemradio` for a model, a plain button that drills into its
+ * own pane for an account route. So a row is anything that is not the title or the
+ * position sentinel, which is also what keeps this correct if a provider ever renders
+ * a wrapper instead of bare buttons. The current model's `aria-checked` marks the
+ * provider in use, and the default is exactly what was asked for: everything closed
+ * except that one.
+ *
+ * Opening is deliberate and nothing else: the group holding the current model, or a
+ * click (or Enter and Space) through the enhancer. Hover is absent because the
+ * pointer crosses provider titles on its way down the list, and `:focus-within` is
+ * absent for a sharper reason — the enhancer makes each heading focusable, so the
+ * group whose heading the menu focuses first opened itself on every visit.
+ *
+ * `display` is the property that hides a row, not `visibility`: a hidden row must
+ * leave the layout entirely, and the enhancer in `model-groups.ts` is what keeps the
+ * keyboard honest by disabling rows it has hidden. */
+[data-menu-group] > :not([data-menu-group-heading], [data-menu-group-start]) {
+  display: none;
+}
+
+[data-menu-group]:has(> [aria-checked='true'])
+  > :not([data-menu-group-heading], [data-menu-group-start]),
+[data-menu-group]:has(> [data-menu-group-heading][aria-expanded='true'])
+  > :not([data-menu-group-heading], [data-menu-group-start]) {
+  display: flex;
+}
+
+/* The title is the control. Its chevron is drawn from borders rather than an icon
+ * font, so it inherits `currentColor` and works in both palettes. */
+[data-menu-group-heading] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+[data-menu-group-heading]::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg) translateY(-1px);
+  transition-property: transform;
+  transition-duration: var(--ds-transition-duration-fast);
+  transition-timing-function: var(--ds-ease-standard);
+}
+
+[data-menu-group]:has(> [data-menu-group-heading][aria-expanded='true']) > [data-menu-group-heading]::after {
+  transform: rotate(45deg) translateY(-2px);
+}
+
+/* A provider with many routes scrolls inside its own box instead of stretching the
+ * dropdown: the pool's eleven accounts are the case this exists for, and it keys on
+ * the count rather than on the provider's name, so a localized label cannot miss it.
+ * The group's own heading is sticky, so the box keeps its title while it scrolls. */
+[data-menu-group]:has(> :nth-child(n + 12)) {
+  max-height: 15rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--dsw-radius-sm);
+}
+
+/* ----------------------------------------------------------------------------
  * 4. Overlay entrances
  * ------------------------------------------------------------------------- */
 
