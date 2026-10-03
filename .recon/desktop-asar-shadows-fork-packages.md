@@ -872,3 +872,31 @@ path itself is proven by the specs, including the verbatim glue from turn 24 of 
 **It needs one more restart**: the row is new, so the running app has not loaded it. After the
 restart, the next table is the end-to-end proof, and it can be checked in the log rather than
 by eye.
+
+### The second shape: rows a lost newline merged (2026-10-03)
+
+The live run after the first restart taught two things. The pass is composed and breaks
+nothing: a spare host answered a prompt asking for the glued form and rendered a table, and
+reading that turn's deltas showed the *model* had written the healthy form itself, so the
+repair path was still only proven by specs. And the operator's next screenshot showed a second
+shape the pass did not touch - my own table came back with rows missing.
+
+The bytes of two of my own messages, from the log:
+
+    | a bare pipe or dash run at the end of a delta | withheld, ... | the next character ... |
+    | the end of a line | settled whole, ...| inside a fenced block | left alone, ... |
+
+Both lines hold *two* rows: the newline after a row's closing pipe was lost. A renderer then
+keeps the first row's cells and discards the rest, so two rows vanished from the screen without
+a word. The same drop produced the delimiter glue earlier - **the character after a pipe** is
+where this fork's model stream loses a newline, which also explains why prose is fine and only
+tables break.
+
+`5959b9f8f2` extends the pass to both shapes through one rule: a table's column count comes from
+its delimiter row, a cell holding a pipe must escape it, so a line whose cells divide by that
+count was two or more rows. A short row is how markdown pads a table and is left alone. The
+stream pass now buffers a line *only* while it looks like a table row or a fence - whether a
+line holds one row or several is a property of the finished line - and prose still flows
+character for character. 28 specs, with both shapes kept verbatim from the log as fixtures.
+
+**Needs one restart to load**, as before: the host row was already resolved when the app booted.
