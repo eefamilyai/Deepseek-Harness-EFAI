@@ -5,6 +5,12 @@
 # A profile without it runs upstream's Web surface unchanged.
 
 - insert:
+    # Interaction polish for the whole client: the shell's motion scale, its
+    # elevation tokens, overlay entrances, and control feedback, as one injected
+    # stylesheet. Mounted ahead of the rows below because it paints them.
+    - id: ui-polish
+      name: '@deepseek-ai/dsh-client-ui-polish'
+
     # The sidebar brand. Upstream's occupant registers only in an `official`
     # client build, so every other build falls through to the shell's
     # "DSH Local Build" label; this row is the fork's own package, which

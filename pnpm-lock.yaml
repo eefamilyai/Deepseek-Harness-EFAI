@@ -2308,6 +2308,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-flow-accents':
         specifier: workspace:^
         version: link:../../client/ui-flow-accents
+      '@deepseek-ai/dsh-client-ui-polish':
+        specifier: workspace:^
+        version: link:../../client/ui-polish
       '@deepseek-ai/dsh-client-ui-settings-accounts':
         specifier: workspace:^
         version: link:../../client/ui-settings-accounts
@@ -4619,6 +4622,12 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+
+  packages/client/ui-polish:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
 
   packages/client/ui-primitives:
     devDependencies:

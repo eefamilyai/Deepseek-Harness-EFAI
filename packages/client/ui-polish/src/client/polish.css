@@ -1,0 +1,339 @@
+/* Interaction polish for the whole client: one motion language, real materials,
+ * and consistent feedback on every control.
+ *
+ * Upstream owns the component tree, so this sheet selects on contracts that
+ * outlive any one component: the `--ds-*` / `--dsw-*` design tokens, ARIA roles
+ * and states, the app frame's own state attributes, element selectors, and the
+ * `data-dsh-*` hooks upstream publishes for styling. It never names a CSS-module
+ * class — those are hashed per bundle (`[hash]_[local]`) and belong to bundles
+ * this plugin does not build, so such a selector would work in a source checkout
+ * and silently do nothing in an installed Desktop build.
+ *
+ * Three layers, in order:
+ *
+ *   1. Tokens. The shell's motion scale is three durations and one curve, and
+ *      the curve is the stock Material S-curve: it eases in as well as out, so a
+ *      panel that should feel flicked starts by hesitating. Retuning the tokens
+ *      moves every transition that reads them — which is the whole shell — at
+ *      once, with no selector fights.
+ *   2. The curve fallback. Most component transitions name the bare `ease`
+ *      keyword instead. Re-pointing `transition-timing-function` keeps each
+ *      component's duration and property list and replaces only the curve.
+ *   3. Surfaces. Elevation, overlay entrances, control feedback, typography.
+ */
+
+/* ----------------------------------------------------------------------------
+ * 1. Motion tokens
+ * ------------------------------------------------------------------------- */
+
+:root {
+  /* Decelerating curves: quick out of the gate, settling at the end. That shape
+     is what reads as weight rather than hesitation. */
+  --ds-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  /* A little overshoot, for short-lived affordances only (press, pop-in). */
+  --ds-ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
+
+  /* The shell's shared curve. Forty-three component transitions read it, so it
+     is the single highest-leverage value in this file: the stock curve eases in
+     and out for every state change, and a panel toggle that eases in looks like
+     it lagged before it moved. */
+  --ds-ease-in-out: var(--ds-ease-standard);
+
+  /* Durations: the shell's own three, slightly rebalanced. Fast stays fast
+     (hover and colour must not lag the pointer), standard grows enough to let
+     the new curve be visible, and slow carries the panel tracks. */
+  --ds-transition-duration-fast: 110ms;
+  --ds-transition-duration: 240ms;
+  --ds-transition-duration-slow: 380ms;
+
+  /* This layer's own scale. */
+  --dsh-polish-press: 0.985;
+  --dsh-polish-pop: 180ms;
+  --dsh-polish-lift: 240ms;
+}
+
+/* ----------------------------------------------------------------------------
+ * 2. One curve everywhere
+ * ------------------------------------------------------------------------- */
+
+/* Component shorthands (`transition: color 120ms ease`) win on specificity, so
+ * this needs two `:root`s to outweigh a single class, and it must stay a
+ * longhand: setting `transition` here would wipe the property lists that decide
+ * what animates at all.
+ *
+ * Loops are deliberately untouched — `animation-timing-function` is not set
+ * anywhere in this file. The shimmer, marquee, spinner and progress animations
+ * are linear on purpose and tear if they are eased. */
+:root:root *,
+:root:root *::before,
+:root:root *::after {
+  transition-timing-function: var(--ds-ease-in-out);
+}
+
+/* ----------------------------------------------------------------------------
+ * 3. Materials
+ * ------------------------------------------------------------------------- */
+
+/* Retuned at the token, not per surface: every menu, dialog, popover, toast and
+ * card that reads an elevation token improves together, in both palettes.
+ *
+ * The stock values are three alphas of pure black, which reads as haze rather
+ * than depth — flat, and muddy over tinted surfaces. These are layered pairs: a
+ * tight contact shadow for the edge that meets the page, an ambient one for the
+ * body, and a wide soft one for the topmost surfaces. Light mode uses a
+ * blue-cooled black so the shadow sits on the palette; dark mode cannot use
+ * black-on-black, so it separates by a hairline highlight instead. */
+body {
+  --dsw-shadow-lv1:
+    0 1px 2px -0.5px rgba(16, 24, 40, 0.08),
+    0 1px 3px rgba(16, 24, 40, 0.05);
+  --dsw-shadow-lv1-blur: 0 6px 16px -4px rgba(16, 24, 40, 0.10);
+  --dsw-shadow-lv2:
+    0 1px 2px -0.5px rgba(16, 24, 40, 0.07),
+    0 6px 16px -4px rgba(16, 24, 40, 0.10),
+    0 12px 28px -12px rgba(16, 24, 40, 0.10);
+  --dsw-shadow-lv3:
+    0 1px 2px -0.5px rgba(16, 24, 40, 0.06),
+    0 12px 28px -8px rgba(16, 24, 40, 0.12),
+    0 28px 60px -16px rgba(16, 24, 40, 0.16);
+  --dsw-elevation-soft: var(--dsw-elevation-stroke), var(--dsw-shadow-lv1);
+  --dsw-elevation-panel: var(--dsw-elevation-stroke), var(--dsw-shadow-lv2);
+  --dsw-elevation-prominent: var(--dsw-elevation-stroke), var(--dsw-shadow-lv3);
+}
+
+body[data-ds-dark-theme] {
+  --dsw-shadow-lv1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.05);
+  --dsw-shadow-lv1-blur: 0 8px 20px -6px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  --dsw-shadow-lv2:
+    0 2px 6px -2px rgba(0, 0, 0, 0.55),
+    0 10px 24px -8px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --dsw-shadow-lv3:
+    0 4px 10px -4px rgba(0, 0, 0, 0.6),
+    0 18px 40px -12px rgba(0, 0, 0, 0.55),
+    0 36px 72px -24px rgba(0, 0, 0, 0.5),
+    0 0 0 0.5px rgba(255, 255, 255, 0.08);
+}
+
+/* The topmost surfaces get a hairline top highlight as well: a 1px inner line
+ * where the edge catches light is what separates a floating panel from a
+ * printed rectangle, and it costs nothing. Applied only to surfaces that
+ * already float above the page, never to in-flow cards. */
+[role='dialog'],
+[role='menu'],
+[role='listbox'] {
+  box-shadow: var(--dsw-elevation-prominent), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ----------------------------------------------------------------------------
+ * 4. Overlay entrances
+ * ------------------------------------------------------------------------- */
+
+/* Upstream animates some overlays and not others, and none of them animate out.
+ * These give the floating layer one entrance, short enough to feel immediate:
+ * 4px of travel on a decelerating curve. The exit states upstream already
+ * publishes (`data-closing`, `data-state='closing'`) get the mirror. */
+@keyframes dsh-polish-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dsh-polish-pop-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(2px) scale(0.99);
+  }
+}
+
+[role='menu'],
+[role='listbox'],
+[role='dialog'],
+[role='tooltip'] {
+  animation: dsh-polish-pop-in var(--dsh-polish-pop) var(--ds-ease-out) both;
+  /* Overlays never scroll the page behind them. */
+  overscroll-behavior: contain;
+}
+
+/* Tooltips follow the pointer: travel reads as lag there, so they fade only. */
+@keyframes dsh-polish-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+[role='tooltip'] {
+  animation-name: dsh-polish-fade-in;
+}
+
+[data-closing],
+[data-state='closing'] {
+  animation: dsh-polish-pop-out 120ms var(--ds-ease-standard) both;
+  pointer-events: none;
+}
+
+/* Dialogs are the one surface a person reads rather than scans, so the panel
+ * eases a touch further and its content column stops jumping when the body
+ * grows past the fold. */
+[role='dialog'] {
+  scrollbar-gutter: stable;
+}
+
+/* ----------------------------------------------------------------------------
+ * 5. Control feedback
+ * ------------------------------------------------------------------------- */
+
+/* Menus and options are the most-used controls in the app and the only ones
+ * small enough that a press can be acknowledged with travel rather than a
+ * colour change. The scale is deliberately small: at 0.985 a 28px row moves
+ * less than half a pixel, which reads as responsiveness rather than as motion.
+ *
+ * Only `transform` is declared, never `transition` — components already own
+ * their transition lists, and replacing one here would silently drop the colour
+ * fade that makes hover feel soft. Where a component declares no transition the
+ * press is instant, which is how a physical button behaves anyway. */
+[role='menuitem']:active:not([aria-disabled='true']),
+[role='option']:active:not([aria-disabled='true']) {
+  transform: scale(var(--dsh-polish-press));
+}
+
+/* Enter and space are the keyboard's press: the same acknowledgement, without a
+ * pointer. `:active` already covers the keys for buttons; these roles are divs
+ * upstream drives by hand, so the state travels on the attribute it sets. */
+[role='menuitem'][data-pressed],
+[role='option'][data-pressed] {
+  transform: scale(var(--dsh-polish-press));
+}
+
+/* Disabled controls should not invite a click, and should not keep the pointer
+ * feedback that a live control has. */
+button:disabled,
+[role='button'][aria-disabled='true'],
+[role='menuitem'][aria-disabled='true'],
+[role='option'][aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* Selected tabs and switches: the indicator is what moves, so it takes the
+ * spring. Components own the geometry; this only names the timing. */
+[role='tab'],
+[role='switch'],
+[role='tablist']::after {
+  transition-duration: var(--ds-transition-duration);
+}
+
+/* ----------------------------------------------------------------------------
+ * 6. Typography and text rendering
+ * ------------------------------------------------------------------------- */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* The app is a window, not a page: no rubber-band over the shell. */
+  overscroll-behavior: none;
+}
+
+/* Prose is read, not scanned past: `pretty` keeps a single word off the last
+ * line, and balanced headings stop a two-word title from wrapping alone. */
+p,
+li,
+blockquote {
+  text-wrap: pretty;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+}
+
+/* Code keeps its column alignment; the shell already ships a code stack with no
+ * bare `monospace` tail, so this only adds the numeric treatment. */
+code,
+kbd,
+samp,
+pre {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selection, caret, and native control tint from the product accent instead of
+ * the browser default blue, which is the one colour on screen that belongs to
+ * no palette here. `color-mix` keeps the selection readable over both the page
+ * and elevated surfaces without a second token. */
+::selection {
+  background: color-mix(in oklab, var(--dsw-alias-state-business-primary) 26%, transparent);
+}
+
+* {
+  caret-color: var(--dsw-alias-state-business-primary);
+  accent-color: var(--dsw-alias-state-business-primary);
+}
+
+/* Placeholders should read as empty, not as disabled content. */
+::placeholder {
+  opacity: 0.7;
+}
+
+/* ----------------------------------------------------------------------------
+ * 7. Scrollbars
+ * ------------------------------------------------------------------------- */
+
+/* The skin and its tokens belong to the theme; the thumb is what a person
+ * actually touches, so it gets the same feedback as every other control. Set as
+ * longhands so a theme that also transitions the thumb's shadow keeps it. */
+::-webkit-scrollbar-thumb {
+  transition-property: background-color;
+  transition-duration: var(--ds-transition-duration-fast);
+  transition-timing-function: var(--ds-ease-standard);
+}
+
+/* ----------------------------------------------------------------------------
+ * 8. Preferences and accessibility
+ * ------------------------------------------------------------------------- */
+
+/* Someone who asked for less motion asked for all of it, including this
+ * layer's: the entrances go, and the shell's own transitions collapse to a
+ * duration that cannot be perceived as travel. Colour and opacity still change,
+ * so state remains legible. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ds-transition-duration-fast: 1ms;
+    --ds-transition-duration: 1ms;
+    --ds-transition-duration-slow: 1ms;
+    --dsh-polish-pop: 1ms;
+    --dsh-polish-lift: 1ms;
+  }
+
+  :root:root *,
+  :root:root *::before,
+  :root:root *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* More contrast: the hairlines that separate surfaces get stronger rather than
+ * the whole palette being repainted. */
+@media (prefers-contrast: more) {
+  :root {
+    --dsw-focus-ring-width: 3px;
+  }
+
+  [role='dialog'],
+  [role='menu'],
+  [role='listbox'] {
+    outline: 1px solid var(--dsw-alias-border-l4);
+  }
+}

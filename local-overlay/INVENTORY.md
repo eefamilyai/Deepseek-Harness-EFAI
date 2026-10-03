@@ -131,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 514 paths do not exist upstream, so no patch covers them and none can conflict.
+These 522 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -410,6 +410,11 @@ These 514 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/host/version-route/src/index.ts`
 - `packages/host/version-route/tests/version-route.spec.ts`
 - `packages/host/version-route/tsconfig.json`
+- `packages/host/web-access/README.md`
+- `packages/host/web-access/package.json`
+- `packages/host/web-access/src/index.ts`
+- `packages/host/web-access/tests/web-access.spec.ts`
+- `packages/host/web-access/tsconfig.json`
 - `packages/kernel/kernel-python/README.md`
 - `packages/kernel/kernel-python/package.json`
 - `packages/kernel/kernel-python/src/child.ts`
@@ -449,6 +454,8 @@ These 514 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/ai-accounts/src/client/index.ts`
 - `packages/llm/ai-accounts/src/index.ts`
 - `packages/llm/ai-accounts/src/types.ts`
+- `packages/llm/ai-accounts/tests/ai-accounts.host.spec.ts`
+- `packages/llm/ai-accounts/tests/client-mount.client.spec.ts`
 - `packages/llm/ai-accounts/tsconfig.client.json`
 - `packages/llm/ai-accounts/tsconfig.host.json`
 - `packages/llm/ai-accounts/tsconfig.json`
@@ -644,6 +651,7 @@ These 514 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/uv.lock`
 - `python/kiln/runtime/vision_tools.py`
 - `python/kiln/test_provider_bridge_wire.py`
+- `scripts/web-access.mjs`
 - `start.cmd`
 - `start.sh`
 - `upload_to_git.py`
