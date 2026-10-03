@@ -593,3 +593,35 @@ a scrollable box. What the code says about that:
   are already imported for the drill-in; and `observeStickyMenuGroups` only tracks
   direct `MenuGroup` children, so custom headers lose stickiness unless it is
   extended.
+
+### Model dropdown: the account selector, as specified (2026-10-03)
+
+The operator's clarification, restated as work on the same plugin (no upstream file):
+
+- **The account pool becomes one choice control, not ten rows.** The ten account
+  routes (`DeepSeek (free web) (deepseek.ee.1+...)`) render as *bubbles* - a
+  wrapping, single-choice group where exactly one bubble is selected, and the box
+  scrolls if they overflow. Selecting a bubble picks that account's route.
+- **Only the four models stay as rows.** Under the `DeepSeek (free web)` header: the
+  bubble row, then `DeepSeek`, `DeepSeek · Thinking`, `DeepSeek · Search`,
+  `DeepSeek · Thinking + Search`.
+- So the provider shows: one header, one account bubble row, four model rows.
+
+Where that lands in the current implementation:
+
+1. The block is the container hook. The account rows are **not** children of a
+   `[data-menu-group]` section in this deployment's markup - they render as their own
+   list beside the provider groups - so neither the sheet's group rules nor the
+   enhancer reach them, and the scroll box from `cd493e289a` does not bound them.
+   Resolving that hook is the first step; a DOM probe of the open menu (inspect
+   `[data-menu-group]`'s siblings and the account rows' ancestors, looking for
+   `data-*` or a role) settles it.
+2. With the container known, the enhancer moves the ten rows into a bubble row it
+   owns (a `role="radiogroup"` of buttons, one `aria-checked="true"`), placed after
+   the `DeepSeek (free web)` header, and the sheet styles them as wrapping pills with
+   a scroll cap. Moving nodes is heavier than the current attribute wiring but stays
+   plugin-only, degrades to the plain list if the container is missing, and is
+   reversible on the next menu open because the menu is unmounted when it closes.
+3. One correctness note for the move: the chosen account and the chosen model are two
+   halves of one selection (`provider` + `model`), so a bubble click must submit the
+   same `ModelSelection` the row click does, not a bare account id.
