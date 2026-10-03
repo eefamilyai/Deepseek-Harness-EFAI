@@ -713,4 +713,72 @@ file and its map. `pnpm exec tsdown --env.DSH_BUILD_FACE client` alone therefore
 whatever `tsc` last emitted, so a source edit needs
 `tsc -b tsconfig.client.json` **first**, and a stale bundle looks exactly like a fix that
 did not work (the CSS, which is read from source, updates in the same build, so the sheet
-and the script disagree).
+and the script disagree). The host face is the same, one step further: a running host
+resolves `@deepseek-ai/dsh-host-web-access` through the profile junction to the package's
+**`lib/index.js`**, so a host-side edit needs `tsc -b tsconfig.host.json` and
+`tsdown --env.DSH_BUILD_FACE host` before a spare host can exercise it. That is what made
+the first attempt at the fix below look like it had not applied.
+
+### The access file, two hosts, one state directory (2026-10-03)
+
+The failure the operator hit: the spare host an agent boots for a test overwrote
+`$DSH_HOME/run/web-access.json`, and with it the only pointer to the running app's
+per-boot token. The app keeps serving, but nothing can recover its URL.
+
+`packages/host/web-access` now checks the configured path before writing it:
+`heldByLiveHost()` reads the record's `pid` and asks `process.kill(pid, 0)` (treating
+`EPERM` as alive, since that is a process this user may not signal). A live foreign
+holder keeps the path and this host publishes beside it as `web-access.<port>.json`
+(`portScopedPath`); a gone pid, an unreadable record, or this process's own record is
+replaced as before. Teardown removes only the file this publisher wrote.
+
+`scripts/web-access.mjs` reads the whole directory now: no arguments reports the
+configured path's host when it is running, else the newest live record, else the newest
+record; `--all` lists every record with its pid and live/gone state; `--port` names one.
+With several records it says which file it chose on stderr, so stdout stays a bare URL.
+
+Verified live with two real hosts (`50141` and `50142`, built host face): A kept
+`web-access.json` (pid 52784), B wrote `web-access.50142.json` (pid 52040), the default
+read answered with A's URL, `--all` listed both as `live`, `--token` gave A's token, and
+`--port 50142` gave B's. 15 package specs cover the guard, the scoped path, the
+reader's preference order, and the unchanged teardown.
+
+### The last hard-coded client copy (2026-10-03)
+
+`verify-client-ui-i18n` was red on `packages/client/ui-effects/src/client/Overlay.tsx`:
+the focus button, the lock dialog's passcode chrome, and the names of all 24 nature
+scenes were English literals in source. The scene catalog now carries a copy key per
+scene (`effects.scene.<id>`), the overlay takes its strings as an `EffectsOverlayCopy`
+prop, and `index.ts` resolves them from the plugin's `settings.effects` dictionaries and
+redraws on `locale/change` (the overlay is mounted outside the render machinery, so
+nothing else would refresh it). The gate is green across all 966 Client UI sources.
+
+Newly written client source must keep out of the gate's way: a module-level constant
+whose *name* looks like copy (`TITLE`) and whose value is natural text is reported, so the
+account picker keeps its cached heading title in `dataset.dshAccountTitle` instead of a
+`const TITLE` - the same shape `model-groups.ts` already used for `dataset.dshGroupWired`.
+
+### Motion evidence: the panel toggles and the folded pool (2026-10-03)
+
+`.playwright-mcp/panel-toggle/panel-toggle.gif` (1.4 MB, 1000x626, 12 fps, 1x speed,
+12.6 s source + 3 s final hold) records one run against the spare host on `50143`:
+sidebar collapse, sidebar return, the right dock opening, then the model dropdown's
+folded account pool. Script: `.playwright-mcp/panel-toggle/record.mjs` (Playwright
+resolved from `apps/web`, no browser-tool video channel exists).
+
+The GIF is deliberately 1x: speeding it up would hide the very thing it exists to show,
+and the sidebar's collapse is a *sequenced* animation (150 ms fade, then the rail's
+150 ms entry against the 300 ms track), which a fast playback reads as a single jump.
+Its precondition is that the shell remembers its layout, so the script expands the
+sidebar first when the profile opens collapsed - the collapsed toggle is named
+"Open sidebar", not "Expand sidebar".
+
+The Tools pane was captured the same way (`.playwright-mcp/tools-section/tools-pane.png`):
+one Playwright click on Settings is not always enough - the first attempt left the dialog
+closed and only *focused* the button, so the script now waits for the composer, retries
+the click, and requires the pane's own "Open configuration file" marker before continuing.
+What the pane showed is recorded there: availability, the kernel window, the
+"no browser tools in this deployment" line, and the preset roster - whose rows printed
+each preset's id twice because the registry answers with the id as the description when a
+preset declares none; the row now prints the description only when it says something the
+title does not.
