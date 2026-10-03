@@ -744,7 +744,6 @@ the first attempt at the fix below look like it had not applied.
 The failure the operator hit: the spare host an agent boots for a test overwrote
 `$DSH_HOME/run/web-access.json`, and with it the only pointer to the running app's
 per-boot token. The app keeps serving, but nothing can recover its URL.
-
 `packages/host/web-access` now checks the configured path before writing it:
 `heldByLiveHost()` reads the record's `pid` and asks `process.kill(pid, 0)` (treating
 `EPERM` as alive, since that is a process this user may not signal). A live foreign
@@ -802,3 +801,37 @@ What the pane showed is recorded there: availability, the kernel window, the
 each preset's id twice because the registry answers with the id as the description when a
 preset declares none; the row now prints the description only when it says something the
 title does not.
+
+### A table that arrived glued: the parser was innocent (2026-10-03)
+
+The operator's GUI showed a markdown table as one line of raw pipes -
+`| Route title | Choice|---|---|`. Three suspects, none of them guilty:
+
+- **The client's markdown pipeline** supports tables: `parseGfm` runs micromark's full GFM
+  (`micromark-extension-gfm`), `render.tsx` has a `table` case, and
+  `ui-primitives/tests/markdown.client.spec.tsx` renders one. The installed Desktop's bundle
+  carries the same feature (`md-table-wide` x11 and `tableScroll` x38 in `app.asar`).
+- **The DSML reader** (`packages/llm/llm-text-toolcalls`, upstream, Tier-2) preserves
+  newlines: driving `DsmlTranslator` with the table whole, in word chunks, with a lone `\n`
+  chunk, and character by character emitted every newline intact.
+- **The sidecar** (`python/kiln/runtime/ds_direct.py`) concatenates SSE fragment content
+  verbatim (`frags[idx]["content"] += text`); its `.strip()` only ever touches the JSON frame,
+  never the answer's text.
+
+What is left is the model's own output: the logged stream deltas read
+`"Choice","|---|---|\n"` with no newline token between them, so the answer reached the harness
+with the header and its delimiter row on one line - and with the header's outer pipe gone.
+
+The fix (`a23fb23acf`) sits in the one fork-owned place that holds the whole block: the Kiln
+adapter repairs the visible text as it closes (`src/markdown-fidelity.ts`), so the answer the
+client and the session log receive is the table the model wrote. The match is narrow - a line
+that starts as a table row, whose trailing delimiter run describes the same column count as the
+header it is glued to, with a row after it - so a correct table, prose that mentions pipes, a
+fenced quote of one, and a column mismatch all pass through untouched. 15 specs cover those
+shapes and the adapter path, including an answer split across stream chunks.
+
+**It needs a host restart to take effect**: the running app resolved `llm-kiln/lib/index.js` at
+boot, so turns after the next restart get the repair; the built `lib/` was verified to carry it.
+The two failed attempts along the way were mine, not the fix's - a probe asserted the delimiter
+regex on a slice that began at a dash instead of at the run's pipe, and the first guard required
+the header to end with a pipe, which the real text does not have.
