@@ -1,5 +1,5 @@
 ---
-description: "Markdown fidelity for a model's text stream: a table's delimiter row goes back on its own line, on every provider route."
+description: "Markdown fidelity for a model's text stream: table lines a lost newline merged go back onto lines of their own, on every provider route."
 kind: "package-reference"
 ---
 
@@ -7,19 +7,18 @@ kind: "package-reference"
 
 ## Summary
 
-A GFM table needs its header and its delimiter row on separate lines:
+A GFM table needs its header, its delimiter row, and each of its rows on lines of their own. A
+model that drops the newline after a row's closing pipe writes two shapes, and both are broken:
 
 | Shape | What the renderer makes of it |
 |---|---|
-| `\| a \| b \|` then `\| --- \| --- \|` | a table |
 | `\| a \| b \|---\|` on one line | a paragraph of pipes |
+| `\| a \| b \| c \| d \|` where two rows were meant | one row of two cells — the rest are **discarded**, so the reader loses rows without being told |
 
-A model occasionally writes the second form, and nothing downstream can recover the first:
-the renderer has only text, the session keeps the malformed text for replays and exports, and
-the reader of a transcript sees punctuation. This row repairs it on `llm/stream` — the
-waterfall every provider route passes through — so the answer that reaches the client, the
-session log, and every later reader is the table that was written. It inserts the newline
-markdown asks for and changes nothing else.
+This row repairs both on `llm/stream` — the waterfall every provider route passes through — so
+the answer that reaches the client, the session log, and every later reader is the table that
+was written. It inserts the newlines markdown asks for and changes nothing else: no words of
+its own, and a table that arrived correctly is left exactly as it is.
 
 ## Use this package
 
@@ -43,22 +42,24 @@ exactly the routes it manages.
 
 ## What it repairs, and what it leaves alone
 
-A candidate is a delimiter run that follows cells carrying text and describes the same number
-of columns as that header. The pass then:
+What makes the repair safe is the table's own column count. A delimiter row states it, and a
+cell that holds a pipe has to escape it, so a line whose cells divide by that count was two or
+more rows. The pass therefore:
 
-- repairs `| a | b |---|---|`, with alignment cells (`|:--|--:|`), with a space between the
-  pair, with three columns or more, and inside a list item's indentation;
-- repairs it however the stream split it, including one character at a time, because it
-  withholds only the tail that could still turn out to be a delimiter row;
-- leaves a table that arrived correctly, prose that mentions pipes and dashes, a fenced block
-  that quotes a glued table, a run whose columns disagree, and a header with nothing under it
-  exactly as they were.
+- separates a delimiter row merged into its header, with alignment cells (`|:--|--:|`), with a
+  space between the pair, with three columns or more, and inside a list item's indentation;
+- splits rows a lost newline merged, including a row merged onto the delimiter row;
+- does it however the stream cut the text, because a line that looks like a table row is
+  buffered until its own newline arrives while prose streams through untouched;
+- leaves a table that arrived correctly, a short row (markdown pads those), a row whose cells do
+  not divide by the column count, a table whose delimiter row is not in the text, prose that
+  mentions pipes and dashes, and a fenced block that quotes a glued table exactly as they were.
 
 ## Model Experience
 
 ### What the model sees
 
-Nothing. The pass inserts a newline inside text the model already wrote, and adds no words of
+Nothing. The pass inserts newlines inside text the model already wrote, and adds no words of
 its own. A model that reads its own previous answer back sees the table it wrote.
 
 ### Token effect
@@ -72,10 +73,9 @@ message, so the prefix is the one a correctly written answer would have produced
 
 ## Known Limitations and Deferred Work
 
-- Only a glued delimiter row is repaired. A table whose *body rows* were glued into one line
-  cannot be put back together, because the boundary between one row and the next is not in the
-  text any more.
-- The repair is applied to visible text, not to reasoning: a table in a reasoning block is
-  left as the model wrote it.
+- Two rows merged into one line are repaired; a row merged with *prose* is not, because nothing
+  in the text says where the prose was meant to begin.
+- The repair is applied to visible text, not to reasoning: a table in a reasoning block is left
+  as the model wrote it.
 - A block whose text the provider assembled other than from its own deltas is passed through
   untouched: the pass replaces a block only when the block equals the deltas it saw.

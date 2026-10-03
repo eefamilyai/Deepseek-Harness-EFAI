@@ -1,20 +1,24 @@
 /**
  * The repair while the text is still arriving.
  *
- * A glue can be split across deltas, so the pass withholds only the tail that could still
- * turn out to be a delimiter row. These specs cut the same answer at every position and
+ * A merged line can be split across deltas, so the pass buffers a line while it looks like a
+ * table row and settles it whole. These specs cut the same answer at every position and
  * require the same repaired stream, which is the property a stream pass has to hold.
  */
 
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { readMarkdownFidelity } from '@deepseek-ai/dsh-llm-markdown-fidelity'
+import { readMarkdownFidelity, TableLineRepair } from '@deepseek-ai/dsh-llm-markdown-fidelity'
 
 /** The shape one session produced verbatim. */
 const GLUED = '| Route title | Choice|---|---|\n| `a` | `b` |\n| `c` | `d` |\n'
 
 /** The same answer with the delimiter row where markdown wants it. */
 const HEALTHY = '| Route title | Choice\n|---|---|\n| `a` | `b` |\n| `c` | `d` |\n'
+
+/** A table whose rows a lost newline merged, and what it meant to say. */
+const MERGED = '| a | b |\n|---|---|\n| r1 | s1 | r2 | s2 |\n'
+const SEPARATE = '| a | b |\n|---|---|\n| r1 | s1 |\n| r2 | s2 |\n'
 
 /** A source that delivers one answer in the given pieces and then finishes. */
 async function* source(pieces: readonly string[], block = true): AsyncGenerator<StreamChunk> {
@@ -54,6 +58,25 @@ describe('readMarkdownFidelity', () => {
     for (let cut = 0; cut <= HEALTHY.length; cut += 1) {
       expect(await textOf([HEALTHY.slice(0, cut), HEALTHY.slice(cut)]), `cut at ${cut}`).toBe(HEALTHY)
     }
+  })
+
+  it('splits merged rows however the stream split them', async () => {
+    for (let cut = 0; cut <= MERGED.length; cut += 1) {
+      expect(await textOf([MERGED.slice(0, cut), MERGED.slice(cut)]), `cut at ${cut}`).toBe(SEPARATE)
+    }
+    expect(await textOf(MERGED.split(''))).toBe(SEPARATE)
+  })
+
+  it('hands over prose as it arrives, and holds a row until its line ends', () => {
+    // Only a line that looks like a table row is buffered; prose streams on untouched.
+    const repair = new TableLineRepair()
+    expect(repair.push('an answer that is ')).toBe('an answer that is ')
+    expect(repair.push('still arriving')).toBe('still arriving')
+    // A row waits for the newline that says how many rows the line holds, then comes out
+    // whole. Nothing is split here: a table's column count comes from its delimiter row, and
+    // this line is all the pass has seen.
+    expect(repair.push('\n| a | b |')).toBe('')
+    expect(repair.push(' c | d |\n')).toBe('\n| a | b | c | d |\n')
   })
 
   it('hands over the block it assembled, not the glued one', async () => {

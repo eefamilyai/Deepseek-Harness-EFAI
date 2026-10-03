@@ -20,8 +20,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { readMarkdownFidelity } from './stream.ts'
 
-export { GluedTableRepair, readMarkdownFidelity } from './stream.ts'
-export { cellsOf, delimiterRun, gluedDelimiterAt, isHeaderSegment, repairGluedTableDelimiter } from './repair.ts'
+export { readMarkdownFidelity, TableLineRepair } from './stream.ts'
+export {
+  columnsOf, delimiterRun, gluedDelimiterAt, isHeaderSegment, repairTableLine, repairTableLines, rowsOf,
+} from './repair.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'llm-markdown-fidelity'
