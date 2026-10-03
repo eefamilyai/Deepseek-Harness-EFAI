@@ -900,3 +900,29 @@ line holds one row or several is a property of the finished line - and prose sti
 character for character. 28 specs, with both shapes kept verbatim from the log as fixtures.
 
 **Needs one restart to load**, as before: the host row was already resolved when the app booted.
+
+### The third shape, and where the damage actually comes from (2026-10-03)
+
+The next attempt produced a *third* malformation, and this one is the model's, not the channel's.
+Reading my own deltas back out of the log:
+
+    "…as tables", ":\n", "\n| Route title | Choice\n\n|---|---|\n", …
+
+So the header and the delimiter row arrived separated by a **blank line** - not glued at all -
+and the merged row under it (`| alpha | beta | gamma | delta`) went unsplit because a blank line
+had reset the table's column count. The pass left all of it alone, correctly: it knew the two
+glued shapes and this was neither.
+
+`67e9068f2f` adds it. A blank line is removed only when the line after it is a delimiter row with
+the header's own column count and a row follows - the exact pair markdown would have joined - so
+a blank line between a row and prose, or above a delimiter row that does not match, stays. On the
+stream side a blank line is held while the header above it may still claim it; prose and its
+breaks are no longer held at all, which the earlier buffering rewrite had made them.
+
+**The conclusion worth keeping.** Three attempts to reproduce the glue on demand produced three
+different malformations, none of them the glue: my own stream drops newlines *around pipes* and
+occasionally loses a blank line where markdown needs adjacency. The pass is therefore a net, not
+a substitute for formatting: it now covers the three shapes this fork's log actually contains,
+with each one kept verbatim as a spec fixture, and any further shape is a new defect rather than
+a guess. A model writing tables through this channel should also prefer rows that end in text
+rather than a trailing pipe, because the character after a pipe is where the newline goes.
