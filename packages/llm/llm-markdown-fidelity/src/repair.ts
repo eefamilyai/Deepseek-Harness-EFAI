@@ -122,6 +122,21 @@ export function rowsOf(line: string, columns: number | null): string[] | null {
 }
 
 /**
+ * The column count of the last delimiter row among these lines.
+ *
+ * A line that arrived with its delimiter row glued to its header produced one, and the rows
+ * written below it split by that count — so a caller reads the count from what it wrote as
+ * well as from what arrived, or the first row after a separated pair would stay merged.
+ * @param lines - the lines one arriving line was written as.
+ * @returns the count, or null when none of them is a delimiter row.
+ */
+export function lastColumnsOf(lines: readonly string[]): number | null {
+  let found: number | null = null
+  for (const line of lines) found = columnsOf(line) ?? found
+  return found
+}
+
+/**
  * The lines one finished line stands for.
  *
  * The two glues are checked in the order they can nest: a delimiter row merged into its
@@ -210,8 +225,11 @@ export function repairTableLines(text: string): string {
       continue
     }
     const rowsFollow = (lines[index + 1] ?? '').trimStart().startsWith('|')
-    out.push(...(fenced ? [line] : repairTableLine(line, columns, rowsFollow)))
-    const count = columnsOf(line)
+    const repaired: string[] = fenced ? [line] : repairTableLine(line, columns, rowsFollow)
+    out.push(...repaired)
+    // A separated pair states the count the rows below it split by; reading only the arriving
+    // line would leave the first row after it merged, repaired only by a second pass.
+    const count: number | null = columnsOf(line) ?? lastColumnsOf(repaired)
     header = !fenced && blockStart && count === null && line.trimStart().startsWith('|') && isHeaderSegment(line)
       ? cells(line).length
       : null

@@ -48,7 +48,9 @@ more rows. The pass therefore:
 
 - separates a delimiter row merged into its header, with alignment cells (`|:--|--:|`), with a
   space between the pair, with three columns or more, and inside a list item's indentation;
-- splits rows a lost newline merged, including a row merged onto the delimiter row;
+- splits rows a lost newline merged, including a row merged onto the delimiter row and a row
+  that follows a pair this pass separated in the same line, which splits by the count the
+  separated pair states;
 - does it however the stream cut the text, because a line that looks like a table row is
   buffered until its own newline arrives while prose streams through untouched;
 - leaves a table that arrived correctly, a short row (markdown pads those), a row whose cells do
@@ -79,3 +81,8 @@ message, so the prefix is the one a correctly written answer would have produced
   as the model wrote it.
 - A block whose text the provider assembled other than from its own deltas is passed through
   untouched: the pass replaces a block only when the block equals the deltas it saw.
+- Text a session recorded before this pass was mounted stays malformed, because nothing streams
+  it again and no supported mechanism shadows a recorded `assistant/message`: a surface
+  `replace` must cite every node it shadows, which an assistant message may not carry, so the
+  removal of the history that predates the pass is a fork-local file repair
+  (`local-overlay/tools/repair-recorded-tables.mjs`) rather than a plugin contribution.

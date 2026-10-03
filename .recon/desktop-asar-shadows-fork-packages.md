@@ -926,3 +926,120 @@ a substitute for formatting: it now covers the three shapes this fork's log actu
 with each one kept verbatim as a spec fixture, and any further shape is a new defect rather than
 a guess. A model writing tables through this channel should also prefer rows that end in text
 rather than a trailing pipe, because the character after a pipe is where the newline goes.
+
+## Why the 19:17 table is still broken after the fix (2026-10-03 20:0x)
+
+### The timeline, from the machine itself
+
+| Fact | Value | Source |
+|---|---|---|
+| `lib/index.js` of the fidelity pass rebuilt | 19:26:30 | file mtime |
+| Desktop app (`DeepSeek Harness.exe`, pid 18296) started | 19:36:28 | `Get-Process -Id 18296` |
+| Row loaded in that app | yes, `llm-markdown-fidelity` … Enabled, under Global plugins | GUI → Settings → Built-in plugins, search "fidelity" |
+| The broken message (`| Route title | Choice` + blank line + `|---|---|`) recorded | 19:17:57 | `assistant/message` seq 10664 of this session |
+| Commit that added the blank-line repair (`67e9068f2f`) | 19:27:14 | `git log` |
+
+The app has the current build loaded. The message the operator is looking at was written at
+19:17 — ten minutes *before* that build existed — and it is a *recorded* text block: a stream
+pass cannot touch it, because nothing streams it again. Rendering it goes through the session
+log, and the log still holds the malformed text.
+
+### The pass works on a real stream: A/B, one run each
+
+Same headless profile, same prompt ("output exactly these lines, do not reformat; line 1 ends
+with a glued delimiter run"), same model, one with the row mounted and one without:
+
+| Run | Recorded `assistant/message` text |
+|---|---|
+| `--profile headless --patch` (row mounted) | `'| Route title | Choice\n|---|---|\n| alpha | beta |'` — separator on its own line |
+| `--profile headless` (control) | `'| Route title | Choice|---|---|\n| alpha | beta |'` — as emitted |
+
+Playbook: `.recon/_fidelity-probe.yml` mounts the row; each run writes its own session log,
+which `node .recon/_dump.mjs <log> <out.jsonl>` decompresses for reading.
+
+### Why the recorded text has no repair path through the client
+
+Read this far before designing a display-side fix; every door is closed by an existing rule:
+
+- **No client override of an assistant node.** `uiConversation.events.register(kind)` throws
+  when the kind is already owned (`definition-registry.ts`), and `ui-chat` owns
+  `assistant/message`. A fork client plugin cannot re-register it.
+- **A message projection is host-only.** `ctx.sessions.registerMessageProjection` changes the
+  model-visible derivation (`deriveEventMessage`), and the client builds its rows from the
+  events themselves, so this cannot change the page either.
+- **The DOM cannot be repaired after the fact.** The rendered page keeps the paragraph but not
+  the line breaks: `| alpha | beta | gamma | delta` + prose arrive as one paragraph, and the
+  boundary between the last cell and the prose is not recoverable from the DOM. Rebuilding the
+  table there would guess, silently.
+- **New production code may not read history synchronously.** `Session.eventAt`,
+  `snapshotEvents`, and `ownEvents` are `@deprecated` with new calls prohibited
+  (`.agents/notes/implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.md`).
+
+### The route that remains
+
+`session.append(type, data, { surfaceOp: { op: 'replace', startSeq, endSeq } })` shadows a
+recorded node with a corrected one — the mechanism compaction and the tool-result pruner
+already use. The sanctioned way to *find* the candidates without a synchronous historical read
+is a `sessionProjections.register` unit whose `apply(state, event)` records the seq of every
+`assistant/message` whose text markdown misreads; the registry folds history through it, and a
+deferred flush appends one replacement per pending seq (`startSeq === endSeq`). The original
+events stay in the log, shadowed exactly as a pruned tool result is.
+
+## Repairing recorded tables: what the harness allows, and the one-pass bug (2026-10-03 20:3x)
+
+The operator chose to repair recorded history. Two findings shaped the answer.
+
+### A recorded `assistant/message` cannot be shadowed
+
+The documented mechanism — `session.append(type, data, { surfaceOp: { op: 'replace', startSeq,
+endSeq } })` — is refused for an assistant message. `assertSourceEventReferences`
+(`packages/core/session/src/surface.ts`) requires the replacement to cite every shadowed node,
+while `SurfaceIntent<'assistant/message'>` declares `sourceEventSeqs?: never`, so the append
+throws `surface replace: sourceEventSeqs must include every shadowed surface node; missing N`.
+A probe on a real `Session` reproduced it. `tool/result` and `user/message` replacements are
+legal; an assistant message is not. The client also derives its transcript from
+`event.data.message.content` directly (`ui-chat/src/client/conversation-nodes/assistant.ts`),
+and `ctx.sessions.registerMessageProjection` changes only the host's derivation, so no message
+projection can change the page either.
+
+### The repair needed two passes for one real shape
+
+Reading the operator's own logs found a text the pass half-repaired: a delimiter row glued to
+its header, with the row *below* it merged. The first pass separated the pair, but the count
+the row split needs comes from that pair, which the arriving line does not state — so the row
+stayed merged and only a second pass found it. `lastColumnsOf` now reads the count from what
+the pass wrote as well as from what arrived (`repair.ts`, `stream.ts`), with a regression spec
+for the shape in both the text and the stream suites (35 specs green).
+
+### The repair of what is already recorded — `local-overlay/tools/repair-recorded-tables.mjs`
+
+Since no append can shadow the text, the recorded bytes are the only place it can be fixed:
+
+- walks `~/.dsh/sessions/**/session*.jsonl(.zstd)`, decompresses the frame concatenation,
+  repairs `assistant/message` text blocks and `compaction/summary` bodies with the same
+  `repairTableLines` the pass uses, and writes the frames back through a temporary file;
+- verifies before and after every write: one header line, events contiguous from seq 0, every
+  repaired text a fixed point; any disagreement restores the `.bak-<stamp>` copy it took;
+- refuses to run while a host is up (`--allow-running` overrides for a copy), because the host
+  holds the authoritative log and rewrites the file as it compacts;
+- `--wait-for-pid <pid>` waits for that host *and* for every `DeepSeek Harness.exe` to be gone.
+
+Dry run over the whole sessions root: **53 messages in 9 files** (11 in this session alone).
+
+### Evidence that a repaired log is loadable
+
+A repaired copy was staged as its own session (header id and all 899
+`session-log-deepseek/delivery-accepted` markers repointed) and handed to the harness's own
+reader: `dsh --profile headless --session-id <staged> "…"` decompressed, parsed, and validated
+the whole log, then failed on the unrelated check that the session runs under a preset the
+one-shot runner does not compose — the format itself passed. The staged session was deleted
+afterwards. The same rewrite then ran against a copy of the live log and came back a fixpoint:
+355 text blocks, 0 still misread.
+
+### The live pass, proven A/B
+
+Two headless runs, same prompt ("output exactly these lines; line 1 ends with a glued delimiter
+run"), one with the row mounted and one without: with the row the recorded text was
+`'| Route title | Choice\n|---|---|\n| alpha | beta |'`; without it the glue survived
+verbatim. The app that serves this session has the row loaded (Built-in plugins → search
+"fidelity" → Enabled) and started after the build that carries it.

@@ -102,6 +102,16 @@ describe('repairTableLines', () => {
     expect(repairTableLines(partial)).toBe(partial)
   })
 
+  it('separates a glued pair and splits the row merged after it in one pass', () => {
+    // Verbatim from a recorded answer: the delimiter row is glued to its header, and the row
+    // below it merged two rows. The count the split needs comes from the pair this line
+    // produced, so one pass has to leave nothing for a second pass to find.
+    const shape = '| a | b |---|---|\n| r1 | s1 | r2 | s2 |\n'
+    const repaired = '| a | b\n|---|---|\n| r1 | s1 |\n| r2 | s2 |\n'
+    expect(repairTableLines(shape)).toBe(repaired)
+    expect(repairTableLines(repaired)).toBe(repaired)
+  })
+
   it('is idempotent', () => {
     expect(repairTableLines(HEALTHY)).toBe(HEALTHY)
     expect(repairTableLines(repairTableLines(GLUED))).toBe(HEALTHY)

@@ -13,7 +13,7 @@
  */
 
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { FENCE, cells, columnsOf, isHeaderSegment, repairTableLine } from './repair.ts'
+import { FENCE, cells, columnsOf, isHeaderSegment, lastColumnsOf, repairTableLine } from './repair.ts'
 
 /** Text a stream buffers while it waits to see the whole of a table line. */
 export class TableLineRepair {
@@ -95,15 +95,19 @@ export class TableLineRepair {
       return line
     }
     const count = columnsOf(line)
+    const repaired = this.fenced ? [line] : repairTableLine(line, this.columns)
     let out = this.blank
     if (out !== '' && count !== null && this.header === count) out = ''
     this.blank = ''
-    out += this.fenced ? line : repairTableLine(line, this.columns).join('\n')
+    out += repaired.join('\n')
     if (FENCE.test(line)) this.fenced = !this.fenced
-    this.header = !this.fenced && this.blockStart && count === null && line.trimStart().startsWith('|') && isHeaderSegment(line)
+    // A separated pair states the count the rows below it split by; reading only the arriving
+    // line would leave the first row after it merged.
+    const columns = count ?? lastColumnsOf(repaired)
+    this.header = !this.fenced && this.blockStart && columns === null && line.trimStart().startsWith('|') && isHeaderSegment(line)
       ? cells(line).length
       : null
-    this.columns = count ?? (line.trimStart().startsWith('|') ? this.columns : null)
+    this.columns = columns ?? (line.trimStart().startsWith('|') ? this.columns : null)
     this.blockStart = false
     return out
   }

@@ -67,6 +67,17 @@ describe('readMarkdownFidelity', () => {
     expect(await textOf(MERGED.split(''))).toBe(SEPARATE)
   })
 
+  it('splits the row merged behind a glued pair, however the stream split them', async () => {
+    // The count the split needs comes from the pair the glued line produced, so the row that
+    // follows it must come out split on the same pass.
+    const shape = '| a | b |---|---|\n| r1 | s1 | r2 | s2 |\n'
+    const repaired = '| a | b\n|---|---|\n| r1 | s1 |\n| r2 | s2 |\n'
+    for (let cut = 0; cut <= shape.length; cut += 1) {
+      expect(await textOf([shape.slice(0, cut), shape.slice(cut)]), `cut at ${cut}`).toBe(repaired)
+    }
+    expect(await textOf(shape.split(''))).toBe(repaired)
+  })
+
   it('hands over prose as it arrives, and holds a row until its line ends', () => {
     // Only a line that looks like a table row is buffered; prose and its breaks stream on.
     const repair = new TableLineRepair()
