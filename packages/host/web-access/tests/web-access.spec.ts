@@ -4,7 +4,7 @@
  * not readable from the file itself, so the specs assert both directions — the
  * URL round-trips for the reader, and the raw bytes never carry it.
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,15 +12,16 @@ import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  ACCESS_FILE_VERSION, apply, deriveKey, machineContext, openPayload, readOrCreateKey, sealPayload, type AccessRecord,
+  ACCESS_FILE_VERSION, apply, deriveKey, machineContext, openPayload, portScopedPath, readOrCreateKey, sealPayload,
+  type AccessPayload, type AccessRecord,
 } from '../src/index.ts'
 
 /** The operator-facing reader, exercised as the process an operator runs. */
 const READER = fileURLToPath(new URL('../../../../scripts/web-access.mjs', import.meta.url))
 
 /** Run the reader script and return its stdout, or throw with its stderr. */
-function runReader(script: string, args: string[]): string {
-  return execFileSync(process.execPath, [script, ...args], { encoding: 'utf8' }).trim()
+function runReader(script: string, args: string[], env?: NodeJS.ProcessEnv): string {
+  return execFileSync(process.execPath, [script, ...args], { encoding: 'utf8', env }).trim()
 }
 
 const dirs: string[] = []
@@ -36,20 +37,33 @@ afterEach(() => {
 
 const PAYLOAD = { url: 'http://127.0.0.1:19387/?token=SECRET-TOKEN-abc123', token: 'SECRET-TOKEN-abc123' }
 
-function writePair(dir: string, payload = PAYLOAD): { file: string; keyFile: string; record: AccessRecord } {
-  const file = join(dir, 'web-access.json')
-  const keyFile = join(dir, 'web-access.key')
-  const secret = readOrCreateKey(keyFile)
+/**
+ * Seal one record to a path, so a spec can stage the host it represents.
+ * @param file - the access file to write.
+ * @param keyFile - the key file the record is sealed with.
+ * @param options - the payload, the pid the record claims, and its publication time.
+ * @returns the record written.
+ */
+function stage(
+  file: string, keyFile: string, options: { payload: AccessPayload; pid: number; createdAt: string },
+): AccessRecord {
   const record: AccessRecord = {
     version: ACCESS_FILE_VERSION,
-    createdAt: '2026-10-03T00:00:00.000Z',
-    pid: process.pid,
+    createdAt: options.createdAt,
+    pid: options.pid,
     profile: 'desktop',
     algorithm: 'aes-256-gcm',
-    ...sealPayload(payload, deriveKey(secret, machineContext())),
+    ...sealPayload(options.payload, deriveKey(readOrCreateKey(keyFile), machineContext())),
     hint: 'node scripts/web-access.mjs',
   }
   writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`)
+  return record
+}
+
+function writePair(dir: string, payload = PAYLOAD): { file: string; keyFile: string; record: AccessRecord } {
+  const file = join(dir, 'web-access.json')
+  const keyFile = join(dir, 'web-access.key')
+  const record = stage(file, keyFile, { payload, pid: process.pid, createdAt: '2026-10-03T00:00:00.000Z' })
   return { file, keyFile, record }
 }
 
@@ -113,6 +127,67 @@ describe('the row', () => {
     await ctx.fiber.dispose()
     expect(existsSync(file), 'a reloading composition may have published a newer file').toBe(true)
     expect((JSON.parse(readFileSync(file, 'utf8')) as AccessRecord).pid).toBe(theirRecord.pid)
+  })
+
+  it('publishes beside a host that is still serving instead of over it', async () => {
+    const dir = tempDir()
+    const { file, keyFile } = writePair(dir)
+    const held = JSON.parse(readFileSync(file, 'utf8')) as AccessRecord
+    // A live process other than this one holds the configured path. The parent of a
+    // forked spec worker is running for the whole spec, which is what makes it live
+    // without spawning a host.
+    writeFileSync(file, `${JSON.stringify({ ...held, pid: process.ppid })}\n`)
+    const { ctx } = await mount(dir)
+    expect((JSON.parse(readFileSync(file, 'utf8')) as AccessRecord).pid, 'the live host keeps its record').toBe(process.ppid)
+    const scoped = join(dir, 'web-access.19387.json')
+    expect(existsSync(scoped), 'the second host publishes under its own port').toBe(true)
+    expect(runReader(READER, ['--path', scoped, '--key-path', keyFile])).toBe(PAYLOAD.url)
+    await ctx.fiber.dispose()
+    expect(existsSync(scoped), 'each host withdraws only its own file').toBe(false)
+    expect(existsSync(file)).toBe(true)
+  })
+
+  it('replaces the record of a host that is gone', async () => {
+    const dir = tempDir()
+    const { file } = writePair(dir)
+    const left = JSON.parse(readFileSync(file, 'utf8')) as AccessRecord
+    // A pid no Windows or POSIX machine hands out to a live process.
+    writeFileSync(file, `${JSON.stringify({ ...left, pid: 2 ** 30 })}\n`)
+    const { ctx } = await mount(dir)
+    expect((JSON.parse(readFileSync(file, 'utf8')) as AccessRecord).pid).toBe(process.pid)
+    expect(existsSync(join(dir, 'web-access.19387.json')), 'a free path needs no second file').toBe(false)
+    await ctx.fiber.dispose()
+  })
+})
+
+describe('the port-scoped path', () => {
+  it('sits beside the configured file, before its extension', () => {
+    expect(portScopedPath('/home/u/.dsh/run/web-access.json', 50140)).toBe('/home/u/.dsh/run/web-access.50140.json')
+    expect(portScopedPath('C:\\dsh\\run\\web-access.json', 50140)).toBe('C:\\dsh\\run\\web-access.50140.json')
+    // A dot in a directory name is not an extension.
+    expect(portScopedPath('/home/u/.dsh/web-access', 50140)).toBe('/home/u/.dsh/web-access.50140')
+  })
+})
+
+describe('the reader across hosts', () => {
+  it('defaults to the newest host that is still running', () => {
+    const home = tempDir()
+    const run = join(home, 'run')
+    mkdirSync(run, { recursive: true })
+    const keyFile = join(run, 'web-access.key')
+    const serving = { url: 'http://127.0.0.1:19387/?token=TOKEN-SERVING', token: 'TOKEN-SERVING' }
+    const spare = { url: 'http://127.0.0.1:50140/?token=TOKEN-SPARE', token: 'TOKEN-SPARE' }
+    stage(join(run, 'web-access.json'), keyFile, { payload: serving, pid: process.pid, createdAt: '2026-10-03T00:00:00.000Z' })
+    stage(join(run, 'web-access.50140.json'), keyFile, { payload: spare, pid: 2 ** 30, createdAt: '2026-10-03T01:00:00.000Z' })
+    const env = { ...process.env, DSH_HOME: home }
+    // The spare is newer but gone, so the host that is serving is the answer.
+    expect(runReader(READER, [], env)).toBe(serving.url)
+    expect(runReader(READER, ['--port', '50140'], env)).toBe(spare.url)
+    expect(runReader(READER, ['--all'], env).split('\n')).toHaveLength(2)
+    // Both running: the configured path is the host the deployment names, so a spare
+    // started later never becomes the answer.
+    stage(join(run, 'web-access.50140.json'), keyFile, { payload: spare, pid: process.pid, createdAt: '2026-10-03T01:00:00.000Z' })
+    expect(runReader(READER, [], env)).toBe(serving.url)
   })
 })
 

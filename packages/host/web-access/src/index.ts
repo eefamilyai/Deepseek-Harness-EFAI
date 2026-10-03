@@ -10,6 +10,14 @@
  * another reader). This row writes the URL to a documented path instead, sealed
  * with a key that does not travel with it.
  *
+ * One path, one live host. A second host sharing the state directory — a spare
+ * host an operator or an agent started beside a running app — would otherwise
+ * overwrite the record of a host that is still serving, which silently costs the
+ * first host's URL: the token is minted per boot and nothing else holds it. A
+ * host that finds the configured path held by another live process publishes
+ * beside it under its own port ({@link portScopedPath}) and leaves the occupied
+ * path alone, so both hosts stay recoverable.
+ *
  * What the sealing protects and what it does not:
  *
  * - It keeps the token out of every plain-text reader: a grep over the state
@@ -99,7 +107,9 @@ export interface Config {
    * The lock file holding the encrypted URL. Defaults to
    * `$DSH_HOME/run/web-access.json`, which is where an operator or agent looks
    * for a host this process did not start. The file is removed when the row
-   * unmounts, so a stale file means a host that died without shutting down.
+   * unmounts, so a stale file means a host that died without shutting down. A
+   * second live host sharing this path publishes beside it instead of over it;
+   * see {@link portScopedPath}.
    */
   path?: string
   /**
@@ -255,6 +265,84 @@ function authenticatedLocalUrl(ctx: Context): string {
 }
 
 /**
+ * The `code` of a thrown node error, or '' for anything else.
+ * @param error - the caught value.
+ * @returns the error code, when the value carries one.
+ */
+function errorCode(error: unknown): string {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return ''
+  const code: unknown = error.code
+  return typeof code === 'string' ? code : ''
+}
+
+/**
+ * Whether a process id names a running process.
+ * @param pid - the process id to probe.
+ * @returns true when the process exists, including one this user may not signal.
+ */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // EPERM is a live process this user cannot signal; anything else (ESRCH) is a
+    // pid nobody holds, which is the leftover file the reader reports.
+    return errorCode(error) === 'EPERM'
+  }
+}
+
+/**
+ * The path a host publishes under when the configured path belongs to another host
+ * that is still running.
+ *
+ * The record of a live host is the only pointer to a token that exists nowhere
+ * else, so a second host sharing one state directory publishes beside it rather
+ * than over it. The port is what distinguishes the two: one host serves one port,
+ * and the operator's reader finds every record in the directory either way.
+ * @param path - the configured access-file path.
+ * @param port - the port this host serves.
+ * @returns the port-scoped sibling of that path (`web-access.50140.json`).
+ */
+export function portScopedPath(path: string, port: number): string {
+  const dot = path.lastIndexOf('.')
+  const separator = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  return dot <= separator
+    ? `${path}.${String(port)}`
+    : `${path.slice(0, dot)}.${String(port)}${path.slice(dot)}`
+}
+
+/**
+ * Whether the record at a path belongs to a host that is still running.
+ * @param path - the access file to inspect.
+ * @returns true when another live process published it.
+ */
+function heldByLiveHost(path: string): boolean {
+  let pid: unknown
+  try {
+    pid = (JSON.parse(readFileSync(path, 'utf8')) as Partial<AccessRecord>).pid
+  } catch {
+    // An absent, unreadable, or malformed record is not a claim on the path.
+    return false
+  }
+  return typeof pid === 'number' && pid !== process.pid && alive(pid)
+}
+
+/**
+ * Remove the file one publisher wrote, and only that one.
+ * @param path - the file this publisher wrote.
+ * @param record - the record it wrote there.
+ * @returns nothing.
+ */
+function withdraw(path: string, record: AccessRecord): void {
+  try {
+    const current = JSON.parse(readFileSync(path, 'utf8')) as AccessRecord
+    if (current.pid === process.pid && sameSeal(current, record)) rmSync(path, { force: true })
+  } catch {
+    // An absent or unreadable file is already the state this teardown wants.
+  }
+}
+
+/**
  * Publish the URL once the host is ready, and withdraw the file on unmount.
  * @param ctx - the plugin context.
  * @param config - the resolved configuration.
@@ -285,19 +373,13 @@ export function apply(ctx: Context, config: Config): void {
       ...sealPayload({ url, token }, key),
       hint: 'node scripts/web-access.mjs',
     }
-    mkdirSync(dirname(accessPath), { recursive: true })
-    writeFileSync(accessPath, `${JSON.stringify(record, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+    // The configured path belongs to whoever holds it while they serve: this host
+    // publishes beside a live one instead of withdrawing a URL nothing can re-mint.
+    const target = heldByLiveHost(accessPath) ? portScopedPath(accessPath, ctx.webServer.port) : accessPath
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, `${JSON.stringify(record, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
     published = true
-    ctx.effect(() => () => {
-      // Only this publisher's file is removed: a reloading composition may have
-      // published a newer one under the same path.
-      try {
-        const current = JSON.parse(readFileSync(accessPath, 'utf8')) as AccessRecord
-        if (current.pid === process.pid && sameSeal(current, record)) rmSync(accessPath, { force: true })
-      } catch {
-        // An absent or unreadable file is already the state this teardown wants.
-      }
-    }, 'web-access: withdraw the access file')
+    ctx.effect(() => () => { withdraw(target, record) }, 'web-access: withdraw the access file')
   }
 
   const loader = ctx.get('loader')

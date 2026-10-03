@@ -41,6 +41,12 @@ a tree whose `/api` route owner is still mounting, and the file is withdrawn whe
 the row unmounts — a file whose process is gone is a host that died without
 shutting down.
 
+One path holds one live host. The record of a host that is still serving is the
+only pointer to a token that exists nowhere else, so a second host sharing the
+state directory publishes beside it as `web-access.<port>.json` instead of
+overwriting it, and withdraws only its own file. A spare host an operator or an
+agent starts for a test therefore cannot cost the running app its URL.
+
 <a id="what-the-sealing-protects"></a>
 ## What the sealing protects
 
@@ -62,15 +68,21 @@ name, and the user name.
 ## Reading the file
 
 ```sh
-node scripts/web-access.mjs            # the authenticated URL
-node scripts/web-access.mjs --token    # only the token
-node scripts/web-access.mjs --json     # the record with the payload decrypted
+node scripts/web-access.mjs              # the newest host that is still running
+node scripts/web-access.mjs --token      # only the token
+node scripts/web-access.mjs --all        # one line per host published here
+node scripts/web-access.mjs --port 50140 # the host serving that port
+node scripts/web-access.mjs --json       # the record with the payload decrypted
 ```
 
 The script mirrors the package's helpers rather than importing its built output:
 it is what an operator runs when the harness is otherwise unavailable, so it must
 not depend on a build having happened. A spec asserts the two agree, and that the
 published bytes carry neither the URL nor the token.
+
+With no arguments it reads every record beside the configured path and reports the
+newest one whose process is alive, so a leftover file from a crashed host cannot
+hide the host that is serving; `--path` and `--port` name one record directly.
 
 No runtime invariant companion is published because the only relation worth
 asserting — the file on disk opens with the key beside it and with nothing else —
