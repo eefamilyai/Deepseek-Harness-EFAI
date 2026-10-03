@@ -103,6 +103,7 @@ No model request prefix changes.
 
 - The app frame animates `grid-template-columns` while a panel toggles, which is a layout animation and cannot be replaced from here: the track width is the panel's layout, and only the owning component can animate a transform instead. Retuning the curve and duration is what this layer can do.
 - The account fold is DOM-level and needs the titles to name the logins: a provider whose groups do not render as `Base (account)` pairs keeps its per-login groups, because no name-independent signal distinguishes them.
+- A login is named by the tag after `+` when it has one, and by its address otherwise — the base account an operator authenticates with, or a mobile number. Every choice is the same fixed width, so an address longer than a cell keeps its tail (`…ee.1`) rather than its front: an ellipsis at the end would render two logins that share a prefix identically. The choice's tooltip always carries the route's full name.
 - The fold lives inside the group the menu renders, so a search query that filters that group out of the menu takes the row of choices with it; reopening the menu rebuilds both.
 - A choice clicks the row it stands for, so a deployment where those rows are `disabled` — a selection already in flight — takes no choice until it settles.
 - Exit animations cover the components that publish a closing state; a menu that unmounts with no such state still disappears at once, because CSS cannot delay an unmount.

@@ -207,6 +207,30 @@ describe('account picker', () => {
     expect(clicked).toEqual(['DeepSeek (free web)|DeepSeek'])
   })
 
+  it('names a login without a tag by its address, keeping the tail a cell cannot hold', () => {
+    // The shapes a pool can carry: a tagged login, the base account an operator
+    // authenticates with (no tag), a second one sharing its prefix, and a mobile number.
+    const root = document.createElement('div')
+    root.setAttribute('role', 'menu')
+    root.append(
+      group('Kiln', 'DeepSeek'),
+      group('Kiln (deepseek.ee.1+hunt@gmail.com)', 'DeepSeek'),
+      group('Kiln (deepseek.ee.1@gmail.com)', 'DeepSeek'),
+      group('Kiln (deepseek.ee.2@gmail.com)', 'DeepSeek'),
+      group('Kiln (+8613800138000)', 'DeepSeek'),
+    )
+    document.body.append(root)
+    const clicked = record(root)
+    wireAccountPicker(root, { auto: 'Auto' })
+    const labels = choices(root).map(choice => choice.textContent)
+    expect(labels).toEqual(['Auto', 'hunt', '…seek.ee.1', '…seek.ee.2', '…800138000'])
+    // What a leading-ellipsis cell would lose: the two untagged logins stay apart.
+    expect(new Set(labels).size).toBe(labels.length)
+    // A tagless login still selects the route it stands for.
+    choices(root)[2]?.click()
+    expect(clicked).toEqual(['Kiln (deepseek.ee.1@gmail.com)|DeepSeek'])
+  })
+
   it('leaves a provider that pools nothing exactly as it rendered', () => {
     const root = document.createElement('div')
     root.setAttribute('role', 'menu')
@@ -225,14 +249,5 @@ describe('account picker', () => {
     document.body.append(root)
     wireAccountPicker(root, {})
     expect(root.querySelector('[data-dsh-picker]')).toBeNull()
-  })
-
-  it('selects a login whose label carries no tag', () => {
-    const root = document.createElement('div')
-    root.setAttribute('role', 'menu')
-    root.append(group('Kiln', 'DeepSeek'), group('Kiln (deepseek.ee.1)', 'DeepSeek'), group('Kiln (plain@example.com)', 'DeepSeek'))
-    document.body.append(root)
-    wireAccountPicker(root, { auto: 'Auto' })
-    expect(choices(root).map(choice => choice.textContent)).toEqual(['Auto', 'deepseek.ee.1', 'plain'])
   })
 })

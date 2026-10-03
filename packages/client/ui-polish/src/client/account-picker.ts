@@ -86,19 +86,35 @@ function titleOf(section: HTMLElement): string | null {
 }
 
 /**
+ * Characters one fixed cell shows before a label keeps only its tail.
+ *
+ * A cell is `4.5rem` wide at an 11px label, which holds about ten characters. A longer
+ * name is not cut by the cell's own ellipsis: that keeps the *front*, so two logins
+ * sharing a long prefix (`deepseek.ee.1@…` beside `deepseek.ee.2@…`) would read
+ * identically. Keeping the tail with a leading ellipsis marks the name as shortened and
+ * leaves the part that tells two logins apart.
+ */
+const LABEL_BUDGET = 10
+
+/**
  * The account's own name, as its choice shows it.
  *
  * Kiln labels a pooled login by its address, and an operator distinguishes the pool by
  * the tag after `+`: `deepseek.ee.1+hunt@gmail.com` is the account they call `hunt`. A
- * label carrying no address is used whole.
+ * login that carries no tag has only its address to be named by — the base account an
+ * operator authenticates with, or a mobile number — so that address is the label, and
+ * one too long for a cell keeps its tail (`…ee.1`). A leading `+` is a country code, not
+ * a tag. The choice's tooltip always carries the route's full name.
  * @param account - the text between the base title's parentheses.
  * @returns the short label.
  */
 function loginName(account: string): string {
   const at = account.indexOf('@')
   const address = at < 0 ? account : account.slice(0, at)
-  const plus = address.lastIndexOf('+')
-  return plus < 0 ? address : address.slice(plus + 1)
+  // The tag follows the address, so a `+` at the front is a dialling code and not one.
+  const tag = address.indexOf('+', 1)
+  const label = tag < 0 ? address : address.slice(tag + 1)
+  return label.length <= LABEL_BUDGET ? label : `…${label.slice(-(LABEL_BUDGET - 1))}`
 }
 
 /**
