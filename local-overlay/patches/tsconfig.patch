@@ -20,7 +20,7 @@ index 738ed0c5b4..82672fca5a 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 5c5c81b7e0..b365df3de5 100644
+index 5c5c81b7e0..9f90082b7f 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
 @@ -394,6 +394,7 @@
@@ -31,7 +31,7 @@ index 5c5c81b7e0..b365df3de5 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -476,6 +477,27 @@
+@@ -476,6 +477,28 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -52,6 +52,7 @@ index 5c5c81b7e0..b365df3de5 100644
 +    { "path": "./packages/agent-memory/agent-memory" },
 +    { "path": "./packages/session/session-recovery-context" },
 +    { "path": "./packages/host/version-route" },
++    { "path": "./packages/host/web-access" },
 +    { "path": "./packages/core/efai-identity" },
 +    { "path": "./packages/llm/token-usage-lifetime" },
 +    { "path": "./packages/skill/skill-injection" },

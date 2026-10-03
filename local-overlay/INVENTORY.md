@@ -131,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 515 paths do not exist upstream, so no patch covers them and none can conflict.
+These 514 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -449,7 +449,6 @@ These 515 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/ai-accounts/src/client/index.ts`
 - `packages/llm/ai-accounts/src/index.ts`
 - `packages/llm/ai-accounts/src/types.ts`
-- `packages/llm/ai-accounts/tests/ai-accounts.spec.ts`
 - `packages/llm/ai-accounts/tsconfig.client.json`
 - `packages/llm/ai-accounts/tsconfig.host.json`
 - `packages/llm/ai-accounts/tsconfig.json`

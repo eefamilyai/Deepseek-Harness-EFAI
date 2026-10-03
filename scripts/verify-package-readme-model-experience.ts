@@ -92,6 +92,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-brand-efai': { kind: 'none', reason: 'Two sidebar slot occupants; the brand a person reads registers nothing model-facing.' },
   'packages/client/ui-skill-mention': { kind: 'none', reason: 'The source registers composer candidates and lands draft text; what the model then reads is the tool-skill pre-step\'s decision.' },
   'packages/client/ui-flow-accents': { kind: 'none', reason: 'A theme token layer and a binding stylesheet; it paints rows that other packages own and register.' },
+  'packages/host/web-access': { kind: 'none', reason: 'The row writes one local lock file; nothing it holds reaches a model request.' },
   'packages/ptc-runtime/ptc-runtime-node': { kind: 'indirect', reason: 'The Node process backend delegates model rendering to PTC mode in dsh-tools.' },
   'packages/experimental/ptc-runtime-python': { kind: 'indirect', reason: 'Explicit source-checkout compositions delegate model rendering to PTC mode in dsh-tools.' },
   'packages/client/ui-agent-preset': { kind: 'indirect', reason: 'Browser-side settings row; the preset it selects owns every model-facing effect.' },

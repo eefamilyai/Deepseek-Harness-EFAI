@@ -35,6 +35,7 @@
       "@deepseek-ai/dsh-client-ui-settings-accounts": ["./packages/client/ui-settings-accounts/src"],
       "@deepseek-ai/dsh-client-ui-flow-accents": ["./packages/client/ui-flow-accents/src"],
       "@deepseek-ai/dsh-host-version-route": ["./packages/host/version-route/src"],
+      "@deepseek-ai/dsh-host-web-access": ["./packages/host/web-access/src"],
       "@deepseek-ai/dsh-client-product-analytics": ["./packages/client/product-analytics/src/index.ts"],
       "@deepseek-ai/dsh-client-product-analytics/types": ["./packages/client/product-analytics/src/events.ts"],
       "@deepseek-ai/dsh-client-product-analytics/client": ["./packages/client/product-analytics/src/client/index.ts"],

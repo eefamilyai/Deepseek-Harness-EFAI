@@ -1,9 +1,13 @@
+/**
+ * The account-pool service: registration, routing, validation, and the
+ * structured refusals a settings page renders. The client half mounts a
+ * Remote namespace of its own, so its spec is a `.client.spec.ts` file — the
+ * host aggregate excludes Client-face tests by that suffix.
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { RemoteError, remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import contribution from '@deepseek-ai/dsh-ai-accounts/remote'
 import AiAccounts from '../src/index.ts'
-import { apply as mountClient, inject as clientInject } from '../src/client/index.ts'
 import type { AccountAdmin, AccountDraft, AccountInfo, AccountLogEntry } from '../src/types.ts'
 
 /** Every Context a test mounted, disposed in reverse so no fiber outlives its test. */
@@ -215,18 +219,5 @@ describe('ai-accounts service', () => {
 
     await expect(service.removeAccount('kiln-deepseek', '', 'profile-1', false)).resolves.toEqual({ ok: true })
     expect(admin.calls).toEqual(['remove::profile-1:false'])
-  })
-})
-
-describe('ai-accounts client half', () => {
-  it('requires the remote service and mounts this package its own namespace', async () => {
-    expect(clientInject).toEqual(['remote'])
-    const mount = vi.fn(async () => async () => {})
-    const ctx = { remote: { $mount: mount } } as unknown as Context
-
-    await mountClient(ctx)
-
-    expect(mount).toHaveBeenCalledTimes(1)
-    expect(mount).toHaveBeenCalledWith(contribution)
   })
 })

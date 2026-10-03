@@ -1564,6 +1564,34 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-version-route -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-web-access -->
+<a id="deepseek-aidsh-host-web-access"></a>
+
+## `@deepseek-ai/dsh-host-web-access`
+
+- `inject`: `connection` · `webServer`
+- `source`: [`packages/host/web-access/src/index.ts:97`](../packages/host/web-access/src/index.ts)
+
+```ts config-catalog
+/** Plugin config: where the access file and its key live. */
+export interface Config {
+  /**
+   * The lock file holding the encrypted URL. Defaults to
+   * `$DSH_HOME/run/web-access.json`, which is where an operator or agent looks
+   * for a host this process did not start. The file is removed when the row
+   * unmounts, so a stale file means a host that died without shutting down.
+   */
+  path?: string
+  /**
+   * The encryption key file. Defaults to `$DSH_HOME/run/web-access.key`. Written
+   * once and reused, so the file pair stays readable across restarts; it is
+   * what makes the access file useless off this machine and this user.
+   */
+  keyPath?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-web-access -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
 <a id="deepseek-aidsh-host-webserver"></a>
 

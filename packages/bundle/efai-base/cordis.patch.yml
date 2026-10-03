@@ -71,6 +71,14 @@
         routePrefix: kiln-
         onlyConfigured: false
 
+    # The running host's authenticated Web URL, published to an encrypted lock
+    # file. The Web host mints one token per boot and prints it once, to stdout,
+    # so anything that did not capture that line — a supervisor that restarted
+    # the app, a second terminal, an agent that finds the app already running —
+    # otherwise cannot open the GUI. `node scripts/web-access.mjs` reads it.
+    - id: web-access
+      name: '@deepseek-ai/dsh-host-web-access'
+
     # What a compacted turn gets back. A summary drops exactly what code can
     # know for certain — the operator's own words, the files touched, the
     # commands run, the errors still open, the todo list — so this folds those

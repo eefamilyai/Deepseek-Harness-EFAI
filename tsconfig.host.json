@@ -493,6 +493,7 @@
     { "path": "./packages/agent-memory/agent-memory" },
     { "path": "./packages/session/session-recovery-context" },
     { "path": "./packages/host/version-route" },
+    { "path": "./packages/host/web-access" },
     { "path": "./packages/core/efai-identity" },
     { "path": "./packages/llm/token-usage-lifetime" },
     { "path": "./packages/skill/skill-injection" },

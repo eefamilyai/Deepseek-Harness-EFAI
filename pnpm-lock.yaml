@@ -2250,6 +2250,9 @@ importers:
       '@deepseek-ai/dsh-efai-identity':
         specifier: workspace:^
         version: link:../../core/efai-identity
+      '@deepseek-ai/dsh-host-web-access':
+        specifier: workspace:^
+        version: link:../../host/web-access
       '@deepseek-ai/dsh-kernel':
         specifier: workspace:^
         version: link:../../kernel/kernel
@@ -9616,6 +9619,21 @@ importers:
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../webserver
+
+  packages/host/web-access:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-home-paths':
+        specifier: workspace:*
+        version: link:../../util/home-paths
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:*
+        version: link:../webserver
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
 
   packages/host/webserver:
     dependencies:

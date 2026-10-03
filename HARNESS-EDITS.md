@@ -41,6 +41,7 @@ Paths upstream does not and will not use. Nothing here can conflict.
 | Account-pool registry and its `aiAccounts` Remote namespace | `packages/llm/ai-accounts` | 10 files |
 | The fork's sidebar brand occupants | `packages/client/ui-brand-efai` | 10 files |
 | The `@skill` mention source over `ctx.inputTriggers` | `packages/client/ui-skill-mention` | 9 files |
+| The running Web host's authenticated URL, published encrypted (`scripts/web-access.mjs` reads it) | `packages/host/web-access` | 5 files |
 | Python runtime (providers, `ds_direct`, WAF, browser identity, memory, compaction, browser tools, tool-result file delivery) | `python/kiln/**` | 56 files |
 | Browser capability | `packages/web/web-browser` | 11 files |
 | Client settings sections (accounts, tools) | `packages/client/{ui-settings-accounts,ui-settings-tools}` | 22 files |
