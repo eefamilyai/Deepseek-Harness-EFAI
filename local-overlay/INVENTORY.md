@@ -131,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 576 paths do not exist upstream, so no patch covers them and none can conflict.
+These 591 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -379,6 +379,21 @@ These 576 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-flow-accents/tests/flow-accent-tokens.client.spec.ts`
 - `packages/client/ui-flow-accents/tsconfig.json`
 - `packages/client/ui-flow-accents/tsdown.config.ts`
+- `packages/client/ui-personalization/README.md`
+- `packages/client/ui-personalization/package.json`
+- `packages/client/ui-personalization/src/client/AppearanceSection.module.css`
+- `packages/client/ui-personalization/src/client/AppearanceSection.tsx`
+- `packages/client/ui-personalization/src/client/appearance.ts`
+- `packages/client/ui-personalization/src/client/index.ts`
+- `packages/client/ui-personalization/src/client/locales.ts`
+- `packages/client/ui-personalization/src/css-modules.d.ts`
+- `packages/client/ui-personalization/src/index.ts`
+- `packages/client/ui-personalization/tests/appearance.client.spec.ts`
+- `packages/client/ui-personalization/tests/row.host.spec.ts`
+- `packages/client/ui-personalization/tsconfig.client.json`
+- `packages/client/ui-personalization/tsconfig.host.json`
+- `packages/client/ui-personalization/tsconfig.json`
+- `packages/client/ui-personalization/tsdown.config.ts`
 - `packages/client/ui-polish/README.md`
 - `packages/client/ui-polish/package.json`
 - `packages/client/ui-polish/src/client/account-picker.ts`

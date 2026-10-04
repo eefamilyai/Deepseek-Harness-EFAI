@@ -1,5 +1,5 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 738ed0c5b4..df2fdeb93e 100644
+index 738ed0c5b4..989429c079 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
 @@ -142,6 +142,17 @@
@@ -14,7 +14,7 @@ index 738ed0c5b4..df2fdeb93e 100644
 +    { "path": "./packages/client/ui-brand-efai" },
 +    { "path": "./packages/client/ui-skill-mention" },
 +    { "path": "./packages/client/ui-settings-tools" },
-+    { "path": "./packages/client/ui-personalization" },
++    { "path": "./packages/client/ui-personalization/tsconfig.client.json" },
 +    { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
 +    { "path": "./packages/client/ui-settings-accounts" },
 +    { "path": "./packages/client/ui-flow-accents" },
@@ -22,10 +22,18 @@ index 738ed0c5b4..df2fdeb93e 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 5c5c81b7e0..f681a0d2aa 100644
+index 5c5c81b7e0..e90b8dc74a 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -394,6 +394,7 @@
+@@ -213,6 +213,7 @@
+     { "path": "./packages/client/ui-chat/tsconfig.host.json" },
+     { "path": "./packages/client/ui-conversation/tsconfig.host.json" },
+     { "path": "./packages/client/ui-settings/tsconfig.host.json" },
++    { "path": "./packages/client/ui-personalization/tsconfig.host.json" },
+     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
+ 
+     { "path": "./packages/host/product-telemetry-otel" },
+@@ -394,6 +395,7 @@
      { "path": "./packages/compaction/compaction-basic" },
      { "path": "./packages/compaction/command-compact" },
      { "path": "./packages/compaction/compaction-tool-result-pruner" },
@@ -33,7 +41,7 @@ index 5c5c81b7e0..f681a0d2aa 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -476,6 +477,29 @@
+@@ -476,6 +478,29 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
