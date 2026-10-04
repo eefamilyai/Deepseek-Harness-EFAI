@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 738ed0c5b4..7bcf239b77 100644
+index 738ed0c5b4..df2fdeb93e 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -142,6 +142,16 @@
+@@ -142,6 +142,17 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -14,6 +14,7 @@ index 738ed0c5b4..7bcf239b77 100644
 +    { "path": "./packages/client/ui-brand-efai" },
 +    { "path": "./packages/client/ui-skill-mention" },
 +    { "path": "./packages/client/ui-settings-tools" },
++    { "path": "./packages/client/ui-personalization" },
 +    { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
 +    { "path": "./packages/client/ui-settings-accounts" },
 +    { "path": "./packages/client/ui-flow-accents" },

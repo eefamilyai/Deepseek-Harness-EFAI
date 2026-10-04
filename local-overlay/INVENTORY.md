@@ -131,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 573 paths do not exist upstream, so no patch covers them and none can conflict.
+These 576 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -482,6 +482,7 @@ These 573 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/roster/package.json`
 - `packages/kernel/roster/src/index.ts`
 - `packages/kernel/roster/src/invariant.ts`
+- `packages/kernel/roster/tests/roster-write.host.spec.ts`
 - `packages/kernel/roster/tests/roster.spec.ts`
 - `packages/kernel/roster/tsconfig.json`
 - `packages/kernel/tool-kernel/README.md`
@@ -563,6 +564,7 @@ These 573 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-text-toolcalls/tests/value-and-fence.spec.ts`
 - `packages/llm/llm-text-toolcalls/tests/value-markup.spec.ts`
 - `packages/llm/llm-text-toolcalls/tsconfig.json`
+- `packages/llm/token-usage-lifetime/README.md`
 - `packages/llm/token-usage-lifetime/package.json`
 - `packages/llm/token-usage-lifetime/src/index.ts`
 - `packages/llm/token-usage-lifetime/tests/token-usage-lifetime.spec.ts`
@@ -586,6 +588,7 @@ These 573 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/session-recovery-context/tests/log-path-oracle.spec.ts`
 - `packages/session/session-recovery-context/tests/session-recovery-context.spec.ts`
 - `packages/session/session-recovery-context/tsconfig.json`
+- `packages/skill/skill-injection/README.md`
 - `packages/skill/skill-injection/package.json`
 - `packages/skill/skill-injection/src/index.ts`
 - `packages/skill/skill-injection/tests/skill-injection.spec.ts`
