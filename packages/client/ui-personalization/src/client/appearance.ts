@@ -67,9 +67,9 @@ const RADIUS_STEPS: Readonly<Record<string, number>> = {
  *
  * A translucent window has to name the colour it fades, and the theme's palette
  * tokens are the only honest source: they are what the opaque value resolved to, so
- * fading one keeps the hue and the palette's own step. `level` says which control owns
- * the token: the shell *is* the window, so its opacity applies to every entry, while
- * the surface level applies on top of it to the entries marked `surface`.
+ * fading one keeps the hue and the palette's own step. `level` names the one control
+ * that owns the token: the three are independent, because a panel inside a glass window
+ * is still its own surface.
  */
 const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string; level: 'shell' | 'surface' | 'panel' }>> = {
   // The window itself, behind and around everything, plus the sidebar.
@@ -77,14 +77,16 @@ const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string; leve
   '--dsw-specific-sidebar-fill': { light: 'var(--dsw-static-neutral-bluish-50)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'shell' },
   '--dsw-specific-sidebar-nav-item-hover': { light: 'var(--dsw-static-neutral-bluish-75)', dark: 'var(--dsw-static-neutral-bluish-850)', level: 'shell' },
   '--dsw-specific-sidebar-nav-item-active': { light: 'var(--dsw-static-neutral-bluish-100)', dark: 'var(--dsw-static-neutral-bluish-750)', level: 'shell' },
-  // The layers inside it: the conversation and the content panels.
+  // The content inside it: the conversation's own cards, bubbles, pills, and inputs.
   '--dsw-alias-bg-layer-1': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
+  '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
+  '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
   '--dsw-alias-bg-module-platform': { light: 'var(--dsw-static-neutral-bluish-60)', dark: 'var(--dsw-static-neutral-bluish-925)', level: 'surface' },
-  // What floats above the window: the settings dialog, menus, and other panels. The
-  // settings row itself draws from layer 2 (`--dsw-alias-settings-card-fill`), which is
-  // why this needs a control of its own rather than riding the surface level.
-  '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'panel' },
-  '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'panel' },
+  // What floats above the window. `--dsw-alias-settings-card-fill` is the theme's own name
+  // for the settings dialog's surface (an alias of layer 2, declared on `body`), and
+  // overriding that alias is what separates the dialog from everything else drawn from the
+  // same layer.
+  '--dsw-alias-settings-card-fill': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'panel' },
   '--dsw-alias-bg-overlay': { light: 'var(--dsw-static-neutral-bluish-150)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'panel' },
 }
 
@@ -166,7 +168,7 @@ export function appearanceCss(values: AppearanceValues): string {
   // Each level's own factor, with the shell at 1 because the shell *is* the factor the
   // whole window multiplies by.
   const levelFactors: Readonly<Record<'shell' | 'surface' | 'panel', number>> = {
-    shell: 1,
+    shell: shellFactor,
     surface: surfaceFactor,
     panel: panelFactor,
   }
@@ -176,7 +178,7 @@ export function appearanceCss(values: AppearanceValues): string {
     // application - shows through. The surface level composes on top of that for the
     // layers inside, so they can read softer than the frame around them without changing
     // how translucent the window itself is.
-    const factor = shellFactor * levelFactors[palette.level]
+    const factor = levelFactors[palette.level]
     if (factor >= 1) continue
     const weight = percent(factor)
     light.push(`  ${token}: color-mix(in srgb, ${palette.light} ${weight}, transparent);`)
@@ -216,11 +218,10 @@ export function appearanceCss(values: AppearanceValues): string {
       '}',
     ].join('\n'))
   }
-  // The content level: the conversation, its scroller, and the composer. Either control
-  // can clear these - the window doing it makes the whole surface glass, the surface
-  // level doing it thins the content while the frame around it stays as it is - and they
-  // are what a translucent card or panel is actually seen against.
-  if (fadesDocument || surfaceFactor < 1) {
+  // The content level: the conversation's scroller and the composer, whose own paint is
+  // what a card or a panel is seen against. The shell leaves these alone: a surface inside
+  // the window belongs to the surface control.
+  if (surfaceFactor < 1) {
     blocks.push([
       ':root:root [data-conversation-content],',
       ':root:root [data-chat-flow],',
