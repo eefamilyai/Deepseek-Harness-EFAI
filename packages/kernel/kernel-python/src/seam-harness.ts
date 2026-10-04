@@ -73,6 +73,7 @@ export const HARNESS_OPS: readonly HarnessOp[] = [
   { op: 'tools.search', args: ['query', 'limit', 'scope'], summary: 'the visible tools whose name or description matches a substring' },
   { op: 'terminals.list', args: [], summary: 'the persistent terminals this agent owns: {id, name, type, pid, status}' },
   { op: 'prompt.sections', args: ['full'], summary: 'the assembled system prompt as section names and sizes, with their text when full is true' },
+  { op: 'storage.backends', args: [], summary: 'the storage backends this deployment registered' },
 
   { op: 'seam.ops', args: [], summary: 'this table: every harness-introspection op with its arguments and what it returns' },
 ]
@@ -175,6 +176,11 @@ interface SystemPromptSeam {
   assemble(context?: unknown): Promise<{ readonly sections: readonly unknown[] }>
 }
 
+/** Mirrored `ctx.storage` surface, read-only: the hub's backend registry. */
+interface StorageSeam {
+  readonly backends: { names(): readonly string[] }
+}
+
 /** Every service this module reads, by its `ctx` property name. */
 interface HarnessServices {
   agents: AgentsSeam
@@ -193,6 +199,7 @@ interface HarnessServices {
   tools: ToolsSeam
   terminals: TerminalsSeam
   systemPrompt: SystemPromptSeam
+  storage: StorageSeam
 }
 
 /**
@@ -357,6 +364,7 @@ export async function dispatchHarness(
     if (request.op === 'tools.search') return dispatchToolSearch(agentCtx, request, args)
     if (request.op === 'terminals.list') return dispatchTerminals(agentCtx, agent, request)
     if (request.op === 'prompt.sections') return await dispatchPrompt(agentCtx, request, args)
+    if (request.op === 'storage.backends') return dispatchStorage(agentCtx, request)
     return unavailable(request.id, `unknown seam operation: ${request.op}`)
   } catch (error) {
     return failed(request.id, error)
@@ -786,6 +794,12 @@ async function dispatchPrompt(
   })
   const total = sections.reduce((sum, section) => sum + section.chars, 0)
   return ok(request.id, { total, sections })
+}
+
+function dispatchStorage(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
+  const storage = serviceOf(agentCtx, 'storage')
+  if (storage === undefined) return unavailable(request.id, 'ctx.storage is not mounted for this agent')
+  return ok(request.id, { backends: [...storage.backends.names()] })
 }
 
 function dispatchSessionsTitle(

@@ -76,6 +76,7 @@ list_workspaces(), list_jobs(), list_schedules(), list_terminals()
 context_state()                              # this session's token accounting
 list_presets(), current_preset(), read_projections(["tokenUsage"])
 session_title(), search_tools(query="browser"), prompt_sections(full=False)
+list_storage_backends()                       # the storage backends this deployment registered
 ```
 
 Two rules shape that family. **History is read through `ctx.sessionQuery`**, which owns the live-preferred corpus and can read a session this process never opened; the synchronous `Session` readers are `@deprecated` and new code may not call them. **A missing service is `unavailable`, not empty**: a deployment without `ctx.sessionQuery` answers with the reason, so a cell can tell "no such data" from "no such seam" — the same distinction `tool_help()` draws for tools. `seam_ops()` is the authoritative table; every helper above is a thin, documented wrapper over one entry.

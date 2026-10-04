@@ -2623,6 +2623,15 @@ def list_terminals(timeout=20.0):
     return _harness_call("terminals.list", {}, timeout=timeout)
 
 
+def list_storage_backends(timeout=20.0):
+    """The storage backends this deployment registered, as `{backends: [name]}`.
+
+    Names only: the hub owns no IO, and a backend's units belong to the data-form
+    facade that owns their semantics rather than to a cell.
+    """
+    return _harness_call("storage.backends", {}, timeout=timeout)
+
+
 def prompt_sections(full=False, timeout=30.0):
     """The assembled system prompt as section names and sizes.
 
@@ -5001,6 +5010,7 @@ _HARNESS_OBSERVERS = {
     "current_preset": current_preset,
     "read_projections": read_projections,
     "prompt_sections": prompt_sections,
+    "list_storage_backends": list_storage_backends,
 }
 prompt_dict.update(_HARNESS_OBSERVERS)
 _ns.update(prompt_dict)

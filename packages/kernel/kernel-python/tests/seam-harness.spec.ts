@@ -325,6 +325,12 @@ describe('plugins, models, workspaces', () => {
     expect((await run('models.providers', undefined)).unavailable).toBe(true)
   })
 
+  it('lists the storage backends this deployment registered', async () => {
+    const ctx = ctxWith({ storage: { backends: { names: () => ['session-jsonl', 'session-projcache'] } } })
+    expect(valueOf(await run('storage.backends', ctx))).toEqual({ backends: ['session-jsonl', 'session-projcache'] })
+    expect((await run('storage.backends', undefined)).unavailable).toBe(true)
+  })
+
   it('lists workspaces', async () => {
     const ctx = ctxWith({
       workspaceRegistry: { list: () => [{ id: 'w1', path: 'C:\\w', name: 'Work', status: 'ready' }, { path: '/x' }] },
