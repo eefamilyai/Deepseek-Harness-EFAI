@@ -41,6 +41,9 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   // audited allowlists must name them; without entries the gate rejects a correct README.
   // EXIT: upstream accepts a model-experience declaration inside each package manifest.
   'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
+  'packages/client/ui-settings-accounts': 'Browser-only Accounts settings section: it adds a login and shows what is pooled, and none of it reaches a request.',
+  'packages/client/ui-settings-tools': 'Browser-only Tools settings section: the switches it edits change the assembled tool list, whose model effect the tool-roster README owns.',
+  'packages/host/version-route': 'A host diagnostics route that reports the running checkout to an operator; it contributes nothing to a request.',
 }
 
 /**

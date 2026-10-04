@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-kernel
 
+## Summary
+
 The **persistent-kernel capability seam** (`ctx.kernel`) for the DeepSeek Harness.
 
 A seam, not an engine: it owns *policy* — which Python backend is selected and how one is registered — and delegates *transport* to providers. `kernel-python` is the provider the fork ships; any other backend that satisfies the same interface can replace it without this package changing.

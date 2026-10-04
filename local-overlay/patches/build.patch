@@ -154,10 +154,10 @@ index bf0ddab2d0..a12114c882 100644
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
-index 2ca3653361..be7db543c2 100644
+index 2ca3653361..a03a22b76b 100644
 --- a/scripts/verify-package-readme-model-experience.ts
 +++ b/scripts/verify-package-readme-model-experience.ts
-@@ -37,6 +37,10 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
+@@ -37,6 +37,13 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
    'packages/util/workspace-path': 'The package only formats Workspace paths for browser UI; it never constructs model input.',
    'packages/util/values': 'The package only validates, snapshots, compares, freezes, or rejects caller-owned values; consumers own every model-facing use.',
    'packages/util/code-language': 'The package only maps a filename suffix to a syntax-highlighting language id; the read consumer owns the persisted hint.',
@@ -165,10 +165,13 @@ index 2ca3653361..be7db543c2 100644
 +  // audited allowlists must name them; without entries the gate rejects a correct README.
 +  // EXIT: upstream accepts a model-experience declaration inside each package manifest.
 +  'packages/client/ui-effects': 'Browser-side visual-effects overlay and its Settings row; it registers a user preference, no prompt, tool, or schema.',
++  'packages/client/ui-settings-accounts': 'Browser-only Accounts settings section: it adds a login and shows what is pooled, and none of it reaches a request.',
++  'packages/client/ui-settings-tools': 'Browser-only Tools settings section: the switches it edits change the assembled tool list, whose model effect the tool-roster README owns.',
++  'packages/host/version-route': 'A host diagnostics route that reports the running checkout to an operator; it contributes nothing to a request.',
  }
  
  /**
-@@ -78,6 +82,18 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+@@ -78,6 +85,18 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
    'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
    'packages/ptc-runtime/ptc-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
    'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },

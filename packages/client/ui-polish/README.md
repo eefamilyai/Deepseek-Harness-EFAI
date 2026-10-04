@@ -3,23 +3,12 @@ description: "Whole-client interaction polish: one motion language for the shell
 kind: "package-reference"
 ---
 
+
 # @deepseek-ai/dsh-client-ui-polish
 
 ## Summary
 
-The client's feel, as one injected stylesheet. It retunes the shell's motion
-scale (three durations and the single curve that forty-three component
-transitions share), re-points the curve for the many transitions that name the
-bare `ease` keyword, rebuilds elevation as layered shadow pairs in both palettes,
-gives every floating surface one entrance, adds press feedback to menus and
-options, and tints selection, caret, and native controls from the product accent.
-It selects only on design tokens, ARIA roles and states, the app frame's state
-attributes, and element selectors — never on a CSS-module class.
-
-One document observer adds the two affordances a stylesheet cannot express, both
-in the model dropdown: each provider group contracts to the one in use, and a
-provider that serves one route per login folds into a single group with one row
-of account choices.
+The client's feel, as one injected stylesheet: one motion language for the shell, layered elevation in both palettes, overlay entrances, and press feedback on menus and options. It selects only on design tokens, ARIA roles and states, and the app frame's state attributes. One document observer adds the two affordances a stylesheet cannot express, both in the model dropdown: provider groups contract to the one in use, and a pool of logins folds into one group with a row of account bubbles.
 
 ## Table of Contents
 
@@ -32,8 +21,7 @@ of account choices.
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount it in a browser roster; `packages/bundle/efai-web` does, ahead of the
-surfaces it paints:
+Mount it in a browser roster; `packages/bundle/efai-web` does, ahead of the surfaces it paints:
 
 ```yaml
 - id: ui-polish
@@ -43,26 +31,9 @@ surfaces it paints:
 <a id="why-a-stylesheet-and-not-a-component"></a>
 ## Why a stylesheet and not a component
 
-The polish spans every surface in the app — the shell frame, the docks, menus,
-dialogs, tooltips, toasts, tables, prose, scrollbars — and a component would have
-to own, or wrap, most of them to reach them. The contracts this sheet selects on
-are stable by construction: tokens are the design system's public interface, ARIA
-roles and states are required for accessibility, and the app frame publishes its
-panel state as attributes. A CSS-module class would be the one tempting,
-unavailable option: those are hashed per bundle and belong to packages this
-plugin does not build.
+The polish spans every surface in the app — the shell frame, the docks, menus, dialogs, tooltips, toasts, tables, prose, scrollbars — and a component would have to own, or wrap, most of them to reach them. The contracts this sheet selects on are stable by construction: tokens are the design system's public interface, ARIA roles and states are required for accessibility, and the app frame publishes its panel state as attributes. A CSS-module class would be the one tempting, unavailable option: those are hashed per bundle and belong to packages this plugin does not build.
 
-The observer is the other half of the same decision, and it stays as narrow as the
-sheet: it reads the two attributes the group primitive publishes, writes the group
-titles' state and the account choices, and clicks the account row a choice stands
-for. It registers nothing, renders no React, and holds no state between menus — the
-dropdown is portalled and unmounted on close, so folding a menu is work that is
-re-done, not work that is stored. Each of those writes changes the card's height
-after `ui-model-selection` has placed it, and that component places itself from the
-trigger's rect plus its own measured height while re-measuring only on a pane or
-query change, a page scroll, and a window resize — so every write re-anchors the
-card (`menu-anchor.ts`), or a contracted provider's rows would become the distance
-between the card and the composer it belongs to.
+The observer is the other half of the same decision, and it stays as narrow as the sheet: it reads the two attributes the group primitive publishes, writes the group titles' state and the account choices, and clicks the account row a choice stands for. It registers nothing, renders no React, and holds no state between menus — the dropdown is portalled and unmounted on close, so folding a menu is work that is re-done, not work that is stored. Each of those writes changes the card's height after `ui-model-selection` has placed it, and that component places itself from the trigger's rect plus its own measured height while re-measuring only on a pane or query change, a page scroll, and a window resize — so every write re-anchors the card (`menu-anchor.ts`), or a contracted provider's rows would become the distance between the card and the composer it belongs to.
 
 <a id="what-it-changes"></a>
 ## What it changes
@@ -77,22 +48,11 @@ between the card and the composer it belongs to.
 | Model menu | provider groups contract to the provider in use, each title toggling on a click, Enter or Space, and a provider that pools logins folds into one group whose accounts are one row of choices |
 | Typography | font smoothing, `text-wrap: pretty` for prose and `balance` for headings, tabular code numerals, accent-tinted selection, caret, and native controls |
 
-Two rules are load-bearing and asserted by specs: the sheet never sets the
-`transition` shorthand (which would wipe a component's property list) and never
-sets `animation-timing-function` (which would ease the shimmer, marquee, and
-spinner loops that are linear on purpose).
+Two rules are load-bearing and asserted by specs: the sheet never sets the `transition` shorthand (which would wipe a component's property list) and never sets `animation-timing-function` (which would ease the shimmer, marquee, and spinner loops that are linear on purpose).
 
-The sheet's model-menu rules are armed on the marker the observer writes on the
-menu it wired. Contraction with no way to open a group would leave every other
-provider's rows unreachable, so a menu the observer never reached — no locale
-service, markup that renders no group sections — keeps upstream's flat column.
+The sheet's model-menu rules are armed on the marker the observer writes on the menu it wired. Contraction with no way to open a group would leave every other provider's rows unreachable, so a menu the observer never reached — no locale service, markup that renders no group sections — keeps upstream's flat column.
 
-No runtime invariant companion is published because the package holds no state
-and registers no service: it injects one stylesheet, registers two words for the
-account choices, and installs one observer, and its specs assert the sheet's
-contract — the selectors it may use, the tokens it must retune, the two rules
-above, the fold's DOM behavior, and that the reduced-motion block collapses every
-duration it introduces.
+No runtime invariant companion is published because the package holds no state and registers no service: it injects one stylesheet, registers two words for the account choices, and installs one observer, and its specs assert the sheet's contract — the selectors it may use, the tokens it must retune, the two rules above, the fold's DOM behavior, and that the reduced-motion block collapses every duration it introduces.
 
 ## Model Experience
 

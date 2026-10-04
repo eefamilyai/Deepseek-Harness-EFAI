@@ -1,8 +1,12 @@
 # @deepseek-ai/dsh-web-browser
 
+## Summary
+
 A **self-hosted headless browser** for the model: a text-first `browser` tool a vision-less model can drive, plus a Playwright fetch provider for `ctx.web`.
 
 The model never sees pixels. Every action returns the page as text - its readable content, then each interactive element on a `[n] role: name` line. The model reads that, picks a ref, and calls the tool again ("click 12"). One tool with an `action` selector keeps the whole loop in a single verb the model does not have to discover piecemeal.
+
+## What it registers
 
 The refs are only valid until the next action reshapes the DOM, which is exactly the read-act-read loop the tool prompt describes.
 

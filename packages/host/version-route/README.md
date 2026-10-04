@@ -38,3 +38,7 @@ Mount it in a composition carrying `webServer`; `packages/bundle/efai-web` does.
 ## Dev Note
 
 The snapshot is taken once, when the plugin applies: the answer describes the code the process is running, not the code on disk right now. Registration goes through `ctx.effect`, so the route is withdrawn when the mounting fiber is disposed.
+
+## Known Limitations and Deferred Work
+
+- A packed or vendored install has no `.git`, and every field then answers `unknown`. The route reports the checkout it was pointed at; it cannot tell a deployment that packed the fork from one that never had the history.

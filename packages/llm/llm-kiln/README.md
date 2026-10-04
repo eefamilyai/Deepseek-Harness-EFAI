@@ -1,8 +1,12 @@
 # @deepseek-ai/dsh-llm-kiln
 
+## Summary
+
 The **Kiln multi-provider LLM adapter**: every provider KilnKernel ships, registered as harness LLM routes.
 
 Sixteen presets come across - Anthropic, OpenAI, Gemini, OpenRouter, the DeepSeek paid API, Groq, xAI, Mistral, Together, Fireworks, Perplexity, Cerebras, NVIDIA, Ollama, LM Studio, and the free DeepSeek web session (`ds_direct`) - plus any custom OpenAI-compatible provider the Kiln settings document adds. Routes are named `<prefix><kiln id>`, default `kiln-`, so they cannot collide with `deepseek-official` or the pi-ai catalog names.
+
+## Keys
 
 Keys are never configuration here. Each preset names the environment variable holding its key, and the sidecar resolves that variable per request; the catalog reports only whether a key is present.
 

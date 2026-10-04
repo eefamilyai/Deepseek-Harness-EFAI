@@ -186,9 +186,9 @@ results.append(_check("it still reports the device it actually has as invalid",
                       bad["device_id_valid"] is False, repr(bad)))
 
 # --- the write path keeps a field and its label together --------------------
-# `device_id_origin` says where the device_id came from, so purging the value
-# while leaving the label is a dangling origin: the row renders a provenance
-# for a device that no longer exists.
+# `device_id_origin` names the field the device_id was read from, so purging the
+# value while leaving the label is a dangling origin: the row names a source for a
+# device that no longer exists.
 _reset()
 rec = ds_profile.write_account_identity("labels@example.com", {
     "device_id": ORPHAN_DEVICE,

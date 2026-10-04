@@ -1,6 +1,10 @@
 # @deepseek-ai/dsh-agent-memory
 
-Durable, cache-friendly memory for a DeepSeek Harness agent.
+## Summary
+
+Durable, cache-friendly memory for a DeepSeek Harness agent. An agent's transcript is the most expensive context in the system: it is re-read on every turn, and a compaction deletes it, so this package keeps durable evidence in files the agent writes and reads on demand instead of in the transcript.
+
+## How it works
 
 An agent's transcript is a terrible place to keep evidence: it is the most expensive context in the system, it is re-read on every turn, and a compaction event deletes it. This package moves the evidence off the transcript and keeps only a bounded, token-stable index in it.
 

@@ -135,3 +135,30 @@ section also needs.
 - **Kernel docs**: `packages/kernel/kernel-python/README.md` documents the observation family
   and its two rules; the kernel prompt gains a `tool:kernel-harness` section naming the
   helpers, so the model reaches for `session_window(seq)` instead of guessing at a payload.
+
+## 7. Kernel round 2: the operation catalog, and the two README gates
+
+`seam.ops` claimed to be "this table: every harness-introspection op" while listing only the observation family - a cell asking what the bridge can do got half the answer, which sends it looking for a capability that is already there. The capability table now lives beside the dispatcher that answers those ops (`CAPABILITY_OPS` in `seam.ts`, where `fs.*`, `shell.run`, `subprocess.*`, `web.*`, `subagents.*`, `goals.*`, `tools.*` and `skills.*` are routed), and `seam.ops` answers with both tables. Neither module imports the other's rows, and the spec dispatches every catalogued op to prove each one is routed and answers something other than "unknown seam operation"; a second case pins that no name appears twice.
+
+The two package-README gates were red across the fork - the model-experience gate on eleven fork-owned packages, the limitations gate on seven - and both are green now with no upstream file touched:
+
+- **Model Experience**: real sections written for `efai-identity` (with the opener verbatim), `llm-system-file`, `token-usage-lifetime`, `skill-injection`, the `efai-base` and `efai-web` bundles, and the roster's field paragraph; the script's fork allowlist gained the three packages that genuinely have no model experience (`ui-settings-accounts`, `ui-settings-tools`, `version-route`). The gate's rules are exacting and paid for themselves: one physical line per paragraph, a verbatim block whenever an entry's title names the system prompt, Model Experience as the final H2 unless a limitations section follows it, and one inline token to ground each entry.
+- **Limitations**: every flagged package gained an honest bullet rather than an allowlist entry, because `scripts/verify-package-readme-limitations.ts` is upstream-owned and its `NO_LIMITATIONS` map is not in the fork's seam.
+
+Four oxlint errors in fork code went with them: two `unbound-method` reads of the optional background-poll capability (fixed at the interface - `this: void`, because the capability is a namespace of functions rather than an instance), an unnecessary cast in the image path, and a settle guard the type system had narrowed away (`isSettled()` reads it through a call, because an abort handler really can settle while `tick` awaits the kernel).
+
+## 8. Where the whole job stands
+
+Verified green at the end of this round: host and client typecheck; 178 tests across the kernel, tools-section and polish suites; 225 offline kernel-helper checks; oxlint clean on every package this job touched; `verify-fork-overlay` (base + 13 patches reproduce 46 Tier-2 paths exactly); `verify-seam-frozen` 46/46; both README gates over 345 package READMEs; the config catalog regenerated with the roster's new field contract; and the fork-caused `test:gui` red gone (5 remaining failures in 9607 tests, all in upstream-owned packages this fork does not patch).
+
+One check cannot run without an app restart, which the operator deferred: the kernel helpers and this session's repaired tables are built and unit-verified, but a live cell has not called them yet, and the repair watcher (pid 31200) is still waiting for a window with no `DeepSeek Harness` process.
+
+### The documentation gates, and what is left
+
+Running the whole `doc-quick` aggregate (not just the two README gates) turned up six red gates. Four are now green and every file behind them was fork-owned:
+
+- **`verify-md-wrap`** (2370 files): fourteen fork READMEs had hard-wrapped prose, including the two written this round. Reflowed to one physical line per paragraph, list item, and quote - the reflow initially joined each file's YAML frontmatter keys into one line, which the frontmatter rebuild afterwards put back, and one run of the reflow tool wedged the kernel cell in an unbounded loop while splitting that frontmatter, which is why the same class of edit is now bounded and verified before it is trusted.
+- **`verify-package-readme-summaries`** (401 READMEs): nineteen fork packages either had no `## Summary` or one over the hundred-word budget. The heading was added where a README opened with an unheaded paragraph, and the over-long ones were split - the summary keeps the opening paragraph and the explanation moves into a named section, so no prose was dropped.
+- **`verify-package-readme-model-experience`** (345) and **`verify-package-readme-limitations`** (345): covered in sections 7 and 8 above.
+
+Two gates stay red, both for reasons outside this job's reach: `verify-translation-pairing` flags the two older bilingual records (`output-masking`, `session-recovery-context`) whose format predates per-section hashes and whose Chinese side therefore needs a translation pass before re-recording, and upstream's own `scripts/verify-concrete-terms.ts` reads a commit hash as an ambiguous term, which every one of the fork's records (`local-overlay/BASE`, `SEAM.json`, `INVENTORY.md`, `HARNESS-EDITS.md`) necessarily contains. The `doc-standard.spec.ts` skeleton checks (frontmatter, table of contents, Dev Note) also predate this session - the first file it fails on at `HEAD` is `agent-memory`, untouched here - and the two READMEs this round created do carry that skeleton.

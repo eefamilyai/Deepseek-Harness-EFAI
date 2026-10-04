@@ -131,7 +131,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 554 paths do not exist upstream, so no patch covers them and none can conflict.
+These 573 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -157,6 +157,7 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/skills/dsh-session-history/session-read.mjs`
 - `.merge-port/MERGE-STATUS.md`
 - `.merge-port/apiproxy-and-fixtures.patch`
+- `.recon/.gitignore`
 - `.recon/CONTINUE-model-dropdown.md`
 - `.recon/OPERATOR-SUMMARY-ds-mute.md`
 - `.recon/accounts-in-running-desktop-app.png`
@@ -193,6 +194,7 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/probe_signin_dom.py`
 - `.recon/probe_two_accounts.py`
 - `.recon/probe_waf_boundary.py`
+- `.recon/session-audit-and-fixes.md`
 - `.recon/trace-shape-b.mjs`
 - `.recon/zz-full-out.txt`
 - `.recon/zz-full-out3.txt`
@@ -318,6 +320,8 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/tsconfig.patch`
 - `local-overlay/rebuild.mjs`
 - `local-overlay/rules.json`
+- `local-overlay/tools/README.md`
+- `local-overlay/tools/repair-recorded-tables.mjs`
 - `local-overlay/verify-seam-frozen.mjs`
 - `local-overlay/verify.mjs`
 - `packages/agent-memory/agent-memory/README.md`
@@ -380,11 +384,13 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-polish/src/client/account-picker.ts`
 - `packages/client/ui-polish/src/client/index.ts`
 - `packages/client/ui-polish/src/client/locales.ts`
+- `packages/client/ui-polish/src/client/menu-anchor.ts`
 - `packages/client/ui-polish/src/client/model-groups.ts`
 - `packages/client/ui-polish/src/client/polish.css`
 - `packages/client/ui-polish/src/css-modules.d.ts`
 - `packages/client/ui-polish/src/index.ts`
 - `packages/client/ui-polish/tests/account-picker.client.spec.ts`
+- `packages/client/ui-polish/tests/menu-anchor.client.spec.ts`
 - `packages/client/ui-polish/tests/polish-sheet.client.spec.ts`
 - `packages/client/ui-polish/tsconfig.json`
 - `packages/client/ui-polish/tsdown.config.ts`
@@ -407,6 +413,7 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-settings-tools/src/client/locales.ts`
 - `packages/client/ui-settings-tools/src/css-modules.d.ts`
 - `packages/client/ui-settings-tools/src/index.ts`
+- `packages/client/ui-settings-tools/tests/tools-section.client.spec.tsx`
 - `packages/client/ui-settings-tools/tsconfig.json`
 - `packages/client/ui-settings-tools/tsdown.config.ts`
 - `packages/client/ui-skill-mention/README.md`
@@ -454,10 +461,13 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/src/index.ts`
 - `packages/kernel/kernel-python/src/invariant.ts`
 - `packages/kernel/kernel-python/src/provider.ts`
+- `packages/kernel/kernel-python/src/seam-harness.ts`
 - `packages/kernel/kernel-python/src/seam.ts`
 - `packages/kernel/kernel-python/tests/browser-window.spec.ts`
 - `packages/kernel/kernel-python/tests/fixtures/fake-kernel.py`
 - `packages/kernel/kernel-python/tests/images.e2e.spec.ts`
+- `packages/kernel/kernel-python/tests/seam-harness.e2e.spec.ts`
+- `packages/kernel/kernel-python/tests/seam-harness.spec.ts`
 - `packages/kernel/kernel-python/tests/seam-tools-call.e2e.spec.ts`
 - `packages/kernel/kernel-python/tests/seam-tools-call.spec.ts`
 - `packages/kernel/kernel-python/tests/transport.spec.ts`
@@ -504,6 +514,14 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/tests/mute-code.spec.ts`
 - `packages/llm/llm-kiln/tests/pinning.spec.ts`
 - `packages/llm/llm-kiln/tsconfig.json`
+- `packages/llm/llm-markdown-fidelity/README.md`
+- `packages/llm/llm-markdown-fidelity/package.json`
+- `packages/llm/llm-markdown-fidelity/src/index.ts`
+- `packages/llm/llm-markdown-fidelity/src/repair.ts`
+- `packages/llm/llm-markdown-fidelity/src/stream.ts`
+- `packages/llm/llm-markdown-fidelity/tests/repair.spec.ts`
+- `packages/llm/llm-markdown-fidelity/tests/stream.spec.ts`
+- `packages/llm/llm-markdown-fidelity/tsconfig.json`
 - `packages/llm/llm-system-file/README.md`
 - `packages/llm/llm-system-file/package.json`
 - `packages/llm/llm-system-file/src/adapter.ts`
@@ -673,6 +691,7 @@ These 554 paths do not exist upstream, so no patch covers them and none can conf
 - `python/kiln/runtime/test_ds_wirelog_nesting.py`
 - `python/kiln/runtime/test_ds_wirelog_rotation.py`
 - `python/kiln/runtime/test_fast_search.py`
+- `python/kiln/runtime/test_harness_introspection.py`
 - `python/kiln/runtime/test_harness_tools.py`
 - `python/kiln/runtime/test_kernel_images.py`
 - `python/kiln/runtime/test_tool_result_files.py`

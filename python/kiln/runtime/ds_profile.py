@@ -136,10 +136,10 @@ def write_account_identity(account_id, doc):
         if rejected:
             stored["device_id_rejected"] = "%s...(len=%d, not a fingerprint)" % (
                 rejected[:20], len(rejected))
-        # The value and its label go together. ``device_id_origin`` describes
-        # where the device_id came from, so purging the value while leaving the
-        # label is a dangling origin -- and the row renders it as though a device
-        # with that provenance existed.
+        # The value and its label go together. ``device_id_origin`` names the
+        # field the device_id was read from, so purging the value while leaving
+        # the label is a dangling origin -- and the row renders it as though a
+        # device read from that field existed.
         stored.pop("device_id", None)
         stored.pop("device_id_origin", None)
         stored.pop("origin", None)

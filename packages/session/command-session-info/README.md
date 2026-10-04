@@ -1,8 +1,12 @@
 # @deepseek-ai/dsh-command-session-info
 
+## Summary
+
 The human-facing **`/sessioninfo`** slash command: a read-only report of one session's token usage, context pressure, and activity.
 
 The handler is synchronous and read-only. It snaps the receiving agent's session through the projection registry and renders three things side by side:
+
+## What it prints
 
 - **Token usage** — reported twice: lifetime totals that survive every compaction, and the resettable buckets since the last `/compact`. Keeping them apart is the point, so a billing total is never mistaken for one turn's prompt cost.
 - **Context pressure** — the current prompt-side occupancy and its share of the context window.
@@ -14,16 +18,13 @@ Nothing here writes to the session or starts model work.
 Session
   id       sess_…
   model    deepseek-official/deepseek-v4-pro
-
 Token usage (lifetime; across all compactions)
   fresh input   1.2M
   cache read    18.4M
   billed input  19.6M
   output        412K
-
 Context pressure (current, prompt side only)
   projected   118K (59% of 200K)
-
 Activity (whole log)
   turns          14
   steps          63

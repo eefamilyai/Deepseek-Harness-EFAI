@@ -1,8 +1,12 @@
 # @deepseek-ai/dsh-tool-kernel
 
+## Summary
+
 The **model-facing `kernel` tool**: run Python in a persistent namespace.
 
 In a composition built around this package the kernel is not one tool among many — it is the model's entire hands. Reading a file, editing it, searching the disk, running a command, driving a browser: all of it is Python, written against the helpers the Kiln runtime preloads into the namespace.
+
+## Why the roster is small here
 
 That is why the roster this package expects to sit in has web access and little else beside it. A conventional harness hands the model one tool per verb; here it hands over a language, and the verbs come from the runtime.
 
@@ -19,34 +23,17 @@ A cell that carries no budget of its own gets `defaultTimeoutMs` from the seam.
 
 ## Images a cell returns
 
-A cell can hand back pictures as well as text: `show()` in the Kiln runtime
-queues an image on the cell's result, and this tool turns each one into an image
-block in the model's own context. That is the difference between the model being
-told what a screenshot contains and the model looking at it.
+A cell can hand back pictures as well as text: `show()` in the Kiln runtime queues an image on the cell's result, and this tool turns each one into an image block in the model's own context. That is the difference between the model being told what a screenshot contains and the model looking at it.
 
 Three steps, in this order, and each one is a place the picture could be lost:
 
-1. **The frame carries the bytes.** `kernel-python` validates whatever the child
-   wrote in its `images` field and reports the survivors on `KernelExecuteResult`.
-   A frame with no images simply omits the field.
-2. **This tool commits them.** `admitCellImages` decodes each payload, asks the
-   attachment store to store it, and returns durable `ImageAttachmentRef`s. The
-   commit happens *before* the tool returns, because a canonical value that cited
-   unstored bytes would replay as a broken picture for the rest of the session.
-3. **The render emits blocks.** `kernelContent` produces the captured output,
-   then one envelope line and one `image` block per stored picture, in queue
-   order.
+1. **The frame carries the bytes.** `kernel-python` validates whatever the child wrote in its `images` field and reports the survivors on `KernelExecuteResult`. A frame with no images simply omits the field.
+2. **This tool commits them.** `admitCellImages` decodes each payload, asks the attachment store to store it, and returns durable `ImageAttachmentRef`s. The commit happens *before* the tool returns, because a canonical value that cited unstored bytes would replay as a broken picture for the rest of the session.
+3. **The render emits blocks.** `kernelContent` produces the captured output, then one envelope line and one `image` block per stored picture, in queue order.
 
-Refusal is per image, never per cell. An unsupported media type or an oversized
-picture becomes a note shown beside the text and costs only itself: a cell that
-produced a good traceback still delivers it even when one of its pictures could
-not be stored. When the store refuses a whole batch — usually its aggregate byte
-or count bound — the batch is retried one at a time so the images that do fit are
-not lost with the one that does not.
+Refusal is per image, never per cell. An unsupported media type or an oversized picture becomes a note shown beside the text and costs only itself: a cell that produced a good traceback still delivers it even when one of its pictures could not be stored. When the store refuses a whole batch — usually its aggregate byte or count bound — the batch is retried one at a time so the images that do fit are not lost with the one that does not.
 
-Storing requires `attachments`, so this package declares it in `inject`. A kernel
-tool that silently dropped a cell's pictures would be worse than one that refuses
-to mount.
+Storing requires `attachments`, so this package declares it in `inject`. A kernel tool that silently dropped a cell's pictures would be worse than one that refuses to mount.
 
 ## Model Experience
 
@@ -149,6 +136,49 @@ The description, its two parameter descriptions, and the prompt section are bill
 #### KV Cache effect
 
 The schema and prompt section are static. Results append to the transcript as ordinary tool results.
+
+### The harness-reading section
+
+#### What the model sees
+
+A second section, `tool:kernel-harness` (order 101, after `tool:kernel`), names the helpers that read the harness a cell runs inside rather than the machine: `seam_ops()` for the whole operation table, `session_events` / `session_window` / `session_surface` / `session_corpus` for recorded history, `harness_settings`, `list_plugins`, `list_model_providers`, `context_state`, `list_jobs`, `list_schedules`, `list_terminals`, `prompt_sections`, and the rest of the observation family. Without it a cell that does not know the environment is readable asks the operator what the harness looks like, or guesses at a recorded payload it could have read.
+
+##### Prompt section verbatim
+
+```markdown
+The kernel also reads the harness you are running inside, not only the machine.
+These helpers answer "what is this deployment, and what has happened in it":
+
+- `seam_ops()` lists every harness operation with its arguments, and
+  `seam(op, **args)` calls any of them — including one that has no helper yet.
+- `session_events(session_id=None, limit=40, type=None)` — the newest recorded events
+  of a session, each `{seq, type, time, summary}`; `session_window(seq)` opens one in
+  context instead of guessing at its payload.
+- `session_surface(session_id=None)` — the events the model would see now, which is a
+  different list: a replaced node is gone and a compacted range is its summary.
+- `session_corpus()` — every session this harness can read, live or stored, so you can
+  read a conversation other than your own.
+- `harness_settings()` and `update_setting(ns, patch)` — the settings namespaces, their
+  effective values, and the revisions to write against.
+- `list_plugins()` — the loader rows this deployment composed.
+- `list_model_providers()` and `list_models(provider)` — the routes you can be run on.
+- `context_state()`, `list_jobs()`, `list_schedules()`, `list_terminals()` — this
+  session's token accounting, background work, and terminals.
+- `prompt_sections(full=False)` — the system prompt you are reading, by section and size.
+- `list_agents()`, `current_agent()`, `read_projections(keys)`, `list_presets()`,
+  `current_preset()`, `list_workspaces()`, `session_title()`, `search_tools(query)`.
+
+Reach for these before asking the operator what the harness looks like, and before
+assuming what a recorded event contains: read it.
+```
+
+#### Token effect
+
+Billed once per request as part of the stable prefix, like `tool:kernel`; it is about twenty lines and changes only when the observation family does.
+
+#### KV Cache effect
+
+Static. It has no dynamic parts, so it cannot invalidate the cache mid-session.
 
 ### Empty and restarted cells
 

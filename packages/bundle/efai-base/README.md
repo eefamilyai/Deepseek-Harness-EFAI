@@ -39,3 +39,24 @@ A Loader `disabled: !!js …` expression is evaluated once at boot. Gating a row
 ## Dev Note
 
 A later bundle layer may replace a row's whole `config` and switch a row off by id, but it never merges into a config — a patch that restates one field deletes the others. `efai-web` uses both facilities: it disables upstream's `agent-presets` row and the host-plane `tool-kernel` row from this bundle.
+
+<a id="model-experience"></a>
+## Model Experience
+
+### The host profile's composition
+
+#### What the model sees
+
+Nothing of its own: this bundle mounts rows, and each row owns its model-visible contribution. What it decides is that those rows exist for every agent at once — the `kernel` tool and its prompt sections, the roster that filters tool schemas and `tool:<name>` guidance, and `llm-kiln`'s request shaping for the web routes.
+
+#### Token effect
+
+The rows it mounts decide the cost. `tool-roster` is the one that removes schema and guidance bytes from every request, and the kernel's prompt sections are the largest fixed addition this bundle makes; the bundle file itself adds nothing to a request.
+
+#### KV Cache effect
+
+None of its own. Changing this file changes which plugins are mounted, which is a restart rather than a mid-session prefix change; the rows it mounts own their own prefix behavior.
+
+## Known Limitations and Deferred Work
+
+- A later layer replaces a row's whole `config` rather than merging one field, so a bundle that restates a row must repeat every field it wants to keep. Nothing here detects that a replacement dropped a value upstream had set.

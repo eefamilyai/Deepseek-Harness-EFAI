@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-recovery-context` makes a compacted session carry on as if nothing was lost. As the log commits, it folds the facts a summary drops first — the operator's own words, the files touched, the commands run, the errors still open, the todo list — into a ledger. In the same step a compaction happens, it adds one handoff message that restates them, attaches the current contents of the most recently changed files, and ends with the exact place to resume. The turn keeps running: no step is spent and nothing is acknowledged. After the first compaction, a one-line focus note in the runtime context keeps the in-progress todo and the next step in view. The plugin also registers the session's log path, directory, and id as prompt variables. A session that never compacts gets only the log-path line.
+Post-compaction recovery: a code-maintained session ledger restated as a handoff in the same step a compaction happens, plus a focus line and the session log path. For deployments tuning what survives a compaction, the ledger is rebuilt from the session's own events rather than from a model summary.
 
 ## Table of Contents
 

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-output-masking` keeps tool output the model has already acted on from filling the context. Once a set share of the routed model's window is in use, every successful text result older than the newest few and longer than a threshold is replaced, in one batch, by a stub naming the call, its size, and its first and last lines. The reasoning and the actions stay intact; only the bulk goes, and the model can run the call again to see it. The original stays in the session log. Masking makes no model call. It defers compaction and leaves it a smaller, denser history to summarize.
+Observation masking for long sessions: old, large tool outputs become one-line stubs once the context fills, which defers compaction instead of forcing it. For deployments tuning context economy, with the stub text and the thresholds as config.
 
 ## Table of Contents
 

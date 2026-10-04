@@ -1,12 +1,14 @@
 # @deepseek-ai/dsh-llm-text-toolcalls
 
+## Summary
+
 The **text-channel tool-call reader**, for every provider and every model.
 
 A model writes the tool-call markup it was trained on. Which markup that is comes from the **model**, not from the transport it is speaking through — so a request that filled a provider's native `tools` field correctly can still get the call back as text. Unread, that call reaches the user as raw markup and reads back to the model as an action that returned nothing: the turn is spent, and neither side is told why.
 
-This package reads it. One `llm/stream` pass sits above whatever adapter answered, turns a complete text-channel call for a declared tool into the same chunks a native tool field would have produced, and leaves everything else exactly as the adapter wrote it.
-
 ## What it reads
+
+This package reads it. One `llm/stream` pass sits above whatever adapter answered, turns a complete text-channel call for a declared tool into the same chunks a native tool field would have produced, and leaves everything else exactly as the adapter wrote it.
 
 | Shape | Example |
 |---|---|

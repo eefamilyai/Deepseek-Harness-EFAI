@@ -29,3 +29,24 @@ The kernel tool stays where `dsh-efai-base` puts it, on the host plane. The tool
 ## Dev Note
 
 A bundle patch replaces a targeted row's whole `config` rather than merging into it. Rows that only need switching off are targeted by id with `disabled: true`, which carries no config and so cannot delete one.
+
+<a id="model-experience"></a>
+## Model Experience
+
+### The browser profile's composition
+
+#### What the model sees
+
+Nothing of its own: a bundle is composition, and every model-visible effect belongs to the row that contributes it. What this layer decides is which of them exist in a Web deployment — the `web-browser` rows and the kernel's browser window, the fork's `tool-roster` in place of upstream's `agent-presets` row, and the client plugins that render the transcript.
+
+#### Token effect
+
+Indirectly, and only through the rows: the roster's switches decide which tool schemas and guidance sections are billed, and the browser window's bounds decide how much of a page's text a fetch returns. The bundle itself adds no bytes to a request.
+
+#### KV Cache effect
+
+None of its own. A change to this file changes which plugins are mounted, which is a restart rather than a mid-session prefix change.
+
+## Known Limitations and Deferred Work
+
+- The bundle replaces and disables rows by id. An upstream release that renames a row this file names will fail to boot rather than silently keep the upstream row, so a release that renames the agent-presets or tool-kernel rows has to be checked here.

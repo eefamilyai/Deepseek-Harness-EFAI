@@ -1,6 +1,10 @@
 # @deepseek-ai/dsh-tool-notebook-edit
 
+## Summary
+
 The model-facing **`notebook_edit`** tool: view, create, replace, insert, and delete cells in a Jupyter `.ipynb` notebook over the harness filesystem service.
+
+## What it changes
 
 It exists because a notebook is JSON, and a plain text editor makes it easy to produce a file that no longer parses. This tool parses the notebook, applies the edit to the cell's source, and writes the whole file back through the mounted filesystem policy, so an edit either lands as valid nbformat or is refused.
 

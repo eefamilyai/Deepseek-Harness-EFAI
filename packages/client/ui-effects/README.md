@@ -1,6 +1,10 @@
 # @deepseek-ai/dsh-client-ui-effects
 
+## Summary
+
 Frame-wide **visual effects** for the DeepSeek Harness web client: an ambient DeepSeek whale backdrop, a bottom-right focus-lock button, a rotating nature scene with a passcode gate, and the Settings row that controls them.
+
+## What it renders
 
 The overlay renders through a **private React root**, the same self-contained pattern the dock uses, so it needs no slot wiring. Three effects share that root:
 

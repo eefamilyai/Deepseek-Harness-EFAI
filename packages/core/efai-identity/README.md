@@ -13,6 +13,7 @@ kind: "package-reference"
 
 - [Use this package](#use-this-package)
 - [Why a rewrite and not a registration](#why-a-rewrite-and-not-a-registration)
+- [Model Experience](#model-experience)
 - [Dev Note](#dev-note)
 
 <a id="use-this-package"></a>
@@ -40,3 +41,33 @@ Editing the string inside `packages/core/system-prompt` is the alternative this 
 ## Dev Note
 
 The opener rides at the front of `sections` because the assembly is already sorted when the waterfall sees it; position, not `order`, is what carries −1000 here. Unmounting the plugin restores the shipped opener, which the tests pin.
+
+<a id="model-experience"></a>
+## Model Experience
+
+### The fork's identity opener
+
+#### What the model sees
+
+The first section of every assembled request: `harness:identity` at order −1000, whose text is the `text` field of this plugin's row (the opener below by default). It arrives before the deployment persona and before any tool guidance, so it frames everything that follows; an empty `text` removes the section instead of replacing it.
+
+##### Prompt section verbatim
+
+```markdown
+You are an AI agent in a fully enclosed sandbox for windows related testing and software
+development. Put in maximum effort no matter how long the task takes, even if it takes hours;
+quality is the ultimate goal. *In large directories, use optimised ways to search through the
+directory. Or write optimized code in general.*
+```
+
+#### Token effect
+
+The opener is the first billed block of every request. Replacing upstream's shipped opener changes those bytes once; the size is whatever the configured `text` is, and a deployment that wants the block gone sets `text: ''` and pays nothing for it.
+
+#### KV Cache effect
+
+The section is part of the stable prefix: it changes only when the configured `text` changes, which invalidates the cached prefix from that point. Rewriting the assembly rather than registering a second section is what keeps exactly one identity block, so a cache that upstream would have built over one opener cannot be split across two.
+
+## Known Limitations and Deferred Work
+
+- The opener is one section. A deployment that wants the fork's opener *and* a second identity line has to put both in `text`, because a second registration under `harness:identity` throws by design.

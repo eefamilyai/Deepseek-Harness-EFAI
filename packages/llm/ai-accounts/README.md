@@ -3,6 +3,7 @@ description: "Account-pool registry: which provider routes accept a login, and t
 kind: "package-reference"
 ---
 
+
 # @deepseek-ai/dsh-ai-accounts
 
 ## Summary
@@ -20,26 +21,21 @@ The account-pool registry. A provider that can sign in with a stored credential 
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the host half wherever a provider registers accounts, and the client half
-in a browser composition that carries the `remote` service. `packages/bundle/efai-base`
-mounts the host half and `packages/bundle/efai-web` the client half.
+Mount the host half wherever a provider registers accounts, and the client half in a browser composition that carries the `remote` service. `packages/bundle/efai-base` mounts the host half and `packages/bundle/efai-web` the client half.
 
 ```yaml
 - id: ai-accounts
   name: '@deepseek-ai/dsh-ai-accounts'
 ```
 
-A provider registers on the service it is given, and the returned disposer
-withdraws the registration with the caller's fiber:
+A provider registers on the service it is given, and the returned disposer withdraws the registration with the caller's fiber:
 
 ```ts
 const dispose = ctx.aiAccounts.registerAccountProvider('kiln-deepseek', addAccount)
 const admin = ctx.aiAccounts.registerAccountAdmin('kiln-deepseek', accountAdmin)
 ```
 
-One handler per route: a second registration for the same route throws rather
-than silently replacing the first, because two owners of one route is a
-configuration the service cannot resolve.
+One handler per route: a second registration for the same route throws rather than silently replacing the first, because two owners of one route is a configuration the service cannot resolve.
 
 <a id="what-it-owns"></a>
 ## What it owns
@@ -50,19 +46,12 @@ configuration the service cannot resolve.
 | `registerAccountAdmin(route, admin)` | The route's logins can be listed and repaired. Returns a disposer. |
 | `listAccountProviders()` | The routes that accept additions, in registration order. |
 
-The `AccountAdmin` interface is the provider's own vocabulary
-(`list`/`relogin`/`reprofile`/`remove`/`log`); this service forwards to it and
-owns only the error translation. Nothing here knows what an account is beyond
-the shapes on the wire, so a second account-pooling provider appears without a
-change to this package.
+The `AccountAdmin` interface is the provider's own vocabulary (`list`/`relogin`/`reprofile`/`remove`/`log`); this service forwards to it and owns only the error translation. Nothing here knows what an account is beyond the shapes on the wire, so a second account-pooling provider appears without a change to this package.
 
 <a id="the-aiaccounts-namespace"></a>
 ## The `aiAccounts` namespace
 
-The namespace is this package's own rather than a corner of `llm`, so the
-account surface ships, versions, and fails independently of the model registry
-it happens to sit beside. Its client half mounts that namespace itself, from the
-descriptors the build generates for this package:
+The namespace is this package's own rather than a corner of `llm`, so the account surface ships, versions, and fails independently of the model registry it happens to sit beside. Its client half mounts that namespace itself, from the descriptors the build generates for this package:
 
 ```ts
 import contribution from '@deepseek-ai/dsh-ai-accounts/remote'
@@ -72,17 +61,9 @@ export async function apply(ctx: Context): Promise<void> {
 }
 ```
 
-A composition therefore reaches the namespace by mounting this package, not by
-owning a line in a shared Remote assembly. A local failure surfaces as
-`RemoteError` with code `aiAccounts/account-rejected` and the route (plus the
-account when one was named) in `details`.
+A composition therefore reaches the namespace by mounting this package, not by owning a line in a shared Remote assembly. A local failure surfaces as `RemoteError` with code `aiAccounts/account-rejected` and the route (plus the account when one was named) in `details`.
 
-No runtime invariant companion is published because both registries are private
-maps whose only observable relation — a route has exactly one handler while its
-disposer lives — is established and released inside the same service call, so a
-companion would re-execute the implementation instead of comparing independent
-observations. The package spec asserts registration, duplicate rejection, and
-disposal directly.
+No runtime invariant companion is published because both registries are private maps whose only observable relation — a route has exactly one handler while its disposer lives — is established and released inside the same service call, so a companion would re-execute the implementation instead of comparing independent observations. The package spec asserts registration, duplicate rejection, and disposal directly.
 
 ## Model Experience
 

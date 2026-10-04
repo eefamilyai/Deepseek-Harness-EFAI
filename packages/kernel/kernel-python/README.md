@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-kernel-python
 
+## Summary
+
 The **Kiln-backed persistent Python provider** for the `ctx.kernel` seam.
 
 The kernel itself is the Kiln runtime vendored under `python/kiln/runtime`, spawned as a child process and driven over its base64 frame protocol. Nothing about the engine is reimplemented here: the namespace semantics, the preloaded helpers (`remember`/`recall`, `sh`, `read_file`, `browser_use`, …), and the top-level-expression echo all belong to that runtime. This package is the adapter that puts it behind `ctx.kernel`.
