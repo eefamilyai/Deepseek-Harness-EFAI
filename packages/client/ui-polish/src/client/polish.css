@@ -638,6 +638,125 @@ pre {
 }
 
 /* ----------------------------------------------------------------------------
+ * 6c. Reading surface detail
+ * ------------------------------------------------------------------------- */
+
+/* The transcript is read far more than it is scanned, so its prose gets the
+ * rhythm a column wants rather than the margins chrome carries: a heading sits
+ * closer to the text it introduces than to the text above it, and the first one
+ * in a message does not push the message down. */
+[data-conversation-content] :is(h1, h2, h3, h4) {
+  letter-spacing: -0.01em;
+  margin-block-start: 1.6em;
+  margin-block-end: 0.55em;
+}
+
+[data-conversation-content] :is(h1, h2, h3, h4):first-child {
+  margin-block-start: 0;
+}
+
+/* Tables are the shape this fork spends the most effort getting right on the way
+ * in (the markdown stream pass repairs the delimiter rows a provider glued), so
+ * the rendered table should look deliberate: a tinted header, a zebra wash,
+ * hairline rules, and the same rounding as every other surface. Separate borders
+ * are what let the outer corners land on the cells rather than on a collapsed
+ * frame, and the last row keeps no rule so the rounding has no stray line. */
+[data-conversation-content] table {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--dsw-radius-md);
+  overflow: hidden;
+  margin-block: 0.9em;
+  font-size: 0.95em;
+}
+
+[data-conversation-content] th,
+[data-conversation-content] td {
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  padding: 0.45em 0.7em;
+  text-align: left;
+}
+
+[data-conversation-content] thead th {
+  background-color: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+[data-conversation-content] tbody tr:nth-child(even) td {
+  background-color: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+[data-conversation-content] tbody tr:hover td {
+  background-color: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+[data-conversation-content] tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Code reads as one material whether it is a token in a sentence or a block: the
+ * surface one step above the transcript, a hairline, and the card rounding. */
+[data-conversation-content] :not(pre) > code {
+  background-color: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  padding: 0.1em 0.35em;
+  font-size: 0.92em;
+}
+
+[data-conversation-content] pre {
+  background-color: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+}
+
+/* A quote is a note beside the text, not a region of it, so the accent arrives as
+ * a bar on the leading edge and the wash stays behind the words. */
+[data-conversation-content] blockquote {
+  background-color: var(--dsw-alias-interactive-bg-hover-solid);
+  border-inline-start: 2px solid var(--dsw-alias-state-business-primary);
+  border-radius: 0 var(--dsw-radius-sm) var(--dsw-radius-sm) 0;
+  padding: 0.4em 0.8em;
+}
+
+[data-conversation-content] hr {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  border-inline: 0;
+  border-bottom: 0;
+  margin-block: 1.2em;
+}
+
+/* A link in an answer is the one thing in the prose that is also a control, so it
+ * keeps the underline and gains the same short colour transition every other
+ * control in the shell has. */
+[data-conversation-content] a {
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.18em;
+  transition-property: color, text-decoration-color;
+  transition-duration: var(--ds-transition-duration-fast);
+  transition-timing-function: var(--ds-ease-standard);
+}
+
+/* The row you are in. `aria-current='page'` is how the shell states that, and
+ * until now it changed nothing visible, so the session open behind the sidebar was
+ * indistinguishable from the ones around it and the settings section you were
+ * reading looked like its neighbours. One treatment covers both: an accent bar on
+ * the leading edge, the accent wash both palettes carry, and a hover step that
+ * keeps the pointer legible over it. */
+[aria-current='page'] {
+  background-color: var(--dsw-alias-interactive-bg-hover-accent);
+  border-radius: var(--dsw-radius-sm);
+  box-shadow: inset 2px 0 0 0 var(--dsw-alias-state-business-primary);
+}
+
+[aria-current='page']:hover {
+  background-color: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+/* ----------------------------------------------------------------------------
  * 7. Scrollbars
  * ------------------------------------------------------------------------- */
 

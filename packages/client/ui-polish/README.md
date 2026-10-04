@@ -54,6 +54,10 @@ The sheet's model-menu rules are armed on the marker the observer writes on the 
 
 No runtime invariant companion is published because the package holds no state and registers no service: it injects one stylesheet, registers two words for the account choices, and installs one observer, and its specs assert the sheet's contract — the selectors it may use, the tokens it must retune, the two rules above, the fold's DOM behavior, and that the reduced-motion block collapses every duration it introduces.
 
+## Reading surface detail
+
+Beyond the shell's materials, the sheet gives the transcript the rhythm a reading column wants: headings sit closer to the text they introduce, tables render as a deliberate object (tinted header, zebra wash, hairline rules, card rounding), code reads as one material whether inline or fenced, quotes carry the accent as a bar, and links keep the underline with the shell's short colour transition. The row the shell marks `aria-current='page'` — the open session, the settings section being read — takes an accent bar and wash, so the current item is visible rather than only focusable.
+
 ## Model Experience
 
 None, as the package paints existing surfaces and registers no prompt section, tool schema, or Session event.
