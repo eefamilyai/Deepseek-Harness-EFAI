@@ -1,3 +1,5 @@
+import type { AppearanceSource } from './appearance-store.ts'
+
 /**
  * The appearance engine: turn one row's values into the token overrides the page
  * wears, and keep them in step with the row.
@@ -13,7 +15,7 @@
  * @module @deepseek-ai/dsh-client-ui-personalization/appearance
  */
 
-import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+
 
 /**
  * The appearance values the page wears.
@@ -234,14 +236,14 @@ export function appearanceCss(values: AppearanceValues): string {
 }
 
 /**
- * Keep the page in step with one row's values.
+ * Keep the page in step with the live values.
  *
- * @param form - the live config form over the personalization row.
+ * @param source - the appearance policy: current values and an invalidation callback.
  * @param doc - the document to write into, injected so a spec can drive a stand-in.
  * @returns the disposer that removes the sheet and the subscription.
  */
-export function installAppearance(form: ConfigForm<Partial<AppearanceValues>>, doc: Document): () => void {
-  const read = (): AppearanceValues => ({ ...APPEARANCE_DEFAULTS, ...form.getSnapshot().value })
+export function installAppearance(source: AppearanceSource, doc: Document): () => void {
+  const read = (): AppearanceValues => source.values()
 
   const sheet = doc.createElement('style')
   sheet.id = APPEARANCE_STYLE_ID
@@ -257,12 +259,9 @@ export function installAppearance(form: ConfigForm<Partial<AppearanceValues>>, d
   }
 
   paint(read())
-  const unsubscribe = form.subscribe(() => { paint(read()) })
+  const unsubscribe = source.subscribe(() => { paint(read()) })
   return () => {
     unsubscribe()
     sheet.remove()
   }
 }
-
-/** Re-exported so a caller can type a snapshot without reaching into the settings package. */
-export type { ConfigFormSnapshot }

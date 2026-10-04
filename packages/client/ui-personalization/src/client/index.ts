@@ -2,9 +2,15 @@
  * The Personalization section, browser half.
  *
  * Registers one `settings.section` entry over this plugin's own row and installs
- * the appearance engine, which turns that row's live fields into the token
+ * the appearance engine, which turns the policy's live values into the token
  * overrides the page wears. The row is the host half's `Config`, so the profile
- * persists every choice and this file owns no state of its own.
+ * persists every choice.
+ *
+ * The values themselves live in one {@link AppearancePolicy}: the section writes
+ * through it and the engine paints from it, so a control changes the window in
+ * the same step and the row is adopted whenever it answers. The slot hands the
+ * policy's stores to the section through the inject `hooks` compartment, which
+ * the renderer binds as `use<Name>` selector hooks.
  *
  * @module @deepseek-ai/dsh-client-ui-personalization/client
  */
@@ -18,11 +24,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import { installAppearance } from './appearance.ts'
+import { AppearancePolicy } from './appearance-store.ts'
 import { AppearanceSection, type AppearanceFields, type AppearanceSectionInjected } from './AppearanceSection.tsx'
 import { en, zh } from './locales.ts'
 
 export type { AppearanceFields, AppearanceSectionComponentProps, AppearanceSectionInjected } from './AppearanceSection.tsx'
 export type { AppearanceValues } from './appearance.ts'
+export type { AppearanceField, AppearanceSource } from './appearance-store.ts'
 
 /** The locale namespace this section registers its copy under. */
 const NS = 'appearance'
@@ -43,11 +51,31 @@ export const inject = ['slots', 'locale', 'configForms']
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-personalization: dictionaries')
   const t = ctx.locale.bind(NS)
-  const appearance = ctx.configForms.get<AppearanceFields>(APPEARANCE_ENTRY_ID)
-  // The engine follows the same live form the section writes, so the page changes
-  // as the control moves and no second source of truth exists.
-  ctx.effect(() => installAppearance(appearance, document), 'ui-personalization: tokens')
-  const injected = (): AppearanceSectionInjected => ({ appearance })
+  const form = ctx.configForms.get<AppearanceFields>(APPEARANCE_ENTRY_ID)
+  const policy = new AppearancePolicy(form)
+  ctx.effect(() => installAppearance(policy, document), 'ui-personalization: tokens')
+  ctx.effect(() => () => { policy.dispose() }, 'ui-personalization: row subscription')
+
+  const injected = (): AppearanceSectionInjected => ({
+    status: form === undefined ? 'unavailable' : 'ready',
+    hooks: {
+      fontFamily: policy.fontFamily,
+      fontScale: policy.fontScale,
+      accent: policy.accent,
+      radiusScale: policy.radiusScale,
+      shellOpacity: policy.shellOpacity,
+      surfaceOpacity: policy.surfaceOpacity,
+      panelOpacity: policy.panelOpacity,
+    },
+    setFontFamily: (value) => { policy.setFontFamily(value) },
+    setFontScale: (value) => { policy.setFontScale(value) },
+    setAccent: (value) => { policy.setAccent(value) },
+    setRadiusScale: (value) => { policy.setRadiusScale(value) },
+    setShellOpacity: (value) => { policy.setShellOpacity(value) },
+    setSurfaceOpacity: (value) => { policy.setSurfaceOpacity(value) },
+    setPanelOpacity: (value) => { policy.setPanelOpacity(value) },
+    reset: () => { policy.reset() },
+  })
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',

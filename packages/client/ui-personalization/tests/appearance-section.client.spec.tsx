@@ -2,16 +2,18 @@
 /**
  * The Personalization section's form.
  *
- * The engine has its own specs and so does the row, but neither would notice a control
+ * The engine has its own specs and so does the policy, but neither would notice a control
  * wired to the wrong field or to none at all - which is the failure mode an operator sees
- * as "this slider does nothing" or "that number will not change". Every control here is
- * driven the way a person drives it and asserted through the write it makes.
+ * as "this control does nothing" or "that number will not change". Every control here is
+ * driven the way a person drives it, and asserted through the store the display follows.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
-import { APPEARANCE_DEFAULTS } from '../src/client/appearance.ts'
-import { AppearanceSection, type AppearanceFields, type AppearanceSectionComponentProps } from '../src/client/AppearanceSection.tsx'
+import { useSyncExternalStore } from 'react'
+import { afterEach, expect, it } from 'vitest'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { APPEARANCE_DEFAULTS, type AppearanceValues } from '../src/client/appearance.ts'
+import { AppearancePolicy } from '../src/client/appearance-store.ts'
+import { AppearanceSection, type AppearanceSectionComponentProps } from '../src/client/AppearanceSection.tsx'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -20,53 +22,59 @@ const translations: ReadonlyMap<string, string> = new Map(Object.entries(en))
 /** The locale seat: every key this section asks for, or the key itself when missing. */
 const t = (key: string): string => translations.get(key) ?? key
 
-/** One live form over a fixed value, recording every write. */
-function form(value: AppearanceFields, user: AppearanceFields = {}) {
-  const snapshot = { status: 'ready' as const, value, base: undefined, user, revision: 1, writable: true, mode: 'host' as const }
-  const mutate = vi.fn(async () => true)
-  return {
-    mutate,
-    handle: {
-      getSnapshot: () => snapshot,
-      subscribe: () => () => {},
-      set: vi.fn(async () => true),
-      mutate,
-      unset: vi.fn(async () => true),
-    } as unknown as ConfigForm<AppearanceFields>,
+/**
+ * The framework's selector hook over one store: what the renderer binds for a `hooks`
+ * entry. Subscribing here is the render machinery's job in production and its stand-in in
+ * a spec.
+ * @param store - the store to bind.
+ * @returns the selector hook over it.
+ */
+function bind<T>(store: SnapshotStore<T>): (select: (value: T) => T) => T {
+  return select => useSyncExternalStore(store.subscribe.bind(store), () => select(store.getSnapshot()))
+}
+
+/** Render the section over a fresh policy, and return that policy. */
+function view(initial: Partial<AppearanceValues> = {}, status: 'ready' | 'unavailable' = 'ready') {
+  const policy = new AppearancePolicy(undefined)
+  for (const [field, value] of Object.entries(initial)) {
+    (policy[field as keyof AppearancePolicy] as SnapshotStore<unknown>).set(value)
   }
-}
-
-/** A framework seat this section does not read. */
-function unusedSeat(): never {
-  throw new Error('unused seat')
-}
-
-/** Render the section over the supplied values and return the form's write log. */
-function view(value: AppearanceFields = {}) {
-  const live = form(value)
-  const seats = {
-    usePanelInfo: unusedSeat,
-    useSessions: unusedSeat,
-    useSessionStatus: unusedSeat,
-    useSessionRetainInfo: unusedSeat,
-    useWorkspaces: unusedSeat,
-    useResource: unusedSeat,
-  } as Pick<AppearanceSectionComponentProps, 'usePanelInfo' | 'useSessions' | 'useSessionStatus'
-  | 'useSessionRetainInfo' | 'useWorkspaces' | 'useResource'>
-  render(
-    <AppearanceSection
-      t={key => t(key)}
-      close={() => {}}
-      {...seats}
-      appearance={live.handle}
-    />,
-  )
-  return live.mutate
+  const props = {
+    t,
+    close: () => {},
+    status,
+    hooks: {
+      fontFamily: policy.fontFamily,
+      fontScale: policy.fontScale,
+      accent: policy.accent,
+      radiusScale: policy.radiusScale,
+      shellOpacity: policy.shellOpacity,
+      surfaceOpacity: policy.surfaceOpacity,
+      panelOpacity: policy.panelOpacity,
+    },
+    useFontFamily: bind(policy.fontFamily),
+    useFontScale: bind(policy.fontScale),
+    useAccent: bind(policy.accent),
+    useRadiusScale: bind(policy.radiusScale),
+    useShellOpacity: bind(policy.shellOpacity),
+    useSurfaceOpacity: bind(policy.surfaceOpacity),
+    usePanelOpacity: bind(policy.panelOpacity),
+    setFontFamily: (value: string) => { policy.setFontFamily(value) },
+    setFontScale: (value: number) => { policy.setFontScale(value) },
+    setAccent: (value: string) => { policy.setAccent(value) },
+    setRadiusScale: (value: number) => { policy.setRadiusScale(value) },
+    setShellOpacity: (value: number) => { policy.setShellOpacity(value) },
+    setSurfaceOpacity: (value: number) => { policy.setSurfaceOpacity(value) },
+    setPanelOpacity: (value: number) => { policy.setPanelOpacity(value) },
+    reset: () => { policy.reset() },
+  } as unknown as AppearanceSectionComponentProps
+  render(<AppearanceSection {...props} />)
+  return policy
 }
 
 /** One numeric control by its accessible name. */
-function numberField(label: string): HTMLElement {
-  return screen.getByRole('spinbutton', { name: label })
+function numberField(label: string): HTMLInputElement {
+  return screen.getByRole('spinbutton', { name: label }) as HTMLInputElement
 }
 
 it('renders one control per appearance field, under the three groups', () => {
@@ -76,98 +84,64 @@ it('renders one control per appearance field, under the three groups', () => {
     expect(screen.getByText(t(label)), label).toBeTruthy()
   }
   expect(screen.getByText(t('appearance.opacity.title'))).toBeTruthy()
-  // Three opacity numbers, one per level.
   expect(numberField(t('appearance.shell.label'))).toBeTruthy()
   expect(numberField(t('appearance.surface.label'))).toBeTruthy()
   expect(numberField(t('appearance.panel.label'))).toBeTruthy()
 })
 
-it('writes each opacity to its own field', () => {
-  const mutate = view()
-  fireEvent.change(numberField(t('appearance.shell.label')), { target: { value: '35' } })
-  fireEvent.keyDown(numberField(t('appearance.shell.label')), { key: 'Enter' })
-  expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['shellOpacity'], value: 35 }])
-
-  mutate.mockClear()
-  fireEvent.change(numberField(t('appearance.panel.label')), { target: { value: '55' } })
-  fireEvent.keyDown(numberField(t('appearance.panel.label')), { key: 'Enter' })
-  expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['panelOpacity'], value: 55 }])
-})
-
-it('writes a preset from the row it belongs to, and only that row', () => {
-  const mutate = view()
+it('writes a preset to its own field, and the number follows in the same step', () => {
+  const policy = view()
   const glass = screen.getAllByText(t('appearance.opacity.glass'))
   expect(glass).toHaveLength(3)
   // The second Glass pill is the surface row's.
   fireEvent.click(glass[1] as HTMLElement)
-  expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['surfaceOpacity'], value: 65 }])
+  expect(policy.surfaceOpacity.getSnapshot()).toBe(65)
+  expect(numberField(t('appearance.surface.label')).value).toBe('65')
+  // The other two levels are untouched.
+  expect(policy.shellOpacity.getSnapshot()).toBe(100)
+  expect(policy.panelOpacity.getSnapshot()).toBe(100)
 })
 
-it('writes the font stack and the accent from their fields', () => {
-  const mutate = view()
-  fireEvent.change(screen.getByRole('textbox', { name: t('appearance.font.label') }), { target: { value: 'Inter, system-ui, sans-serif' } })
-  fireEvent.keyDown(screen.getByRole('textbox', { name: t('appearance.font.label') }), { key: 'Enter' })
-  expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['fontFamily'], value: 'Inter, system-ui, sans-serif' }])
+it('writes each opacity field from its own number control', () => {
+  const policy = view()
+  fireEvent.change(numberField(t('appearance.shell.label')), { target: { value: '35' } })
+  fireEvent.keyDown(numberField(t('appearance.shell.label')), { key: 'Enter' })
+  expect(policy.shellOpacity.getSnapshot()).toBe(35)
 
-  mutate.mockClear()
+  fireEvent.change(numberField(t('appearance.panel.label')), { target: { value: '55' } })
+  fireEvent.keyDown(numberField(t('appearance.panel.label')), { key: 'Enter' })
+  expect(policy.panelOpacity.getSnapshot()).toBe(55)
+  expect(numberField(t('appearance.panel.label')).value).toBe('55')
+})
+
+it('writes the font stack, the accent, and the corner scale', () => {
+  const policy = view()
+  const font = screen.getByRole('textbox', { name: t('appearance.font.label') })
+  fireEvent.change(font, { target: { value: 'Inter, system-ui, sans-serif' } })
+  fireEvent.keyDown(font, { key: 'Enter' })
+  expect(policy.fontFamily.getSnapshot()).toBe('Inter, system-ui, sans-serif')
+
   fireEvent.click(screen.getByText(t('appearance.accentPreset.violet')))
-  expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['accent'], value: '#7c5cff' }])
+  expect(policy.accent.getSnapshot()).toBe('#7c5cff')
+
+  fireEvent.change(numberField(t('appearance.radius.label')), { target: { value: '0' } })
+  fireEvent.keyDown(numberField(t('appearance.radius.label')), { key: 'Enter' })
+  expect(policy.radiusScale.getSnapshot()).toBe(0)
 })
 
 it('resets every field at once', () => {
-  const mutate = view({ shellOpacity: 35, panelOpacity: 40 })
+  const policy = view({ shellOpacity: 35, panelOpacity: 40 })
   fireEvent.click(screen.getByRole('button', { name: t('appearance.reset.action') }))
-  expect(mutate).toHaveBeenCalledWith(Object.entries(APPEARANCE_DEFAULTS).map(([field, value]) => ({
-    op: 'set', path: [field], value,
-  })))
+  expect(policy.values()).toEqual(APPEARANCE_DEFAULTS)
 })
 
-it('shows the stored percentages, including a value the first build wrote as a fraction', () => {
+it('shows the stored percentages, including a fraction the first build wrote', () => {
   view({ shellOpacity: 0.65, panelOpacity: 55 })
-  expect((numberField(t('appearance.shell.label')) as HTMLInputElement).value).toBe('65')
-  expect((numberField(t('appearance.panel.label')) as HTMLInputElement).value).toBe('55')
+  expect(numberField(t('appearance.shell.label')).value).toBe('65')
+  expect(numberField(t('appearance.panel.label')).value).toBe('55')
 })
 
-it('shows the layer the operator set, not the composition default beneath it', () => {
-  // The regression: a field read 100 while the profile held 35, because the snapshot's
-  // `value` was the default and the operator's own layer sat beside it.
-  const live = form({ shellOpacity: 100 }, { shellOpacity: 35 })
-  render(
-    <AppearanceSection
-      t={key => t(key)}
-      close={() => {}}
-      usePanelInfo={unusedSeat}
-      useSessions={unusedSeat}
-      useSessionStatus={unusedSeat}
-      useSessionRetainInfo={unusedSeat}
-      useWorkspaces={unusedSeat}
-      useResource={unusedSeat}
-      appearance={live.handle}
-    />,
-  )
-  expect((numberField(t('appearance.shell.label')) as HTMLInputElement).value).toBe('35')
-})
-
-it('reports a section without a row, and a write that failed', async () => {
-  // A deployment that composes no such row: the section says so instead of rendering an
-  // empty form.
-  // A stable snapshot: the framework hook compares by reference, so a fresh object per
-  // read is an infinite re-render rather than an assertion.
-  const unavailable = { status: 'unavailable' as const, value: undefined, base: undefined, user: undefined, revision: undefined, writable: false, mode: 'host' as const }
-  const missing = form({})
-  Object.assign(missing.handle, { getSnapshot: () => unavailable })
-  render(
-    <AppearanceSection
-      t={key => t(key)}
-      close={() => {}}
-      usePanelInfo={unusedSeat}
-      useSessions={unusedSeat}
-      useSessionStatus={unusedSeat}
-      useSessionRetainInfo={unusedSeat}
-      useWorkspaces={unusedSeat}
-      useResource={unusedSeat}
-      appearance={missing.handle}
-    />,
-  )
+it('reports a deployment that composes no row', () => {
+  view({}, 'unavailable')
   expect(screen.getByText(t('appearance.unavailable'))).toBeTruthy()
 })

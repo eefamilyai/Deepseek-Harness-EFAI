@@ -1,65 +1,61 @@
 /**
  * The Personalization settings section.
  *
- * One row per appearance field, each writing its own live field of this plugin's
- * row, so the page changes as the control moves and the profile remembers it. The
- * engine that turns those values into token overrides is `appearance.ts`; this file
- * is only the form over it.
+ * One row per appearance field. Every value arrives as a framework-bound selector hook
+ * over the appearance policy's stores, and every control writes back through an injected
+ * callback, so the component holds no subscription of its own and the page repaints in
+ * the same step the control moves. The engine that turns those values into token
+ * overrides is `appearance.ts`; this file is only the form over it.
  *
  * @module @deepseek-ai/dsh-client-ui-personalization/AppearanceSection
  */
 
-import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { APPEARANCE_DEFAULTS, opacityPercent, type AppearanceValues } from './appearance.ts'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { opacityPercent, type AppearanceValues } from './appearance.ts'
 import css from './AppearanceSection.module.css'
 import type { AppearanceKey } from './locales.ts'
 
 /** The row's live fields, as the client reads them. */
 export type AppearanceFields = Partial<AppearanceValues>
 
-/** Injected face: the live config form over this plugin's own row. */
+/** Injected face: the appearance policy's stores and the writes that move them. */
 export interface AppearanceSectionInjected {
-  /** Live form over the personalization row. */
-  appearance: ConfigForm<AppearanceFields>
+  /** Whether this deployment composes the row the section edits. */
+  status: 'ready' | 'unavailable'
+  /** Live values, one store per field, bound as `use<Name>` selector hooks. */
+  hooks: {
+    fontFamily: SnapshotStore<string>
+    fontScale: SnapshotStore<number>
+    accent: SnapshotStore<string>
+    radiusScale: SnapshotStore<number>
+    shellOpacity: SnapshotStore<number>
+    surfaceOpacity: SnapshotStore<number>
+    panelOpacity: SnapshotStore<number>
+  }
+  /** Set the interface font stack. */
+  setFontFamily: (value: string) => void
+  /** Set the root font size percentage. */
+  setFontScale: (value: number) => void
+  /** Set the accent colour. */
+  setAccent: (value: string) => void
+  /** Set the corner-radius multiplier. */
+  setRadiusScale: (value: number) => void
+  /** Set the window opacity percentage. */
+  setShellOpacity: (value: number) => void
+  /** Set the content-surface opacity percentage. */
+  setSurfaceOpacity: (value: number) => void
+  /** Set the settings-panel opacity percentage. */
+  setPanelOpacity: (value: number) => void
+  /** Restore every field to the deployment default. */
+  reset: () => void
 }
 
-/** Full component props: runtime share + locale seat + the injected form. */
+/** Full component props: runtime share + locale seat + the injected policy face. */
 export type AppearanceSectionComponentProps =
-  PropsRuntime<'settings.section'> & PropsLocale<'appearance'> & AppearanceSectionInjected
-
-/** One write pump: reports failure instead of throwing, and serialises. */
-interface Writer {
-  failed: boolean
-  pending: boolean
-  write: (fields: AppearanceFields) => void
-}
-
-/**
- * A write pump over one form.
- * @param form - the form to write through.
- * @returns its writer state and the write call.
- */
-function useWriter(form: ConfigForm<AppearanceFields>): Writer {
-  const [failed, setFailed] = useState(false)
-  const [pending, setPending] = useState(false)
-  const { write } = useMemo(() => ({
-    write: (fields: AppearanceFields): void => {
-      setPending(true)
-      void form.mutate(Object.entries(fields).map(([field, value]) => ({
-        op: 'set' as const,
-        path: [field],
-        value: value as never,
-      }))).then((saved) => {
-        setPending(false)
-        setFailed(!saved)
-      })
-    },
-  }), [form])
-  return { failed, pending, write }
-}
+  PropsRuntime<'settings.section'> & PropsLocale<'appearance'> & InjectFace<AppearanceSectionInjected>
 
 /** A titled row: label and hint on the left, control on the right. */
 function Row({ label, hint, control, presets }: {
@@ -179,19 +175,33 @@ const ACCENT_PRESETS: readonly { key: AppearanceKey; value: string }[] = [
  * @param props - the runtime share, the locale seat, and the injected form.
  * @returns the section.
  */
-export function AppearanceSection({ t, appearance }: AppearanceSectionComponentProps): ReactNode {
-  const snapshot = useSyncExternalStore(appearance.subscribe.bind(appearance), appearance.getSnapshot.bind(appearance))
-  const writer = useWriter(appearance)
-  // The user layer is what the operator set, and it is the layer a control shows and
-  // writes. The snapshot's `value` can be the composition default underneath it - which is
-  // how a field read 100 while the profile held 35 - so the user layer wins here.
-  const user = (snapshot.user ?? {}) as AppearanceFields
-  const values: AppearanceValues = { ...APPEARANCE_DEFAULTS, ...snapshot.value, ...user }
-  const locked = writer.pending || snapshot.status === 'ready' ? false : true
-  const write = (fields: AppearanceFields): void => { writer.write(fields) }
+export function AppearanceSection({
+  t, status, reset,
+  setFontFamily, setFontScale, setAccent, setRadiusScale, setShellOpacity, setSurfaceOpacity, setPanelOpacity,
+  useFontFamily, useFontScale, useAccent, useRadiusScale, useShellOpacity, useSurfaceOpacity, usePanelOpacity,
+}: AppearanceSectionComponentProps): ReactNode {
+  const values: AppearanceValues = {
+    fontFamily: useFontFamily(value => value),
+    fontScale: useFontScale(value => value),
+    accent: useAccent(value => value),
+    radiusScale: useRadiusScale(value => value),
+    shellOpacity: useShellOpacity(value => value),
+    surfaceOpacity: useSurfaceOpacity(value => value),
+    panelOpacity: usePanelOpacity(value => value),
+  }
+  const locked = status !== 'ready'
+  const write = (fields: AppearanceFields): void => {
+    if (fields.fontFamily !== undefined) setFontFamily(fields.fontFamily)
+    if (fields.fontScale !== undefined) setFontScale(fields.fontScale)
+    if (fields.accent !== undefined) setAccent(fields.accent)
+    if (fields.radiusScale !== undefined) setRadiusScale(fields.radiusScale)
+    if (fields.shellOpacity !== undefined) setShellOpacity(fields.shellOpacity)
+    if (fields.surfaceOpacity !== undefined) setSurfaceOpacity(fields.surfaceOpacity)
+    if (fields.panelOpacity !== undefined) setPanelOpacity(fields.panelOpacity)
+  }
 
-  if (snapshot.status !== 'ready') {
-    return <p className={css.hint}>{t(snapshot.status === 'loading' ? 'appearance.loading' : 'appearance.unavailable')}</p>
+  if (status !== 'ready') {
+    return <p className={css.hint}>{t('appearance.unavailable')}</p>
   }
 
   return (
@@ -350,12 +360,11 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         label={t('appearance.reset')}
         hint={t('appearance.reset.hint')}
         control={(
-          <Button variant="outline" onClick={() => { write(APPEARANCE_DEFAULTS) }}>
+          <Button variant="outline" onClick={() => { reset() }}>
             {t('appearance.reset.action')}
           </Button>
         )}
       />
-      {writer.failed ? <p className={css.failed}>{t('appearance.failed')}</p> : null}
     </div>
   )
 }

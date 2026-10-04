@@ -8,8 +8,7 @@
  * palette token the theme itself uses, in both palettes, because the shell and the
  * surfaces are faded separately and a hardcoded colour would break dark mode.
  */
-import { describe, expect, it, vi } from 'vitest'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
+import { describe, expect, it } from 'vitest'
 import {
   APPEARANCE_DEFAULTS,
   APPEARANCE_STYLE_ID,
@@ -147,32 +146,28 @@ describe('real transparency', () => {
 })
 
 describe('installAppearance', () => {
-  /** A stand-in form over a fixed value, with the subscription the engine uses. */
-  function form(value: Partial<AppearanceValues>) {
+  /** A stand-in appearance source over a fixed value, with the subscription the engine uses. */
+  function source(value: Partial<AppearanceValues>) {
     const listeners = new Set<() => void>()
-    let current = value
+    let current: AppearanceValues = { ...APPEARANCE_DEFAULTS, ...value }
     return {
       set: (next: Partial<AppearanceValues>): void => {
-        current = next
+        current = { ...APPEARANCE_DEFAULTS, ...next }
         for (const listener of listeners) listener()
       },
-      unsubscribe: vi.fn(),
       handle: {
-        getSnapshot: () => ({ status: 'ready' as const, value: current, revision: 1, writable: true }),
+        values: () => current,
         subscribe: (listener: () => void) => {
           listeners.add(listener)
           return () => { listeners.delete(listener) }
         },
-        mutate: () => Promise.resolve(true),
-        set: () => Promise.resolve(true),
-        unset: () => Promise.resolve(true),
-      } as unknown as ConfigForm<Partial<AppearanceValues>>,
+      },
     }
   }
 
-  it('writes a sheet only when there is something to write, and follows the row', () => {
+  it('writes a sheet only when there is something to write, and follows the policy', () => {
     const doc = document.implementation.createHTMLDocument('test')
-    const live = form({})
+    const live = source({})
     const dispose = installAppearance(live.handle, doc)
     // Nothing chosen: no sheet at all, and the page is untouched.
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
@@ -191,7 +186,7 @@ describe('installAppearance', () => {
 
   it('removes what it added when it is disposed', () => {
     const doc = document.implementation.createHTMLDocument('test')
-    const live = form({ shellOpacity: 50 })
+    const live = source({ shellOpacity: 50 })
     const dispose = installAppearance(live.handle, doc)
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).not.toBeNull()
     dispose()
