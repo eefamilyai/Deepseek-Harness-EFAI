@@ -23,6 +23,8 @@ export const zh = {
 
   'appearance.font.label': '界面字体',
   'appearance.font.hint': '填写 CSS 字体栈，例如 "Inter, system-ui, sans-serif"。留空则使用主题字体。',
+  'appearance.font.placeholder': 'Inter, system-ui, sans-serif',
+  'appearance.accent.placeholder': '#5b8cff',
   'appearance.fontPreset.system': '系统默认',
   'appearance.fontPreset.sans': '无衬线',
   'appearance.fontPreset.serif': '衬线',
@@ -56,6 +58,7 @@ export const zh = {
   'appearance.opacity.glass': '玻璃',
   'appearance.opacity.clear': '全透',
   'appearance.reset': '恢复默认',
+  'appearance.reset.action': '恢复',
   'appearance.reset.hint': '把上面每一项都恢复为主题自己的取值。',
   'appearance.loading': '正在读取个性化配置…',
   'appearance.unavailable': '此部署没有装载个性化配置行。',
@@ -70,6 +73,8 @@ export const en: Record<keyof typeof zh, string> = {
 
   'appearance.font.label': 'Interface font',
   'appearance.font.hint': 'A CSS font stack, for example "Inter, system-ui, sans-serif". Empty keeps the theme font.',
+  'appearance.font.placeholder': 'Inter, system-ui, sans-serif',
+  'appearance.accent.placeholder': '#5b8cff',
   'appearance.fontPreset.system': 'System',
   'appearance.fontPreset.sans': 'Sans',
   'appearance.fontPreset.serif': 'Serif',
@@ -103,6 +108,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appearance.opacity.glass': 'Glass',
   'appearance.opacity.clear': 'Clear',
   'appearance.reset': 'Reset to defaults',
+  'appearance.reset.action': 'Reset',
   'appearance.reset.hint': 'Returns every field above to what the theme already says.',
   'appearance.loading': 'Reading the personalization row…',
   'appearance.unavailable': 'This deployment composes no personalization row.',

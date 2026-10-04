@@ -27,7 +27,7 @@ The overrides are `:root:root`-scoped because the theme declares tokens on the r
 
 #### What the model sees
 
-Nothing. The section edits this deployment's own row and writes a stylesheet into the page; no field, value, or token reaches a request, a tool schema, or a session event.
+Nothing. The section edits this deployment's own row and writes `dsh-personalization`, one `<style>` element, into the page; no field, value, or token reaches a request, a tool schema, or a session event.
 
 #### Token effect
 

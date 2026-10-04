@@ -200,7 +200,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
             value={values.fontFamily}
             disabled={locked}
             label={t('appearance.font.label')}
-            placeholder="Inter, system-ui, sans-serif"
+            placeholder={t('appearance.font.placeholder')}
             onCommit={(next) => { write({ fontFamily: next }) }}
           />
         )}
@@ -237,7 +237,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
             value={values.accent}
             disabled={locked}
             label={t('appearance.accent.label')}
-            placeholder="#5b8cff"
+            placeholder={t('appearance.accent.placeholder')}
             onCommit={(next) => { write({ accent: next }) }}
           />
         )}
@@ -347,7 +347,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         hint={t('appearance.reset.hint')}
         control={(
           <Button variant="outline" onClick={() => { write(APPEARANCE_DEFAULTS) }}>
-            {t('appearance.reset')}
+            {t('appearance.reset.action')}
           </Button>
         )}
       />
