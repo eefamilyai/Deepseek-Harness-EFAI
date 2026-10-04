@@ -15,6 +15,7 @@ import {
   APPEARANCE_STYLE_ID,
   appearanceCss,
   installAppearance,
+  opacityPercent,
   type AppearanceValues,
 } from '../src/client/appearance.ts'
 
@@ -69,6 +70,20 @@ describe('appearanceCss', () => {
 
   it('scales the root font size on its own', () => {
     expect(appearanceCss(values({ fontScale: 115 }))).toContain('font-size: 115%;')
+  })
+})
+
+describe('the fraction-to-percentage migration', () => {
+  it('reads a value the first build stored as a fraction', () => {
+    // The field was 0.35-1 when the first version shipped; a profile written then still
+    // holds the fraction, and the range accepts it so the stored value cannot stop the
+    // row from starting.
+    expect(opacityPercent(0.65)).toBe(65)
+    expect(opacityPercent(1)).toBe(100)
+    expect(opacityPercent(65)).toBe(65)
+    const css = appearanceCss(values({ shellOpacity: 0.6, surfaceOpacity: 0.9 }))
+    expect(css).toContain('60%, transparent')
+    expect(css).toContain('90%, transparent')
   })
 })
 

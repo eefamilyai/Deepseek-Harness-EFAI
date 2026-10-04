@@ -90,6 +90,21 @@ function isDefault(values: AppearanceValues, key: keyof AppearanceValues): boole
   return values[key] === APPEARANCE_DEFAULTS[key]
 }
 
+/**
+ * One opacity as a percentage.
+ *
+ * The field was a fraction (0.35–1) in the first build and is a percentage now, and a
+ * profile written by that build still holds the fraction — which the range now accepts
+ * so a stored value cannot stop the row from starting. Reading both here is what makes
+ * the change a migration rather than a break: the page shows the percentage, the next
+ * write stores one, and the value means the same thing either way.
+ * @param value - the stored opacity.
+ * @returns the opacity as a percentage.
+ */
+export function opacityPercent(value: number): number {
+  return value <= 1 ? value * 100 : value
+}
+
 /** A percentage with no trailing noise, for a `color-mix` weight. */
 function percent(fraction: number): string {
   return `${String(Math.round(fraction * 1000) / 10)}%`
@@ -140,14 +155,14 @@ export function appearanceCss(values: AppearanceValues): string {
   // value can make the frame translucent while the cards inside it stay readable.
   for (const [token, palette] of Object.entries(PALETTE_FILLS)) {
     const shell = token.startsWith('--dsw-alias-bg-base') || token.startsWith('--dsw-specific-sidebar')
-    const opacity = shell ? values.shellOpacity : values.surfaceOpacity
+    const opacity = opacityPercent(shell ? values.shellOpacity : values.surfaceOpacity)
     if (opacity >= 100) continue
     const weight = percent(opacity / 100)
     light.push(`  ${token}: color-mix(in srgb, ${palette.light} ${weight}, transparent);`)
     dark.push(`  ${token}: color-mix(in srgb, ${palette.dark} ${weight}, transparent);`)
   }
 
-  const fadesDocument = values.shellOpacity < 100
+  const fadesDocument = opacityPercent(values.shellOpacity) < 100
   if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && !fadesDocument) {
     return ''
   }
@@ -162,7 +177,7 @@ export function appearanceCss(values: AppearanceValues): string {
   // vibrancy layer on macOS), so with the page's own background gone the desktop
   // behind the window is what shows through — which is the whole point of the
   // setting, and the one piece a token override cannot reach on its own.
-  if (values.shellOpacity < 100) {
+  if (opacityPercent(values.shellOpacity) < 100) {
     blocks.push(':root:root, :root:root body {\n  background-color: transparent;\n}')
   }
   if (light.length > 0) {

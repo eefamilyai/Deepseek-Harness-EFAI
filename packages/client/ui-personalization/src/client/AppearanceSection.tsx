@@ -13,7 +13,7 @@ import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Button, Input, Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { APPEARANCE_DEFAULTS, type AppearanceValues } from './appearance.ts'
+import { APPEARANCE_DEFAULTS, opacityPercent, type AppearanceValues } from './appearance.ts'
 import css from './AppearanceSection.module.css'
 import type { AppearanceKey } from './locales.ts'
 
@@ -272,7 +272,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         hint={t('appearance.shell.hint')}
         control={(
           <NumberField
-            value={values.shellOpacity}
+            value={opacityPercent(values.shellOpacity)}
             min={35}
             max={100}
             step={5}
@@ -285,7 +285,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         presets={OPACITY_PRESETS.map(preset => (
           <Pill
             key={preset.key}
-            active={values.shellOpacity === preset.value}
+            active={opacityPercent(values.shellOpacity) === preset.value}
             onClick={() => { write({ shellOpacity: preset.value }) }}
           >
             {t(preset.key)}
@@ -297,7 +297,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         hint={t('appearance.surface.hint')}
         control={(
           <NumberField
-            value={values.surfaceOpacity}
+            value={opacityPercent(values.surfaceOpacity)}
             min={35}
             max={100}
             step={5}
@@ -310,7 +310,7 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         presets={OPACITY_PRESETS.map(preset => (
           <Pill
             key={preset.key}
-            active={values.surfaceOpacity === preset.value}
+            active={opacityPercent(values.surfaceOpacity) === preset.value}
             onClick={() => { write({ surfaceOpacity: preset.value }) }}
           >
             {t(preset.key)}

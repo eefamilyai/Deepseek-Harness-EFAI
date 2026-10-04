@@ -28,11 +28,11 @@ export const Config = z.object({
   radiusScale: z.number().min(0).max(2.5).default(1)
     .description('Multiplier for every corner radius step: 0 squares the interface, 2 rounds it further.')
     .volatile(),
-  shellOpacity: z.number().min(35).max(100).default(100)
-    .description('Shell opacity in percent: the app frame, the sidebar, and its navigation rows. Below 100 the window stops painting its own background, so the desktop behind it — blurred by the window material — shows through.')
+  shellOpacity: z.number().min(0.35).max(100).default(100)
+    .description('Shell opacity: the app frame, the sidebar, and its navigation rows. Below 100 the window stops painting its own background, so the desktop behind it - blurred by the window material - shows through. A value written before this field became a percentage (0.35-1) is read as that fraction.')
     .volatile(),
-  surfaceOpacity: z.number().min(35).max(100).default(100)
-    .description('Surface opacity in percent: cards, panels, menus, and dialogs. Lower it to read what sits underneath them.')
+  surfaceOpacity: z.number().min(0.35).max(100).default(100)
+    .description('Surface opacity: cards, panels, menus, and dialogs. Lower it to read what sits underneath them. A value written before this field became a percentage (0.35-1) is read as that fraction.')
     .volatile(),
 })
 

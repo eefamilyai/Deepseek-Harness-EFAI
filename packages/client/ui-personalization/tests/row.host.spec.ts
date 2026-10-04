@@ -42,9 +42,15 @@ describe('the personalization row', () => {
   })
 
   it('rejects values outside the range the page can render', () => {
-    expect(() => Config({ shellOpacity: 20 })).toThrow()
+    expect(() => Config({ shellOpacity: 0.1 })).toThrow()
     expect(() => Config({ surfaceOpacity: 400 })).toThrow()
     expect(() => Config({ radiusScale: 9 })).toThrow()
     expect(() => Config({ fontScale: 10 })).toThrow()
+  })
+
+  it('accepts both spellings of an opacity, so an older profile keeps working', () => {
+    // Fractions are what the first build wrote; percentages are what it writes now.
+    expect(() => Config({ shellOpacity: 0.6, surfaceOpacity: 0.9 })).not.toThrow()
+    expect(() => Config({ shellOpacity: 60, surfaceOpacity: 90 })).not.toThrow()
   })
 })
