@@ -162,3 +162,33 @@ Running the whole `doc-quick` aggregate (not just the two README gates) turned u
 - **`verify-package-readme-model-experience`** (345) and **`verify-package-readme-limitations`** (345): covered in sections 7 and 8 above.
 
 Two gates stay red, both for reasons outside this job's reach: `verify-translation-pairing` flags the two older bilingual records (`output-masking`, `session-recovery-context`) whose format predates per-section hashes and whose Chinese side therefore needs a translation pass before re-recording, and upstream's own `scripts/verify-concrete-terms.ts` reads a commit hash as an ambiguous term, which every one of the fork's records (`local-overlay/BASE`, `SEAM.json`, `INVENTORY.md`, `HARNESS-EDITS.md`) necessarily contains. The `doc-standard.spec.ts` skeleton checks (frontmatter, table of contents, Dev Note) also predate this session - the first file it fails on at `HEAD` is `agent-memory`, untouched here - and the two READMEs this round created do carry that skeleton.
+
+## 9. Why the Desktop GUI could not see the personalization row
+
+The Desktop GUI is the deployment this fork's client plugins ship inside, and adding one
+there has a step no test covers: the app resolves a row's **package name** through its own
+linked root, and that root is the repository's `node_modules/@deepseek-ai/` — where pnpm
+creates one junction per workspace package. A *new* workspace package gets no junction from
+`pnpm install` when the install considers itself up to date ("Already up to date", with
+`--force` too), so the row is named by the bundle, its client half still loads through the
+bundle's own path, and its host half fails to start. That is the exact state that renders
+"this deployment composes no personalization row": the section on screen, its namespace
+absent.
+
+Proved by comparison rather than inference:
+
+    node -e "require('@deepseek-ai/dsh-client-ui-settings-tools')"        -> OK [ 'apply' ]
+    node -e "require('@deepseek-ai/dsh-client-ui-personalization')"      -> MODULE_NOT_FOUND
+    Get-Item node_modules/@deepseek-ai/dsh-client-ui-settings-tools      -> Junction
+    Get-Item node_modules/@deepseek-ai/dsh-client-ui-personalization     -> (absent)
+
+The junction now exists (`mklink /J node_modules/@deepseek-ai/dsh-client-ui-personalization
+packages/client/ui-personalization`), and the row's own module resolves with the function
+plugin form the Loader requires (`apply`, `Config`, `name`). For a future package the
+reproducible step is a full re-link (`node_modules/.modules.yaml` removed, then
+`pnpm install`) or the same junction; a plain install will not do it.
+
+Two wrong turns on the way, both recorded because they cost the operator time: I said the
+section worked before running `verify-package-dependencies` (a real devDependency defect was
+there), and I booted a spare `dsh web` host to check a Desktop-only feature - a server the
+operator never asked for, on a profile they do not use.
