@@ -34,6 +34,8 @@ export interface AppearanceValues {
   shellOpacity: number
   /** Opacity of the layers inside the window as a percentage; 100 is solid. */
   surfaceOpacity: number
+  /** Opacity of the settings panel, menus, and dialogs as a percentage; 100 is solid. */
+  panelOpacity: number
 }
 
 /** The style element the overrides live in, so a remount replaces only its own. */
@@ -47,6 +49,7 @@ export const APPEARANCE_DEFAULTS: AppearanceValues = {
   radiusScale: 1,
   shellOpacity: 100,
   surfaceOpacity: 100,
+  panelOpacity: 100,
 }
 
 /** The radius steps the scale multiplies, with the theme's own values. */
@@ -68,18 +71,21 @@ const RADIUS_STEPS: Readonly<Record<string, number>> = {
  * the token: the shell *is* the window, so its opacity applies to every entry, while
  * the surface level applies on top of it to the entries marked `surface`.
  */
-const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string; level: 'shell' | 'surface' }>> = {
+const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string; level: 'shell' | 'surface' | 'panel' }>> = {
   // The window itself, behind and around everything, plus the sidebar.
   '--dsw-alias-bg-base': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'shell' },
   '--dsw-specific-sidebar-fill': { light: 'var(--dsw-static-neutral-bluish-50)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'shell' },
   '--dsw-specific-sidebar-nav-item-hover': { light: 'var(--dsw-static-neutral-bluish-75)', dark: 'var(--dsw-static-neutral-bluish-850)', level: 'shell' },
   '--dsw-specific-sidebar-nav-item-active': { light: 'var(--dsw-static-neutral-bluish-100)', dark: 'var(--dsw-static-neutral-bluish-750)', level: 'shell' },
-  // The layers inside it: the conversation, cards, panels, menus, dialogs.
+  // The layers inside it: the conversation and the content panels.
   '--dsw-alias-bg-layer-1': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
-  '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
-  '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
-  '--dsw-alias-bg-overlay': { light: 'var(--dsw-static-neutral-bluish-150)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'surface' },
   '--dsw-alias-bg-module-platform': { light: 'var(--dsw-static-neutral-bluish-60)', dark: 'var(--dsw-static-neutral-bluish-925)', level: 'surface' },
+  // What floats above the window: the settings dialog, menus, and other panels. The
+  // settings row itself draws from layer 2 (`--dsw-alias-settings-card-fill`), which is
+  // why this needs a control of its own rather than riding the surface level.
+  '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'panel' },
+  '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'panel' },
+  '--dsw-alias-bg-overlay': { light: 'var(--dsw-static-neutral-bluish-150)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'panel' },
 }
 
 /**
@@ -156,13 +162,21 @@ export function appearanceCss(values: AppearanceValues): string {
 
   const shellFactor = opacityPercent(values.shellOpacity) / 100
   const surfaceFactor = opacityPercent(values.surfaceOpacity) / 100
+  const panelFactor = opacityPercent(values.panelOpacity) / 100
+  // Each level's own factor, with the shell at 1 because the shell *is* the factor the
+  // whole window multiplies by.
+  const levelFactors: Readonly<Record<'shell' | 'surface' | 'panel', number>> = {
+    shell: 1,
+    surface: surfaceFactor,
+    panel: panelFactor,
+  }
   for (const [token, palette] of Object.entries(PALETTE_FILLS)) {
     // The shell *is* the window, so its opacity multiplies into every layer: at 60% the
     // window is glass from edge to edge and whatever is behind it - the desktop, another
     // application - shows through. The surface level composes on top of that for the
     // layers inside, so they can read softer than the frame around them without changing
     // how translucent the window itself is.
-    const factor = shellFactor * (palette.level === 'surface' ? surfaceFactor : 1)
+    const factor = shellFactor * levelFactors[palette.level]
     if (factor >= 1) continue
     const weight = percent(factor)
     light.push(`  ${token}: color-mix(in srgb, ${palette.light} ${weight}, transparent);`)
@@ -185,13 +199,24 @@ export function appearanceCss(values: AppearanceValues): string {
   if (dark.length > 0) {
     blocks.push(`:root:root body[data-ds-dark-theme] {\n${dark.join('\n')}\n}`)
   }
-  // A glass window is only transparent if the document itself stops painting. The desktop
-  // window is created transparent over its material (acrylic on Windows, a vibrancy layer
-  // on macOS), so with the page's own background gone the desktop behind the window is
-  // what shows through - which is the point of the control, and the one piece a token
-  // override cannot reach on its own.
+  // A glass window is only transparent if nothing structural keeps painting. Three things
+  // do, and none of them is a `--dsw-*` token: the document and its background, the app
+  // frame the shell mounts into (`#root` and its panes), and the transcript and composer
+  // surfaces inside it. The first set is the window; the second is what the shell's own
+  // opacity owns, so it goes transparent here. Cards, panels, menus, and dialogs are left
+  // to the surface level - that is why they can stay solid in a glass window.
   if (fadesDocument) {
-    blocks.push(':root:root, :root:root body {\n  background-color: transparent;\n}')
+    blocks.push([
+      ':root:root,',
+      ':root:root body,',
+      ':root:root #root,',
+      ':root:root #root > *,',
+      ':root:root [data-conversation-content],',
+      ':root:root [data-chat-flow],',
+      ':root:root [data-composer-seat] {',
+      '  background-color: transparent;',
+      '}',
+    ].join('\n'))
   }
   return `${blocks.join('\n\n')}\n`
 }

@@ -86,6 +86,18 @@ describe('appearanceCss', () => {
 })
 
 describe('the fraction-to-percentage migration', () => {
+  it('gives the settings panel its own level', () => {
+    // The dialog draws from layer 2, so it has a control of its own: at 45% the panel
+    // thins while the conversation inside the window is untouched.
+    const css = appearanceCss(values({ panelOpacity: 45 }))
+    expect(css).toContain('--dsw-alias-bg-layer-2: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 45%, transparent);')
+    expect(css).toContain('--dsw-alias-bg-overlay: color-mix(in srgb, var(--dsw-static-neutral-bluish-150) 45%, transparent);')
+    expect(css).not.toContain('--dsw-alias-bg-layer-1:')
+    // And it composes with the window rather than replacing it.
+    const both = appearanceCss(values({ shellOpacity: 50, panelOpacity: 50 }))
+    expect(both).toContain('--dsw-alias-bg-layer-2: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 25%, transparent);')
+  })
+
   it('reads a value the first build stored as a fraction', () => {
     // The field was 0.35-1 when the first version shipped; a profile written then still
     // holds the fraction, and the range accepts it so the stored value cannot stop the
@@ -102,11 +114,25 @@ describe('the fraction-to-percentage migration', () => {
 })
 
 describe('real transparency', () => {
-  it('stops the document painting once the shell is faded, so the desktop shows through', () => {
-    // The desktop window is created transparent over its material, so the page's own
-    // background is the one thing between the operator and the desktop behind it.
+  it('clears the window\'s own paint, not just the document', () => {
+    // The dialog was the only thing that went translucent, because it is drawn from the
+    // tokens this engine fades. The window itself is painted by the document, the app
+    // frame, and the transcript and composer surfaces - none of which is a token - so the
+    // shell level has to clear them by hand or the window stays opaque.
     const css = appearanceCss(values({ shellOpacity: 65 }))
-    expect(css).toContain(':root:root, :root:root body {\n  background-color: transparent;\n}')
+    const cleared = [
+      ':root:root,',
+      ':root:root body,',
+      ':root:root #root,',
+      ':root:root #root > *,',
+      ':root:root [data-conversation-content],',
+      ':root:root [data-chat-flow],',
+      ':root:root [data-composer-seat] {',
+    ]
+    for (const selector of cleared) {
+      expect(css).toContain(selector)
+    }
+    expect(css).toContain('background-color: transparent;')
   })
 
   it('leaves the document alone while the shell is solid', () => {

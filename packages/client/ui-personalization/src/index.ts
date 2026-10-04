@@ -32,7 +32,10 @@ export const Config = z.object({
     .description('Shell opacity: the app frame, the sidebar, and its navigation rows. Below 100 the window stops painting its own background, so the desktop behind it - blurred by the window material - shows through. A value written before this field became a percentage (0.35-1) is read as that fraction.')
     .volatile(),
   surfaceOpacity: z.number().min(0.35).max(100).default(100)
-    .description('Surface opacity: cards, panels, menus, and dialogs. Lower it to read what sits underneath them. A value written before this field became a percentage (0.35-1) is read as that fraction.')
+    .description('Surface opacity: the conversation, cards, and panels. Lower it to read what sits underneath them. A value written before this field became a percentage (0.35-1) is read as that fraction.')
+    .volatile(),
+  panelOpacity: z.number().min(0.35).max(100).default(100)
+    .description('Settings panel opacity: the settings dialog, menus, and every other floating surface. A value written before this field existed is 100.')
     .volatile(),
 })
 

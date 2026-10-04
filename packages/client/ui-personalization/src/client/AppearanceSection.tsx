@@ -318,6 +318,31 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         ))}
       />
       <Row
+        label={t('appearance.panel.label')}
+        hint={t('appearance.panel.hint')}
+        control={(
+          <NumberField
+            value={opacityPercent(values.panelOpacity)}
+            min={35}
+            max={100}
+            step={5}
+            disabled={locked}
+            label={t('appearance.panel.label')}
+            suffix="%"
+            onCommit={(next) => { write({ panelOpacity: next }) }}
+          />
+        )}
+        presets={OPACITY_PRESETS.map(preset => (
+          <Pill
+            key={preset.key}
+            active={opacityPercent(values.panelOpacity) === preset.value}
+            onClick={() => { write({ panelOpacity: preset.value }) }}
+          >
+            {t(preset.key)}
+          </Pill>
+        ))}
+      />
+      <Row
         label={t('appearance.reset')}
         hint={t('appearance.reset.hint')}
         control={(
