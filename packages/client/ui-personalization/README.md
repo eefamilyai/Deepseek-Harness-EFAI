@@ -39,5 +39,6 @@ None. The plugin contributes no prompt section and never touches an assembled re
 
 ## Known Limitations and Deferred Work
 
+- The client bundle is built from `lib/types`, so `tsc -b tsconfig.client.json` must run before `tsdown --env.DSH_BUILD_FACE client`. Running the bundler alone repackages whatever the last emit held: the source, the specs, and the profile all agree while the running page still executes older code, which reads as a fix that does not work.
 - Window transparency is the launched application's property, not this plugin's: the desktop app creates its window with `transparent: true` over `backgroundMaterial: 'acrylic'` and a fully transparent background colour, which is why clearing the page background reveals the desktop. A host that creates a plain opaque window would instead reveal the window's own fill, and nothing here can change that from inside the page.
 - The blur and tint of what shows through belong to the operating system's window material. macOS Reduce Transparency and Windows transparency effects change how strong the effect looks, and neither is observable from the page.
