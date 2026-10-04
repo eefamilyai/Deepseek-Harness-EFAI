@@ -20,6 +20,7 @@
  * actually visible, which is a no-op while every group is open.
  */
 import { wireAccountPicker, type AccountPickerCopy } from './account-picker.ts'
+import { reanchorMenu } from './menu-anchor.ts'
 
 /** Attribute the group primitive puts on each provider section. */
 const GROUP = 'data-menu-group'
@@ -44,9 +45,10 @@ function toggle(heading: HTMLElement): void {
 /**
  * Wire one title as a toggle, once.
  * @param group - the provider section.
+ * @param menu - the menu the section belongs to, which is placed from its height.
  * @returns nothing; the listeners live as long as the section does.
  */
-function wire(group: HTMLElement): void {
+function wire(group: HTMLElement, menu: HTMLElement): void {
   const heading = group.querySelector<HTMLElement>(`:scope > [${HEADING}]`)
   if (heading === null || heading.dataset.dshGroupWired === 'true') return
   heading.dataset.dshGroupWired = 'true'
@@ -54,11 +56,16 @@ function wire(group: HTMLElement): void {
   heading.setAttribute('tabindex', '0')
   // Undefined means "not chosen yet": the sheet contracts the group unless its row
   // is the checked one, and the first click decides from there.
-  heading.addEventListener('click', () => { toggle(heading) })
+  heading.addEventListener('click', () => {
+    toggle(heading)
+    // Opening a group changes the card's height under the placement the app ran.
+    reanchorMenu(menu)
+  })
   heading.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     toggle(heading)
+    reanchorMenu(menu)
   })
 }
 
@@ -96,12 +103,15 @@ function step(menu: HTMLElement, step: number): boolean {
 function wireMenu(menu: HTMLElement, copy: AccountPickerCopy): void {
   if (menu.dataset.dshGroupKeys !== 'true') {
     menu.dataset.dshGroupKeys = 'true'
-    for (const group of menu.querySelectorAll<HTMLElement>(`:scope > [${GROUP}]`)) wire(group)
+    for (const group of menu.querySelectorAll<HTMLElement>(`:scope > [${GROUP}]`)) wire(group, menu)
     menu.addEventListener('keydown', (event) => {
       const delta = STEPS[event.key]
       if (delta === undefined) return
       if (step(menu, delta)) event.stopPropagation()
     }, true)
+    // The sheet contracts the groups this call arms, so the card is one provider's
+    // rows shorter than the height the app placed it from.
+    reanchorMenu(menu)
   }
   // A group can be rendered into a menu that already exists, so the pool is folded on
   // every scan; a menu already folded returns from this immediately.

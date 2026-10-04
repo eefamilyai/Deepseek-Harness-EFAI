@@ -331,7 +331,7 @@ body:not([data-ds-dark-theme]) {
   flex: 0 0 4.5rem;
   min-height: 22px;
   padding: 2px 6px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 999px;
   corner-shape: round;
   background: var(--dsw-alias-interactive-bg-hover);

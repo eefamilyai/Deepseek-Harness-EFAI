@@ -111,6 +111,17 @@ function choices(root: HTMLElement): HTMLElement[] {
 }
 
 describe('account picker', () => {
+  it('asks the app to re-measure after hiding the routes it folded', () => {
+    // Hiding nine routes and adding one row changes the card's height, and the card was
+    // placed from the height it had when it opened.
+    const measured = vi.fn()
+    window.addEventListener('resize', measured)
+    const root = menu({ route: 0, model: 'DeepSeek' })
+    wireAccountPicker(root, { legend: 'Account', auto: 'Auto' })
+    expect(measured).toHaveBeenCalledTimes(1)
+    window.removeEventListener('resize', measured)
+  })
+
   it('folds ten login routes into one group and one row of choices', () => {
     const root = menu({ route: 3, model: 'DeepSeek · Thinking' })
     const inUse = root.querySelector('[role="menuitemradio"][aria-checked="true"]')

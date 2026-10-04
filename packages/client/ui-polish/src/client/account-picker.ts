@@ -20,6 +20,8 @@
  * `choose()` runs, and the account and the model stay two halves of one selection.
  */
 
+import { reanchorMenu } from './menu-anchor.ts'
+
 /** Attribute the group primitive puts on each provider section. */
 const GROUP = 'data-menu-group'
 
@@ -270,4 +272,7 @@ export function wireAccountPicker(menu: HTMLElement, copy: AccountPickerCopy): v
   // scrolled that row into view before this one existed — with a pool of ten, the models
   // would sit below the fold of a menu the operator has not scrolled yet.
   current?.scrollIntoView({ block: 'nearest' })
+  // Hiding nine routes and adding one row changed the card's height under the placement
+  // the app ran when it opened, so the card is asked to measure itself again.
+  reanchorMenu(menu)
 }

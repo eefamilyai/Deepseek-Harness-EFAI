@@ -57,7 +57,12 @@ sheet: it reads the two attributes the group primitive publishes, writes the gro
 titles' state and the account choices, and clicks the account row a choice stands
 for. It registers nothing, renders no React, and holds no state between menus — the
 dropdown is portalled and unmounted on close, so folding a menu is work that is
-re-done, not work that is stored.
+re-done, not work that is stored. Each of those writes changes the card's height
+after `ui-model-selection` has placed it, and that component places itself from the
+trigger's rect plus its own measured height while re-measuring only on a pane or
+query change, a page scroll, and a window resize — so every write re-anchors the
+card (`menu-anchor.ts`), or a contracted provider's rows would become the distance
+between the card and the composer it belongs to.
 
 <a id="what-it-changes"></a>
 ## What it changes

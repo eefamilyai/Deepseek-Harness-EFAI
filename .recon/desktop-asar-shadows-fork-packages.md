@@ -1043,3 +1043,41 @@ run"), one with the row mounted and one without: with the row the recorded text 
 `'| Route title | Choice\n|---|---|\n| alpha | beta |'`; without it the glue survived
 verbatim. The app that serves this session has the row loaded (Built-in plugins → search
 "fidelity" → Enabled) and started after the build that carries it.
+
+## The model card floating above the composer (2026-10-04 14:2x)
+
+The operator's screenshot showed the model dropdown sitting ~60 px clear of the composer it
+belongs to, in a 1920x1080 window, in the `Qwen-3.8-27B` workspace.
+
+### Mechanism
+
+`ModelSelect` places the card in its own `useLayoutEffect`: `y = rect.top - 8 - cardHeight`,
+clamped into the viewport, re-run only on `[open, pane, state, query]`, a page scroll, and a
+window resize. It has no resize observer on the card, so any height change that does not come
+from those inputs leaves the position it was given for the height it had first.
+
+Everything this fork's `ui-polish` does to that card is such a change: it arms the contraction
+of every provider group but the one in use, folds a pool's routes into one choice row, and
+opens a group on a click. The card therefore ends up shorter than its placement assumed, and
+floats above the composer by exactly the rows that went away — measured in the operator's
+crop: card bottom ≈357 of 526, composer top ≈420, and `rect.top - 8 - expanded height` ≈85
+against an observed ≈85 for the card's top.
+
+### Fix
+
+`packages/client/ui-polish/src/client/menu-anchor.ts` — `reanchorMenu(menu)` dispatches one
+`resize` on the window, which is the app's own signal for "measure me again", and every
+height-changing write calls it: wiring a menu (which arms the contraction), opening or closing
+a group by click or by Enter/Space, and folding a pool. A menu that is already unmounted is
+left alone, so a stale element cannot make every anchored overlay in the app re-measure.
+
+### Evidence
+
+Live in the running app (browser client, 1280x720): expanding `DeepSeek Account` grew the card
+*upward* — top 133 → 65, bottom pinned at 420 — which is a re-placement, not the growth
+downward over the composer that no re-measure produces. Specs: `menu-anchor.client.spec.ts`
+(6) plus the picker's re-anchor case, 30 green in `packages/client/ui-polish`.
+
+Note the two other fixes this card needs are unrelated and unchanged: rows the deployment
+labels with a bare tag (`hunt`, `v`, `j1`) do not match the picker's `isLogin` title shape, so
+that pool keeps its rows instead of folding into bubbles.
