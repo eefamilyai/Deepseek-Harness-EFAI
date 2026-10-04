@@ -825,15 +825,22 @@ async function dispatchPrompt(
  * @returns each failed row's id and the message it raised, or why none is reachable.
  */
 function dispatchPluginFailures(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
-  const root = (agentCtx as { root?: unknown } | undefined)?.root
-  const loader = asRecord(asRecord(root)['loader'])
-  const entries = loader['entries']
-  if (!(entries instanceof Map)) {
-    return unavailable(request.id, 'the loader tree is not reachable from this context')
+  // The loader is a service, so the strict read is `ctx.get`: the property proxy
+  // refuses it on an agent's context and the root context does not carry it either.
+  const resolved: unknown = agentCtx === undefined ? undefined : agentCtx.get('loader' as never)
+  const loader = asRecord(resolved)
+  const list = loader['entries']
+  const entries: Iterable<[unknown, unknown]> | undefined = typeof list === 'function'
+    ? (list as () => Iterable<[unknown, unknown]>).call(loader)
+    : list instanceof Map ? list : undefined
+  if (entries === undefined) {
+    return unavailable(request.id, 'the loader is not mounted in this deployment')
   }
   const failures: { id: string; error: string }[] = []
-  for (const [id, entry] of entries as Map<unknown, unknown>) {
-    const error = asRecord(asRecord(entry)['fiber'])['error']
+  for (const [id, entry] of entries) {
+    // A failed fiber keeps its error on `_error`; the inventory reports only a phase,
+    // which is why a row could say "failed" and nothing else.
+    const error = asRecord(asRecord(entry)['fiber'])['_error']
     if (error === undefined || error === null) continue
     failures.push({
       id: typeof id === 'string' ? id : JSON.stringify(id),
