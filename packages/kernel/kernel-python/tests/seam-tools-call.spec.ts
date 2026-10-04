@@ -43,9 +43,15 @@ function callRequest(name: unknown, args?: unknown): SeamRequest {
   return { id: 'req-1', op: 'tools.call', args: { name, arguments: args } }
 }
 
-/** A ctx whose `ctx.tools` is the supplied stand-in. */
+/**
+ * A ctx whose `ctx.tools` is the supplied stand-in.
+ *
+ * `get` answers too, and that is the read the dispatcher uses: the property proxy
+ * refuses a service the reading fiber did not declare, so a fixture that only
+ * exposed the property would pass while every op failed in a real cell.
+ */
 function ctxWithTools(tools: unknown): Context {
-  return { tools } as unknown as Context
+  return { tools, get: (name: string) => (name === 'tools' ? tools : undefined) } as unknown as Context
 }
 
 /** A successful registry outcome for `value`. */
@@ -140,7 +146,7 @@ describe('dispatchSeam tools.call', () => {
   })
 
   it('reports an unmounted registry as unavailable so Python degrades explicitly', async () => {
-    const response = await dispatchSeam({} as unknown as Context, undefined, callRequest('read'))
+    const response = await dispatchSeam(ctxWithTools(undefined), undefined, callRequest('read'))
     expect(response).toEqual({
       id: 'req-1',
       ok: false,
@@ -172,7 +178,7 @@ describe('dispatchSeam tools.call', () => {
     const explicit: KernelAgent = { id: 'explicit', session: { id: 'explicit' } }
     const decoy = { id: 'decoy', session: { id: 'decoy' } }
     await dispatchSeam(
-      { tools: { execute }, agent: decoy } as unknown as Context,
+      { tools: { execute }, agent: decoy, get: (name: string) => (name === 'tools' ? { execute } : undefined) } as unknown as Context,
       explicit,
       callRequest('read'),
     )

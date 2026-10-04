@@ -94,7 +94,8 @@ function fakeHarness(handler: (name: string, args: Record<string, unknown>) => u
   ]
   const get = (name: string) => schemas().find(s => s.name === name)
   const agent: KernelAgent = { id: 'e2e-session', session: { id: 'e2e-session' } }
-  return { calls, ctx: { tools: { execute, schemas, get } } as unknown as Context, agent }
+  const tools = { execute, schemas, get }
+  return { calls, ctx: { tools, get: (name: string) => (name === 'tools' ? tools : undefined) } as unknown as Context, agent }
 }
 
 /** One live kernel with a harness answering its seam requests. */

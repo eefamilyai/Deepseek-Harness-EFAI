@@ -24,7 +24,7 @@ import { dispatchHarness } from './seam-harness.ts'
 export { HARNESS_OPS } from './seam-harness.ts'
 export type { HarnessOp } from './seam-harness.ts'
 
-import { HARNESS_OPS } from './seam-harness.ts'
+import { HARNESS_OPS, isHarnessOp } from './seam-harness.ts'
 import type { HarnessOp } from './seam-harness.ts'
 
 /**
@@ -128,16 +128,31 @@ interface ShellExecutorSeam {
   run(spec: ShellRunSpec): Promise<ShellRunResultShape>
 }
 
-function fsOf(ctx: Context | undefined): FileSystemSeam | undefined {
+/**
+ * One service off the dispatch context, or undefined when it is not mounted.
+ *
+ * `ctx.get` is the strict read, and the difference matters here: the property
+ * proxy refuses a service the reading fiber did not declare, and a cell dispatches
+ * with an *agent's* context, which injects a handful of services. Reading through
+ * the global store instead makes an op answer with a value or with "not mounted",
+ * where property access threw an inject error the kernel could only report as an
+ * unusable seam.
+ * @param ctx - the agent-scoped context a cell runs with.
+ * @param name - the service's `ctx` property name.
+ * @returns the service, or undefined.
+ */
+function serviceOf(ctx: Context | undefined, name: string): unknown {
   if (ctx === undefined) return undefined
-  const c = (ctx as Context & { fs?: unknown }).fs
-  return c === undefined || c === null ? undefined : c as FileSystemSeam
+  const service: unknown = ctx.get(name)
+  return service === undefined || service === null ? undefined : service
+}
+
+function fsOf(ctx: Context | undefined): FileSystemSeam | undefined {
+  return serviceOf(ctx, 'fs') as FileSystemSeam | undefined
 }
 
 function shellOf(ctx: Context | undefined): ShellExecutorSeam | undefined {
-  if (ctx === undefined) return undefined
-  const c = (ctx as Context & { shell?: unknown }).shell
-  return c === undefined || c === null ? undefined : c as ShellExecutorSeam
+  return serviceOf(ctx, 'shell') as ShellExecutorSeam | undefined
 }
 
 /** Web shapes the kernel consumes, mirrored from `packages/web/web/src/types.ts`. */
@@ -159,9 +174,7 @@ interface WebRuntimeSeam {
 }
 
 function webOf(ctx: Context | undefined): WebRuntimeSeam | undefined {
-  if (ctx === undefined) return undefined
-  const c = (ctx as Context & { web?: unknown }).web
-  return c === undefined || c === null ? undefined : c as WebRuntimeSeam
+  return serviceOf(ctx, 'web') as WebRuntimeSeam | undefined
 }
 
 function toValue(value: unknown): unknown {
@@ -213,9 +226,7 @@ interface SubagentRuntimeSeamShape {
 }
 
 function subagentsOf(ctx: Context | undefined): SubagentRuntimeSeamShape | undefined {
-  if (ctx === undefined) return undefined
-  const c = (ctx as Context & { subagents?: unknown }).subagents
-  return c === undefined || c === null ? undefined : c as SubagentRuntimeSeamShape
+  return serviceOf(ctx, 'subagents') as SubagentRuntimeSeamShape | undefined
 }
 
 /** Goal shapes the kernel consumes, mirrored from `packages/goal/goal/src/types.ts`. */
@@ -245,9 +256,7 @@ interface GoalsSeamShape {
 }
 
 function goalsOf(ctx: Context | undefined): GoalsSeamShape | undefined {
-  if (ctx === undefined) return undefined
-  const c = (ctx as Context & { goals?: unknown }).goals
-  return c === undefined || c === null ? undefined : c as GoalsSeamShape
+  return serviceOf(ctx, 'goals') as GoalsSeamShape | undefined
 }
 
 /** Tool registry shapes the kernel consumes, mirrored from `packages/core/tools/src/index.ts`. */
@@ -286,9 +295,7 @@ interface ToolsSeamShape {
 }
 
 function toolsOf(ctx: Context | undefined): ToolsSeamShape | undefined {
-  if (ctx === undefined) return undefined
-  const c = (ctx as Context & { tools?: unknown }).tools
-  return c === undefined || c === null ? undefined : c as ToolsSeamShape
+  return serviceOf(ctx, 'tools') as ToolsSeamShape | undefined
 }
 
 /** Skill shapes the kernel consumes, mirrored from `packages/skill/skill/src/index.ts`. */
@@ -359,6 +366,9 @@ export async function dispatchSeam(
   if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)
   if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, agent, request, signal)
   if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, agent, request, signal)
+  // The catalog first: it is the authority for what the observation family answers, so an
+  // op it lists cannot be swallowed by a capability prefix it shares (`tools.search`).
+  if (isHarnessOp(request.op)) return dispatchHarness(agentCtx, agent, request, signal)
   if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, agent, request, signal)
   if (request.op.startsWith('skills.')) return dispatchSkills(agentCtx, request, signal)
   if (request.op.startsWith('subprocess.')) return dispatchSubprocess(agentCtx, request, signal)

@@ -67,7 +67,9 @@ function fakeHarness(withQuery = true): { ctx: Context; agent: KernelAgent } {
     id: 'e2e-session',
     session: { id: 'e2e-session', header: { agentPreset: 'standard' } },
   } as unknown as KernelAgent
-  return { ctx: services as unknown as Context, agent }
+  // `get` is the read the dispatcher uses: the property proxy refuses a service the
+  // reading fiber did not declare, and a cell dispatches with an agent's context.
+  return { ctx: { ...services, get: (name: string) => services[name] } as unknown as Context, agent }
 }
 
 /** One live kernel answering seam requests from a fixed context. */

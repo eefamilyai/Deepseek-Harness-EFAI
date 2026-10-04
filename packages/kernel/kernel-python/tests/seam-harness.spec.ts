@@ -27,9 +27,32 @@ function request(op: string, args?: unknown): SeamRequest {
   return { id: 'req-1', op, args: args ?? {} }
 }
 
-/** A context whose named services are the supplied stand-ins. */
+/**
+ * A context whose named services are the supplied stand-ins.
+ *
+ * `get` is the read the dispatcher uses, because the property proxy refuses a
+ * service the reading fiber did not declare and a cell dispatches with an agent's
+ * context. A fixture that only exposed properties would pass while every op failed
+ * in a real cell.
+ */
 function ctxWith(services: Record<string, unknown>): Context {
-  return services as unknown as Context
+  return { ...services, get: (name: string) => services[name] } as unknown as Context
+}
+
+/**
+ * A context that refuses every property read the way the real proxy does, so a
+ * service can only be reached through `get`.
+ * @param services - the stand-ins `get` answers with.
+ * @returns a context whose property reads throw.
+ */
+function strictCtxWith(services: Record<string, unknown>): Context {
+  return new Proxy({} as Context, {
+    get: (_target, property) => {
+      if (property === 'get') return (name: string) => services[name]
+      if (property === 'then' || typeof property === 'symbol') return undefined
+      throw new Error(`cannot get property "${property}" without inject`)
+    },
+  })
 }
 
 /** A cell owner, keyed by session id. */
@@ -47,6 +70,31 @@ function valueOf(response: SeamResponse): unknown {
   expect(response.ok, response.error ?? 'expected ok').toBe(true)
   return response.value
 }
+
+describe('services are read the way an agent context allows', () => {
+  it('answers through a context whose property reads all throw', async () => {
+    // The regression this pins: every op read `ctx.settings`, `ctx.sessionQuery`,
+    // `ctx.storage` and friends as properties, which an agent's context refuses with
+    // `cannot get property "…" without inject`, so thirty ops answered with an inject
+    // error instead of a value. `strictCtxWith` is that context.
+    const ctx = strictCtxWith({
+      settings: { describe: () => [{ ns: 'tool-roster', revision: 3, value: { enabled: true } }] },
+      storage: { backends: { names: () => ['session-jsonl'] } },
+      pluginInventory: { list: () => ({ entries: [], managementAvailable: false }) },
+    })
+    expect(valueOf(await run('settings.describe', ctx)))
+      .toEqual([{ ns: 'tool-roster', revision: 3, value: { enabled: true } }])
+    expect(valueOf(await run('storage.backends', ctx))).toEqual({ backends: ['session-jsonl'] })
+    expect(valueOf(await run('plugins.list', ctx))).toEqual({ entries: [], managementAvailable: false })
+  })
+
+  it('routes an op that shares a capability prefix to the family that answers it', async () => {
+    // `tools.search` sits beside `tools.call`; the catalog decides, so it cannot be
+    // swallowed by the capability dispatcher's prefix.
+    const response = await dispatchSeam(ctxWith({ tools: { schemas: () => [] } }), undefined, request('tools.search', { query: 'read' }))
+    expect(response.error ?? '').not.toContain('unknown seam operation')
+  })
+})
 
 describe('seam.ops', () => {
   it('lists both tables, and every op in them answers something other than "unknown op"', async () => {

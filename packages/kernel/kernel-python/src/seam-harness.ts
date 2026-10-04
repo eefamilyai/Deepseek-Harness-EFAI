@@ -209,8 +209,26 @@ interface HarnessServices {
  */
 function serviceOf<K extends keyof HarnessServices>(ctx: Context | undefined, name: K): HarnessServices[K] | undefined {
   if (ctx === undefined) return undefined
-  const service = (ctx as Context & Record<string, unknown>)[name]
+  // `ctx.get` is the strict read: the property proxy refuses a service the reading
+  // fiber did not declare, and a cell dispatches with an agent's context, which
+  // injects a handful. Reading the global store is what lets an op answer with a
+  // value or with "not mounted" instead of an inject error.
+  const service: unknown = ctx.get(name)
   return service === undefined || service === null ? undefined : service as HarnessServices[K]
+}
+
+/**
+ * Whether the observation family owns one op.
+ *
+ * The router asks this before its capability prefixes, so an op that shares a
+ * prefix with a capability seam (`tools.search` beside `tools.call`) reaches the
+ * dispatcher that answers it. The catalog is the authority, which is what keeps
+ * the table a cell reads and the routing that answers it from drifting apart.
+ * @param op - the request op.
+ * @returns whether {@link dispatchHarness} answers it.
+ */
+export function isHarnessOp(op: string): boolean {
+  return HARNESS_OPS.some(entry => entry.op === op)
 }
 
 /** Narrow an unknown value to a property bag without asserting its contents. */
