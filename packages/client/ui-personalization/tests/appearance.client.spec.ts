@@ -55,17 +55,29 @@ describe('appearanceCss', () => {
     expect(css).toContain('--dsw-alias-state-business-tertiary: color-mix(in srgb, oklch(0.7 0.12 250) 18%, transparent);')
   })
 
-  it('fades the shell and the surfaces by different amounts, per palette', () => {
-    const css = appearanceCss(values({ shellOpacity: 60, surfaceOpacity: 90 }))
-    // The shell: the canvas and the sidebar's own fills.
+  it('makes the whole window glass, and composes the surface level on top of it', () => {
+    const css = appearanceCss(values({ shellOpacity: 60, surfaceOpacity: 50 }))
+    // The shell is the window: the canvas and the sidebar go to 60%.
     expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
     expect(css).toContain('--dsw-specific-sidebar-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-50) 60%, transparent);')
-    // The surfaces keep more of their colour, so text over them stays readable.
-    expect(css).toContain('--dsw-alias-bg-layer-1: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 90%, transparent);')
+    // The layers inside multiply: 60% shell x 50% surface = 30%, so the conversation is
+    // softer than the frame while the window itself stays exactly as translucent as the
+    // shell says.
+    expect(css).toContain('--dsw-alias-bg-layer-1: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 30%, transparent);')
     // Both palettes carry a rule, because the tokens resolve differently in each.
     expect(css).toContain(':root:root body:not([data-ds-dark-theme])')
     expect(css).toContain(':root:root body[data-ds-dark-theme]')
-    expect(css).toContain('var(--dsw-static-neutral-bluish-950) 90%, transparent')
+    expect(css).toContain('var(--dsw-static-neutral-bluish-950) 30%, transparent')
+  })
+
+  it('fades every layer when only the shell is glass', () => {
+    // What "literal transparency" means: with the shell at 60 and the surface untouched,
+    // nothing in the window is left opaque, so the desktop behind it is what you see.
+    const css = appearanceCss(values({ shellOpacity: 60 }))
+    expect(css).toContain('--dsw-alias-bg-layer-1: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
+    expect(css).toContain('--dsw-alias-bg-layer-3:')
+    expect(css).toContain('--dsw-alias-bg-overlay:')
+    expect(css).toContain('background-color: transparent;')
   })
 
   it('scales the root font size on its own', () => {
@@ -82,8 +94,10 @@ describe('the fraction-to-percentage migration', () => {
     expect(opacityPercent(1)).toBe(100)
     expect(opacityPercent(65)).toBe(65)
     const css = appearanceCss(values({ shellOpacity: 0.6, surfaceOpacity: 0.9 }))
-    expect(css).toContain('60%, transparent')
-    expect(css).toContain('90%, transparent')
+    // The shell factor is the window: 0.6 -> 60%. The layers inside compose with the
+    // surface factor: 60% x 90% = 54%.
+    expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
+    expect(css).toContain('--dsw-alias-bg-layer-1: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 54%, transparent);')
   })
 })
 

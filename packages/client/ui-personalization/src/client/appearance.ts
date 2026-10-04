@@ -30,9 +30,9 @@ export interface AppearanceValues {
   accent: string
   /** Multiplier for every corner radius step. */
   radiusScale: number
-  /** Shell opacity in percent; 100 is solid. */
+  /** Window opacity as a percentage; 100 is solid. */
   shellOpacity: number
-  /** Surface opacity in percent; 100 is solid. */
+  /** Opacity of the layers inside the window as a percentage; 100 is solid. */
   surfaceOpacity: number
 }
 
@@ -60,24 +60,41 @@ const RADIUS_STEPS: Readonly<Record<string, number>> = {
 }
 
 /**
- * The light and dark expression of one token, as the theme composes it.
+ * The light and dark expression of one opaque fill, as the theme composes it.
  *
- * A translucent surface has to name the colour it fades, and the theme's palette
+ * A translucent window has to name the colour it fades, and the theme's palette
  * tokens are the only honest source: they are what the opaque value resolved to, so
- * fading one keeps the hue and the palette's own step.
+ * fading one keeps the hue and the palette's own step. `level` says which control owns
+ * the token: the shell *is* the window, so its opacity applies to every entry, while
+ * the surface level applies on top of it to the entries marked `surface`.
  */
-const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string }>> = {
-  // The shell: the canvas behind everything and the sidebar's own fill.
-  '--dsw-alias-bg-base': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)' },
-  '--dsw-specific-sidebar-fill': { light: 'var(--dsw-static-neutral-bluish-50)', dark: 'var(--dsw-static-neutral-bluish-900)' },
-  '--dsw-specific-sidebar-nav-item-hover': { light: 'var(--dsw-static-neutral-bluish-75)', dark: 'var(--dsw-static-neutral-bluish-850)' },
-  '--dsw-specific-sidebar-nav-item-active': { light: 'var(--dsw-static-neutral-bluish-100)', dark: 'var(--dsw-static-neutral-bluish-750)' },
-  // The surfaces inside it.
-  '--dsw-alias-bg-layer-1': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)' },
-  '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)' },
-  '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)' },
-  '--dsw-alias-bg-overlay': { light: 'var(--dsw-static-neutral-bluish-150)', dark: 'var(--dsw-static-neutral-bluish-900)' },
-  '--dsw-alias-bg-module-platform': { light: 'var(--dsw-static-neutral-bluish-60)', dark: 'var(--dsw-static-neutral-bluish-925)' },
+const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string; level: 'shell' | 'surface' }>> = {
+  // The window itself, behind and around everything, plus the sidebar.
+  '--dsw-alias-bg-base': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'shell' },
+  '--dsw-specific-sidebar-fill': { light: 'var(--dsw-static-neutral-bluish-50)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'shell' },
+  '--dsw-specific-sidebar-nav-item-hover': { light: 'var(--dsw-static-neutral-bluish-75)', dark: 'var(--dsw-static-neutral-bluish-850)', level: 'shell' },
+  '--dsw-specific-sidebar-nav-item-active': { light: 'var(--dsw-static-neutral-bluish-100)', dark: 'var(--dsw-static-neutral-bluish-750)', level: 'shell' },
+  // The layers inside it: the conversation, cards, panels, menus, dialogs.
+  '--dsw-alias-bg-layer-1': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
+  '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
+  '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
+  '--dsw-alias-bg-overlay': { light: 'var(--dsw-static-neutral-bluish-150)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'surface' },
+  '--dsw-alias-bg-module-platform': { light: 'var(--dsw-static-neutral-bluish-60)', dark: 'var(--dsw-static-neutral-bluish-925)', level: 'surface' },
+}
+
+/**
+ * One opacity as a percentage.
+ *
+ * The field was a fraction (0.35–1) in the first build and is a percentage now, and a
+ * profile written by that build still holds the fraction — which the range accepts so
+ * that a stored value cannot stop the row from starting. Reading both here makes the
+ * change a migration rather than a break: the page shows the percentage, the next
+ * write stores one, and the value means the same thing either way.
+ * @param value - the stored opacity.
+ * @returns the opacity as a percentage.
+ */
+export function opacityPercent(value: number): number {
+  return value <= 1 ? value * 100 : value
 }
 
 /**
@@ -88,21 +105,6 @@ const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string }>> =
  */
 function isDefault(values: AppearanceValues, key: keyof AppearanceValues): boolean {
   return values[key] === APPEARANCE_DEFAULTS[key]
-}
-
-/**
- * One opacity as a percentage.
- *
- * The field was a fraction (0.35–1) in the first build and is a percentage now, and a
- * profile written by that build still holds the fraction — which the range now accepts
- * so a stored value cannot stop the row from starting. Reading both here is what makes
- * the change a migration rather than a break: the page shows the percentage, the next
- * write stores one, and the value means the same thing either way.
- * @param value - the stored opacity.
- * @returns the opacity as a percentage.
- */
-export function opacityPercent(value: number): number {
-  return value <= 1 ? value * 100 : value
 }
 
 /** A percentage with no trailing noise, for a `color-mix` weight. */
@@ -151,18 +153,23 @@ export function appearanceCss(values: AppearanceValues): string {
     base.push(`  --dsw-alias-state-business-tertiary: color-mix(in srgb, ${accent} 18%, transparent);`)
     base.push(`  --dsw-alias-interactive-bg-hover-accent: color-mix(in srgb, ${accent} 16%, transparent);`)
   }
-  // The shell and the surfaces fade the same tokens by different amounts, so one
-  // value can make the frame translucent while the cards inside it stay readable.
+
+  const shellFactor = opacityPercent(values.shellOpacity) / 100
+  const surfaceFactor = opacityPercent(values.surfaceOpacity) / 100
   for (const [token, palette] of Object.entries(PALETTE_FILLS)) {
-    const shell = token.startsWith('--dsw-alias-bg-base') || token.startsWith('--dsw-specific-sidebar')
-    const opacity = opacityPercent(shell ? values.shellOpacity : values.surfaceOpacity)
-    if (opacity >= 100) continue
-    const weight = percent(opacity / 100)
+    // The shell *is* the window, so its opacity multiplies into every layer: at 60% the
+    // window is glass from edge to edge and whatever is behind it - the desktop, another
+    // application - shows through. The surface level composes on top of that for the
+    // layers inside, so they can read softer than the frame around them without changing
+    // how translucent the window itself is.
+    const factor = shellFactor * (palette.level === 'surface' ? surfaceFactor : 1)
+    if (factor >= 1) continue
+    const weight = percent(factor)
     light.push(`  ${token}: color-mix(in srgb, ${palette.light} ${weight}, transparent);`)
     dark.push(`  ${token}: color-mix(in srgb, ${palette.dark} ${weight}, transparent);`)
   }
 
-  const fadesDocument = opacityPercent(values.shellOpacity) < 100
+  const fadesDocument = shellFactor < 1
   if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && !fadesDocument) {
     return ''
   }
@@ -172,19 +179,19 @@ export function appearanceCss(values: AppearanceValues): string {
   const core = [...base]
   if (!isDefault(values, 'fontScale')) core.push(`  font-size: ${String(values.fontScale)}%;`)
   if (core.length > 0) blocks.push(`${scopes} {\n${core.join('\n')}\n}`)
-  // A faded shell is only *transparent* if the document itself stops painting. The
-  // desktop window is created transparent over its material (acrylic on Windows, a
-  // vibrancy layer on macOS), so with the page's own background gone the desktop
-  // behind the window is what shows through — which is the whole point of the
-  // setting, and the one piece a token override cannot reach on its own.
-  if (opacityPercent(values.shellOpacity) < 100) {
-    blocks.push(':root:root, :root:root body {\n  background-color: transparent;\n}')
-  }
   if (light.length > 0) {
     blocks.push(`:root:root body:not([data-ds-dark-theme]) {\n${light.join('\n')}\n}`)
   }
   if (dark.length > 0) {
     blocks.push(`:root:root body[data-ds-dark-theme] {\n${dark.join('\n')}\n}`)
+  }
+  // A glass window is only transparent if the document itself stops painting. The desktop
+  // window is created transparent over its material (acrylic on Windows, a vibrancy layer
+  // on macOS), so with the page's own background gone the desktop behind the window is
+  // what shows through - which is the point of the control, and the one piece a token
+  // override cannot reach on its own.
+  if (fadesDocument) {
+    blocks.push(':root:root, :root:root body {\n  background-color: transparent;\n}')
   }
   return `${blocks.join('\n\n')}\n`
 }

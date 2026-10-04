@@ -43,10 +43,10 @@ export const zh = {
   'appearance.radius.hint': '所有圆角档位的倍率：0 完全直角，1 为主题默认，2 更圆。',
 
   'appearance.shell.label': '外壳不透明度',
-  'appearance.shell.hint': '对话之外外壳的不透明度：应用框架、侧边栏及其导航行。低于 100% 时窗口本身变为透明，直接看到后面的桌面。',
+  'appearance.shell.hint': '整个窗口的不透明度：窗口背景、侧边栏、对话区一起变成玻璃。低于 100% 时窗口真的透明，能直接看到后面的浏览器标签页或桌面。',
 
   'appearance.surface.label': '内层不透明度',
-  'appearance.surface.hint': '外壳内部表面的不透明度：卡片、面板、菜单和对话框。把它调低可以看到下面的内容。',
+  'appearance.surface.hint': '窗口内部各层的不透明度：对话区、卡片、面板、菜单和对话框。它与外壳叠加，因此可以把内层做得比窗口更透。',
 
   'appearance.opacity.title': '不透明度',
   'appearance.opacity.solid': '不透明',
@@ -88,7 +88,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appearance.radius.hint': 'Multiplier for every corner radius step: 0 squares the interface, 1 is the theme default, 2 rounds it further.',
 
   'appearance.shell.label': 'Shell opacity',
-  'appearance.shell.hint': 'Opacity of the shell around the conversation: the app frame, the sidebar, and its navigation rows. Below 100% the window itself turns transparent and the desktop behind it shows through.',
+  'appearance.shell.hint': 'Opacity of the whole window: its background, the sidebar, and the conversation surface together. Below 100% the window is genuinely glass, so another browser tab or the desktop behind it shows through.',
 
   'appearance.surface.label': 'Surface opacity',
   'appearance.surface.hint': 'Opacity of the surfaces inside the shell: cards, panels, menus, and dialogs. Lower it to see what sits underneath them.',
