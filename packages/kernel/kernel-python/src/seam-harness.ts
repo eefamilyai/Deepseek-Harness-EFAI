@@ -77,6 +77,18 @@ export const HARNESS_OPS: readonly HarnessOp[] = [
 
 ]
 
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /**
+     * The cordis loader, when this deployment mounts one.
+     *
+     * Declared so `ctx.get('loader')` is a known key: an unknown name types as a
+     * statement in this build, which makes its result unusable in an expression.
+     */
+    loader?: unknown
+  }
+}
+
 /** Mirrored `ctx.agents` surface. */
 interface AgentsSeam {
   list(): readonly unknown[]
@@ -824,7 +836,7 @@ async function dispatchPrompt(
 function loaderOf(ctx: Context): unknown {
   // A bare assignment: this cordis build types `get` as a statement, so using its
   // result inside another expression is what the lint rejects.
-  const loader = ctx.get('loader' as never)
+  const loader = ctx.get('loader')
   return loader
 }
 
@@ -842,7 +854,8 @@ function loaderOf(ctx: Context): unknown {
 function dispatchPluginFailures(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
   // The loader is a service, so the strict read is `ctx.get`: the property proxy
   // refuses it on an agent's context and the root context does not carry it either.
-  const loader = asRecord(agentCtx === undefined ? undefined : loaderOf(agentCtx))
+  const mounted = agentCtx === undefined ? undefined : loaderOf(agentCtx)
+  const loader = asRecord(mounted)
   const list = loader['entries']
   const entries: Iterable<[unknown, unknown]> | undefined = typeof list === 'function'
     ? (list as () => Iterable<[unknown, unknown]>).call(loader)
