@@ -4173,7 +4173,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-roster`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/kernel/roster/src/index.ts:89`](../packages/kernel/roster/src/index.ts)
+- `source`: [`packages/kernel/roster/src/index.ts:95`](../packages/kernel/roster/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -4193,9 +4193,12 @@ export interface Config {
    */
   enabled: Volatile<boolean>
   /**
-   * Per-tool overrides. A name absent here is enabled, so a newly mounted tool
-   * is available until someone turns it off. Choosing a preset's tools is the
-   * preset editor's job; this map is for withdrawing one host-plane tool.
+   * One switch per tool, which the Tools settings page renders as a list. The
+   * roster adds an entry (enabled) the first time it mounts a switchable tool,
+   * so the map is the deployment's roster rather than only the names someone
+   * already withdrew; the values are the switches, and a name absent from the
+   * map is still available. Tools whose visibility no switch controls, and the
+   * kernel tool its own category switch governs, get no entry.
    */
   tools: Volatile<Record<string, boolean>>
 }

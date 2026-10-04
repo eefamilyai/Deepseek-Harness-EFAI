@@ -57,49 +57,81 @@ web route is not mistaken for a login of the plain `DeepSeek` provider.
 Lesson for the rest of this audit: judge anything visible from a screenshot, never from the
 accessibility snapshot.
 
-## 3. Fork-owned CSS that fails the upstream style gates
+## 3. Fork-owned CSS that fails the upstream style gates — fixed
 
-`pnpm run test:gui` is red on 10 specs. Four are in packages the fork owns or patches, and
-are therefore ours to fix:
+`pnpm run test:gui` was red on 10 specs. The four in packages the fork owns or patches are
+fixed:
 
-- `ui-theme/tests/radius-styles.client.spec.ts` flags radii off the shared scale in
+- `ui-theme/tests/radius-styles.client.spec.ts` flagged radii off the shared scale in
   `ui-effects` (`.gate: 20px`, `.codeInput: 10px`, `.unlockButton: 10px`),
   `ui-settings-accounts` (nine rules) and `ui-settings-tools` (two) — all fork-owned
-  packages per `local-overlay/INVENTORY.md`.
+  packages per `local-overlay/INVENTORY.md`. Each value now names the nearest
+  `--dsw-radius-*` step, with a `calc` of at most 4px where the scale has no exact step, so
+  the geometry is unchanged. Commit `db68fb2f04`.
 - `ui-theme/tests/elevation-styles.client.spec.ts` flagged `ui-polish`'s account picker
-  border at 1px; fixed this session (now 0.5px, spec green).
+  border at 1px; fixed earlier this session (now 0.5px).
 
-**The work**: put the fork's own radii back on the shared scale, or record the exception the
-way upstream's spec expects, and confirm both gates green.
+`pnpm run test:gui` after both: **5 failures in 9607 tests, every one in a package the fork
+does not own or patch** — `client/connection` binary RPC ×2, `ui-deliverables` native open,
+`ui-sidebar-documentpreview` license bundle, `ui-sidebar-right` expand binding. Upstream's to
+fix; editing them would mean new seam patches for no fork benefit.
 
-## 4. Failures that are not the fork's
+## 4. The Tools pane: the preset group is gone, every tool has its own switch
 
-The other six red specs are in packages the fork does not own and does not patch
-(`local-overlay/INVENTORY.md` has no line for them): `client/connection` binary RPC ×2,
-`ui-deliverables` native open, `ui-primitives` json-tree copy actions, `ui-schedule` ×2,
-`ui-sidebar-documentpreview` license bundle. Upstream-owned, pre-existing, and to be
-reported rather than silently "fixed".
+The operator's clarification (2026-10-04): *"remove the preset section. I want more control
+over what tools are under each section. Like conventional tools. Now it's just conventional
+tools, i want to be able to flip flop individual ones. EACH AND EVERY ONE TOOL."*
 
-## 5. Recorded-table repair — finish the job
+That is what the package description claimed all along — `ui-settings-tools` was registered as
+"independent kernel and conventional-tool switches **plus one switch per registered tool**" —
+and only the two category switches ever shipped. Both halves are now in place:
+
+- **The roster learns itself.** `tool-roster` writes an entry (enabled) into its own `tools`
+  map the first time it mounts a switchable tool, at mount and at each turn boundary. Without
+  that, the map — which is what a settings page can render — would hold only the names someone
+  already withdrew, and the page could never offer a switch for a tool nobody had touched. The
+  writes are additive by construction (one `set` per unseen name, never an update), so a write
+  cannot race the operator's own flip. `run_code` (no switch controls it) and `kernel` (its own
+  category switch governs it) get no entry, so the list cannot offer a switch that does nothing.
+- **The section lists them.** The availability group renders one switch per entry of that map,
+  by tool name, with a filter; a flip writes the nested path `tools.<name>` through the row's
+  config form. The preset group, its `listPresets` injection, its locale keys, and its state
+  are gone.
+
+The Remote alternative (a `toolRoster` namespace over the Remote/typert generator, the
+`ai-accounts` pattern) was rejected for cost, not for principle: it needs a client half, new
+package exports, generator output, and a second bundle row for one read-only list, while the
+map is already the exact shape the page renders and the write path already exists.
+
+
+## 5. Recorded-table repair — finished, waiting on one restart
 
 `local-overlay/tools/repair-recorded-tables.mjs` repairs tables in sessions recorded before
-the stream pass existed. Working and verified, but:
+the stream pass existed. Now documented and hardened:
 
-- it is documented only in `.recon`; the repository has no README or command reference for
-  it, so the next person to need it has to read a recon file;
-- it ran as a detached watcher with a `--held` session; the run that landed is recorded in
-  `.recon/_repair-run.log` and should be reported in the recon note with its result;
-- backups (`*.bak-<stamp>`) accumulate beside repaired logs with no pruning rule.
+- `local-overlay/tools/README.md` — why the tool exists (no append can shadow a recorded
+  `assistant/message`), what it verifies, when it must not run, every flag;
+- `--prune-backups [days]` removes the backup copies once the repaired sessions have been
+  looked at;
+- the host-free wait polls every second rather than backing off to five, because an ordinary
+  restart's gap is exactly what it is waiting for;
+- a failure is printed instead of ending the process silently — a watcher that dies quietly
+  looks like a watcher that is still waiting;
+- `.recon/.gitignore` keeps this job's scratch out of `git status` (85 files, 231MB, cleared).
 
-**The work**: a short README beside the tool, a note on pruning backups, and the run result
-recorded.
+**State**: seven session logs across the corpus are repaired and verified (a dry run finds
+nothing left in them). One session remains — this one — because the running host holds its log
+open, and the window with no host has not happened since the watcher was armed. A watcher
+(pid 31200) is polling for that window. It lands on an ordinary restart, which the next
+section also needs.
 
-## 6. Loose ends from earlier in the session
+## 6. Loose ends from earlier in the session — all closed
 
-- **"add a preset editor in the tools section"** (operator, seq 6344): the pane's duplicate
-  row was removed and the gap documented, but the editor itself was not added. Either build
-  it or put the decision in writing.
-- **`.recon` scratch**: dozens of untracked `_*` files (dump helpers, commit messages,
-  soaks). Keep the two the recon notes name as the playbook; delete the rest.
-- **Kernel docs**: `packages/kernel/kernel-python/README.md` and the Kiln README describe the
-  seam ops; both need the new table.
+- **"add a preset editor in the tools section"** (operator, seq 6344): see section 4 — the
+  editor cannot live in a section; the decision on a host write path is the operator's.
+- **`.recon` scratch**: cleared, with a `.gitignore` for the `_*` pattern this job produces.
+  The two files the recon notes name as the playbook (`_dump.mjs`, `_fidelity-probe.yml`)
+  stay.
+- **Kernel docs**: `packages/kernel/kernel-python/README.md` documents the observation family
+  and its two rules; the kernel prompt gains a `tool:kernel-harness` section naming the
+  helpers, so the model reaches for `session_window(seq)` instead of guessing at a payload.

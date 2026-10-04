@@ -1,4 +1,5 @@
-/** Tools-section copy: availability switches, the Python kernel, the browser tools, and the notices. */
+/** Tools-section copy: the availability switches, the per-tool roster, the Python
+ * kernel, the browser tools, and the notices. */
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -15,12 +16,10 @@ export const zh = {
   'tools.kernel.hint': '在持久 Python 命名空间中运行代码，读取、编辑、搜索文件都是其中的函数调用。',
   'tools.category.label': '常规工具',
   'tools.category.hint': '关闭后一次收起全部常规工具，模型只能通过 Kernel 行动；Kernel 不受影响。',
-  'tools.presets.title': '预设',
-  'tools.presets.hint': '每个预设决定它的 Agent 能看到哪些工具。这里列出已装载的预设，具体选择在预设编辑器中修改。',
-  'tools.presets.default': '默认',
-  'tools.presets.loading': '正在读取预设…',
-  'tools.presets.empty': '此部署没有装载任何预设。',
-  'tools.presets.failed': '无法读取预设列表。',
+  'tools.roster.title': '单个工具',
+  'tools.roster.hint': '每个工具一个开关。清单来自实际装载的工具，改动同样在模型停止生成后生效。',
+  'tools.roster.filter': '筛选工具…',
+  'tools.roster.empty': '没有匹配的工具。',
   'tools.pending': '更改会在模型停止生成后生效。系统提示词随之改变，这可能会让提示词缓存失效。',
   'tools.loadError': '无法读取设置。',
   'tools.writeError': '无法保存设置。',
@@ -62,12 +61,10 @@ export const en = {
   'tools.kernel.hint': 'Run code in a persistent Python namespace, where reading, editing, and searching files are function calls inside it.',
   'tools.category.label': 'Conventional tools',
   'tools.category.hint': 'Turning this off withdraws every conventional tool at once, leaving the kernel as the only way to act; the kernel is unaffected.',
-  'tools.presets.title': 'Presets',
-  'tools.presets.hint': 'Each preset decides which tools its agent can see. These are the composed presets; the selection itself is edited in the preset editor.',
-  'tools.presets.default': 'Default',
-  'tools.presets.loading': 'Reading presets…',
-  'tools.presets.empty': 'This deployment composes no presets.',
-  'tools.presets.failed': 'Could not read the preset list.',
+  'tools.roster.title': 'Individual tools',
+  'tools.roster.hint': 'One switch per tool, listed from what this deployment actually mounts. Changes apply once the model stops generating, like the switches above.',
+  'tools.roster.filter': 'Filter tools…',
+  'tools.roster.empty': 'No tool matches.',
   'tools.pending': 'Changes apply once the model stops generating. The system prompt changes with them, which can invalidate the prompt cache.',
   'tools.loadError': 'Could not read settings.',
   'tools.writeError': 'Could not save the setting.',

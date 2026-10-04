@@ -13,8 +13,15 @@
  *
  * Numeric fields commit on blur or Enter. Writing on each keystroke would queue a
  * host write per character, and a half-typed number is not a value anyone chose.
+ *
+ * The availability group lists one switch per tool. `tool-roster` records an entry
+ * for every switchable tool it mounts, so that map IS the deployment's roster
+ * rather than only the names someone already withdrew, and a switch here writes one
+ * nested entry (`tools.<name>`). A tool the roster only reports — the run-code alias,
+ * whose visibility no switch controls — never gets an entry, so the list cannot
+ * offer a switch that would do nothing.
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Input, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -27,6 +34,12 @@ export interface RosterFields {
   kernel?: boolean
   /** Whether the conventional tool category is available. */
   enabled?: boolean
+  /**
+   * Per-tool switches, one entry per switchable tool the roster has seen. The list
+   * is the map's keys and each switch is its value, so an entry written here is a
+   * tool the operator can turn off and a missing entry is a tool that stays on.
+   */
+  tools?: Record<string, boolean>
 }
 
 /** The `kernel-python` row's live fields as this section reads them. */
@@ -53,18 +66,6 @@ export interface BrowserFields {
   userAgent?: string
 }
 
-/** One composed preset, as the registry reports it. */
-export interface PresetRow {
-  /** Stable preset identity. */
-  id: string
-  /** Display name, when the preset declares one. */
-  name?: string
-  /** One-line purpose, when the preset declares one. */
-  description?: string
-  /** Whether new sessions start from this preset. */
-  isDefault?: boolean
-}
-
 /** Injected business face: one live config form per row this section edits. */
 export interface ToolsSectionInjected {
   /** Live form over the `tool-roster` row. */
@@ -73,8 +74,6 @@ export interface ToolsSectionInjected {
   kernel: ConfigForm<KernelFields>
   /** Live form over the `web-browser` row. */
   browser: ConfigForm<BrowserFields>
-  /** The composed preset roster, read once when the section opens. */
-  listPresets: () => Promise<readonly PresetRow[]>
 }
 
 /** Full component props: runtime share + locale seat + injected face. */
@@ -97,6 +96,8 @@ interface Writer {
   failed: boolean
   pending: boolean
   write: (field: string, next: unknown) => void
+  /** Write one nested field, for a map whose keys are data (a tool name). */
+  setAt: (path: readonly string[], next: unknown) => void
 }
 
 /** One row's write pump: reports failure instead of throwing, and serialises. */
@@ -110,7 +111,14 @@ function useWriter<T extends object>(form: ConfigForm<T>): Writer {
       setFailed(!saved)
     })
   }, [form])
-  return { failed, pending, write }
+  const setAt = useCallback((path: readonly string[], next: unknown): void => {
+    setPending(true)
+    void form.mutate([{ op: 'set', path: [...path], value: next as never }]).then((saved) => {
+      setPending(false)
+      setFailed(!saved)
+    })
+  }, [form])
+  return { failed, pending, write, setAt }
 }
 
 /** Whether a form's controls should refuse input right now. */
@@ -130,6 +138,30 @@ function Group({ title, hint, children }: { title: string; hint: string; childre
 }
 
 /** One row with a switch on the right. */
+/**
+ * One per-tool switch.
+ *
+ * The tool's own name is the label, verbatim: it is a wire token the model and the
+ * operator both read, and translating or prettifying it would break the one thing
+ * this row has to say. The availability group's hint carries the timing warning, so
+ * forty rows do not repeat it forty times.
+ */
+function ToolRow({ name, checked, disabled, onChange }: {
+  name: string
+  checked: boolean
+  disabled: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <div className={css.row}>
+      <span className={css.text}>
+        <span className={css.toolName}>{name}</span>
+      </span>
+      <Switch checked={checked} disabled={disabled} label={name} onChange={onChange} />
+    </div>
+  )
+}
+
 function ToggleRow({ copy, checked, disabled, t, onChange }: {
   copy: FieldCopy
   checked: boolean
@@ -253,18 +285,9 @@ const COPY = {
  * @param props - composed slot props.
  * @returns the section element tree.
  */
-export function ToolsSection({ t, roster, kernel, browser, listPresets }: ToolsSectionComponentProps) {
-  // Presets are read once per mount: the roster changes when a preset file does,
-  // which is a reload, and this section already treats composition changes that way.
-  const [presets, setPresets] = useState<readonly PresetRow[] | undefined>(undefined)
-  const [presetsFailed, setPresetsFailed] = useState(false)
-  useEffect(() => {
-    let live = true
-    void listPresets()
-      .then((rows) => { if (live) setPresets(rows) })
-      .catch(() => { if (live) { setPresets([]); setPresetsFailed(true) } })
-    return () => { live = false }
-  }, [listPresets])
+export function ToolsSection({ t, roster, kernel, browser }: ToolsSectionComponentProps) {
+  // The filter is view state, not configuration: it never reaches the Host.
+  const [toolFilter, setToolFilter] = useState('')
 
   const rosterState = useForm(roster)
   const kernelState = useForm(kernel)
@@ -272,6 +295,10 @@ export function ToolsSection({ t, roster, kernel, browser, listPresets }: ToolsS
   const rosterWriter = useWriter(roster)
   const kernelWriter = useWriter(kernel)
   const browserWriter = useWriter(browser)
+
+  const needle = toolFilter.trim().toLowerCase()
+  const rosterTools = Object.keys(rosterState.value?.tools ?? {}).sort((left, right) => left.localeCompare(right))
+  const shownTools = needle === '' ? rosterTools : rosterTools.filter(name => name.toLowerCase().includes(needle))
 
   const rosterLocked = locked(rosterState.status, rosterState.writable, rosterWriter)
   const kernelLocked = locked(kernelState.status, kernelState.writable, kernelWriter)
@@ -303,6 +330,34 @@ export function ToolsSection({ t, roster, kernel, browser, listPresets }: ToolsS
           disabled={rosterLocked}
           onChange={(next) => { rosterWriter.write('kernel', next) }}
         />
+        <div className={css.row}>
+          <span className={css.text}>
+            <span className={css.label}>{t('tools.roster.title')}</span>
+            <span className={css.hint}>{t('tools.roster.hint')}</span>
+          </span>
+          <Input
+            className={css.wide ?? ''}
+            value={toolFilter}
+            disabled={rosterState.status !== 'ready'}
+            aria-label={t('tools.roster.filter')}
+            placeholder={t('tools.roster.filter')}
+            onChange={(event) => { setToolFilter(event.target.value) }}
+          />
+        </div>
+        <div className={css.subList}>
+          {rosterState.status === 'ready' && shownTools.length === 0 && (
+            <p className={css.hint}>{t('tools.roster.empty')}</p>
+          )}
+          {shownTools.map(name => (
+            <ToolRow
+              key={name}
+              name={name}
+              checked={rosterState.value?.tools?.[name] !== false}
+              disabled={rosterLocked}
+              onChange={(next) => { rosterWriter.setAt(['tools', name], next) }}
+            />
+          ))}
+        </div>
       </Group>
 
       {kernelComposed && (
@@ -375,29 +430,6 @@ export function ToolsSection({ t, roster, kernel, browser, listPresets }: ToolsS
       )}
       {!browserComposed && <p className={css.hint}>{t('tools.browser.missing')}</p>}
 
-      <Group title={t('tools.presets.title')} hint={t('tools.presets.hint')}>
-        {presets === undefined && <p className={css.hint}>{t('tools.presets.loading')}</p>}
-        {presetsFailed && <p className={css.hint}>{t('tools.presets.failed')}</p>}
-        {!presetsFailed && presets?.length === 0 && <p className={css.hint}>{t('tools.presets.empty')}</p>}
-        {presets?.map((preset) => {
-          const title = preset.name ?? preset.id
-          // The registry answers with the preset's id as its description when the
-          // preset declares none, so the row would otherwise print the same word
-          // twice for every composed preset.
-          const described = preset.description === title ? undefined : preset.description
-          return (
-            <div className={css.row} key={preset.id}>
-              <span className={css.text}>
-                <span className={css.label}>
-                  {title}
-                  {preset.isDefault === true && <span className={css.tag}>{t('tools.presets.default')}</span>}
-                </span>
-                {described !== undefined && <span className={css.hint}>{described}</span>}
-              </span>
-            </div>
-          )
-        })}
-      </Group>
     </div>
   )
 }

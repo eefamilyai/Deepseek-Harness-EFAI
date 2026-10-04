@@ -41,9 +41,15 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
 // The Loader's `loader/volatile-update` event and `fiber.entry`.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
+
+/** The part of `ctx.tools` this plugin reads to size the roster. */
+interface ToolsSeam {
+  schemas(): readonly ToolSchema[]
+}
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-roster'
@@ -98,9 +104,12 @@ export interface Config {
    */
   enabled: Volatile<boolean>
   /**
-   * Per-tool overrides. A name absent here is enabled, so a newly mounted tool
-   * is available until someone turns it off. Choosing a preset's tools is the
-   * preset editor's job; this map is for withdrawing one host-plane tool.
+   * One switch per tool, which the Tools settings page renders as a list. The
+   * roster adds an entry (enabled) the first time it mounts a switchable tool,
+   * so the map is the deployment's roster rather than only the names someone
+   * already withdrew; the values are the switches, and a name absent from the
+   * map is still available. Tools whose visibility no switch controls, and the
+   * kernel tool its own category switch governs, get no entry.
    */
   tools: Volatile<Record<string, boolean>>
 }
@@ -117,7 +126,10 @@ export const Config = z.object({
       + ' withdraw every tool in the category at once; the kernel category is separate.')
     .volatile(),
   tools: z.dict(z.boolean()).default({})
-    .description('Per-tool switches. A tool absent from this map is available.')
+    .description('Per-tool switches, one entry per switchable tool. A tool absent from this map'
+      + ' is available; the roster adds an entry (enabled) the first time it sees a newly'
+      + ' mounted tool, so the settings page can offer a switch for every one of them.'
+      + ' Applies when the model next stops generating.')
     .volatile(),
 })
 
@@ -236,6 +248,45 @@ export function apply(ctx: Context, config: Config): void {
   // The page is the fork's Tools section, so the generic form would repeat it.
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
 
+  /**
+   * Learn the mounted roster into this configuration's own per-tool map.
+   *
+   * The map is what the Tools page renders as switches, and a map that held only
+   * the names someone already withdrew could not offer a switch for anything the
+   * operator has not touched yet — the page would list the tools that are off and
+   * nothing else. So the roster records every switchable tool it sees as enabled
+   * the first time it sees it: the entries are the page's list, the values are
+   * the switches, and both start from what the runtime actually mounts. A tool
+   * absent from the map is still available, so a deployment that refuses the
+   * write loses the listing and nothing else.
+   *
+   * Writes are additive by construction: one `set` per unseen name, never an
+   * update of a name that is already there, so a write can never race the
+   * operator's own flip of an existing switch.
+   * @param ctx - plugin context, for the optional settings service.
+   * @param config - the live roster fields.
+   * @param runtime - the tool registry, for the mounted names.
+   */
+  const learnRoster = (ctx2: Context, config2: Config, runtime: ToolsSeam): void => {
+    const settings = ctx2.get('settings')
+    if (settings === undefined) return
+    const known = config2.tools.get()
+    const additions = runtime.schemas()
+      .map(schema => normalize(schema.name))
+      // The run-code alias is not switchable (`toolVisible` always answers yes),
+      // so it is not a switch this page could honour.
+      .filter(name => name !== RUN_CODE_NAME && !(name in known))
+    if (additions.length === 0) return
+    void settings.mutate(TOOL_ROSTER_ENTRY_ID, additions.map(name => ({
+      op: 'set' as const,
+      path: ['tools', name],
+      value: true,
+    }))).catch(() => {
+      // A profile that refuses writes (memory mode, or a read-only document)
+      // keeps the map as it is; the switches it already has still work.
+    })
+  }
+
   ctx.inject(['tools', 'systemPrompt'], (runtime) => {
     // 1. The prompt: drop a hidden tool's schema and its guidance together. The
     //    returned assembly is authoritative, which is what makes this possible
@@ -251,6 +302,11 @@ export function apply(ctx: Context, config: Config): void {
       }
     })
 
+    // The page renders a switch per entry of this map, so it learns the mounted
+    // roster the first time it sees it - both at mount, for the tools already
+    // there, and at each turn boundary, for a plugin that mounted later.
+    learnRoster(ctx, config, runtime.tools)
+
     // 2. Execution: filtering the prompt does not stop a model that remembers
     //    the name, so a hidden tool must also refuse to run.
     runtime.tools.guard(execution =>
@@ -263,6 +319,7 @@ export function apply(ctx: Context, config: Config): void {
     //    one turn never changes hands between its steps.
     runtime.on('agent/turn-stopping', () => {
       if (!sameRoster(pending, active)) active = pending
+      learnRoster(ctx, config, runtime.tools)
     })
   })
 }
