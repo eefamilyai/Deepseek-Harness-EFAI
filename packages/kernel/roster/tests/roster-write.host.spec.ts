@@ -1,3 +1,15 @@
+/** Poll until the profile patch holds the write, or fail with what it holds. */
+async function waitForPatch(path: string, timeoutMs = 2000): Promise<string> {
+  const deadline = Date.now() + timeoutMs
+  let saved = ''
+  while (Date.now() < deadline) {
+    saved = readFileSync(path, 'utf8')
+    if (saved.includes('tool-roster')) return saved
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  return saved
+}
+
 /**
  * The roster's write path, against the real settings service.
  *
@@ -87,8 +99,9 @@ describe('the roster writes its own per-tool map', () => {
     ctx.tools.register(tool('bash'))
     // The learner runs on the assembled prompt, which is where an agent's own tools appear.
     await ctx.systemPrompt.assemble({})
-    // The write is asynchronous by contract: give the service its turn, then read the file.
-    await new Promise(resolve => setTimeout(resolve, 50))
+    // The write is asynchronous by contract, so wait for the file rather than for a
+    // fixed delay: a loaded machine is otherwise a flaky test.
+    await waitForPatch(patchPath)
 
     const saved = readFileSync(patchPath, 'utf8')
     expect(saved).toContain('tool-roster')
@@ -97,11 +110,11 @@ describe('the roster writes its own per-tool map', () => {
   })
 
   it('keeps an entry the operator set instead of rewriting it', async () => {
-    const { ctx } = await bootRoster({ tools: { read: false } })
+    const { ctx, patchPath } = await bootRoster({ tools: { read: false } })
     ctx.tools.register(tool('read'))
     ctx.tools.register(tool('bash'))
     await ctx.systemPrompt.assemble({})
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitForPatch(patchPath)
 
     const row = ctx.settings.describe().find(entry => entry.ns === 'tool-roster')
     expect(row?.value).toMatchObject({ tools: { read: false, bash: true } })
