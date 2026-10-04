@@ -814,6 +814,18 @@ async function dispatchPrompt(
 }
 
 /**
+ * The loader off one context, read through the service store.
+ *
+ * `get` is typed as a statement in this cordis build, so the read happens inside a
+ * function rather than in the middle of an expression.
+ * @param ctx - the dispatch context.
+ * @returns the loader, or undefined when this deployment mounts none.
+ */
+function loaderOf(ctx: Context): unknown {
+  return ctx.get('loader' as never)
+}
+
+/**
  * Why a composed row failed, which the plugin inventory reports only as a phase.
  *
  * `pluginInventory.list()` answers with a phase, and a failed row without its error
@@ -827,8 +839,7 @@ async function dispatchPrompt(
 function dispatchPluginFailures(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
   // The loader is a service, so the strict read is `ctx.get`: the property proxy
   // refuses it on an agent's context and the root context does not carry it either.
-  const resolved: unknown = agentCtx === undefined ? undefined : agentCtx.get('loader' as never)
-  const loader = asRecord(resolved)
+  const loader = asRecord(agentCtx === undefined ? undefined : loaderOf(agentCtx))
   const list = loader['entries']
   const entries: Iterable<[unknown, unknown]> | undefined = typeof list === 'function'
     ? (list as () => Iterable<[unknown, unknown]>).call(loader)
