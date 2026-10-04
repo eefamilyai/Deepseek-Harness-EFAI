@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-personalization",
-  "description": "Personalization settings section: font, accent, corner scale, shell and surface opacity, and the backdrop they reveal, applied as token overrides",
+  "description": "Personalization settings section: interface font, root size, accent, corner scale, and real shell and surface transparency, applied as token overrides",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"
@@ -34,6 +34,9 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
   },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~"
+  },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
@@ -42,7 +45,6 @@
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:*",
     "@types/react": "~18.3.1",
     "react": "^18.2.0"
   },
