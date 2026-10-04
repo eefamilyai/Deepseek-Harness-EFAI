@@ -48,7 +48,7 @@ export const zh = {
   'appearance.shell.hint': '整个窗口的不透明度：窗口背景、侧边栏、对话区一起变成玻璃。低于 100% 时窗口真的透明，能直接看到后面的浏览器标签页或桌面。',
 
   'appearance.surface.label': '内层不透明度',
-  'appearance.surface.hint': '窗口内对话区与内容面板的不透明度。它与窗口叠加，因此可以把内容做得比窗口更透。',
+  'appearance.surface.hint': '窗口内内容表面的不透明度：卡片、气泡、标签和输入框。调低即可看到它们下面的内容。',
 
   'appearance.opacity.title': '不透明度',
   'appearance.panel.label': '设置面板',
@@ -98,7 +98,7 @@ export const en: Record<keyof typeof zh, string> = {
   'appearance.shell.hint': 'Opacity of the whole window: its background, the sidebar, and the conversation surface together. Below 100% the window is genuinely glass, so another browser tab or the desktop behind it shows through.',
 
   'appearance.surface.label': 'Surface opacity',
-  'appearance.surface.hint': 'Opacity of the surfaces inside the shell: cards, panels, menus, and dialogs. Lower it to see what sits underneath them.',
+  'appearance.surface.hint': 'Opacity of the content surfaces inside the window: cards, bubbles, pills, and inputs. Lower it to see what sits underneath them.',
 
   'appearance.opacity.title': 'Opacity',
   'appearance.panel.label': 'Settings panel',

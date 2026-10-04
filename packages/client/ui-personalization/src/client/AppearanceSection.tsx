@@ -182,7 +182,11 @@ const ACCENT_PRESETS: readonly { key: AppearanceKey; value: string }[] = [
 export function AppearanceSection({ t, appearance }: AppearanceSectionComponentProps): ReactNode {
   const snapshot = useSyncExternalStore(appearance.subscribe.bind(appearance), appearance.getSnapshot.bind(appearance))
   const writer = useWriter(appearance)
-  const values: AppearanceValues = { ...APPEARANCE_DEFAULTS, ...snapshot.value }
+  // The user layer is what the operator set, and it is the layer a control shows and
+  // writes. The snapshot's `value` can be the composition default underneath it - which is
+  // how a field read 100 while the profile held 35 - so the user layer wins here.
+  const user = (snapshot.user ?? {}) as AppearanceFields
+  const values: AppearanceValues = { ...APPEARANCE_DEFAULTS, ...snapshot.value, ...user }
   const locked = writer.pending || snapshot.status === 'ready' ? false : true
   const write = (fields: AppearanceFields): void => { writer.write(fields) }
 

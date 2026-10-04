@@ -21,8 +21,8 @@ const translations: ReadonlyMap<string, string> = new Map(Object.entries(en))
 const t = (key: string): string => translations.get(key) ?? key
 
 /** One live form over a fixed value, recording every write. */
-function form(value: AppearanceFields) {
-  const snapshot = { status: 'ready' as const, value, base: undefined, user: undefined, revision: 1, writable: true, mode: 'host' as const }
+function form(value: AppearanceFields, user: AppearanceFields = {}) {
+  const snapshot = { status: 'ready' as const, value, base: undefined, user, revision: 1, writable: true, mode: 'host' as const }
   const mutate = vi.fn(async () => true)
   return {
     mutate,
@@ -126,6 +126,26 @@ it('shows the stored percentages, including a value the first build wrote as a f
   view({ shellOpacity: 0.65, panelOpacity: 55 })
   expect((numberField(t('appearance.shell.label')) as HTMLInputElement).value).toBe('65')
   expect((numberField(t('appearance.panel.label')) as HTMLInputElement).value).toBe('55')
+})
+
+it('shows the layer the operator set, not the composition default beneath it', () => {
+  // The regression: a field read 100 while the profile held 35, because the snapshot's
+  // `value` was the default and the operator's own layer sat beside it.
+  const live = form({ shellOpacity: 100 }, { shellOpacity: 35 })
+  render(
+    <AppearanceSection
+      t={key => t(key)}
+      close={() => {}}
+      usePanelInfo={unusedSeat}
+      useSessions={unusedSeat}
+      useSessionStatus={unusedSeat}
+      useSessionRetainInfo={unusedSeat}
+      useWorkspaces={unusedSeat}
+      useResource={unusedSeat}
+      appearance={live.handle}
+    />,
+  )
+  expect((numberField(t('appearance.shell.label')) as HTMLInputElement).value).toBe('35')
 })
 
 it('reports a section without a row, and a write that failed', async () => {
