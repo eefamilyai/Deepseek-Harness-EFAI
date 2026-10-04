@@ -380,6 +380,7 @@ export async function dispatchHarness(
     if (request.op === 'tools.search') return dispatchToolSearch(agentCtx, request, args)
     if (request.op === 'terminals.list') return dispatchTerminals(agentCtx, agent, request)
     if (request.op === 'prompt.sections') return await dispatchPrompt(agentCtx, request, args)
+    if (request.op === 'plugins.failures') return dispatchPluginFailures(agentCtx, request)
     if (request.op === 'storage.backends') return dispatchStorage(agentCtx, request)
     return unavailable(request.id, `unknown seam operation: ${request.op}`)
   } catch (error) {
@@ -810,6 +811,38 @@ async function dispatchPrompt(
   })
   const total = sections.reduce((sum, section) => sum + section.chars, 0)
   return ok(request.id, { total, sections })
+}
+
+/**
+ * Why a composed row failed, which the plugin inventory reports only as a phase.
+ *
+ * `pluginInventory.list()` answers with a phase, and a failed row without its error
+ * is the worst of both: Settings shows a row that says "failed" and says nothing
+ * about what to fix. The error lives on the row's fiber, so this reads the loader's
+ * own tree through the root context and reports each failure with its message.
+ * @param agentCtx - the agent-scoped context a cell runs with.
+ * @param request - the request to answer.
+ * @returns each failed row's id and the message it raised, or why none is reachable.
+ */
+function dispatchPluginFailures(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
+  const root = (agentCtx as { root?: unknown } | undefined)?.root
+  const loader = asRecord(asRecord(root)['loader'])
+  const entries = loader['entries']
+  if (!(entries instanceof Map)) {
+    return unavailable(request.id, 'the loader tree is not reachable from this context')
+  }
+  const failures: { id: string; error: string }[] = []
+  for (const [id, entry] of entries as Map<unknown, unknown>) {
+    const error = asRecord(asRecord(entry)['fiber'])['error']
+    if (error === undefined || error === null) continue
+    failures.push({
+      id: typeof id === 'string' ? id : JSON.stringify(id),
+      // A thrown value need not be an Error: name what it is rather than its
+      // default stringification, which would read `[object Object]`.
+      error: error instanceof Error ? error.message : `${typeof error}: ${JSON.stringify(error)}`,
+    })
+  }
+  return ok(request.id, failures)
 }
 
 function dispatchStorage(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {

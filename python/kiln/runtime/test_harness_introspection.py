@@ -84,7 +84,7 @@ HELPERS = [
     "list_plugins", "list_model_providers", "list_models", "list_workspaces", "list_jobs",
     "list_schedules", "context_state", "list_presets", "current_preset", "read_projections",
     "session_title", "search_tools", "list_terminals", "prompt_sections",
-    "list_storage_backends",
+    "list_storage_backends", "list_plugin_failures",
 ]
 for name in HELPERS:
     fn = NS.get(name)

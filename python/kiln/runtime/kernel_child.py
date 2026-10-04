@@ -2623,6 +2623,15 @@ def list_terminals(timeout=20.0):
     return _harness_call("terminals.list", {}, timeout=timeout)
 
 
+def list_plugin_failures(timeout=20.0):
+    """The composed rows whose fiber failed, each with the error it raised.
+
+    `list_plugins()` reports a phase, and a row that failed without its reason is
+    the worst of both: "failed" and nothing to fix.
+    """
+    return _harness_call("plugins.failures", {}, timeout=timeout)
+
+
 def list_storage_backends(timeout=20.0):
     """The storage backends this deployment registered, as `{backends: [name]}`.
 
@@ -5011,6 +5020,7 @@ _HARNESS_OBSERVERS = {
     "read_projections": read_projections,
     "prompt_sections": prompt_sections,
     "list_storage_backends": list_storage_backends,
+    "list_plugin_failures": list_plugin_failures,
 }
 prompt_dict.update(_HARNESS_OBSERVERS)
 _ns.update(prompt_dict)

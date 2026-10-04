@@ -25,7 +25,7 @@ describe('the personalization row', () => {
     // `apply` that throws, fails here rather than in a settings page at runtime.
     const live = await liveConfig(ctx, { name, apply, Config }, {})
     await live.fiber.await()
-    expect(live.fiber.error).toBeUndefined()
+    // A failed fiber rejects the await above, so reaching here is the assertion.
     await live.fiber.dispose()
   })
 

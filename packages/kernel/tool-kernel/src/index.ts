@@ -559,7 +559,7 @@ export function apply(ctx: Context, config: Config): void {
       '  read a conversation other than your own.',
       '- `harness_settings()` and `update_setting(ns, patch)` — the settings namespaces, their',
       '  effective values, and the revisions to write against.',
-      '- `list_plugins()` — the loader rows this deployment composed.',
+      '- `list_plugins()` — the loader rows this deployment composed, plus `list_plugin_failures()` for the ones that failed with the error each raised.',
       '- `list_model_providers()` and `list_models(provider)` — the routes you can be run on.',
       '- `context_state()`, `list_jobs()`, `list_schedules()`, `list_terminals()` — this',
       '  session\'s token accounting, background work, and terminals.',
