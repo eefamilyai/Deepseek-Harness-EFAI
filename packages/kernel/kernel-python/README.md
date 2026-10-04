@@ -19,10 +19,13 @@ Mount it to make the Kiln runtime the backend the seam selects.
 - `src/provider.ts` — the `KernelProvider` implementation over the child process.
 - `src/child.ts` — child lifecycle and the frame protocol.
 - `src/seam.ts` — the deep bridge: dispatches Python→TS seam requests onto the harness seams reached through the calling agent's scoped context.
+- `src/seam-harness.ts` — the observation half of that bridge: the ops that report what the harness currently is (agents, session history, settings, loader rows, model routes, workspaces, jobs, schedules, token accounting, presets, projections, terminals, the assembled prompt) plus `seam.ops`, the catalog of all of them.
 - `tests/transport.spec.ts` — frame-protocol coverage, driven by `tests/fixtures/fake-kernel.py` so the transport is tested without the real runtime.
 - `tests/seam-tools-call.spec.ts` — the `tools.call` seam contract, unit-level.
+- `tests/seam-harness.spec.ts` — the observation ops, unit-level: the `unavailable` path per family, the projections each one reads, and that `seam.ops` lists exactly the ops the dispatcher answers.
 - `tests/seam-tools-call.e2e.spec.ts` — the same capability end-to-end, driving the real `kernel_child.py` process and answering its seam frames through the real `dispatchSeam`.
 - `python/kiln/runtime/test_harness_tools.py` — the schema-to-signature generator, offline: it slices `_make_tool_function` out of the runtime by marker and exercises it against a stubbed `call_tool`. That is the one part of the surface the seam tests cannot pin, because they drive dispatch rather than the generated signatures.
+- `python/kiln/runtime/test_harness_introspection.py` — the observation helpers, offline: it slices their block out of `kernel_child.py` by marker and pins the op each helper sends, the arguments it forwards, and how it unwraps a response.
 
 ## Calling harness tools from Python
 
@@ -51,6 +54,31 @@ tool_help("tools.read")     # one harness tool's schema, as the model sees it
 ```
 
 A bare harness name works too (`tool_help("read")`). With no harness attached the harness section says so explicitly rather than appearing empty — that difference is what tells a caller to fall back to the local helpers.
+
+## Reading the harness from a cell
+
+`tools.*` acts on the harness; the observation helpers report what it currently is. They are the same bridge, one op each, reachable from a cell by name:
+
+```python
+seam_ops()                                  # every op, its arguments, and what it returns
+seam("sessions.surface", limit=20)           # call any op, including one with no helper yet
+
+session_corpus()                             # every session this harness can read, live or stored
+session_events(type="tool/result", limit=10) # the newest recorded events, with per-event summaries
+session_surface(limit=20)                    # what the model would see now — a different list
+session_window(seq=412)                      # the events around one seq
+list_agents(), current_agent()               # who is running, and which one is this cell
+harness_settings()                           # settings namespaces, effective values, revisions
+update_setting("kernel-python", {"browserWindow": True})
+list_plugins()                               # the loader rows this deployment composed
+list_model_providers(), list_models("kiln")  # the routes a session can be run on
+list_workspaces(), list_jobs(), list_schedules(), list_terminals()
+context_state()                              # this session's token accounting
+list_presets(), current_preset(), read_projections(["tokenUsage"])
+session_title(), search_tools(query="browser"), prompt_sections(full=False)
+```
+
+Two rules shape that family. **History is read through `ctx.sessionQuery`**, which owns the live-preferred corpus and can read a session this process never opened; the synchronous `Session` readers are `@deprecated` and new code may not call them. **A missing service is `unavailable`, not empty**: a deployment without `ctx.sessionQuery` answers with the reason, so a cell can tell "no such data" from "no such seam" — the same distinction `tool_help()` draws for tools. `seam_ops()` is the authoritative table; every helper above is a thin, documented wrapper over one entry.
 
 ## Model Experience
 

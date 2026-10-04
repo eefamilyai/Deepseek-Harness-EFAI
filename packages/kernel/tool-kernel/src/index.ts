@@ -538,6 +538,37 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = config as ResolvedConfig
 
   ctx.systemPrompt.section({
+    name: 'tool:kernel-harness',
+    order: 101,
+    text: [
+      'The kernel also reads the harness you are running inside, not only the machine.',
+      'These helpers answer "what is this deployment, and what has happened in it":',
+      '',
+      '- `seam_ops()` lists every harness operation with its arguments, and',
+      '  `seam(op, **args)` calls any of them — including one that has no helper yet.',
+      '- `session_events(session_id=None, limit=40, type=None)` — the newest recorded events',
+      '  of a session, each `{seq, type, time, summary}`; `session_window(seq)` opens one in',
+      '  context instead of guessing at its payload.',
+      '- `session_surface(session_id=None)` — the events the model would see now, which is a',
+      '  different list: a replaced node is gone and a compacted range is its summary.',
+      '- `session_corpus()` — every session this harness can read, live or stored, so you can',
+      '  read a conversation other than your own.',
+      '- `harness_settings()` and `update_setting(ns, patch)` — the settings namespaces, their',
+      '  effective values, and the revisions to write against.',
+      '- `list_plugins()` — the loader rows this deployment composed.',
+      '- `list_model_providers()` and `list_models(provider)` — the routes you can be run on.',
+      '- `context_state()`, `list_jobs()`, `list_schedules()`, `list_terminals()` — this',
+      '  session\'s token accounting, background work, and terminals.',
+      '- `prompt_sections(full=False)` — the system prompt you are reading, by section and size.',
+      '- `list_agents()`, `current_agent()`, `read_projections(keys)`, `list_presets()`,',
+      '  `current_preset()`, `list_workspaces()`, `session_title()`, `search_tools(query)`.',
+      '',
+      'Reach for these before asking the operator what the harness looks like, and before',
+      'assuming what a recorded event contains: read it.',
+    ].join('\n'),
+  })
+
+  ctx.systemPrompt.section({
     name: 'tool:kernel',
     order: 100,
     text: [

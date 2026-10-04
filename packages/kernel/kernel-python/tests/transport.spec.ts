@@ -188,7 +188,7 @@ describe('KernelFrame images', () => {
   it('normalises an empty-but-present list to no images', () => {
     // A child that sent `images: []` means "no pictures", not "an empty batch
     // to save" — the two must not reach a consumer as different states.
-    expect(withFrameImages({ out: 'x', images: [] } as never).images).toBeUndefined()
+    expect(withFrameImages({ out: 'x', images: [] }).images).toBeUndefined()
   })
 
   it('ignores a non-array images field instead of throwing', () => {

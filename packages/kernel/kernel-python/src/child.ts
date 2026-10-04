@@ -445,7 +445,7 @@ export function withFrameImages(frame: KernelFrame): KernelFrame {
   if (!Array.isArray(raw)) {
     // Absent and malformed are the same answer to a consumer: no images.
     const { images: _dropped, ...rest } = frame as { images?: unknown }
-    return rest as unknown as KernelFrame
+    return rest
   }
   const images: KernelCellImage[] = []
   for (const entry of raw) {
@@ -465,7 +465,7 @@ export function withFrameImages(frame: KernelFrame): KernelFrame {
   }
   if (images.length === 0) {
     const { images: _dropped, ...rest } = frame as { images?: unknown }
-    return rest as unknown as KernelFrame
+    return rest
   }
   return { ...frame, images }
 }

@@ -19,6 +19,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { KernelAgent } from '@deepseek-ai/dsh-kernel'
+import { dispatchHarness } from './seam-harness.ts'
+
+export { HARNESS_OPS } from './seam-harness.ts'
+export type { HarnessOp } from './seam-harness.ts'
 
 /** One Python→TS seam request, decoded from a `seam` frame. */
 export interface SeamRequest {
@@ -238,36 +242,6 @@ function toolsOf(ctx: Context | undefined): ToolsSeamShape | undefined {
   return c === undefined || c === null ? undefined : c as ToolsSeamShape
 }
 
-/** Session shapes the kernel consumes, mirrored from `packages/core/session/src/types.ts`. */
-interface SessionHeaderShape {
-  readonly id: unknown
-  readonly createdAt: number
-  readonly cwd?: string
-  readonly parentSession?: unknown
-  readonly origin?: string
-}
-interface SessionShape { readonly id: unknown; readonly header: SessionHeaderShape }
-interface SessionsSeamShape {
-  list(): SessionShape[]
-  get(id: unknown): SessionShape | undefined
-}
-
-function sessionsOf(ctx: Context | undefined): SessionsSeamShape | undefined {
-  if (ctx === undefined) return undefined
-  const c = (ctx as Context & { sessions?: unknown }).sessions
-  return c === undefined || c === null ? undefined : c as SessionsSeamShape
-}
-
-function projectSessionHeader(header: SessionHeaderShape): SessionHeaderShape {
-  return {
-    id: header.id,
-    createdAt: header.createdAt,
-    ...header.cwd !== undefined ? { cwd: header.cwd } : {},
-    ...header.parentSession !== undefined ? { parentSession: header.parentSession } : {},
-    ...header.origin !== undefined ? { origin: header.origin } : {},
-  }
-}
-
 /** Skill shapes the kernel consumes, mirrored from `packages/skill/skill/src/index.ts`. */
 interface SkillSummaryShape { readonly name: string; readonly description: string; readonly whenToUse?: string }
 interface SkillDefinitionShape extends SkillSummaryShape {
@@ -334,10 +308,12 @@ export async function dispatchSeam(
   if (request.op.startsWith('subagents.')) return dispatchSubagents(agentCtx, agent, request, signal)
   if (request.op.startsWith('goals.')) return dispatchGoals(agentCtx, agent, request, signal)
   if (request.op.startsWith('tools.')) return dispatchTools(agentCtx, agent, request, signal)
-  if (request.op.startsWith('sessions.')) return dispatchSessions(agentCtx, request)
   if (request.op.startsWith('skills.')) return dispatchSkills(agentCtx, request, signal)
   if (request.op.startsWith('subprocess.')) return dispatchSubprocess(agentCtx, request, signal)
-  return unavailable(request.id, `unknown seam operation: ${request.op}`)
+  // Observation seams (agents, sessions and their history, settings, the loader, models,
+  // workspaces, jobs, schedules, token accounting, presets, projections) plus the op
+  // catalog that makes them discoverable. One module owns that family.
+  return dispatchHarness(agentCtx, agent, request, signal)
 }
 
 async function dispatchFs(
@@ -447,7 +423,7 @@ async function dispatchSubagents(
   }
   // Children/descendants discovery resolves the current agent's own session id.
   if (request.op === 'subagents.children' || request.op === 'subagents.descendants') {
-    const sessionId = agent?.session?.id
+    const sessionId = agent?.session.id
     if (sessionId === undefined) return unavailable(request.id, 'no owning agent session is available for this cell')
     try {
       const items = request.op === 'subagents.children'
@@ -630,7 +606,10 @@ async function dispatchTools(
     // the kernel can show a caller exactly what the model would have seen.
     // `isError` and the structured `error` survive so Python can raise.
     const content = Array.isArray(result.content)
-      ? result.content.map(block => ({ type: block.type, ...block.text !== undefined ? { text: block.text } : {} }))
+      ? result.content.map((block: unknown) => {
+        const part = typeof block === 'object' && block !== null ? block as Record<string, unknown> : {}
+        return { type: part['type'], ...part['text'] !== undefined ? { text: part['text'] } : {} }
+      })
       : []
     return ok(request.id, result.isError
       ? {
@@ -645,27 +624,6 @@ async function dispatchTools(
         content,
         ...result.meta !== undefined ? { meta: result.meta } : {},
       })
-  } catch (error) {
-    return failed(request.id, error)
-  }
-}
-
-function dispatchSessions(agentCtx: Context | undefined, request: SeamRequest): SeamResponse {
-  const sessions = sessionsOf(agentCtx)
-  if (sessions === undefined) return unavailable(request.id, 'ctx.sessions is not mounted for this agent')
-  const args = asArgs(request.args)
-  try {
-    if (request.op === 'sessions.list') {
-      return ok(request.id, sessions.list().map(s => ({ id: s.id, header: projectSessionHeader(s.header) })))
-    }
-    if (request.op === 'sessions.get') {
-      const id = (args as { id?: unknown }).id
-      if (id === undefined) return failed(request.id, new Error('sessions.get requires an "id" argument'))
-      const session = sessions.get(id)
-      if (session === undefined) return ok(request.id, null)
-      return ok(request.id, { id: session.id, header: projectSessionHeader(session.header) })
-    }
-    return unavailable(request.id, `unknown seam operation: ${request.op}`)
   } catch (error) {
     return failed(request.id, error)
   }

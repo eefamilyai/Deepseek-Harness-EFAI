@@ -2398,6 +2398,241 @@ def get_session(session_id, timeout=15.0):
     return seam.get("value")
 
 
+# ---------------------------------------------------------------------------
+# What the harness currently is
+#
+# One helper per observation seam: the agents it holds, the sessions it can
+# read (its whole corpus, not just this process's live ones), their recorded
+# events, its settings, its loader rows, its model routes, its workspaces, its
+# background jobs and scheduled tasks, its token accounting, its presets, and
+# its session projections.
+#
+# Reads of history go through `ctx.sessionQuery`, which owns the live-preferred
+# corpus and can read a session this process never opened. Every helper returns
+# the seam's value, or `{"error": ...}` when there is no harness (a backgrounded
+# cell, a standalone kernel) or the seam refused. `seam_ops()` lists the whole
+# table; `seam(op, **args)` calls any entry, including one that has no wrapper
+# here yet.
+# ---------------------------------------------------------------------------
+
+
+def _harness_call(op, args=None, timeout=15.0):
+    """Send one harness observation op and unwrap its response."""
+    seam = _seam_request(op, args or {}, timeout=timeout)
+    if seam is None:
+        return {"error": "harness seam unavailable (no harness or backgrounded cell)"}
+    if seam.get("unavailable") or not seam.get("ok"):
+        return {"error": seam.get("error") or "harness seam rejected the request"}
+    return seam.get("value")
+
+
+def seam_ops(timeout=15.0):
+    """List every harness seam op with the arguments it reads and what it returns.
+
+    Each entry is `{op, args, summary}`. The helpers around this one wrap those
+    ops; `seam(op, **args)` calls any of them, including one added to the
+    harness after this runtime shipped.
+    """
+    return _harness_call("seam.ops", {}, timeout=timeout)
+
+
+def seam(op, timeout=60.0, **args):
+    """Call any harness seam operation by name, with keyword arguments.
+
+    `seam("sessions.events", limit=5)` or `seam("models.list", provider="kiln")`.
+    Use it for an op that has no helper here; `seam_ops()` lists what the
+    harness answers, and `tool_help("<name>")` documents the wrappers.
+    """
+    return _harness_call(op, args, timeout=timeout)
+
+
+def list_agents(timeout=15.0):
+    """List the live agents the harness holds, as `{id, root, current}`.
+
+    An agent is keyed by its session id. `current` marks the agent that
+    dispatched this cell; `root` marks one with no parent agent.
+    """
+    return _harness_call("agents.list", {}, timeout=timeout)
+
+
+def current_agent(timeout=15.0):
+    """Return `{id}` of the agent that dispatched this cell, or None."""
+    return _harness_call("agents.current", {}, timeout=timeout)
+
+
+def session_corpus(timeout=20.0):
+    """List every session the harness can read, as `{id, live, persisted, ...}`.
+
+    `live` means the id is currently open in this process, `persisted` means the
+    storage backend lists it; `cwd`, `createdAt`, and `agentPreset` come from the
+    session header. This is how a cell finds a session other than its own —
+    including one from an earlier day — before reading its events.
+    """
+    return _harness_call("sessions.corpus", {}, timeout=timeout)
+
+
+def session_events(session_id=None, limit=40, type=None, timeout=20.0):
+    """The newest recorded events of a session, as `{seq, type, time, summary}`.
+
+    Args:
+        session_id: Session to read; defaults to this cell's own session.
+        limit: How many events to return, newest first.
+        type: Optional event discriminant filter, e.g. `"assistant/message"`,
+            `"tool/result"`, or `"compaction/summary"`.
+    """
+    args = {"sessionId": session_id, "limit": limit, "type": type}
+    return _harness_call("sessions.events", args, timeout=timeout)
+
+
+def session_surface(session_id=None, limit=40, timeout=20.0):
+    """The events currently on a session's model surface, oldest first.
+
+    A surface is what the model would see if the request were sent now: a
+    replaced node is absent from it, a compacted range appears as its summary,
+    and a node the model never saw is not there at all. `limit` keeps the newest
+    tail of that list.
+    """
+    args = {"sessionId": session_id, "limit": limit}
+    return _harness_call("sessions.surface", args, timeout=timeout)
+
+
+def session_window(seq, session_id=None, before=5, after=5, timeout=20.0):
+    """The events around one recorded seq, for reading what happened at a point.
+
+    Use it after `session_events()` names a seq worth seeing in context.
+    """
+    args = {"sessionId": session_id, "seq": seq, "before": before, "after": after}
+    return _harness_call("sessions.window", args, timeout=timeout)
+
+
+def session_trace(session_id=None, timeout=20.0):
+    """The ancestry and descendant ids of one session, or of this cell's own."""
+    return _harness_call("sessions.trace", {"sessionId": session_id}, timeout=timeout)
+
+
+def harness_settings(timeout=20.0):
+    """Every settings namespace with its effective value and revision.
+
+    Each entry is `{ns, revision, value, user?, secrets?}`: `value` is what the
+    deployment runs with (inherited profile patches included), and `user` is the
+    part the operator set themselves.
+    """
+    return _harness_call("settings.describe", {}, timeout=timeout)
+
+
+def update_setting(ns, patch, expected_revision=None, timeout=30.0):
+    """Merge `patch` into one settings namespace and return `{ns, updated}`.
+
+    `patch` is a partial document for that namespace, applied on top of what is
+    already there. Pass `expected_revision` from `harness_settings()` to fail
+    instead of overwriting a namespace that changed since it was read.
+    """
+    args = {"ns": ns, "patch": patch, "expectedRevision": expected_revision}
+    return _harness_call("settings.update", args, timeout=timeout)
+
+
+def list_plugins(timeout=20.0):
+    """The loader's plugin rows: `{id, module, name, group, enabled, phase}`.
+
+    Read-only inventory of what this deployment composed — the same list the
+    Settings plugin pane shows.
+    """
+    return _harness_call("plugins.list", {}, timeout=timeout)
+
+
+def list_model_providers(timeout=20.0):
+    """The registered model providers, as `{id, name}`."""
+    return _harness_call("models.providers", {}, timeout=timeout)
+
+
+def list_models(provider, timeout=20.0):
+    """The models one provider offers, as `{id, name, description}`."""
+    return _harness_call("models.list", {"provider": provider}, timeout=timeout)
+
+
+def list_workspaces(timeout=20.0):
+    """The workspace registry, as `{id, path, name, status}`."""
+    return _harness_call("workspaces.list", {}, timeout=timeout)
+
+
+def list_jobs(timeout=20.0):
+    """Background jobs of this cell's session, as `{id, kind, label, state}`."""
+    return _harness_call("jobs.list", {}, timeout=timeout)
+
+
+def list_schedules(timeout=20.0):
+    """Scheduled tasks bound to this cell's session, as their durable records."""
+    return _harness_call("schedules.list", {}, timeout=timeout)
+
+
+def context_state(timeout=20.0):
+    """Token accounting for this session.
+
+    Returns `{sessionId, logRevision, surfaceDeltaTokens, baseline}`: the seq the
+    measurement consumed through, the signed repricing of the current surface,
+    and the anchor it was measured against.
+    """
+    return _harness_call("context.state", {}, timeout=timeout)
+
+
+def list_presets(timeout=20.0):
+    """The composed agent presets, with the plugin rows each one composes."""
+    return _harness_call("presets.list", {}, timeout=timeout)
+
+
+def current_preset(timeout=20.0):
+    """The preset this session runs under, and the composed context it resolved to."""
+    return _harness_call("presets.current", {}, timeout=timeout)
+
+
+def read_projections(keys=None, session_id=None, timeout=20.0):
+    """Current session-projection values for this session (or a named one).
+
+    Args:
+        keys: Projection keys to read, e.g. `["modelSelection", "tokenUsage"]`;
+            omit for every key the session carries.
+        session_id: Session to read; defaults to this cell's own. The session
+            must be live, because projections are folded in-process.
+    """
+    args = {"sessionId": session_id, "keys": list(keys) if keys is not None else None}
+    return _harness_call("projections.read", args, timeout=timeout)
+
+
+def session_title(session_id=None, timeout=20.0):
+    """The durable title of one live session, as `{sessionId, title, updatedAt}`, or None.
+
+    The title lives in the session's own log (`session/title`), so this reads a
+    live session only; a stored session's title arrives with `session_corpus()`.
+    """
+    return _harness_call("sessions.title", {"sessionId": session_id}, timeout=timeout)
+
+
+def search_tools(query="", limit=25, scope=None, timeout=20.0):
+    """The visible tools whose name or description matches `query`.
+
+    Returns `{total, tools: [{name, description, parameters}]}`. This is the
+    filtered form of `tools.*`: an agent with a large roster asks what it has for
+    "browser" or "session" instead of listing every schema.
+    """
+    args = {"query": query, "limit": limit, "scope": scope}
+    return _harness_call("tools.search", args, timeout=timeout)
+
+
+def list_terminals(timeout=20.0):
+    """The persistent terminals this agent owns, as `{id, type, status, name?, pid?}`."""
+    return _harness_call("terminals.list", {}, timeout=timeout)
+
+
+def prompt_sections(full=False, timeout=30.0):
+    """The assembled system prompt as section names and sizes.
+
+    Returns `{total, sections: [{name, chars, text?}]}`: the parts the deployment
+    composes (harness identity, persona, tool guidance, runtime context) and how
+    much of the prompt each one carries. `full=True` adds each section's text.
+    """
+    return _harness_call("prompt.sections", {"full": bool(full)}, timeout=timeout)
+
+
 def run_process(argv, cwd=None, input=None, env=None, max_bytes=1048576, grace_ms=10000, timeout_ms=None, timeout=30.0):
     """Run one executable through the harness `ctx.subprocess` seam (argv form).
 
@@ -4735,6 +4970,39 @@ _IMAGE_TOOLS = {
 }
 prompt_dict.update(_IMAGE_TOOLS)
 globals().update(_IMAGE_TOOLS)
+_ns.update(prompt_dict)
+# The harness-observation helpers. Being module globals is what makes `tool_help` list
+# them; being in `prompt_dict` is what makes them *callable* in a cell. Registering only
+# in globals left them discoverable and uncallable, which is the same failure the vision
+# tools above record in the other direction.
+_HARNESS_OBSERVERS = {
+    "seam_ops": seam_ops,
+    "seam": seam,
+    "list_agents": list_agents,
+    "current_agent": current_agent,
+    "session_corpus": session_corpus,
+    "session_events": session_events,
+    "session_surface": session_surface,
+    "session_window": session_window,
+    "session_trace": session_trace,
+    "session_title": session_title,
+    "harness_settings": harness_settings,
+    "update_setting": update_setting,
+    "list_plugins": list_plugins,
+    "list_model_providers": list_model_providers,
+    "list_models": list_models,
+    "search_tools": search_tools,
+    "list_workspaces": list_workspaces,
+    "list_jobs": list_jobs,
+    "list_schedules": list_schedules,
+    "list_terminals": list_terminals,
+    "context_state": context_state,
+    "list_presets": list_presets,
+    "current_preset": current_preset,
+    "read_projections": read_projections,
+    "prompt_sections": prompt_sections,
+}
+prompt_dict.update(_HARNESS_OBSERVERS)
 _ns.update(prompt_dict)
 # ── process entrypoint ───────────────────────────────────────────────────
 # Everything above defines the runtime; only a process that IS the protocol
