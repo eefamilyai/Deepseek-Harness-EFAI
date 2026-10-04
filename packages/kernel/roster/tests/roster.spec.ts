@@ -8,6 +8,9 @@
  * and that a settings change does not reach the model mid-turn.
  */
 import { Context } from '@deepseek-ai/cordis'
+import { createScope } from '@deepseek-ai/dsh-scope'
+import type { Scope } from '@deepseek-ai/dsh-scope'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -76,6 +79,89 @@ async function assemble(ctx: Context): Promise<{ tools: string[]; sections: stri
     sections: assembly.sections.map(entry => entry.name),
   }
 }
+
+describe('the per-tool map is learned from what an agent is offered', () => {
+  /**
+   * The Tools page renders one switch per entry of `tools`, so the entries have to
+   * exist before the page can offer them. `ctx.tools.schemas()` reads the global
+   * view and misses every agent-scoped registration, which is why the list comes
+   * from the assembled prompt instead.
+   */
+  it('records every assembled tool as enabled, except the ones no switch governs', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime)
+    ctx.tools.register(tool('read'))
+    ctx.tools.register(tool('bash'))
+    ctx.tools.register(tool('kernel'))
+    const writes: { ns: string; ops: { path: string[]; value: unknown }[] }[] = []
+    const mutate = (ns: string, ops: { path: string[]; value: unknown }[]): Promise<void> => {
+      writes.push({ ns, ops })
+      return Promise.resolve()
+    }
+    ctx.provide('settings', { configure: () => () => {}, mutate } as never)
+    await ctx.plugin({ name: 'tool-roster', apply, Config }, {})
+    await ctx.fiber.await()
+    await assemble(ctx)
+
+    // One write per unseen name, additive: the map is a list, never a rewrite.
+    expect(writes.every(write => write.ns === 'tool-roster')).toBe(true)
+    const paths = writes.flatMap(write => write.ops.map(op => op.path.join('.')))
+    expect(paths).toContain('tools.read')
+    expect(paths).toContain('tools.bash')
+    expect(writes.flatMap(write => write.ops).every(op => op.value === true)).toBe(true)
+    // The kernel tool has its own category switch; the run-code alias, whose name the
+    // registry reserves, has none either (`toolVisible` always answers yes for it).
+    expect(paths).not.toContain('tools.kernel')
+    expect(paths).not.toContain('tools.run_code')
+  })
+
+  it('leaves an entry whose switch the operator already set alone', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime)
+    ctx.tools.register(tool('read'))
+    const writes: { path: string[] }[] = []
+    const mutate = (_ns: string, ops: { path: string[] }[]): Promise<void> => {
+      writes.push(...ops)
+      return Promise.resolve()
+    }
+    ctx.provide('settings', { configure: () => () => {}, mutate } as never)
+    await ctx.plugin({ name: 'tool-roster', apply, Config }, { tools: { read: false } })
+    await ctx.fiber.await()
+    await assemble(ctx)
+
+    // A known name is never rewritten, which is what keeps a write from racing a flip.
+    expect(writes.map(op => op.path.join('.'))).not.toContain('tools.read')
+  })
+
+  it('learns a tool only an agent scope registers, which the global view cannot see', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime)
+    const key = { id: 'agent-a' as SessionId } as Agent
+    let scope!: Scope
+    await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, key) }, {
+      inject: ['tools', 'systemPrompt'],
+    }))
+    scope.ctx.tools.register(tool('scoped_only'))
+    const writes: { path: string[] }[] = []
+    const mutate = (_ns: string, ops: { path: string[] }[]): Promise<void> => {
+      writes.push(...ops)
+      return Promise.resolve()
+    }
+    ctx.provide('settings', { configure: () => () => {}, mutate } as never)
+    await ctx.plugin({ name: 'tool-roster', apply, Config }, {})
+    await ctx.fiber.await()
+
+    // The registry's global view cannot see a preset's tool...
+    expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('scoped_only')
+    // ...but the prompt assembled for that agent can, and that is the list the page shows.
+    await ctx.systemPrompt.assemble({ scope: key })
+    expect(writes.map(op => op.path.join('.'))).toContain('tools.scoped_only')
+  })
+})
+
 
 describe('the roster is two independent categories', () => {
   it('keeps the kernel and the conventional tools separable', () => {

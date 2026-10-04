@@ -41,15 +41,9 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
 // The Loader's `loader/volatile-update` event and `fiber.entry`.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
-import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent'
-
-/** The part of `ctx.tools` this plugin reads to size the roster. */
-interface ToolsSeam {
-  schemas(): readonly ToolSchema[]
-}
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-roster'
@@ -249,33 +243,40 @@ export function apply(ctx: Context, config: Config): void {
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
 
   /**
-   * Learn the mounted roster into this configuration's own per-tool map.
+   * Learn a roster into this configuration's own per-tool map.
    *
    * The map is what the Tools page renders as switches, and a map that held only
    * the names someone already withdrew could not offer a switch for anything the
    * operator has not touched yet — the page would list the tools that are off and
-   * nothing else. So the roster records every switchable tool it sees as enabled
-   * the first time it sees it: the entries are the page's list, the values are
-   * the switches, and both start from what the runtime actually mounts. A tool
-   * absent from the map is still available, so a deployment that refuses the
-   * write loses the listing and nothing else.
+   * nothing else. So the roster records every switchable tool it is shown as
+   * enabled the first time it sees it: the entries are the page's list, the values
+   * are the switches. A tool absent from the map is still available, so a
+   * deployment that refuses the write loses the listing and nothing else.
+   *
+   * The names come from an assembled prompt, not from `ctx.tools.schemas()`: that
+   * call reads the *global* view, and every tool a preset registers is scoped to
+   * its agent, so the registry alone yields a list of the handful of globally
+   * registered tools. What the prompt service assembles for an agent is the set
+   * that agent can actually be offered, which is the set this page exists to
+   * switch; the registry is read too, at mount, so a row that has never assembled
+   * a prompt still starts from something.
    *
    * Writes are additive by construction: one `set` per unseen name, never an
    * update of a name that is already there, so a write can never race the
    * operator's own flip of an existing switch.
-   * @param ctx - plugin context, for the optional settings service.
-   * @param config - the live roster fields.
-   * @param runtime - the tool registry, for the mounted names.
+   * @param ctx2 - plugin context, for the optional settings service.
+   * @param config2 - the live roster fields.
+   * @param names - the tool names to record, in the order they were seen.
    */
-  const learnRoster = (ctx2: Context, config2: Config, runtime: ToolsSeam): void => {
+  const learnRoster = (ctx2: Context, config2: Config, names: readonly string[]): void => {
     const settings = ctx2.get('settings')
     if (settings === undefined) return
     const known = config2.tools.get()
-    const additions = runtime.schemas()
-      .map(schema => normalize(schema.name))
+    const additions = [...new Set(names.map(normalize))]
       // The run-code alias is not switchable (`toolVisible` always answers yes),
-      // so it is not a switch this page could honour.
-      .filter(name => name !== RUN_CODE_NAME && !(name in known))
+      // so it is not a switch this page could honour; the kernel tool has the
+      // category switch above.
+      .filter(name => name !== RUN_CODE_NAME && name !== KERNEL_TOOL_NAME && !(name in known))
     if (additions.length === 0) return
     void settings.mutate(TOOL_ROSTER_ENTRY_ID, additions.map(name => ({
       op: 'set' as const,
@@ -293,7 +294,12 @@ export function apply(ctx: Context, config: Config): void {
     //    without unmounting anything.
     runtime.on('system-prompt/assemble', async (_assembly, _context, next) => {
       const out = await next()
-      const hidden = hiddenToolNames(active, out.tools.map(tool => tool.name))
+      const mounted = out.tools.map(tool => tool.name)
+      // Before this plugin's own filter: a tool switched off is exactly the entry
+      // the page has to keep showing, and the assembled list is where the
+      // agent-scoped ones appear.
+      learnRoster(ctx, config, mounted)
+      const hidden = hiddenToolNames(active, mounted)
       if (hidden.size === 0) return out
       return {
         ...out,
@@ -302,10 +308,10 @@ export function apply(ctx: Context, config: Config): void {
       }
     })
 
-    // The page renders a switch per entry of this map, so it learns the mounted
-    // roster the first time it sees it - both at mount, for the tools already
-    // there, and at each turn boundary, for a plugin that mounted later.
-    learnRoster(ctx, config, runtime.tools)
+    // The page renders a switch per entry of this map. At mount the registry has
+    // only the global registrations; the assemble hook in (1) adds everything an
+    // agent can be offered.
+    learnRoster(ctx, config, runtime.tools.schemas().map(schema => schema.name))
 
     // 2. Execution: filtering the prompt does not stop a model that remembers
     //    the name, so a hidden tool must also refuse to run.
@@ -319,7 +325,6 @@ export function apply(ctx: Context, config: Config): void {
     //    one turn never changes hands between its steps.
     runtime.on('agent/turn-stopping', () => {
       if (!sameRoster(pending, active)) active = pending
-      learnRoster(ctx, config, runtime.tools)
     })
   })
 }
