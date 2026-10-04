@@ -19,7 +19,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { KernelAgent } from '@deepseek-ai/dsh-kernel'
 import { HARNESS_OPS, dispatchHarness } from '../src/seam-harness.ts'
-import { dispatchSeam } from '../src/seam.ts'
+import { CAPABILITY_OPS, dispatchSeam } from '../src/seam.ts'
 import type { SeamRequest, SeamResponse } from '../src/seam.ts'
 
 /** A request envelope for one op with a fixed correlation id. */
@@ -49,19 +49,27 @@ function valueOf(response: SeamResponse): unknown {
 }
 
 describe('seam.ops', () => {
-  it('lists the op table, and every op in it answers something other than "unknown op"', async () => {
-    const catalog = valueOf(await run('seam.ops', undefined)) as readonly { op: string }[]
-    expect(catalog.length).toBe(HARNESS_OPS.length)
-    expect(catalog.map(entry => entry.op)).toContain('sessions.events')
+  it('lists both tables, and every op in them answers something other than "unknown op"', async () => {
+    // The catalog is what a cell discovers the bridge with, so it has to cover the
+    // capability seams a cell acts through as well as the observation family: a list
+    // that stopped at half the bridge would send a cell looking for a capability that
+    // is already there.
+    const response = await dispatchSeam(undefined, undefined, request('seam.ops'))
+    const catalog = valueOf(response) as readonly { op: string }[]
+    expect(catalog.length).toBe(CAPABILITY_OPS.length + HARNESS_OPS.length)
+    for (const entry of ['shell.run', 'tools.call', 'goals.block', 'sessions.events', 'storage.backends']) {
+      expect(catalog.map(row => row.op)).toContain(entry)
+    }
     for (const entry of catalog) {
-      const response = await run(entry.op, undefined)
-      expect(response.error ?? '', `${entry.op} is not routed`).not.toContain('unknown seam operation')
+      const answered = await dispatchSeam(undefined, undefined, request(entry.op))
+      expect(answered.error ?? '', `${entry.op} is not routed`).not.toContain('unknown seam operation')
     }
   })
 
-  it('routes through dispatchSeam, so one dispatcher owns every prefix', async () => {
-    const response = await dispatchSeam(undefined, undefined, request('seam.ops'))
-    expect(response.ok).toBe(true)
+  it('names every op exactly once', async () => {
+    const catalog = valueOf(await dispatchSeam(undefined, undefined, request('seam.ops'))) as readonly { op: string }[]
+    const names = catalog.map(entry => entry.op)
+    expect(new Set(names).size).toBe(names.length)
   })
 
   it('names an unknown op instead of answering it', async () => {

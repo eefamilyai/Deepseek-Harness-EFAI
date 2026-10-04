@@ -75,7 +75,6 @@ export const HARNESS_OPS: readonly HarnessOp[] = [
   { op: 'prompt.sections', args: ['full'], summary: 'the assembled system prompt as section names and sizes, with their text when full is true' },
   { op: 'storage.backends', args: [], summary: 'the storage backends this deployment registered' },
 
-  { op: 'seam.ops', args: [], summary: 'this table: every harness-introspection op with its arguments and what it returns' },
 ]
 
 /** Mirrored `ctx.agents` surface. */
@@ -349,7 +348,6 @@ export async function dispatchHarness(
 ): Promise<SeamResponse> {
   const args = (request.args ?? {}) as Record<string, unknown>
   try {
-    if (request.op === 'seam.ops') return ok(request.id, HARNESS_OPS)
     if (request.op.startsWith('agents.')) return dispatchAgents(agentCtx, agent, request)
     if (request.op.startsWith('sessions.')) return await dispatchSessions(agentCtx, agent, request, signal)
     if (request.op.startsWith('settings.')) return await dispatchSettings(agentCtx, request)

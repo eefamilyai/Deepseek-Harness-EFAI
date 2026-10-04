@@ -145,8 +145,9 @@ export class KernelRuntime extends Service {
    * @returns whether the cell is known, still running, and its drained output.
    */
   async pollBackground(id: number): Promise<KernelBackgroundPoll> {
-    const poll = this.resolve().pollBackground
-    return poll === undefined ? { known: false } : poll.call(this.resolve(), id)
+    const provider = this.resolve()
+    const poll = provider.pollBackground
+    return poll === undefined ? { known: false } : await poll(id)
   }
 
   /**
@@ -156,8 +157,9 @@ export class KernelRuntime extends Service {
    * @param id - the id from {@link KernelExecuteResult.background}.
    */
   async stopBackground(id: number): Promise<void> {
-    const stop = this.resolve().stopBackground
-    if (stop !== undefined) await stop.call(this.resolve(), id)
+    const provider = this.resolve()
+    const stop = provider.stopBackground
+    if (stop !== undefined) await stop(id)
   }
 
   /**

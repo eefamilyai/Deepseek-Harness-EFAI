@@ -24,6 +24,55 @@ import { dispatchHarness } from './seam-harness.ts'
 export { HARNESS_OPS } from './seam-harness.ts'
 export type { HarnessOp } from './seam-harness.ts'
 
+import { HARNESS_OPS } from './seam-harness.ts'
+import type { HarnessOp } from './seam-harness.ts'
+
+/**
+ * The ops this module answers: the capability seams a cell acts through.
+ *
+ * `HARNESS_OPS` in `seam-harness.ts` lists the observation family; `seam.ops`
+ * answers with both tables, because a cell asking "what can I do here" needs one
+ * list, and a list that covered half the bridge would send it looking for a
+ * capability that is already there.
+ */
+export const CAPABILITY_OPS: readonly HarnessOp[] = [
+  { op: 'seam.ops', args: [], summary: 'every seam op, capability and observation, with its arguments' },
+
+  { op: 'fs.readText', args: ['path'], summary: 'read one file through the harness filesystem seam' },
+  { op: 'fs.writeText', args: ['path', 'content'], summary: 'write one file, creating parents as needed' },
+  { op: 'fs.editText', args: ['path', 'old', 'new'], summary: 'replace the first occurrence of a string in a file' },
+  { op: 'fs.listDir', args: ['path'], summary: 'list one directory' },
+
+  { op: 'shell.run', args: ['command', 'cwd'], summary: 'run one command string through the harness shell seam' },
+  { op: 'subprocess.run', args: ['argv', 'cwd', 'input', 'env'], summary: 'run one argv with no shell, collecting stdout and stderr' },
+  { op: 'subprocess.resolve', args: ['argv'], summary: 'resolve one argv to the executable it would run' },
+
+  { op: 'web.search', args: ['query'], summary: 'search the web through the deployed search provider' },
+  { op: 'web.fetch', args: ['url'], summary: 'fetch one URL and return its readable content' },
+
+  { op: 'subagents.list', args: [], summary: 'the subagents of this agent' },
+  { op: 'subagents.start', args: ['prompt', 'provider', 'label', 'max_depth'], summary: 'start one subagent and return its answer' },
+  { op: 'subagents.children', args: [], summary: 'the direct children of this session' },
+  { op: 'subagents.descendants', args: [], summary: 'every descendant of this session' },
+
+  { op: 'goals.get', args: [], summary: 'this agent\'s goal view' },
+  { op: 'goals.create', args: ['objective', 'max_goal_rounds'], summary: 'create a goal for this session' },
+  { op: 'goals.edit', args: ['objective', 'maxGoalRounds'], summary: 'edit the current goal' },
+  { op: 'goals.pause', args: [], summary: 'pause the current goal' },
+  { op: 'goals.resume', args: [], summary: 'resume the current goal' },
+  { op: 'goals.complete', args: [], summary: 'mark the current goal complete' },
+  { op: 'goals.block', args: ['reason'], summary: 'mark the current goal blocked, with the reason' },
+  { op: 'goals.disarm', args: [], summary: 'disarm the current goal' },
+  { op: 'goals.clear', args: [], summary: 'clear the current goal' },
+
+  { op: 'tools.schemas', args: ['scope'], summary: 'the visible tool schemas' },
+  { op: 'tools.get', args: ['name'], summary: 'one visible tool schema by name' },
+  { op: 'tools.call', args: ['name', 'args'], summary: 'execute one harness tool through the same registry pipe the model uses' },
+
+  { op: 'skills.list', args: [], summary: 'the loadable skills' },
+  { op: 'skills.get', args: ['name'], summary: 'one skill\'s body and its directory' },
+]
+
 /** One Python→TS seam request, decoded from a `seam` frame. */
 export interface SeamRequest {
   readonly id: string
@@ -302,6 +351,9 @@ export async function dispatchSeam(
   request: SeamRequest,
   signal?: AbortSignal,
 ): Promise<SeamResponse> {
+  // The catalog is assembled here: this module owns the capability table and
+  // `seam-harness.ts` owns the observation table, so neither imports the other's.
+  if (request.op === 'seam.ops') return ok(request.id, [...CAPABILITY_OPS, ...HARNESS_OPS])
   if (request.op.startsWith('fs.')) return dispatchFs(agentCtx, request, signal)
   if (request.op === 'shell.run') return dispatchShell(agentCtx, request, signal)
   if (request.op === 'web.search' || request.op === 'web.fetch') return dispatchWeb(agentCtx, request, signal)

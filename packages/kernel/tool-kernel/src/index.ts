@@ -203,7 +203,7 @@ export async function admitCellImages(
 
   const inputs = accepted.map(image => ({
     data: new Uint8Array(Buffer.from(image.data, 'base64')),
-    mediaType: image.mediaType as ImageMediaType,
+    mediaType: image.mediaType,
     ...image.name === undefined ? {} : { name: image.name },
   }))
 
@@ -445,6 +445,10 @@ export function attachBackgroundCell(
         let timer: ReturnType<typeof setTimeout> | undefined
         let finish!: (outcome: JobOutcome) => void
         const done = new Promise<JobOutcome>((resolve) => { finish = resolve })
+        // Read through a call: `settle` can run from an abort handler while `tick` is
+        // awaiting the kernel, and a direct `settled` read would be narrowed to the
+        // value it had before the await.
+        const isSettled = (): boolean => settled
         const settle = (outcome: JobOutcome): void => {
           if (settled) return
           settled = true
@@ -452,7 +456,7 @@ export function attachBackgroundCell(
           finish(outcome)
         }
         const tick = async (): Promise<void> => {
-          if (settled) return
+          if (isSettled()) return
           let poll: KernelBackgroundPoll
           try {
             poll = await ctx.kernel.pollBackground(background.id)
@@ -460,7 +464,7 @@ export function attachBackgroundCell(
             settle({ status: 'failed', detail: error instanceof Error ? error.message : String(error) })
             return
           }
-          if (settled) return
+          if (isSettled()) return
           // An id the kernel no longer holds is terminal, never a retry: the
           // cell finished and was drained, or the kernel restarted and lost it.
           if (!poll.known) {
