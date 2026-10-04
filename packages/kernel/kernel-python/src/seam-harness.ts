@@ -822,7 +822,10 @@ async function dispatchPrompt(
  * @returns the loader, or undefined when this deployment mounts none.
  */
 function loaderOf(ctx: Context): unknown {
-  return ctx.get('loader' as never)
+  // A bare assignment: this cordis build types `get` as a statement, so using its
+  // result inside another expression is what the lint rejects.
+  const loader = ctx.get('loader' as never)
+  return loader
 }
 
 /**
