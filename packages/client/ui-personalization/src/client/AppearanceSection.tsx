@@ -81,13 +81,14 @@ function Row({ label, hint, control, presets }: {
 }
 
 /** A number field that commits on blur or Enter, so a half-typed value is never written. */
-function NumberField({ value, min, max, step, disabled, label, onCommit }: {
+function NumberField({ value, min, max, step, disabled, label, suffix, onCommit }: {
   value: number
   min: number
   max: number
   step: number
   disabled: boolean
   label: string
+  suffix?: string
   onCommit: (next: number) => void
 }) {
   const [draft, setDraft] = useState(String(value))
@@ -101,19 +102,22 @@ function NumberField({ value, min, max, step, disabled, label, onCommit }: {
     if (clamped !== value) onCommit(clamped)
   }
   return (
-    <Input
-      className={css.number ?? ''}
-      type="number"
-      min={min}
-      max={max}
-      step={step}
-      value={shown}
-      disabled={disabled}
-      aria-label={label}
-      onChange={(event) => { setEditing(true); setDraft(event.target.value) }}
-      onBlur={commit}
-      onKeyDown={(event) => { if (event.key === 'Enter') commit() }}
-    />
+    <span className={css.numberWrap}>
+      <Input
+        className={css.number ?? ''}
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={shown}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(event) => { setEditing(true); setDraft(event.target.value) }}
+        onBlur={commit}
+        onKeyDown={(event) => { if (event.key === 'Enter') commit() }}
+      />
+      {suffix === undefined ? null : <span className={css.suffix}>{suffix}</span>}
+    </span>
   )
 }
 
@@ -153,6 +157,14 @@ const FONT_PRESETS: readonly { key: AppearanceKey; value: string }[] = [
   { key: 'appearance.fontPreset.mono', value: '"JetBrains Mono", "Cascadia Code", ui-monospace, monospace' },
 ]
 
+/** The opacity presets both opacity rows offer. */
+const OPACITY_PRESETS: readonly { key: AppearanceKey; value: number }[] = [
+  { key: 'appearance.opacity.solid', value: 100 },
+  { key: 'appearance.opacity.soft', value: 85 },
+  { key: 'appearance.opacity.glass', value: 65 },
+  { key: 'appearance.opacity.clear', value: 45 },
+]
+
 /** The accents the preset pills write. */
 const ACCENT_PRESETS: readonly { key: AppearanceKey; value: string }[] = [
   { key: 'appearance.accentPreset.deepseek', value: '' },
@@ -160,14 +172,6 @@ const ACCENT_PRESETS: readonly { key: AppearanceKey; value: string }[] = [
   { key: 'appearance.accentPreset.emerald', value: '#10b981' },
   { key: 'appearance.accentPreset.amber', value: '#f59e0b' },
   { key: 'appearance.accentPreset.rose', value: '#f43f5e' },
-]
-
-/** The backdrops the preset pills write. */
-const BACKDROP_PRESETS: readonly { key: AppearanceKey; value: AppearanceValues['backdrop'] }[] = [
-  { key: 'appearance.backdrop.theme', value: 'theme' },
-  { key: 'appearance.backdrop.aurora', value: 'aurora' },
-  { key: 'appearance.backdrop.mist', value: 'mist' },
-  { key: 'appearance.backdrop.dusk', value: 'dusk' },
 ]
 
 /**
@@ -262,20 +266,31 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
           />
         )}
       />
+      <p className={css.groupLabel}>{t('appearance.opacity.title')}</p>
       <Row
         label={t('appearance.shell.label')}
         hint={t('appearance.shell.hint')}
         control={(
           <NumberField
             value={values.shellOpacity}
-            min={0.35}
-            max={1}
-            step={0.05}
+            min={35}
+            max={100}
+            step={5}
             disabled={locked}
             label={t('appearance.shell.label')}
+            suffix="%"
             onCommit={(next) => { write({ shellOpacity: next }) }}
           />
         )}
+        presets={OPACITY_PRESETS.map(preset => (
+          <Pill
+            key={preset.key}
+            active={values.shellOpacity === preset.value}
+            onClick={() => { write({ shellOpacity: preset.value }) }}
+          >
+            {t(preset.key)}
+          </Pill>
+        ))}
       />
       <Row
         label={t('appearance.surface.label')}
@@ -283,32 +298,33 @@ export function AppearanceSection({ t, appearance }: AppearanceSectionComponentP
         control={(
           <NumberField
             value={values.surfaceOpacity}
-            min={0.35}
-            max={1}
-            step={0.05}
+            min={35}
+            max={100}
+            step={5}
             disabled={locked}
             label={t('appearance.surface.label')}
+            suffix="%"
             onCommit={(next) => { write({ surfaceOpacity: next }) }}
           />
         )}
+        presets={OPACITY_PRESETS.map(preset => (
+          <Pill
+            key={preset.key}
+            active={values.surfaceOpacity === preset.value}
+            onClick={() => { write({ surfaceOpacity: preset.value }) }}
+          >
+            {t(preset.key)}
+          </Pill>
+        ))}
       />
       <Row
-        label={t('appearance.backdrop.label')}
-        hint={t('appearance.backdrop.hint')}
+        label={t('appearance.reset')}
+        hint={t('appearance.reset.hint')}
         control={(
           <Button variant="outline" onClick={() => { write(APPEARANCE_DEFAULTS) }}>
             {t('appearance.reset')}
           </Button>
         )}
-        presets={BACKDROP_PRESETS.map(preset => (
-          <Pill
-            key={preset.value}
-            active={values.backdrop === preset.value}
-            onClick={() => { write({ backdrop: preset.value }) }}
-          >
-            {t(preset.key)}
-          </Pill>
-        ))}
       />
       {writer.failed ? <p className={css.failed}>{t('appearance.failed')}</p> : null}
     </div>

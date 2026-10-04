@@ -13,9 +13,7 @@ import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   APPEARANCE_DEFAULTS,
   APPEARANCE_STYLE_ID,
-  BACKDROP_ATTRIBUTE,
   appearanceCss,
-  backdropCss,
   installAppearance,
   type AppearanceValues,
 } from '../src/client/appearance.ts'
@@ -57,7 +55,7 @@ describe('appearanceCss', () => {
   })
 
   it('fades the shell and the surfaces by different amounts, per palette', () => {
-    const css = appearanceCss(values({ shellOpacity: 0.6, surfaceOpacity: 0.9 }))
+    const css = appearanceCss(values({ shellOpacity: 60, surfaceOpacity: 90 }))
     // The shell: the canvas and the sidebar's own fills.
     expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
     expect(css).toContain('--dsw-specific-sidebar-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-50) 60%, transparent);')
@@ -74,18 +72,16 @@ describe('appearanceCss', () => {
   })
 })
 
-describe('backdropCss', () => {
-  it('paints nothing for the theme backdrop', () => {
-    expect(backdropCss('theme')).toBe('')
+describe('real transparency', () => {
+  it('stops the document painting once the shell is faded, so the desktop shows through', () => {
+    // The desktop window is created transparent over its material, so the page's own
+    // background is the one thing between the operator and the desktop behind it.
+    const css = appearanceCss(values({ shellOpacity: 65 }))
+    expect(css).toContain(':root:root, :root:root body {\n  background-color: transparent;\n}')
   })
 
-  it('paints each preset behind the interface', () => {
-    for (const preset of ['aurora', 'mist', 'dusk'] as const) {
-      const css = backdropCss(preset)
-      expect(css).toContain(`[${BACKDROP_ATTRIBUTE}]`)
-      expect(css).toContain('background-image:')
-    }
-    expect(backdropCss('aurora')).toContain('var(--dsw-alias-state-business-primary)')
+  it('leaves the document alone while the shell is solid', () => {
+    expect(appearanceCss(values({ surfaceOpacity: 60 }))).not.toContain('background-color: transparent;')
   })
 })
 
@@ -117,29 +113,27 @@ describe('installAppearance', () => {
     const doc = document.implementation.createHTMLDocument('test')
     const live = form({})
     const dispose = installAppearance(live.handle, doc)
-    // Nothing chosen: no sheet, no backdrop, and the page is untouched.
+    // Nothing chosen: no sheet at all, and the page is untouched.
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
 
-    live.set({ accent: '#7c5cff', backdrop: 'aurora' })
+    live.set({ accent: '#7c5cff', shellOpacity: 65 })
     const sheet = doc.getElementById(APPEARANCE_STYLE_ID)
     expect(sheet?.textContent).toContain('--dsw-alias-state-business-primary: #7c5cff;')
-    expect(doc.querySelector(`[${BACKDROP_ATTRIBUTE}]`)).not.toBeNull()
+    expect(sheet?.textContent).toContain('background-color: transparent;')
 
-    // Back to the defaults: the sheet and the backdrop both leave.
+    // Back to the defaults: the sheet leaves and the page publishes nothing again.
     live.set({})
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
-    expect(doc.querySelector(`[${BACKDROP_ATTRIBUTE}]`)).toBeNull()
 
     dispose()
   })
 
   it('removes what it added when it is disposed', () => {
     const doc = document.implementation.createHTMLDocument('test')
-    const live = form({ shellOpacity: 0.5, backdrop: 'mist' })
+    const live = form({ shellOpacity: 50 })
     const dispose = installAppearance(live.handle, doc)
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).not.toBeNull()
     dispose()
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
-    expect(doc.querySelector(`[${BACKDROP_ATTRIBUTE}]`)).toBeNull()
   })
 })

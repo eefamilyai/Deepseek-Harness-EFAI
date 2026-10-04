@@ -41,6 +41,17 @@
   flex-shrink: 0;
 }
 
+.numberWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.suffix {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.8125rem;
+}
+
 .number {
   width: 5.5rem;
 }
@@ -54,6 +65,15 @@
   flex-wrap: wrap;
   gap: 0.375rem;
   margin-top: 0.5rem;
+}
+
+.groupLabel {
+  margin: 0.5rem 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .failed {

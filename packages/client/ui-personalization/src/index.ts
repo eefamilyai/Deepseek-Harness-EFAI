@@ -28,14 +28,11 @@ export const Config = z.object({
   radiusScale: z.number().min(0).max(2.5).default(1)
     .description('Multiplier for every corner radius step: 0 squares the interface, 2 rounds it further.')
     .volatile(),
-  shellOpacity: z.number().min(0.35).max(1).default(1)
-    .description('Opacity of the shell around the conversation — the app frame, the sidebar, its navigation rows.')
+  shellOpacity: z.number().min(35).max(100).default(100)
+    .description('Shell opacity in percent: the app frame, the sidebar, and its navigation rows. Below 100 the window stops painting its own background, so the desktop behind it — blurred by the window material — shows through.')
     .volatile(),
-  surfaceOpacity: z.number().min(0.35).max(1).default(1)
-    .description('Opacity of the surfaces inside the shell — cards, panels, menus, dialogs — over whatever the backdrop paints.')
-    .volatile(),
-  backdrop: z.union([z.const('theme'), z.const('aurora'), z.const('mist'), z.const('dusk')]).default('theme')
-    .description('What a translucent shell reveals: the theme background, or one of three soft backdrops behind the interface.')
+  surfaceOpacity: z.number().min(35).max(100).default(100)
+    .description('Surface opacity in percent: cards, panels, menus, and dialogs. Lower it to read what sits underneath them.')
     .volatile(),
 })
 

@@ -30,19 +30,14 @@ export interface AppearanceValues {
   accent: string
   /** Multiplier for every corner radius step. */
   radiusScale: number
-  /** Opacity of the shell around the conversation. */
+  /** Shell opacity in percent; 100 is solid. */
   shellOpacity: number
-  /** Opacity of the surfaces inside it. */
+  /** Surface opacity in percent; 100 is solid. */
   surfaceOpacity: number
-  /** What a translucent shell reveals. */
-  backdrop: 'theme' | 'aurora' | 'mist' | 'dusk'
 }
 
 /** The style element the overrides live in, so a remount replaces only its own. */
 export const APPEARANCE_STYLE_ID = 'dsh-personalization'
-
-/** The attribute on the backdrop element this plugin paints. */
-export const BACKDROP_ATTRIBUTE = 'data-dsh-backdrop'
 
 /** The values a deployment gets before it chooses anything. */
 export const APPEARANCE_DEFAULTS: AppearanceValues = {
@@ -50,9 +45,8 @@ export const APPEARANCE_DEFAULTS: AppearanceValues = {
   fontScale: 100,
   accent: '',
   radiusScale: 1,
-  shellOpacity: 1,
-  surfaceOpacity: 1,
-  backdrop: 'theme',
+  shellOpacity: 100,
+  surfaceOpacity: 100,
 }
 
 /** The radius steps the scale multiplies, with the theme's own values. */
@@ -86,15 +80,13 @@ const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string }>> =
   '--dsw-alias-bg-module-platform': { light: 'var(--dsw-static-neutral-bluish-60)', dark: 'var(--dsw-static-neutral-bluish-925)' },
 }
 
-/** One backdrop preset, painted behind the interface so translucency reveals something. */
-const BACKDROPS: Readonly<Record<string, string>> = {
-  aurora: 'radial-gradient(60rem 40rem at 12% -10%, color-mix(in srgb, var(--dsw-alias-state-business-primary) 26%, transparent), transparent 70%), radial-gradient(50rem 36rem at 108% 8%, color-mix(in srgb, var(--dsw-static-blue-500) 24%, transparent), transparent 68%), linear-gradient(160deg, var(--dsw-static-neutral-bluish-50), var(--dsw-static-neutral-bluish-150))',
-  mist: 'radial-gradient(70rem 50rem at 50% -20%, color-mix(in srgb, var(--dsw-static-neutral-bluish-200) 40%, transparent), transparent 72%), linear-gradient(180deg, var(--dsw-static-neutral-bluish-75), var(--dsw-static-neutral-bluish-150))',
-  dusk: 'radial-gradient(55rem 38rem at 84% -6%, color-mix(in srgb, var(--dsw-static-deepseek-500) 22%, transparent), transparent 70%), linear-gradient(200deg, var(--dsw-static-neutral-bluish-900), var(--dsw-static-neutral-bluish-1000))',
-}
-
-/** Whether one value is the deployment default, so its rule can be omitted. */
-function isDefault<K extends keyof AppearanceValues>(values: AppearanceValues, key: K): boolean {
+/**
+ * Whether one value is still the deployment default, so its rule can be omitted.
+ * @param values - the row's resolved values.
+ * @param key - the field to test.
+ * @returns whether the field holds its default.
+ */
+function isDefault(values: AppearanceValues, key: keyof AppearanceValues): boolean {
   return values[key] === APPEARANCE_DEFAULTS[key]
 }
 
@@ -149,13 +141,14 @@ export function appearanceCss(values: AppearanceValues): string {
   for (const [token, palette] of Object.entries(PALETTE_FILLS)) {
     const shell = token.startsWith('--dsw-alias-bg-base') || token.startsWith('--dsw-specific-sidebar')
     const opacity = shell ? values.shellOpacity : values.surfaceOpacity
-    if (opacity >= 1) continue
-    const weight = percent(opacity)
+    if (opacity >= 100) continue
+    const weight = percent(opacity / 100)
     light.push(`  ${token}: color-mix(in srgb, ${palette.light} ${weight}, transparent);`)
     dark.push(`  ${token}: color-mix(in srgb, ${palette.dark} ${weight}, transparent);`)
   }
 
-  if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale')) {
+  const fadesDocument = values.shellOpacity < 100
+  if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && !fadesDocument) {
     return ''
   }
 
@@ -164,6 +157,14 @@ export function appearanceCss(values: AppearanceValues): string {
   const core = [...base]
   if (!isDefault(values, 'fontScale')) core.push(`  font-size: ${String(values.fontScale)}%;`)
   if (core.length > 0) blocks.push(`${scopes} {\n${core.join('\n')}\n}`)
+  // A faded shell is only *transparent* if the document itself stops painting. The
+  // desktop window is created transparent over its material (acrylic on Windows, a
+  // vibrancy layer on macOS), so with the page's own background gone the desktop
+  // behind the window is what shows through — which is the whole point of the
+  // setting, and the one piece a token override cannot reach on its own.
+  if (values.shellOpacity < 100) {
+    blocks.push(':root:root, :root:root body {\n  background-color: transparent;\n}')
+  }
   if (light.length > 0) {
     blocks.push(`:root:root body:not([data-ds-dark-theme]) {\n${light.join('\n')}\n}`)
   }
@@ -174,47 +175,26 @@ export function appearanceCss(values: AppearanceValues): string {
 }
 
 /**
- * The backdrop a translucent shell reveals.
- *
- * The theme's own backdrop means this plugin paints nothing and leaves the page's
- * background alone; the presets paint one fixed layer behind the app, which is what
- * a faded shell then shows through.
- * @param backdrop - the chosen backdrop.
- * @returns the CSS for the backdrop layer, or an empty string for `theme`.
- */
-export function backdropCss(backdrop: AppearanceValues['backdrop']): string {
-  const image = BACKDROPS[backdrop]
-  if (image === undefined) return ''
-  return `[${BACKDROP_ATTRIBUTE}] {\n  background-image: ${image};\n}\n`
-}
-
-/**
  * Keep the page in step with one row's values.
  *
  * @param form - the live config form over the personalization row.
  * @param doc - the document to write into, injected so a spec can drive a stand-in.
- * @returns the disposer that removes the sheet, the backdrop, and the subscription.
+ * @returns the disposer that removes the sheet and the subscription.
  */
 export function installAppearance(form: ConfigForm<Partial<AppearanceValues>>, doc: Document): () => void {
   const read = (): AppearanceValues => ({ ...APPEARANCE_DEFAULTS, ...form.getSnapshot().value })
 
   const sheet = doc.createElement('style')
   sheet.id = APPEARANCE_STYLE_ID
-  const backdrop = doc.createElement('div')
-  backdrop.setAttribute(BACKDROP_ATTRIBUTE, '')
-  backdrop.setAttribute('aria-hidden', 'true')
 
   const paint = (values: AppearanceValues): void => {
-    const css = appearanceCss(values) + backdropCss(values.backdrop)
+    const css = appearanceCss(values)
     if (css.length === 0) {
       sheet.remove()
-      backdrop.remove()
       return
     }
     sheet.textContent = css
     if (sheet.parentNode === null) doc.head.append(sheet)
-    if (values.backdrop !== 'theme' && backdrop.parentNode === null) doc.body.prepend(backdrop)
-    if (values.backdrop === 'theme') backdrop.remove()
   }
 
   paint(read())
@@ -222,7 +202,6 @@ export function installAppearance(form: ConfigForm<Partial<AppearanceValues>>, d
   return () => {
     unsubscribe()
     sheet.remove()
-    backdrop.remove()
   }
 }
 
