@@ -1,3 +1,6 @@
+/* Radii stay on the shared scale (`ui-theme/src/styles/base.css`): a value the scale
+ * does not name is anchored to the nearest step with a `calc` of at most 4px, which keeps
+ * this file's geometry while leaving the tokens as the only source of radius sizes. */
 /* Frame-wide visual effects: whale backdrop, focus button, nature lock. */
 .root {
   position: fixed;
@@ -122,7 +125,7 @@
   gap: 12px;
   padding: 28px 30px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 20px;
+  border-radius: var(--dsw-radius-xl);
   color: #e4eeff;
   background: rgba(6, 12, 26, 0.62);
   backdrop-filter: blur(14px);
@@ -149,7 +152,7 @@
   width: 150px;
   padding: 10px 14px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+  border-radius: calc(var(--dsw-radius-sm) + 2px);
   color: #eaf2ff;
   background: rgba(255, 255, 255, 0.06);
   font-size: 22px;
@@ -166,7 +169,7 @@
   pointer-events: auto;
   padding: 9px 22px;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(var(--dsw-radius-sm) + 2px);
   color: #061019;
   background: #9fd0ff;
   font-size: 13px;

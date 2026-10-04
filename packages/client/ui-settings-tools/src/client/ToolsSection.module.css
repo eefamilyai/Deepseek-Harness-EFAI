@@ -1,3 +1,6 @@
+/* Radii stay on the shared scale (`ui-theme/src/styles/base.css`): a value the scale
+ * does not name is anchored to the nearest step with a `calc` of at most 4px, which keeps
+ * this file's geometry while leaving the tokens as the only source of radius sizes. */
 .section {
   display: flex;
   flex-direction: column;
@@ -13,7 +16,7 @@
 
 .notice {
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: calc(var(--dsw-radius-xs) + 2px);
   background: var(--dsw-alias-bg-secondary);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
@@ -22,7 +25,7 @@
 
 .error {
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: calc(var(--dsw-radius-xs) + 2px);
   background: var(--dsw-alias-bg-error);
   color: var(--dsw-alias-label-error);
   font-size: 12px;

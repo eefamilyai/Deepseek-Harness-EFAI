@@ -52,6 +52,7 @@ function options(argv) {
     held: undefined,
     settleSeconds: 120,
     holdMs: 6 * 60 * 60 * 1000,
+    pruneBackups: undefined,
   }
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index]
@@ -61,6 +62,7 @@ function options(argv) {
     else if (flag === '--held') parsed.held = argv[++index]
     else if (flag === '--settle') parsed.settleSeconds = Number(argv[++index])
     else if (flag === '--hold-ms') parsed.holdMs = Number(argv[++index])
+    else if (flag === '--prune-backups') parsed.pruneBackups = Number(argv[++index] ?? 14)
     else throw new Error(`unknown argument ${flag}`)
   }
   return parsed
@@ -257,8 +259,10 @@ async function waitForPid(pid) {
 /**
  * Wait until no host of the app image is running, or the budget runs out.
  *
- * The first two minutes are polled every second: a restart closes and reopens the app, and
- * the window with no host is the only safe moment to rewrite the log that host will reopen.
+ * Polled every second, always: a restart closes and reopens the app in about that long, and
+ * that gap is the only safe moment to rewrite the log the host reopens. A slower poll misses
+ * every ordinary restart, and an operator restarts far more often than they close. The wait
+ * reports a heartbeat each minute, so a reader can tell "still waiting" from "died".
  * @param timeoutMs - how long to wait.
  * @returns whether the wait succeeded.
  */
@@ -267,9 +271,9 @@ async function waitForNoHost(timeoutMs) {
   let waited = 0
   while (hostRunning()) {
     if (Date.now() > deadline) return false
-    const interval = waited < 120_000 ? 1000 : 5000
-    waited += interval
-    await new Promise(resolve => setTimeout(resolve, interval))
+    waited += 1000
+    if (waited % 60_000 === 0) console.log(`[repair] still waiting for a host-free window (${String(waited / 1000)}s)`)
+    await new Promise(resolve => setTimeout(resolve, 1000))
   }
   return true
 }
@@ -334,8 +338,42 @@ function repairLogs(config, repairTableLines, select, label) {
   return { files, messages }
 }
 
+/**
+ * Delete the backup copies a repair left beside logs, once they are older than a grace
+ * period.
+ *
+ * A backup is only useful until the operator has seen the repaired session open; after that
+ * it is a second copy of a multi-megabyte log in a directory the harness lists. The default
+ * grace is two weeks, and `--prune-backups 0` removes them all.
+ * @param root - sessions root or one project directory.
+ * @param days - keep backups newer than this many days.
+ * @returns how many files were removed.
+ */
+function pruneBackups(root, days) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  let removed = 0
+  const walk = (dir, depth) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const next = path.join(dir, entry.name)
+      for (const file of fs.readdirSync(next)) {
+        if (!/\.bak-\d/u.test(file)) continue
+        const full = path.join(next, file)
+        if (fs.statSync(full).mtimeMs > cutoff) continue
+        fs.rmSync(full, { force: true })
+        removed += 1
+      }
+      if (depth > 0) walk(next, depth - 1)
+    }
+  }
+  walk(root, 1)
+  console.log(`[repair] pruned ${String(removed)} backup(s) older than ${String(days)} day(s) under ${root}`)
+  return removed
+}
+
 async function main(argv) {
   const config = options(argv)
+  if (config.pruneBackups !== undefined) pruneBackups(config.sessions, config.pruneBackups)
   if (config.waitForPid !== undefined) {
     if (!Number.isSafeInteger(config.waitForPid)) throw new Error(`invalid --wait-for-pid ${String(config.waitForPid)}`)
     console.log(`[repair] waiting for host pid ${String(config.waitForPid)} to exit`)
@@ -386,4 +424,11 @@ function logsUnder(root) {
   return found
 }
 
-await main(process.argv.slice(2))
+// A watcher that dies silently is worse than one that never started: it looks like it is
+// still waiting. Report the failure and leave the log on disk for the next run.
+try {
+  await main(process.argv.slice(2))
+} catch (error) {
+  console.log(`[repair] FAILED: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`)
+  process.exitCode = 1
+}

@@ -1,0 +1,4 @@
+# Scratch this job produces: log dumps, probe scripts, commit messages. The two files the
+# recon notes name as the playbook (`_dump.mjs`, `_fidelity-probe.yml`) live here too; they
+# stay on disk but out of `git status`, which is what kept 85 files in every diff.
+_*

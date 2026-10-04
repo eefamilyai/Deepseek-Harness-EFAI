@@ -37,18 +37,25 @@ projections, skills, presets, MCP), plus a raw `seam(op, **args)` escape hatch a
 `seam_ops()` so the whole table is discoverable from a cell. Every op returns `unavailable`
 when its service is not mounted, and every helper falls back the way the existing ones do.
 
-## 2. Model dropdown — the account pool still is not folded
+## 2. Model dropdown — the account pool is folded, and my first read of it was wrong
 
-`packages/client/ui-polish` folds a pool whose accounts arrive as *sibling sections*
-(`DeepSeek (free web)` beside `DeepSeek (free web) (…+hunt@…)`). Live today, in the
-`Qwen-3.8-27B` workspace, the same provider renders **one** section holding eleven account
-rows (`Auto`, `hunt`, `v`, `f`, `j1`, `t1`, `t2`, `d1`, `claude1`, `claude2`, `merge`)
-followed by the four model rows — so nothing folds, and the operator's original ask (one row
-of account bubbles, then only the models) is still unmet in this shape. This is also the
-question they asked mid-session: "what if there isnt a + tag? and its a base account?"
+**Corrected after checking.** I first recorded this as "the pool is still not folded", because
+the browser tool's accessibility snapshot lists the eleven account rows while the picker has
+them hidden. That snapshot is a DOM projection, not a picture: it reports rows that are
+`display: none`. A screenshot of the same open menu shows what a person sees — the pool's
+eleven logins as one wrapping row of equal capsules (`Auto`, `hunt`, `v`, `f`, `j1`, `t1`,
+`t2`, `d1`, `claude1`, `claude2`, `merge`) directly under the `DeepSeek (free web)` title,
+with the four model rows below them and every other provider contracted.
 
-**The work**: fold account *rows* as well as account *sections*, keyed on something the row
-carries rather than on the `+tag@` title shape, and prove it live in that workspace.
+The two shapes the operator asked about mid-session are handled and pinned by spec:
+`loginName` keeps a tag (`…+hunt@gmail.com` → `hunt`), falls back to the whole address when
+there is no tag (keeping the tail a narrow cell cannot hold), treats a leading `+` as a
+dialling code rather than a tag, and labels a pool's unpinned base route `Auto`
+(`account-picker.client.spec.ts`, 11 cases). `isLogin` refuses a nested title, so the free
+web route is not mistaken for a login of the plain `DeepSeek` provider.
+
+Lesson for the rest of this audit: judge anything visible from a screenshot, never from the
+accessibility snapshot.
 
 ## 3. Fork-owned CSS that fails the upstream style gates
 
