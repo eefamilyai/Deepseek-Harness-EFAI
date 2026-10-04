@@ -206,11 +206,22 @@ export function appearanceCss(values: AppearanceValues): string {
   // opacity owns, so it goes transparent here. Cards, panels, menus, and dialogs are left
   // to the surface level - that is why they can stay solid in a glass window.
   if (fadesDocument) {
+    // The window itself: the document, the app frame, and the panes the shell mounts.
     blocks.push([
       ':root:root,',
       ':root:root body,',
       ':root:root #root,',
-      ':root:root #root > *,',
+      ':root:root #root > * {',
+      '  background-color: transparent;',
+      '}',
+    ].join('\n'))
+  }
+  // The content level: the conversation, its scroller, and the composer. Either control
+  // can clear these - the window doing it makes the whole surface glass, the surface
+  // level doing it thins the content while the frame around it stays as it is - and they
+  // are what a translucent card or panel is actually seen against.
+  if (fadesDocument || surfaceFactor < 1) {
+    blocks.push([
       ':root:root [data-conversation-content],',
       ':root:root [data-chat-flow],',
       ':root:root [data-composer-seat] {',

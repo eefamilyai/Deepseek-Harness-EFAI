@@ -117,26 +117,35 @@ describe('real transparency', () => {
   it('clears the window\'s own paint, not just the document', () => {
     // The dialog was the only thing that went translucent, because it is drawn from the
     // tokens this engine fades. The window itself is painted by the document, the app
-    // frame, and the transcript and composer surfaces - none of which is a token - so the
-    // shell level has to clear them by hand or the window stays opaque.
+    // frame, and the conversation and composer surfaces - none of which is a token.
     const css = appearanceCss(values({ shellOpacity: 65 }))
     const cleared = [
       ':root:root,',
       ':root:root body,',
       ':root:root #root,',
-      ':root:root #root > *,',
+      ':root:root #root > * {',
       ':root:root [data-conversation-content],',
       ':root:root [data-chat-flow],',
       ':root:root [data-composer-seat] {',
     ]
-    for (const selector of cleared) {
-      expect(css).toContain(selector)
-    }
+    for (const selector of cleared) expect(css).toContain(selector)
     expect(css).toContain('background-color: transparent;')
   })
 
-  it('leaves the document alone while the shell is solid', () => {
-    expect(appearanceCss(values({ surfaceOpacity: 60 }))).not.toContain('background-color: transparent;')
+  it('clears the content level for either control, and the frame only for the window', () => {
+    // With a solid window, the surface level still thins the content - which is what a
+    // translucent card or panel is seen against - but the frame around it stays.
+    const css = appearanceCss(values({ surfaceOpacity: 35 }))
+    expect(css).toContain(':root:root [data-conversation-content],')
+    expect(css).not.toContain(':root:root #root > * {')
+  })
+
+  it('leaves the window alone while the shell is solid', () => {
+    // The surface level thins the content, so what is asserted here is the *frame*: the
+    // document and the shell's own panes stay as the theme painted them.
+    const css = appearanceCss(values({ surfaceOpacity: 60 }))
+    expect(css).not.toContain(':root:root #root > * {')
+    expect(css).not.toContain(':root:root body {')
   })
 })
 
