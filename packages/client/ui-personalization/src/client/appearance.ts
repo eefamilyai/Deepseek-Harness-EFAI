@@ -150,6 +150,19 @@ export function appearanceCss(values: AppearanceValues): string {
   const base: string[] = []
   const light: string[] = []
   const dark: string[] = []
+  // The caption band is unconditional: it restores the fill the OS caption already paints on
+  // the desktop, and is inert wherever the desktop publishes no caption height.
+  const band = [
+    ':root:root body::before {',
+    "  content: '';",
+    '  position: fixed;',
+    '  inset: 0 0 auto 0;',
+    '  height: var(--dsh-windows-titlebar-height, 0px);',
+    '  background-color: var(--dsw-specific-sidebar-fill);',
+    '  pointer-events: none;',
+    '  z-index: 2147483647;',
+    '}',
+  ].join('\n')
 
   if (!isDefault(values, 'fontFamily') && usableFontStack(values.fontFamily)) {
     base.push(`  --dsw-font-family: ${values.fontFamily.trim()};`)
@@ -160,10 +173,6 @@ export function appearanceCss(values: AppearanceValues): string {
       base.push(`  ${token}: ${String(Math.round(step * scale * 100) / 100)}px;`)
     }
   }
-  // The window's own corner is the same corner the interface's panels use, so it follows
-  // the same token - and therefore the Corner scale control - rather than a number of its
-  // own. A window rounded differently from the surfaces inside it reads as two shapes.
-  const frameRadius = 'var(--dsw-radius-panel)'
   if (!isDefault(values, 'accent') && usableColour(values.accent)) {
     const accent = values.accent.trim()
     base.push(`  --dsw-alias-state-business-primary: ${accent};`)
@@ -205,7 +214,7 @@ export function appearanceCss(values: AppearanceValues): string {
     ...fills(['panel'], panelFactor, 'dark'))
 
   if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && shellFactor >= 1 && surfaceFactor >= 1) {
-    return ''
+    return `${band}\n`
   }
 
 
@@ -268,18 +277,6 @@ export function appearanceCss(values: AppearanceValues): string {
       '}',
     ].join('\n'))
   }
-  // The window's own corners belong to the shell. Windows does not round a transparent
-  // window - DWM accepts the corner preference and renders nothing - so the page rounds
-  // itself: clipping the document clips every surface inside it, and the arcs fall outside
-  // the clip, where the window is transparent and the desktop shows through. The radius
-  // follows the corner scale, so the control that rounds the interface rounds the window.
-  if (values.radiusScale > 0) {
-    blocks.push([
-      ':root:root body {',
-      `  clip-path: inset(0 round ${frameRadius});`,
-      '}',
-    ].join('\n'))
-  }
   // The content level: the conversation's scroller and the composer, whose own paint is
   // what a card or a panel is seen against. The shell leaves these alone: a surface inside
   // the window belongs to the surface control.
@@ -292,7 +289,7 @@ export function appearanceCss(values: AppearanceValues): string {
       '}',
     ].join('\n'))
   }
-  return `${blocks.join('\n\n')}\n`
+  return `${band}\n\n${blocks.join('\n\n')}\n`
 }
 
 /**

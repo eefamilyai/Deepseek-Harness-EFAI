@@ -24,8 +24,16 @@ function values(patch: Partial<AppearanceValues> = {}): AppearanceValues {
 }
 
 describe('appearanceCss', () => {
-  it('emits nothing until something is chosen', () => {
-    expect(appearanceCss(values())).toBe('')
+  it('emits only the caption band until something is chosen', () => {
+    // The band is unconditional: it restores the fill the OS caption paints on the desktop,
+    // and resolves to nothing where no caption height is published. No token moves until a
+    // value differs from the deployment's own.
+    const css = appearanceCss(values())
+    expect(css).toContain('body::before {')
+    // No token is overridden and no rule but the band is written.
+    expect(css).not.toContain('--dsw-font-family')
+    expect(css).not.toContain(':root:root body:not([data-ds-dark-theme]) {')
+    expect(css.trim().split('}').length).toBe(2)
   })
 
   it('writes the font stack on the scopes that beat the theme', () => {
@@ -37,8 +45,8 @@ describe('appearanceCss', () => {
   })
 
   it('refuses a font stack that is not a plain stack', () => {
-    expect(appearanceCss(values({ fontFamily: 'Inter; color: red' }))).toBe('')
-    expect(appearanceCss(values({ fontFamily: 'Inter /* x */' }))).toBe('')
+    expect(appearanceCss(values({ fontFamily: 'Inter; color: red' }))).not.toContain('--dsw-font-family')
+    expect(appearanceCss(values({ fontFamily: 'Inter /* x */' }))).not.toContain('--dsw-font-family')
   })
 
   it('scales every radius step together, and squares them at zero', () => {
@@ -166,23 +174,31 @@ describe('real transparency', () => {
     expect(css).not.toContain(':root:root #root > * {')
   })
 
+  it('paints the caption band, which the page otherwise leaves bare', () => {
+    // The OS draws the caption in that band and the page paints nothing there, so on a
+    // translucent window it shows a strip of whatever sits behind the app across the top.
+    // The page fills it in the application's own chrome colour, at the height the desktop
+    // preload publishes - unset elsewhere, so no band is painted off Windows.
+    const css = appearanceCss(values({}))
+    expect(css).toContain('body::before {')
+    expect(css).toContain('height: var(--dsh-windows-titlebar-height, 0px);')
+    expect(css).toContain('background-color: var(--dsw-specific-sidebar-fill);')
+    expect(css).toContain('pointer-events: none;')
+  })
+
   it('leaves the window paint alone while the shell is solid', () => {
-    // The window's shape is not an opacity: it stays rounded whatever the shell is set to,
-    // and what the shell owns when solid is the paint, which is left to the theme.
     const css = appearanceCss(values({ surfaceOpacity: 60 }))
     expect(css).not.toContain(':root:root #root > * {')
     // The document is pinned at the shell's opacity either way - full here - because the
     // content token paints the document too and a surface fade would otherwise take the
     // window with it.
     expect(css).toContain(':root:root body:not([data-ds-dark-theme]) {\n  background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 100%, transparent);')
-    expect(css).toContain('clip-path: inset(0 round var(--dsw-radius-panel));')
   })
 
-  it('rounds the window with the same corner its panels use, and stops at zero', () => {
-    // The Corner scale drives both, so the window and the surfaces inside it stay one shape.
-    expect(appearanceCss(values({ radiusScale: 2.5 }))).toContain('clip-path: inset(0 round var(--dsw-radius-panel));')
-    // A square interface gets a square window.
-    expect(appearanceCss(values({ radiusScale: 0, shellOpacity: 45 }))).not.toContain('clip-path')
+  it('leaves the window shape to the platform', () => {
+    // Windows rounds an ordinary window itself. A page arc on top of that shows the window's
+    // material as a wedge inside the corner, so the page never clips the document.
+    expect(appearanceCss(values({ radiusScale: 2.5, shellOpacity: 45 }))).not.toContain('clip-path')
   })
 })
 
@@ -210,17 +226,18 @@ describe('installAppearance', () => {
     const doc = document.implementation.createHTMLDocument('test')
     const live = source({})
     const dispose = installAppearance(live.handle, doc)
-    // Nothing chosen: no sheet at all, and the page is untouched.
-    expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
+    // Nothing chosen: the sheet holds the caption band and no token override.
+    expect(doc.getElementById(APPEARANCE_STYLE_ID)?.textContent).toContain('body::before')
+    expect(doc.getElementById(APPEARANCE_STYLE_ID)?.textContent).not.toContain('--dsw-font-family')
 
     live.set({ accent: '#7c5cff', shellOpacity: 65 })
     const sheet = doc.getElementById(APPEARANCE_STYLE_ID)
     expect(sheet?.textContent).toContain('--dsw-alias-state-business-primary: #7c5cff;')
     expect(sheet?.textContent).toContain('background-color: transparent;')
 
-    // Back to the defaults: the sheet leaves and the page publishes nothing again.
+    // Back to the defaults: only the band is left, and no token is published again.
     live.set({})
-    expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
+    expect(doc.getElementById(APPEARANCE_STYLE_ID)?.textContent).not.toContain('--dsw-font-family')
 
     dispose()
   })
