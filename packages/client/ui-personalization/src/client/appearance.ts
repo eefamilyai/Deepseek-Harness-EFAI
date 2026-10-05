@@ -234,7 +234,10 @@ export function appearanceCss(values: AppearanceValues): string {
   if (dialogDark.length > 0) {
     blocks.push(`:root:root body[data-ds-dark-theme] [role='dialog'] {\n${dialogDark.join('\n')}\n}`)
   }
-  // The window itself. The document is painted at the shell's opacity rather than cleared,
+  // The window itself, including the region the content surface's rounded corner exposes:
+  // the frame around the surface is cleared, so that corner shows this paint - the shell's
+  // own colour - rather than the desktop, and the corner reads as part of the shell. The
+  // document is painted at the shell's opacity rather than cleared,
   // so a partly transparent shell reads as a translucent window over whatever the platform
   // composites behind it, and the frame around the content is cleared so nothing of the
   // shell paints over the surface inside it. The document is pinned here whenever either
@@ -258,18 +261,6 @@ export function appearanceCss(values: AppearanceValues): string {
       ':root:root #root,',
       ':root:root #root > * {',
       '  background-color: transparent;',
-      '}',
-    ].join('\n'))
-  }
-  // A rounded corner on a translucent window is a notch: the arc is outside the surface, so
-  // whatever the window composites behind it shows through and reads as a gap at the leading
-  // edge. The corner is squared while either control is faded and returns with the window's
-  // own opacity, so the shape is unchanged on a solid deployment.
-  if (shellFactor < 1 || surfaceFactor < 1) {
-    blocks.push([
-      ':root:root [data-dockkit-surface] {',
-      '  border-top-left-radius: 0;',
-      '  border-bottom-left-radius: 0;',
       '}',
     ].join('\n'))
   }

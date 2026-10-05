@@ -145,16 +145,15 @@ describe('real transparency', () => {
     expect(css).not.toContain('--dsw-alias-bg-base:')
   })
 
-  it('squares the leading corner while the window is translucent', () => {
-    // A rounded corner on a translucent window is a notch the backdrop shows through, which
-    // reads as a gap at the leading edge. It is squared only while a control is faded.
+  it('paints the corner the content surface exposes, so it belongs to the shell', () => {
+    // The content surface keeps its rounded corner. The frame above it is cleared, so the
+    // corner shows the window's own paint - the shell's colour - and never the desktop.
     const glass = appearanceCss(values({ shellOpacity: 45 }))
-    expect(glass).toContain(':root:root [data-dockkit-surface] {\n  border-top-left-radius: 0;\n  border-bottom-left-radius: 0;\n}')
-    const faded = appearanceCss(values({ surfaceOpacity: 45 }))
-    expect(faded).toContain(':root:root [data-dockkit-surface] {')
-    // A solid window keeps the theme's shape.
-    const solid = appearanceCss(values({ shellOpacity: 100, surfaceOpacity: 100, panelOpacity: 45 }))
-    expect(solid).not.toContain('[data-dockkit-surface]')
+    expect(glass).toContain(':root:root #root,\n:root:root #root > * {\n  background-color: transparent;\n}')
+    expect(glass).toContain('background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 45%, transparent);')
+    // The shape itself is never changed.
+    expect(glass).not.toContain('border-top-left-radius')
+    expect(appearanceCss(values({ surfaceOpacity: 45 }))).not.toContain('border-top-left-radius')
   })
 
   it('clears the content scroller for the surface control, and the frame only for the window', () => {
