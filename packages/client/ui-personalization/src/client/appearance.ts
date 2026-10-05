@@ -74,12 +74,15 @@ const RADIUS_STEPS: Readonly<Record<string, number>> = {
  * is still its own surface.
  */
 const PALETTE_FILLS: Readonly<Record<string, { light: string; dark: string; level: 'shell' | 'surface' | 'panel' }>> = {
-  // The window itself, behind and around everything, plus the sidebar.
-  '--dsw-alias-bg-base': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'shell' },
+  // The chrome around the content: the sidebar.
   '--dsw-specific-sidebar-fill': { light: 'var(--dsw-static-neutral-bluish-50)', dark: 'var(--dsw-static-neutral-bluish-900)', level: 'shell' },
   '--dsw-specific-sidebar-nav-item-hover': { light: 'var(--dsw-static-neutral-bluish-75)', dark: 'var(--dsw-static-neutral-bluish-850)', level: 'shell' },
   '--dsw-specific-sidebar-nav-item-active': { light: 'var(--dsw-static-neutral-bluish-100)', dark: 'var(--dsw-static-neutral-bluish-750)', level: 'shell' },
-  // The content inside it: the conversation's own cards, bubbles, pills, and inputs.
+  // The content surface and everything on it: the conversation's own background, its
+  // cards, bubbles, pills, and inputs. `--dsw-alias-bg-base` paints the conversation area
+  // as well as the document, which is why the shell level pins the document directly
+  // instead of fading this token.
+  '--dsw-alias-bg-base': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
   '--dsw-alias-bg-layer-1': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
   '--dsw-alias-bg-layer-2': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
   '--dsw-alias-bg-layer-3': { light: 'var(--dsw-static-neutral-bluish-00)', dark: 'var(--dsw-static-neutral-bluish-950)', level: 'surface' },
@@ -197,8 +200,7 @@ export function appearanceCss(values: AppearanceValues): string {
   dark.push(...fills(['shell'], shellFactor, 'dark'), ...fills(['surface'], surfaceFactor, 'dark'),
     ...fills(['panel'], panelFactor, 'dark'))
 
-  const fadesDocument = shellFactor < 1
-  if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && !fadesDocument) {
+  if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && shellFactor >= 1 && surfaceFactor >= 1) {
     return ''
   }
 
@@ -232,17 +234,27 @@ export function appearanceCss(values: AppearanceValues): string {
   if (dialogDark.length > 0) {
     blocks.push(`:root:root body[data-ds-dark-theme] [role='dialog'] {\n${dialogDark.join('\n')}\n}`)
   }
-  // A glass window is only transparent if nothing structural keeps painting. Three things
-  // do, and none of them is a `--dsw-*` token: the document and its background, the app
-  // frame the shell mounts into (`#root` and its panes), and the transcript and composer
-  // surfaces inside it. The first set is the window; the second is what the shell's own
-  // opacity owns, so it goes transparent here. Cards, panels, menus, and dialogs are left
-  // to the surface level - that is why they can stay solid in a glass window.
-  if (fadesDocument) {
-    // The window itself: the document, the app frame, and the panes the shell mounts.
+  // The window itself. The document is painted at the shell's opacity rather than cleared,
+  // so a partly transparent shell reads as a translucent window over whatever the platform
+  // composites behind it, and the frame around the content is cleared so nothing of the
+  // shell paints over the surface inside it. The document is pinned here whenever either
+  // control is faded, because the content token paints the document too.
+  if (shellFactor < 1 || surfaceFactor < 1) {
+    const weight = percent(shellFactor)
     blocks.push([
-      ':root:root,',
-      ':root:root body,',
+      ':root:root {',
+      '  background-color: transparent;',
+      '}',
+      ':root:root body:not([data-ds-dark-theme]) {',
+      `  background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) ${weight}, transparent);`,
+      '}',
+      ':root:root body[data-ds-dark-theme] {',
+      `  background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-950) ${weight}, transparent);`,
+      '}',
+    ].join('\n'))
+  }
+  if (shellFactor < 1) {
+    blocks.push([
       ':root:root #root,',
       ':root:root #root > * {',
       '  background-color: transparent;',

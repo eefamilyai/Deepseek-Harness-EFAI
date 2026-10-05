@@ -54,21 +54,22 @@ describe('appearanceCss', () => {
     expect(css).toContain('--dsw-alias-state-business-tertiary: color-mix(in srgb, oklch(0.7 0.12 250) 18%, transparent);')
   })
 
-  it('makes the window glass without touching the surfaces inside it', () => {
-    // The three controls are independent: the shell owns the window's own paint, and a
-    // card or a panel inside a glass window is still its own level.
+  it('separates the window from the surface inside it', () => {
+    // The complaint this answers: choosing Shell glass made the whole interface glass,
+    // because the token that paints the conversation also paints the document. The window
+    // now paints through the document at the shell's opacity, the chrome follows the shell,
+    // and the conversation's own background belongs to the surface control.
     const css = appearanceCss(values({ shellOpacity: 60, surfaceOpacity: 50, panelOpacity: 45 }))
-    // The shell is the window: the canvas and the sidebar go to 60%.
-    expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
+    // The window: the document at 60%, and the frame around the content cleared.
+    expect(css).toContain(':root:root body:not([data-ds-dark-theme]) {\n  background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
+    expect(css).toContain(':root:root #root > * {')
+    // The chrome follows the shell.
     expect(css).toContain('--dsw-specific-sidebar-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-50) 60%, transparent);')
-    // Moving the shell must not move anything else: the content and the dialog keep their
-    // own numbers, not the window's.
+    // The content surface follows its own control, at its own number.
+    expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 50%, transparent);')
     expect(css).toContain('--dsw-alias-bg-layer-1: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 50%, transparent);')
     expect(css).toContain('--dsw-alias-settings-card-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 45%, transparent);')
-    // Both palettes carry a rule, because the tokens resolve differently in each.
-    expect(css).toContain(':root:root body:not([data-ds-dark-theme])')
     expect(css).toContain(':root:root body[data-ds-dark-theme]')
-    expect(css).toContain('var(--dsw-static-neutral-bluish-950) 50%, transparent')
   })
 
   it('leaves the content and the dialog alone when only the shell is glass', () => {
@@ -123,25 +124,25 @@ describe('the three opacity levels', () => {
     expect(opacityPercent(1)).toBe(100)
     expect(opacityPercent(65)).toBe(65)
     const css = appearanceCss(values({ shellOpacity: 0.6, surfaceOpacity: 0.9 }))
-    expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
+    // The window's paint takes the shell's fraction, the content surface the other.
+    expect(css).toContain('background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 60%, transparent);')
+    expect(css).toContain('--dsw-alias-bg-base: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 90%, transparent);')
     expect(css).toContain('--dsw-alias-bg-layer-1: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 90%, transparent);')
   })
 })
 
 describe('real transparency', () => {
-  it('clears the window\'s own paint, not just the document', () => {
+  it('paints the window itself, and clears what would cover it', () => {
     // The dialog was the only thing that went translucent, because it is drawn from the
-    // tokens this engine fades. The window itself is painted by the document and the app
-    // frame - neither of which is a token - so the shell clears those by hand.
+    // tokens this engine fades. The window is painted by the document - not by a token this
+    // engine could fade without also fading the conversation - so the shell level paints it
+    // and clears the frame around the content.
     const css = appearanceCss(values({ shellOpacity: 65 }))
-    const cleared = [
-      ':root:root,',
-      ':root:root body,',
-      ':root:root #root,',
-      ':root:root #root > * {',
-    ]
-    for (const selector of cleared) expect(css).toContain(selector)
-    expect(css).toContain('background-color: transparent;')
+    expect(css).toContain(':root:root {\n  background-color: transparent;\n}')
+    expect(css).toContain('background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 65%, transparent);')
+    expect(css).toContain(':root:root #root,\n:root:root #root > * {\n  background-color: transparent;\n}')
+    // Nothing of the content surface is faded by the shell on its own.
+    expect(css).not.toContain('--dsw-alias-bg-base:')
   })
 
   it('clears the content scroller for the surface control, and the frame only for the window', () => {
