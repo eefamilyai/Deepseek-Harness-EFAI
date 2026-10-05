@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **46** in **13** patch(es).
+Tier-2 files: **47** in **13** patch(es).
 
 ## Patches
 
@@ -38,9 +38,10 @@ Tier-2 files: **46** in **13** patch(es).
 - `scripts/gen-tool-catalog.ts`
 - `scripts/verify-package-readme-model-experience.ts`
 
-### `patches/apps.patch` — 2 file(s)
+### `patches/apps.patch` — 3 file(s)
 
 - `apps/cli/package.json`
+- `apps/desktop/src/main.ts`
 - `apps/web/tests/built-boot.expected.e2e.ts`
 
 ### `patches/core.patch` — 3 file(s)
@@ -131,7 +132,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 591 paths do not exist upstream, so no patch covers them and none can conflict.
+These 595 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -383,12 +384,16 @@ These 591 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-personalization/package.json`
 - `packages/client/ui-personalization/src/client/AppearanceSection.module.css`
 - `packages/client/ui-personalization/src/client/AppearanceSection.tsx`
+- `packages/client/ui-personalization/src/client/appearance-store.ts`
 - `packages/client/ui-personalization/src/client/appearance.ts`
 - `packages/client/ui-personalization/src/client/index.ts`
 - `packages/client/ui-personalization/src/client/locales.ts`
 - `packages/client/ui-personalization/src/css-modules.d.ts`
 - `packages/client/ui-personalization/src/index.ts`
+- `packages/client/ui-personalization/tests/appearance-section.client.spec.tsx`
+- `packages/client/ui-personalization/tests/appearance-store.client.spec.ts`
 - `packages/client/ui-personalization/tests/appearance.client.spec.ts`
+- `packages/client/ui-personalization/tests/row-writes.host.spec.ts`
 - `packages/client/ui-personalization/tests/row.host.spec.ts`
 - `packages/client/ui-personalization/tsconfig.client.json`
 - `packages/client/ui-personalization/tsconfig.host.json`

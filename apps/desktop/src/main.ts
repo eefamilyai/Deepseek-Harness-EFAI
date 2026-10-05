@@ -212,7 +212,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     show,
     ...(process.platform === 'win32' && primary ? {
       titleBarStyle: 'hidden' as const,
-      titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
+      // Windows composites the page over the window's own surface unless the window is
+      // created transparent, so interface transparency can only wash the app out - never
+      // reveal the desktop or another application behind it. The caption strip gives up
+      // its fill for the same reason: an opaque overlay paints a solid band across it.
+      transparent: true,
+      backgroundColor: '#00000000',
+      titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: '#00000000',
         symbolColor: nativeTheme.shouldUseDarkColors ? '#f9fafb' : '#0f1115' },
     } : {}),
     // hiddenInset places traffic lights inside the sidebar; sidebar vibrancy

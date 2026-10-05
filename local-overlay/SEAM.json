@@ -14,6 +14,7 @@
     ".github/dependabot.yml",
     ".gitignore",
     "apps/cli/package.json",
+    "apps/desktop/src/main.ts",
     "apps/web/tests/built-boot.expected.e2e.ts",
     "docs/subsystems/compaction.md",
     "docs/subsystems/compaction.zh.md",

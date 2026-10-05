@@ -83,6 +83,20 @@ describe('appearanceCss', () => {
     expect(css).toContain('background-color: transparent;')
   })
 
+  it('keeps the settings dialog on the panel control, whatever Surface is set to', () => {
+    // The reported defect: lowering Surface thinned the settings dialog's own cards, which
+    // reads as the two controls being swapped. The dialog re-declares the layer tokens, and
+    // the nearest ancestor that declares one is what its subtree inherits.
+    const css = appearanceCss(values({ surfaceOpacity: 45, panelOpacity: 100 }))
+    const dialog = css.slice(css.indexOf(":root:root body:not([data-ds-dark-theme]) [role='dialog']"))
+    expect(dialog).toContain('--dsw-alias-bg-layer-2: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 100%, transparent);')
+    expect(dialog).toContain('--dsw-alias-settings-card-fill:')
+    // And the panel control moves the dialog, at its own number.
+    const panel = appearanceCss(values({ panelOpacity: 45 }))
+    expect(panel).toContain(":root:root body:not([data-ds-dark-theme]) [role='dialog']")
+    expect(panel).toContain('--dsw-alias-bg-layer-2: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 45%, transparent);')
+  })
+
   it('scales the root font size on its own', () => {
     expect(appearanceCss(values({ fontScale: 115 }))).toContain('font-size: 115%;')
   })
@@ -94,9 +108,11 @@ describe('the three opacity levels', () => {
     // `--dsw-alias-settings-card-fill` is the theme's own name for the dialog's surface.
     expect(css).toContain('--dsw-alias-settings-card-fill: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 45%, transparent);')
     expect(css).toContain('--dsw-alias-bg-overlay: color-mix(in srgb, var(--dsw-static-neutral-bluish-150) 45%, transparent);')
-    // Not the content, and not the window.
-    expect(css).not.toContain('--dsw-alias-bg-layer-1:')
-    expect(css).not.toContain('--dsw-alias-bg-base:')
+    // Not the app-wide content, and not the window: the only layer declarations here are
+    // the dialog's own, which is what keeps the two controls from reading as swapped.
+    const appWide = css.slice(0, css.indexOf("[role='dialog']"))
+    expect(appWide).not.toContain('--dsw-alias-bg-layer-1:')
+    expect(appWide).not.toContain('--dsw-alias-bg-base:')
   })
 
   it('reads a value the first build stored as a fraction', () => {

@@ -167,30 +167,41 @@ export function appearanceCss(values: AppearanceValues): string {
   const shellFactor = opacityPercent(values.shellOpacity) / 100
   const surfaceFactor = opacityPercent(values.surfaceOpacity) / 100
   const panelFactor = opacityPercent(values.panelOpacity) / 100
-  // Each level's own factor, with the shell at 1 because the shell *is* the factor the
-  // whole window multiplies by.
-  const levelFactors: Readonly<Record<'shell' | 'surface' | 'panel', number>> = {
-    shell: shellFactor,
-    surface: surfaceFactor,
-    panel: panelFactor,
-  }
-  for (const [token, palette] of Object.entries(PALETTE_FILLS)) {
-    // The shell *is* the window, so its opacity multiplies into every layer: at 60% the
-    // window is glass from edge to edge and whatever is behind it - the desktop, another
-    // application - shows through. The surface level composes on top of that for the
-    // layers inside, so they can read softer than the frame around them without changing
-    // how translucent the window itself is.
-    const factor = levelFactors[palette.level]
-    if (factor >= 1) continue
+  /**
+   * The declarations for one level.
+   * @param levels - which entries to emit.
+   * @param factor - the opacity to fade them by.
+   * @param palette - which palette's expression of each token to use.
+   * @param emitWhenSolid - keep the declarations at 100%, so a scope can override an
+   * inherited value with a solid fill instead of leaving it to the ancestor.
+   * @returns one CSS declaration per token.
+   */
+  const fills = (
+    levels: readonly ('shell' | 'surface' | 'panel')[],
+    factor: number,
+    palette: 'light' | 'dark',
+    emitWhenSolid = false,
+  ): string[] => {
+    if (factor >= 1 && !emitWhenSolid) return []
     const weight = percent(factor)
-    light.push(`  ${token}: color-mix(in srgb, ${palette.light} ${weight}, transparent);`)
-    dark.push(`  ${token}: color-mix(in srgb, ${palette.dark} ${weight}, transparent);`)
+    const lines: string[] = []
+    for (const [token, fill] of Object.entries(PALETTE_FILLS)) {
+      if (!levels.includes(fill.level)) continue
+      lines.push(`  ${token}: color-mix(in srgb, ${palette === 'light' ? fill.light : fill.dark} ${weight}, transparent);`)
+    }
+    return lines
   }
+
+  light.push(...fills(['shell'], shellFactor, 'light'), ...fills(['surface'], surfaceFactor, 'light'),
+    ...fills(['panel'], panelFactor, 'light'))
+  dark.push(...fills(['shell'], shellFactor, 'dark'), ...fills(['surface'], surfaceFactor, 'dark'),
+    ...fills(['panel'], panelFactor, 'dark'))
 
   const fadesDocument = shellFactor < 1
   if (base.length === 0 && light.length === 0 && dark.length === 0 && isDefault(values, 'fontScale') && !fadesDocument) {
     return ''
   }
+
 
   const blocks: string[] = []
   const scopes = ':root:root, :root:root body, :root:root body[data-ds-dark-theme]'
@@ -202,6 +213,24 @@ export function appearanceCss(values: AppearanceValues): string {
   }
   if (dark.length > 0) {
     blocks.push(`:root:root body[data-ds-dark-theme] {\n${dark.join('\n')}\n}`)
+  }
+  // The settings dialog and everything inside it are the settings-panel control's, not the
+  // surface control's: the layer tokens are re-declared on the dialog itself, and the
+  // nearest ancestor that declares a custom property is the one its whole subtree inherits.
+  // Without this, lowering Surface thinned the dialog's own cards - which reads as the two
+  // controls being swapped.
+  const dialogLevels = ['surface', 'panel'] as const
+  // Emitted whenever either control is faded, and always at a solid weight when the panel
+  // is at 100%: the dialog has to re-declare the tokens to escape the surface fade it
+  // would otherwise inherit.
+  const scopesDialog = panelFactor < 1 || surfaceFactor < 1
+  const dialogLight = scopesDialog ? fills(dialogLevels, panelFactor, 'light', true) : []
+  const dialogDark = scopesDialog ? fills(dialogLevels, panelFactor, 'dark', true) : []
+  if (dialogLight.length > 0) {
+    blocks.push(`:root:root body:not([data-ds-dark-theme]) [role='dialog'] {\n${dialogLight.join('\n')}\n}`)
+  }
+  if (dialogDark.length > 0) {
+    blocks.push(`:root:root body[data-ds-dark-theme] [role='dialog'] {\n${dialogDark.join('\n')}\n}`)
   }
   // A glass window is only transparent if nothing structural keeps painting. Three things
   // do, and none of them is a `--dsw-*` token: the document and its background, the app
