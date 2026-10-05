@@ -166,10 +166,23 @@ describe('real transparency', () => {
     expect(css).not.toContain(':root:root #root > * {')
   })
 
-  it('leaves the window alone while the shell is solid', () => {
+  it('leaves the window paint alone while the shell is solid', () => {
+    // The window's shape is not an opacity: it stays rounded whatever the shell is set to,
+    // and what the shell owns when solid is the paint, which is left to the theme.
     const css = appearanceCss(values({ surfaceOpacity: 60 }))
     expect(css).not.toContain(':root:root #root > * {')
-    expect(css).not.toContain(':root:root body {')
+    // The document is pinned at the shell's opacity either way - full here - because the
+    // content token paints the document too and a surface fade would otherwise take the
+    // window with it.
+    expect(css).toContain(':root:root body:not([data-ds-dark-theme]) {\n  background-color: color-mix(in srgb, var(--dsw-static-neutral-bluish-00) 100%, transparent);')
+    expect(css).toContain('clip-path: inset(0 round var(--dsw-radius-panel));')
+  })
+
+  it('rounds the window with the same corner its panels use, and stops at zero', () => {
+    // The Corner scale drives both, so the window and the surfaces inside it stay one shape.
+    expect(appearanceCss(values({ radiusScale: 2.5 }))).toContain('clip-path: inset(0 round var(--dsw-radius-panel));')
+    // A square interface gets a square window.
+    expect(appearanceCss(values({ radiusScale: 0, shellOpacity: 45 }))).not.toContain('clip-path')
   })
 })
 

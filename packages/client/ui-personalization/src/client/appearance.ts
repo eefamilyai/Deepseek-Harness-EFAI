@@ -160,6 +160,10 @@ export function appearanceCss(values: AppearanceValues): string {
       base.push(`  ${token}: ${String(Math.round(step * scale * 100) / 100)}px;`)
     }
   }
+  // The window's own corner is the same corner the interface's panels use, so it follows
+  // the same token - and therefore the Corner scale control - rather than a number of its
+  // own. A window rounded differently from the surfaces inside it reads as two shapes.
+  const frameRadius = 'var(--dsw-radius-panel)'
   if (!isDefault(values, 'accent') && usableColour(values.accent)) {
     const accent = values.accent.trim()
     base.push(`  --dsw-alias-state-business-primary: ${accent};`)
@@ -261,6 +265,18 @@ export function appearanceCss(values: AppearanceValues): string {
       ':root:root #root,',
       ':root:root #root > * {',
       '  background-color: transparent;',
+      '}',
+    ].join('\n'))
+  }
+  // The window's own corners belong to the shell. Windows does not round a transparent
+  // window - DWM accepts the corner preference and renders nothing - so the page rounds
+  // itself: clipping the document clips every surface inside it, and the arcs fall outside
+  // the clip, where the window is transparent and the desktop shows through. The radius
+  // follows the corner scale, so the control that rounds the interface rounds the window.
+  if (values.radiusScale > 0) {
+    blocks.push([
+      ':root:root body {',
+      `  clip-path: inset(0 round ${frameRadius});`,
       '}',
     ].join('\n'))
   }

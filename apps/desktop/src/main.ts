@@ -212,15 +212,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     show,
     ...(process.platform === 'win32' && primary ? {
       titleBarStyle: 'hidden' as const,
-      // Windows composites the page over the window's own surface unless the window is
-      // created transparent, so interface transparency can only wash the app out - never
-      // reveal the desktop or another application behind it.
-      transparent: true,
-      backgroundColor: '#00000000',
-      // The caption strip stays painted. The page leaves that band empty - it is where the
-      // OS draws the caption and its buttons - so a clear strip shows whatever is behind the
-      // window instead, including a neighbouring window's rounded corner, which reads as a
-      // gap across the top of the application.
+      // Windows rounds an ordinary window and leaves a transparent one square - DWM accepts
+      // DWMWA_WINDOW_CORNER_PREFERENCE on a layered window and renders nothing - and a
+      // maximized transparent window is also inset by its resize border, which reads as a
+      // gap along the edges. The material gives the translucency instead, which keeps the
+      // platform's own corners, caption, and geometry: the same pairing the welcome window
+      // uses on this platform.
+      backgroundMaterial: 'acrylic' as const,
       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
         symbolColor: nativeTheme.shouldUseDarkColors ? '#f9fafb' : '#0f1115' },
     } : {}),
