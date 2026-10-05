@@ -12,24 +12,25 @@ index d2a403283c..ab80195da3 100644
      "@deepseek-ai/dsh-experimental-schedule-bundle": "workspace:*",
      "@deepseek-ai/dsh-fs-local": "workspace:*",
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index b4b8153b7f..8c0fd9f2cb 100644
+index b4b8153b7f..d370d61d92 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
-@@ -212,7 +212,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+@@ -212,6 +212,15 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
      show,
      ...(process.platform === 'win32' && primary ? {
        titleBarStyle: 'hidden' as const,
--      titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
 +      // Windows composites the page over the window's own surface unless the window is
 +      // created transparent, so interface transparency can only wash the app out - never
-+      // reveal the desktop or another application behind it. The caption strip gives up
-+      // its fill for the same reason: an opaque overlay paints a solid band across it.
++      // reveal the desktop or another application behind it.
 +      transparent: true,
 +      backgroundColor: '#00000000',
-+      titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: '#00000000',
++      // The caption strip stays painted. The page leaves that band empty - it is where the
++      // OS draws the caption and its buttons - so a clear strip shows whatever is behind the
++      // window instead, including a neighbouring window's rounded corner, which reads as a
++      // gap across the top of the application.
+       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
          symbolColor: nativeTheme.shouldUseDarkColors ? '#f9fafb' : '#0f1115' },
      } : {}),
-     // hiddenInset places traffic lights inside the sidebar; sidebar vibrancy
 diff --git a/apps/web/tests/built-boot.expected.e2e.ts b/apps/web/tests/built-boot.expected.e2e.ts
 index f645214133..06c9d78141 100644
 --- a/apps/web/tests/built-boot.expected.e2e.ts
