@@ -145,6 +145,18 @@ describe('real transparency', () => {
     expect(css).not.toContain('--dsw-alias-bg-base:')
   })
 
+  it('squares the leading corner while the window is translucent', () => {
+    // A rounded corner on a translucent window is a notch the backdrop shows through, which
+    // reads as a gap at the leading edge. It is squared only while a control is faded.
+    const glass = appearanceCss(values({ shellOpacity: 45 }))
+    expect(glass).toContain(':root:root [data-dockkit-surface] {\n  border-top-left-radius: 0;\n  border-bottom-left-radius: 0;\n}')
+    const faded = appearanceCss(values({ surfaceOpacity: 45 }))
+    expect(faded).toContain(':root:root [data-dockkit-surface] {')
+    // A solid window keeps the theme's shape.
+    const solid = appearanceCss(values({ shellOpacity: 100, surfaceOpacity: 100, panelOpacity: 45 }))
+    expect(solid).not.toContain('[data-dockkit-surface]')
+  })
+
   it('clears the content scroller for the surface control, and the frame only for the window', () => {
     // The conversation's scroller and the composer are what a card or panel is seen
     // against, so the surface control owns them.

@@ -261,6 +261,18 @@ export function appearanceCss(values: AppearanceValues): string {
       '}',
     ].join('\n'))
   }
+  // A rounded corner on a translucent window is a notch: the arc is outside the surface, so
+  // whatever the window composites behind it shows through and reads as a gap at the leading
+  // edge. The corner is squared while either control is faded and returns with the window's
+  // own opacity, so the shape is unchanged on a solid deployment.
+  if (shellFactor < 1 || surfaceFactor < 1) {
+    blocks.push([
+      ':root:root [data-dockkit-surface] {',
+      '  border-top-left-radius: 0;',
+      '  border-bottom-left-radius: 0;',
+      '}',
+    ].join('\n'))
+  }
   // The content level: the conversation's scroller and the composer, whose own paint is
   // what a card or a panel is seen against. The shell leaves these alone: a surface inside
   // the window belongs to the surface control.
