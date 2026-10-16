@@ -1,0 +1,88 @@
+/* The provider visibility list under the Models settings page, on the
+   Tools section's row and text scale. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 24px;
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hint,
+.note {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: calc(var(--dsw-radius-xs) + 2px);
+  background: var(--dsw-alias-bg-error);
+  color: var(--dsw-alias-label-error);
+  font-size: 12px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.row + .row {
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The switch row inside a provider card. */
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.cardLabel {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
