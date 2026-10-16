@@ -300,9 +300,15 @@ describe('ui-schedule browser half', () => {
     }
   })
 
-  it('binds the shown task to the Session committed tabs and starts a new task from the panel', async () => {
+  it('binds the shown task to the Session committed tabs and creates a task from the panel form', async () => {
     const sidebar = sidebarStubs()
-    const ctx = await baseContext(undefined, sidebar)
+    const created = {
+      id: 'created-task' as ScheduleId, kind: 'every' as const, title: 'Nightly', prompt: 'Run the sweep',
+      everySeconds: 3_600, scheduledAt: '2099-01-01T00:00:00.000Z',
+    }
+    const create = vi.fn(async () => ({ ok: true, value: { created: true, record: created } }))
+    const catalog = vi.fn(async () => ({ ok: true, value: [] }))
+    const ctx = await baseContext({ schedule: { create, catalog }, $on: () => () => {} }, sidebar)
     const owner = ctx.slots.register({
       name: 'root',
       children: {
@@ -311,7 +317,6 @@ describe('ui-schedule browser half', () => {
         main: { kind: 'keyed', scope: 'root' },
       },
     } as never, Empty)
-    const startSession = vi.spyOn(ctx.uiWorkspace, 'startSession')
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     try {
@@ -330,10 +335,14 @@ describe('ui-schedule browser half', () => {
       ) as ScheduleTaskCatalogInjected & ScheduleTaskBindingInjected
       expect(chip.taskBindings).toBe(body.taskBindings)
       expect(chip.hooks.catalog).toBe(body.hooks.catalog)
-      // The panel starts a new reminder in a Session rather than opening a creation form.
+      // The panel's own form creates the task through the Host endpoint, so a new
+      // reminder never has to be asked for in a chat first.
       const panel = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
-      panel.onNewTask()
-      expect(startSession).toHaveBeenCalledOnce()
+      const request = { sessionId, title: 'Nightly', prompt: 'Run the sweep', every_seconds: 3_600 }
+      await expect(panel.onCreateTask(request)).resolves.toEqual({ ok: true })
+      expect(create).toHaveBeenCalledWith(request)
+      // The write is in, so the page refreshes the catalog it lists from.
+      expect(catalog).toHaveBeenCalled()
     } finally {
       await fiber.dispose()
       owner()

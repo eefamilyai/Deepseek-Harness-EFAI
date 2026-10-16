@@ -6,7 +6,7 @@ import type { PropsLocale, PropsRuntime, InjectFace } from '@deepseek-ai/dsh-cli
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import styles from './EffectsSettingsRow.module.css'
 
-const css = (key: string): string => (styles as Record<string, string>)[key] ?? key
+const css = (key: string): string => (styles)[key] ?? key
 
 /** Injected business face handed to the row through the slot framework. */
 export interface EffectsSettingsRowInjected {

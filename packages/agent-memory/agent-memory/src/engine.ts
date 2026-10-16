@@ -31,8 +31,10 @@ import {
 export const name = 'agent-memory-engine'
 export const inject = ['storageDomain', 'systemPrompt', 'tools']
 
+/** System-prompt section id of the injected memory index. */
 export const MEMORY_PROMPT_SECTION = 'memory:index'
 
+/** The engine's bounds; each field defaults in the plugin's Config. */
 export interface EngineConfig {
   /** How many of the newest memory nodes the injected index lists. */
   maxIndexNodes?: number
@@ -237,18 +239,15 @@ export function apply(ctx: Context, config: EngineConfig): Promise<void> {
             text: { type: 'string', required: true },
           },
         },
-        render: (_args, value) => {
-          const v = value as { found: boolean; ref: string; text: string }
-          return [{ type: 'text', text: v.found ? v.text : `no memory found for ref ${v.ref}` }]
-        },
+        render: (_args, value) => [{ type: 'text', text: value.found ? value.text : `no memory found for ref ${value.ref}` }],
       },
+      // oxlint-disable-next-line typescript/require-await -- async keeps the missing-agent guard a rejection, not a synchronous throw
       async execute(args, exec: ToolRunContext) {
-        const a = args as { ref: string }
         if (exec.agent === undefined) throw new Error('memory_recall requires an owning agent')
-        const text = service.fullByRef(exec.agent.id, a.ref)
+        const text = service.fullByRef(exec.agent.id, args.ref)
         return text === undefined
-          ? { found: false, ref: a.ref, text: '' }
-          : { found: true, ref: a.ref, text }
+          ? { found: false, ref: args.ref, text: '' }
+          : { found: true, ref: args.ref, text }
       },
     }))
 
@@ -278,12 +277,12 @@ export function apply(ctx: Context, config: EngineConfig): Promise<void> {
           },
         },
         render: (_args, value) => {
-          const v = value as { count: number; entries: { ref: string; seq: number; kind: string; source: string; summary: string }[] }
-          if (v.count === 0) return [{ type: 'text', text: '(memory is empty)' }]
-          const lines = v.entries.map(e => `[${e.kind}:${e.ref}] ${e.source}: ${e.summary}`)
+          if (value.count === 0) return [{ type: 'text', text: '(memory is empty)' }]
+          const lines = value.entries.map(e => `[${e.kind}:${e.ref}] ${e.source}: ${e.summary}`)
           return [{ type: 'text', text: lines.join('\n') }]
         },
       },
+      // oxlint-disable-next-line typescript/require-await -- async keeps the missing-agent guard a rejection, not a synchronous throw
       async execute(_args, exec: ToolRunContext) {
         if (exec.agent === undefined) throw new Error('memory_map requires an owning agent')
         const nodes = service.recent(exec.agent.id)

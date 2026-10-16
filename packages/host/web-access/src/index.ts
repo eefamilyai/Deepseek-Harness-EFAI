@@ -48,6 +48,8 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEq
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+// Type-only: pulls the Loader's Context merge (ctx.get('loader')).
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 
 /** Cordis plugin name used by loader diagnostics. */

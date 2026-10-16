@@ -330,7 +330,7 @@ describe('structural spam cuts the turn and still runs the call', () => {
   it('stops PULLING the provider rather than reading on and discarding', async () => {
     let pulled = 0
     const trailer = Array.from({ length: 50 }, (_, index): StreamChunk =>
-      ({ type: 'text-delta', index: 1, text: 'MORE-' + index + '\n' }))
+      ({ type: 'text-delta', index: 1, text: `MORE-${index}\n` }))
     async function* counted(): AsyncIterable<StreamChunk> {
       const chunks: StreamChunk[] = [
         ...textBlock(0, good + spam),

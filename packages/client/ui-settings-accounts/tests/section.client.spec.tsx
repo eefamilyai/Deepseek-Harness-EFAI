@@ -64,7 +64,7 @@ async function expandRow(): Promise<void> {
  * @returns the checkbox's checked state.
  */
 function purgeTick(): boolean {
-  return (screen.getByRole('checkbox', { name: en['accounts.remove.purge'] }) as HTMLInputElement).checked
+  return screen.getByRole<HTMLInputElement>('checkbox', { name: en['accounts.remove.purge'] }).checked
 }
 
 /** The row's Remove button. */

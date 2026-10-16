@@ -32,6 +32,7 @@ One settlement per turn/step, replacing rather than adding: a step can settle tw
 
 The fold is one pass over the session events, and its state schema is the one definition of the totals a reader sees: `projectionSchema` is shared between the definition and the state it stores, so a bucket added in one place cannot be forgotten in the other.
 
+No runtime invariant companion is published: the projection is one fold over durable usage samples, and the projection registry owns its checkpoint and replay.
 
 ## Model Experience
 

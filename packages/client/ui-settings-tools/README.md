@@ -28,6 +28,8 @@ Every string is registered through `ctx.locale.register('tools', { zh, en })`; `
 
 Fork-owned: `packages/client/ui-settings-tools` is Tier 1.
 
+No runtime invariant companion is published: the section edits other plugins' settings rows through the settings service and owns no state or event stream of its own.
+
 ## Known Limitations and Deferred Work
 
 - The per-tool list is what the roster has learned, so a tool a plugin mounts after the last turn appears on the next one rather than immediately, and a deployment that refuses settings writes shows only the names someone already withdrew.

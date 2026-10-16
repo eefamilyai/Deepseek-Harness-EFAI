@@ -46,6 +46,47 @@ MCP 提供方为其加载后创建的每个活动 Agent 初始化一个客户端
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxagentbrowser--agentbrowser"></a>
+
+### `ctx.agentBrowser` — `AgentBrowser`
+
+The `ctx.agentBrowser` service. The name is the literal the Typert analyzer binds the namespace to.
+
+```ts cordis-catalog
+/**
+ * Whether a Desktop window is subscribed to carry agent pages.
+ * @returns true while at least one window holds the command stream.
+ */
+available(): boolean
+
+/**
+ * Perform one page operation in the newest subscribed window.
+ * @param call - the operation and the page it addresses.
+ * @param signal - abandons the wait; the window may still finish the operation.
+ * @returns the window's successful reply.
+ * @throws {AgentBrowserUnavailableError} when no window is subscribed or the holding window disconnects.
+ * @throws Error with the window's reason when the operation fails, or when no reply arrives in time.
+ */
+run(call: AgentBrowserCall, signal?: AbortSignal): Promise<AgentBrowserReply>
+
+/**
+ * Carry agent pages in this window: receive every operation addressed to them.
+ * The first item is a `hello` with no operation, so the window can accept the stream.
+ * @param signal - stream lifetime; it ends when the window disconnects.
+ * @returns the operations, in the order the Host issued them.
+ */
+@Remote({ mode: 'stream' }) async *commands(signal: AbortSignal): AsyncIterable<AgentBrowserRequest>
+
+/**
+ * Settle one operation this window performed.
+ * @param reply - the outcome, naming the operation it settles.
+ * @returns whether an operation was waiting for this reply; false for a late or unknown one.
+ */
+@Remote respond(reply: AgentBrowserReply): boolean
+```
+
+Source: [`packages/web/web-browser-sidebar/src/index.ts`](../../packages/web/web-browser-sidebar/src/index.ts)
+
 <a id="ctxbrowseruse--browseruseregistry"></a>
 
 ### `ctx.browserUse` — `BrowserUseRegistry`

@@ -9,8 +9,8 @@
  * The values themselves live in one {@link AppearancePolicy}: the section writes
  * through it and the engine paints from it, so a control changes the window in
  * the same step and the row is adopted whenever it answers. The slot hands the
- * policy's stores to the section through the inject `hooks` compartment, which
- * the renderer binds as `use<Name>` selector hooks.
+ * policy's snapshot and save state to the section through the inject `hooks`
+ * compartment, which the renderer binds as `use<Name>` selector hooks.
  *
  * @module @deepseek-ai/dsh-client-ui-personalization/client
  */
@@ -29,8 +29,8 @@ import { AppearanceSection, type AppearanceFields, type AppearanceSectionInjecte
 import { en, zh } from './locales.ts'
 
 export type { AppearanceFields, AppearanceSectionComponentProps, AppearanceSectionInjected } from './AppearanceSection.tsx'
-export type { AppearanceValues } from './appearance.ts'
-export type { AppearanceField, AppearanceSource } from './appearance-store.ts'
+export type { AppearanceField, AppearanceValues, Backdrop, ContentWidth, ScrollbarStyle, SettingsWidth, ShadowStrength } from '../options.ts'
+export type { AppearanceSaveState, AppearanceSource } from './appearance-store.ts'
 
 /** The locale namespace this section registers its copy under. */
 const NS = 'appearance'
@@ -57,23 +57,8 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => { policy.dispose() }, 'ui-personalization: row subscription')
 
   const injected = (): AppearanceSectionInjected => ({
-    status: form === undefined ? 'unavailable' : 'ready',
-    hooks: {
-      fontFamily: policy.fontFamily,
-      fontScale: policy.fontScale,
-      accent: policy.accent,
-      radiusScale: policy.radiusScale,
-      shellOpacity: policy.shellOpacity,
-      surfaceOpacity: policy.surfaceOpacity,
-      panelOpacity: policy.panelOpacity,
-    },
-    setFontFamily: (value) => { policy.setFontFamily(value) },
-    setFontScale: (value) => { policy.setFontScale(value) },
-    setAccent: (value) => { policy.setAccent(value) },
-    setRadiusScale: (value) => { policy.setRadiusScale(value) },
-    setShellOpacity: (value) => { policy.setShellOpacity(value) },
-    setSurfaceOpacity: (value) => { policy.setSurfaceOpacity(value) },
-    setPanelOpacity: (value) => { policy.setPanelOpacity(value) },
+    hooks: { appearance: policy.appearance, saveState: policy.saveState, rowStatus: policy.rowStatus },
+    set: (field, value) => { policy.set(field, value) },
     reset: () => { policy.reset() },
   })
 

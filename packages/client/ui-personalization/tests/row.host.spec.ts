@@ -12,6 +12,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import { Config, apply, name } from '../src/index.ts'
+import { APPEARANCE_DEFAULTS } from '../src/options.ts'
 
 describe('the personalization row', () => {
   it('exports the function-plugin form and mounts', async () => {
@@ -29,8 +30,10 @@ describe('the personalization row', () => {
     await live.fiber.dispose()
   })
 
-  it('accepts every field at once, and an empty document', () => {
-    expect(() => Config({})).not.toThrow()
+  it('accepts every field at once, and an empty document that resolves to the theme defaults', () => {
+    // Every field is volatile, so the resolved document holds live references.
+    const resolved = Config({}) as Record<string, { get: () => unknown }>
+    expect(Object.fromEntries(Object.entries(resolved).map(([field, ref]) => [field, ref.get()]))).toEqual(APPEARANCE_DEFAULTS)
     expect(() => Config({
       fontFamily: 'Inter, system-ui, sans-serif',
       fontScale: 120,
@@ -38,6 +41,17 @@ describe('the personalization row', () => {
       radiusScale: 1.5,
       shellOpacity: 65,
       surfaceOpacity: 85,
+      codeFontFamily: 'Cascadia Code, Consolas',
+      lineHeight: 120,
+      accentEverywhere: true,
+      contentWidth: 'full',
+      settingsWidth: 'wide',
+      scrollbars: 'thin',
+      glassBlur: 16,
+      backdrop: 'image',
+      backdropImage: 'https://example.com/w.jpg',
+      shadows: 'strong',
+      reduceMotion: true,
     })).not.toThrow()
   })
 
@@ -46,6 +60,8 @@ describe('the personalization row', () => {
     expect(() => Config({ surfaceOpacity: 400 })).toThrow()
     expect(() => Config({ radiusScale: 9 })).toThrow()
     expect(() => Config({ fontScale: 10 })).toThrow()
+    expect(() => Config({ contentWidth: 'huge' })).toThrow()
+    expect(() => Config({ glassBlur: 200 })).toThrow()
   })
 
   it('accepts both spellings of an opacity, so an older profile keeps working', () => {

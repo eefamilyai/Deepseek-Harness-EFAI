@@ -26,6 +26,8 @@ Preferences are durable. The Host half declares the preferences as live config f
 | [`src/client/settings-store.ts`](src/client/settings-store.ts) | Mirrors the row's config form into browser state, with a process-local fallback |
 | [`src/client/locales.ts`](src/client/locales.ts) | The `settings.effects` copy |
 
+No runtime invariant companion is published: a purely decorative client overlay — it emits no cordis events and owns no cross-plugin contract; overlay lifecycle is asserted directly by this package's client behavior specs.
+
 ## Known Limitations and Deferred Work
 
 These limits define what this package does not provide. They are current package constraints, not a roadmap.

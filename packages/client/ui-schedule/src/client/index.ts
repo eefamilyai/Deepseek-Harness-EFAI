@@ -53,6 +53,7 @@ import { ScheduleTaskTabTitle } from './ScheduleTaskTabTitle.tsx'
 import { SessionScheduleHover } from './SessionScheduleHover.tsx'
 import { SessionScheduleMark } from './SessionScheduleMark.tsx'
 import { createSessionScheduleSource, type SessionScheduleSourceFactory } from './session-schedule-state.ts'
+import { timingError } from './task-timing.ts'
 import { TaskTabBindings } from './task-tab-bindings.ts'
 import { TaskManagerPage, type TaskManagerInjected } from './TaskManagerPage.tsx'
 import type { TaskDetailInjected } from './TaskDetail.tsx'
@@ -165,14 +166,25 @@ export function apply(ctx: ClientContext): void {
     locale: MANAGER_NS,
     inject: (): ScheduleTaskCatalogInjected & ScheduleTaskBindingInjected => ({ hooks: detail.hooks, taskBindings }),
   }, ScheduleTaskTabTitle))
+  // DSH-FORK(schedule): the page creates its own task through a Remote endpoint the
+  // Desktop's app.asar does not ship, so this wiring is a fork delta on an upstream file.
+  // EXIT: upstream ships a creation form on the Automation tasks page.
   ctx.slots.inject('main', () => ctx.slots.register({
     name: 'main',
     key: PANEL_ID,
     locale: MANAGER_NS,
     inject: (): TaskManagerInjected => ({
       ...detail,
-      // The page has no creation form: a new reminder starts in a Session.
-      onNewTask: () => { ctx.uiWorkspace.startSession() },
+      // The page's own form creates the task through the Host endpoint, so a new
+      // reminder never has to be asked for in a chat first.
+      onCreateTask: async (request) => {
+        const result = await ctx.remote.schedule.create(request)
+        if (!result.ok) return { ok: false, message: 'create.failed' }
+        if (!result.value.created) return { ok: false, message: timingError(result.value.code) }
+        // The write is in, so this readback must not join a read sent before it.
+        await manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest)
+        return { ok: true }
+      },
     }),
   }, TaskManagerPage))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({

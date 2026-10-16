@@ -447,6 +447,12 @@ function isIllustration(text: string): boolean {
   return false
 }
 
+/**
+ * Read one text span as a tool call written in a recognized malformed shape.
+ * @param text - the span.
+ * @param tools - the request's tool schemas by name.
+ * @returns the candidate call, or undefined when the span is not one.
+ */
 export function extractShape(text: string, tools: ReadonlyMap<string, ToolSchema>): ShapeCandidate | undefined {
   return readShape(text, tools).candidate
 }

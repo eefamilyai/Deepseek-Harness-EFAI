@@ -34,7 +34,9 @@ const SECTION_ID = 'tools'
  * Host packages are not part of the browser program.
  */
 export const TOOL_ROSTER_ENTRY_ID = 'tool-roster'
+/** The Python kernel's profile entry id. */
 export const KERNEL_PYTHON_ENTRY_ID = 'kernel-python'
+/** The browser tool's profile entry id. */
 export const WEB_BROWSER_ENTRY_ID = 'web-browser'
 
 /**

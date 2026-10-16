@@ -191,19 +191,19 @@ function separate(region: string, tools: ReadonlyMap<string, ToolSchema>): reado
   const firstTag = firstIsCloser ? '' : (first[1] ?? '').toLowerCase()
   const lastToken = tokens[tokens.length - 1]
   const lastIsCloser = lastToken !== undefined && lastToken[0].charAt(1) === SL
-  const lastTag = lastIsCloser ? (lastToken?.[1] ?? '').toLowerCase() : ''
+  const lastTag = lastIsCloser ? (lastToken[1] ?? '').toLowerCase() : ''
   const wrapperTag = firstTag.length > 0 && firstTag === lastTag ? firstTag : ''
   const items: Item[] = []
   // Only the text before the first tag, plus the text that sits where no value
   // can -- after a closer -- is residue. Text between two openers is a VALUE
   // and belongs to the item that owns it, and sweeping that up here would read
   // every argument as prose and discard the whole span.
-  let residue = region.slice(0, first.index ?? 0)
+  let residue = region.slice(0, first.index)
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token === undefined) continue
     const next = tokens[index + 1]
-    const slice = region.slice((token.index ?? 0) + token[0].length, next?.index ?? region.length)
+    const slice = region.slice(token.index + token[0].length, next?.index ?? region.length)
     const closer = token[0].charAt(1) === SL
     const tag = (token[1] ?? '').toLowerCase()
     if (closer && wrapperTag.length > 0 && index === tokens.length - 1) continue

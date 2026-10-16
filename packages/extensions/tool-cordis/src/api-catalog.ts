@@ -82,6 +82,38 @@ export interface TypeApiEntry {
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
+    key: 'agentBrowser',
+    summary: 'The `ctx.agentBrowser` service.',
+    description: 'The `ctx.agentBrowser` service. The name is the literal the Typert analyzer binds the namespace to.',
+    methods: [
+      {
+        signature: 'available(): boolean',
+        description: 'Whether a Desktop window is subscribed to carry agent pages.',
+        parameters: [],
+        returns: 'true while at least one window holds the command stream.',
+      },
+      {
+        signature: 'run(call: AgentBrowserCall, signal?: AbortSignal): Promise<AgentBrowserReply>',
+        description: 'Perform one page operation in the newest subscribed window.',
+        parameters: [{ name: 'call', description: 'the operation and the page it addresses.' }, { name: 'signal', description: 'abandons the wait; the window may still finish the operation.' }],
+        returns: 'the window\'s successful reply.',
+        throws: ['{AgentBrowserUnavailableError} when no window is subscribed or the holding window disconnects.', 'Error with the window\'s reason when the operation fails, or when no reply arrives in time.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *commands(signal: AbortSignal): AsyncIterable<AgentBrowserRequest>',
+        description: 'Carry agent pages in this window: receive every operation addressed to them. The first item is a `hello` with no operation, so the window can accept the stream.',
+        parameters: [{ name: 'signal', description: 'stream lifetime; it ends when the window disconnects.' }],
+        returns: 'the operations, in the order the Host issued them.',
+      },
+      {
+        signature: '@Remote respond(reply: AgentBrowserReply): boolean',
+        description: 'Settle one operation this window performed.',
+        parameters: [{ name: 'reply', description: 'the outcome, naming the operation it settles.' }],
+        returns: 'whether an operation was waiting for this reply; false for a late or unknown one.',
+      },
+    ],
+  },
+  {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',
     description: 'Owns the default model selection independently of any Host or transport. Each operation reads the owning Config references.',
@@ -1898,6 +1930,53 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'readonly telemetryDisabledEnv: string | undefined',
         description: 'Launch-time DSH_TELEMETRY_DISABLED value; any non-empty value opts out.',
         parameters: [],
+      },
+    ],
+  },
+  {
+    key: 'profileHub',
+    summary: 'The `ctx.profileHub` service.',
+    description: 'The `ctx.profileHub` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.',
+    methods: [
+      {
+        signature: '@Remote listProfiles(): ProfileHubState',
+        description: 'Every profile this machine holds, with the facts the landing page renders.',
+        parameters: [],
+        returns: 'the harness home, the running profile, the launcher profile, and one row per profile.',
+      },
+      {
+        signature: '@Remote createProfile(request: CreateProfileRequest): ProfileHubState',
+        description: 'Create one self-contained profile from the running profile\'s own stack.',
+        parameters: [{ name: 'request', description: 'the name, optional title and working directory, and whether to copy the running layer.' }],
+        returns: 'the machine\'s state after the profile exists.',
+        throws: ['RemoteError with `profileHub/rejected` when the name is invalid, taken, or reserved.'],
+      },
+      {
+        signature: '@Remote removeProfile(name: string): ProfileHubState',
+        description: 'Remove one profile and everything it owns, including its chats and logins.',
+        parameters: [{ name: 'name', description: 'the profile to remove.' }],
+        returns: 'the machine\'s state after the removal.',
+        throws: ['RemoteError with `profileHub/rejected` when the profile is reserved, running, or this one.'],
+      },
+      {
+        signature: '@Remote setLauncherProfile(name: string): ProfileHubState',
+        description: 'Choose which profile opens the landing page at startup.',
+        parameters: [{ name: 'name', description: 'the profile whose startup should land on this page.' }],
+        returns: 'the machine\'s state after the choice.',
+        throws: ['RemoteError with `profileHub/rejected` when no such profile exists.'],
+      },
+      {
+        signature: '@Remote async openProfile(name: string, target: OpenProfileTarget): Promise<OpenProfileResult>',
+        description: 'Start a profile as its own host process and answer the URL to enter it at.\n\nA host serves exactly one profile, so entering another one starts a second process rather than reconfiguring this one; a profile this hub already started answers with the same URL instead of a second host.',
+        parameters: [{ name: 'name', description: 'the profile to enter.' }, { name: 'target', description: 'open a second Desktop window, or start a Web Host and answer its URL.' }],
+        returns: 'which surface opened, and the URL when a Web Host did.',
+        throws: ['RemoteError with `profileHub/rejected` when the profile cannot be opened.'],
+      },
+      {
+        signature: '@Remote stopProfile(name: string): ProfileHubState',
+        description: 'Stop a profile this hub started.',
+        parameters: [{ name: 'name', description: 'the profile whose host should stop.' }],
+        returns: 'the machine\'s state after the stop.',
       },
     ],
   },
@@ -4613,6 +4692,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface Agent {\n    readonly id: SessionId;\n}',
   },
   {
+    name: 'AgentBrowserCall',
+    declaration: 'export type AgentBrowserCall = Omit<AgentBrowserRequest, \'id\'>;',
+  },
+  {
+    name: 'AgentBrowserOp',
+    declaration: 'export type AgentBrowserOp = \'hello\' | \'navigate\' | \'evaluate\' | \'click\' | \'insertText\' | \'key\' | \'back\' | \'forward\' | \'settle\' | \'screenshot\' | \'close\';',
+  },
+  {
+    name: 'AgentBrowserReply',
+    declaration: 'export interface AgentBrowserReply {\n    readonly id: string;\n    readonly ok: boolean;\n    readonly error?: string;\n    readonly fresh?: boolean;\n    readonly url?: string;\n    readonly title?: string;\n    readonly value?: string;\n    readonly png?: string;\n    readonly width?: number;\n    readonly height?: number;\n}',
+  },
+  {
+    name: 'AgentBrowserRequest',
+    declaration: 'export interface AgentBrowserRequest {\n    readonly id: string;\n    readonly op: AgentBrowserOp;\n    readonly pageId: string;\n    readonly displaySessionId: string;\n    readonly viewportWidth: number;\n    readonly viewportHeight: number;\n    readonly timeoutMs: number;\n    readonly url?: string;\n    readonly script?: string;\n    readonly text?: string;\n    readonly key?: string;\n    readonly x?: number;\n    readonly y?: number;\n}',
+  },
+  {
     name: 'AgentCancelCause',
     declaration: 'export type AgentCancelCause = {\n    readonly kind: \'user\';\n} | {\n    readonly kind: \'parent\';\n} | {\n    readonly kind: \'hook\';\n    readonly reason: string;\n} | {\n    readonly kind: \'disposed\';\n};',
   },
@@ -5107,6 +5202,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CreateGoalResult',
     declaration: 'export interface CreateGoalResult {\n    readonly ref: GoalRef;\n}',
+  },
+  {
+    name: 'CreateProfileRequest',
+    declaration: 'export interface CreateProfileRequest {\n    readonly name: string;\n    readonly title?: string;\n    readonly workdir?: string;\n    readonly clone?: boolean;\n}',
   },
   {
     name: 'CreateSessionOptions',
@@ -5726,7 +5825,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KernelProvider',
-    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n    busy?(): boolean;\n    pollBackground?(id: number): Promise<KernelBackgroundPoll>;\n    stopBackground?(id: number): Promise<void>;\n}',
+    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n    busy?(): boolean;\n    pollBackground?(this: void, id: number): Promise<KernelBackgroundPoll>;\n    stopBackground?(this: void, id: number): Promise<void>;\n}',
   },
   {
     name: 'KvFacet',
@@ -6057,6 +6156,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n}',
   },
   {
+    name: 'OpenProfileResult',
+    declaration: 'export interface OpenProfileResult {\n    readonly opened: OpenProfileTarget;\n    readonly url?: string;\n}',
+  },
+  {
+    name: 'OpenProfileTarget',
+    declaration: 'export type OpenProfileTarget = \'app\' | \'browser\';',
+  },
+  {
     name: 'OptionalSessionSeq',
     declaration: 'export type OptionalSessionSeq = SessionSeq | null;',
   },
@@ -6209,8 +6316,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ProductTelemetryRecord = OTelEventRecord;',
   },
   {
+    name: 'ProfileHubState',
+    declaration: 'export interface ProfileHubState {\n    readonly home: string;\n    readonly profilesDir: string;\n    readonly current: string;\n    readonly launcher: string;\n    readonly landing: boolean;\n    readonly canLaunch: boolean;\n    readonly canOpenDesktop: boolean;\n    readonly profiles: readonly ProfileSummary[];\n}',
+  },
+  {
     name: 'ProfilePnpmInvocation',
     declaration: 'export interface ProfilePnpmInvocation {\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'ProfileSummary',
+    declaration: 'export interface ProfileSummary {\n    readonly name: string;\n    readonly title: string;\n    readonly workdir?: string;\n    readonly bundles: readonly string[];\n    readonly isolated: boolean;\n    readonly chats?: number;\n    readonly locked: boolean;\n    readonly current: boolean;\n    readonly launcher: boolean;\n    readonly running: boolean;\n    readonly url?: string;\n}',
   },
   {
     name: 'ProjectionChangeListener',

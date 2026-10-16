@@ -53,6 +53,11 @@ flowchart LR
   pkg_ai_accounts["ai-accounts"]
   svc_aiAccounts["ctx.aiAccounts<br/>Account-pool registry"]
   pkg_client_ui_settings_accounts["client-ui-settings-accounts"]
+  pkg_profile_hub["profile-hub"]
+  svc_profileHub["ctx.profileHub<br/>Profile registry and launcher"]
+  pkg_web_browser_sidebar["web-browser-sidebar"]
+  svc_agentBrowser["ctx.agentBrowser<br/>Sidebar browser bridge"]
+  pkg_web_browser["web-browser"]
   pkg_kernel["kernel"]
   svc_kernel["ctx.kernel<br/>Persistent code-execution kernel"]
   pkg_kernel_python["kernel-python"]
@@ -372,6 +377,7 @@ flowchart LR
   pkg_plan_mode --> svc_planMode
   pkg_plugin_manager --> svc_pluginManager
   pkg_plugin_package_inventory_deepseek --> svc_deepseekLlmApiExtensions
+  pkg_profile_hub --> svc_profileHub
   pkg_ptc_runtime --> svc_ptcRuntime
   pkg_ptc_runtime_node --> svc_ptcRuntime
   pkg_pwsh_local --> svc_shell
@@ -429,6 +435,7 @@ flowchart LR
   pkg_user_approval --> svc_approval
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
+  pkg_web_browser_sidebar --> svc_agentBrowser
   pkg_web_fetch_http --> svc_web
   pkg_web_search_deepseek --> svc_web
   pkg_web_search_exa --> svc_web
@@ -438,6 +445,8 @@ flowchart LR
   pkg_workflow_ptc --> svc_workflowEngine
   pkg_workspace --> svc_workspaceRegistry
   pkg_workspace_changes --> svc_workspaceChanges
+  svc_agentBrowser --> pkg_web_browser
+  svc_agentBrowser --> pkg_web_browser_sidebar
   svc_agentDefaultModel --> pkg_api_session_controller
   svc_agentDefaultModel --> pkg_headless
   svc_agentLoop --> pkg_base
@@ -501,6 +510,7 @@ flowchart LR
   svc_pluginManager --> pkg_ui_settings_plugin_inventory
   svc_pluginRegistryProbe --> pkg_client_ui_plugin_manager
   svc_profileContext --> pkg_plugin_manager
+  svc_profileHub --> pkg_profile_hub
   svc_ptcRuntime --> pkg_tools
   svc_ptcRuntime --> pkg_workflow_ptc
   svc_sandbox --> pkg_bash_sandbox
@@ -605,6 +615,8 @@ flowchart LR
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-kiln`](../packages/llm/llm-kiln), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.aiAccounts` | `seam` | [`ai-accounts`](../packages/llm/ai-accounts) | [`llm-kiln`](../packages/llm/llm-kiln) | [`client-ui-settings-accounts`](../packages/client/ui-settings-accounts) | - | A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service's own aiAccounts Remote namespace. |
+| `ctx.profileHub` | `seam` | [`profile-hub`](../packages/boot/profile-hub) | - | [`profile-hub`](../packages/boot/profile-hub) | - | The service lists every profile under the harness home, creates and removes self-contained ones, records which profile opens on startup, and launches a profile other than the running one as its own host process; the landing page reaches all of it through the service's own profileHub Remote namespace. |
+| `ctx.agentBrowser` | `seam` | [`web-browser-sidebar`](../packages/web/web-browser-sidebar) | - | [`web-browser`](../packages/web/web-browser), [`web-browser-sidebar`](../packages/web/web-browser-sidebar) | - | A Host caller's browser operation reaches the newest subscribed window's sidebar browser and resolves with that window's reply; the window subscribes and answers through the service's own agentBrowser Remote namespace. |
 | `ctx.kernel` | `seam` | [`kernel`](../packages/kernel/kernel) | [`kernel-python`](../packages/kernel/kernel-python) | [`tool-kernel`](../packages/kernel/tool-kernel) | - | A backend owns one namespace that survives across calls; the tool runs a cell in it and returns the captured output. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |

@@ -1,0 +1,46 @@
+/* Shell of the Automation tasks creation dialog.
+   The fields inside reuse the manager page's own rule-row classes, so the form
+   and the detail's Run time editor share one set of row metrics and tokens.
+   Only the shell lives here: the dialog box, the field stack, and the session
+   picker's truncation and list height. */
+
+.dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* A session title can be long; the row keeps one line and the picker's value
+   truncates rather than pushing the chevron off the row. */
+.sessionValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionMenu.sessionMenu {
+  height: min(320px, calc(100dvh - 48px));
+  max-height: min(320px, calc(100dvh - 48px));
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

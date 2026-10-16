@@ -20,6 +20,8 @@ The password rides that one call only. The Host never stores or returns it, the 
 
 Fork-owned: `packages/client/ui-settings-accounts` is Tier 1. It depends on the `llm` Remote surface that `packages/llm/llm` exposes, which is a Tier-2 seam edit with its own `DSH-FORK` marker and exit plan.
 
+No runtime invariant companion is published: the section renders the account provider's answers and owns no state or event stream of its own.
+
 ## Known Limitations and Deferred Work
 
 - The page adds a login and shows what a pool reports about it; it cannot remove one. Removing a pooled account is the account store's operation, and this section deliberately holds no store handle of its own.

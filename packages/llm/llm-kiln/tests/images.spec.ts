@@ -53,7 +53,7 @@ function provider(id: string): KilnProvider {
     models: [{ id: 'm', name: 'M' }],
     advertised: [],
     default: 'm',
-  } as unknown as KilnProvider
+  }
 }
 
 /** An attachment store that returns fixed bytes and records what it was asked for. */
@@ -123,7 +123,7 @@ async function run(adapter: KilnAdapter, options: Partial<GenerateOptions> = {})
     model: 'm',
     messages: [IMAGE_MESSAGE],
     ...options,
-  } as GenerateOptions
+  }
   for await (const _ of adapter.stream(request)) { /* drain */ }
 }
 
@@ -261,7 +261,7 @@ describe('images that cannot travel', () => {
     await run(adapter)
     // The turn still runs — losing an attachment is not fatal to the request —
     // but the transcript says the image did not travel rather than implying it did.
-    expect(observed.requests[0]?.opts).not.toMatchObject({ ref_file_ids: expect.anything() })
+    expect(observed.requests[0]?.opts).not.toHaveProperty('ref_file_ids')
     const content = observed.requests[0]?.messages.map(turn => turn.content).join('\n') ?? ''
     expect(content).toContain('too large')
   })
@@ -319,7 +319,7 @@ describe('image placeholder text', () => {
       provider: 'kiln-deepseek',
       model: 'm',
       messages: [result],
-    } as unknown as GenerateOptions, '[image delivered]')
+    }, '[image delivered]')
     expect(turns).toEqual([{ role: 'user', content: 'OUTPUT:\n[image delivered]' }])
   })
 
@@ -333,7 +333,7 @@ describe('image placeholder text', () => {
         createToolResultMessage({ callId: ToolCallId('c2'), content: [text('two')], isError: false }),
         createUserMessage({ content: [text('next')], source }),
       ],
-    } as unknown as GenerateOptions)
+    })
     expect(turns.map(turn => turn.content)).toEqual(['OUTPUT:\none\nOUTPUT:\ntwo', 'next'])
   })
 })

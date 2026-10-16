@@ -1,82 +1,219 @@
-/* The personalization rows: a label with its hint on the left, its control on the
- * right, and the preset pills under the row that has them. Tokens only, so both
- * palettes and every user accent keep working. */
+/* The personalization section: titled groups separated by hairlines, each row a
+ * label and hint with its control on the right and its choices on the full width
+ * underneath. Tokens only, so both palettes and every user accent keep working. */
 
 .rows {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  width: 100%;
+}
+
+.notice {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.groupTitle {
+  margin: 0 0 4px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.groupRows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .row {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.rowHead {
+  display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1.25rem;
+  gap: 20px;
 }
 
 .text {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  max-width: 34rem;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .label {
   color: var(--dsw-alias-label-primary);
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
+  line-height: 20px;
 }
 
 .hint {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 0.8125rem;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .control {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .numberWrap {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 4px;
 }
 
 .suffix {
   color: var(--dsw-alias-label-tertiary);
-  font-size: 0.8125rem;
+  font-size: 13px;
 }
 
 .number {
-  width: 5.5rem;
+  width: 88px;
+}
+
+.textWrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .wide {
-  width: 18rem;
+  width: 288px;
+  max-width: 100%;
+}
+
+.invalid {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .presets {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
-  margin-top: 0.5rem;
+  align-items: center;
+  gap: 6px;
 }
 
-.groupLabel {
-  margin: 0.5rem 0 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
+.accentControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.failed {
-  color: var(--dsw-alias-label-danger);
-  font-size: 0.8125rem;
+.picker {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+}
+
+/* A colour swatch: the selected one carries the label colour as a ring. */
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 999px;
+  corner-shape: round;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.swatch:hover {
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l2);
+}
+
+.swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--dsw-alias-bg-layer-2), 0 0 0 4px var(--dsw-alias-label-primary);
+}
+
+.swatch:focus-visible,
+.tile:focus-visible,
+.picker:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+/* Backdrop tiles: a preview of the backdrop over its name. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tile:hover:not([aria-pressed='true']) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tile[aria-pressed='true'] {
+  background: var(--dsw-alias-bg-module-platform);
+  border-color: var(--dsw-static-neutral-bluish-400);
+}
+
+.tileSwatch {
+  display: block;
+  height: 40px;
+  border-radius: var(--dsw-radius-sm);
+  background-size: cover;
+}
+
+.tileLabel {
+  padding: 0 2px;
 }

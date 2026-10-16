@@ -43,6 +43,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-config-editor` | no | Persist plugin configuration through profile patches and Loader reconciliation |
 | `@deepseek-ai/dsh-hmr` | yes | Coordinated module and profile configuration hot reload |
 | `@deepseek-ai/dsh-plugin-manager` | yes | Current-profile plugin and bundle management shared by dsh CLI, Web and agent tools |
+| `@deepseek-ai/dsh-profile-hub` | yes | Profile hub: the dsh profiles on this machine, with the Remote surface a landing page uses to create, remove, launch, and enter one |
 
 ## browser-use
 
@@ -91,7 +92,9 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-ui-message-feedback` | no | The Web feedback surface: per-message Like/Dislike in the assistant-message action strip and the feedback dialog behind both ratings and /feedback, backed by the messageFeedback and sessionFeedback Host Remotes |
 | `@deepseek-ai/dsh-client-ui-model-selection` | no | Model selection over the shared model catalog, Session projection, and session.selectModel |
 | `@deepseek-ai/dsh-client-ui-open-in-app` | no | Web "Open In..." controls: the Session-header split button opening the workspace directory in an installed application, and the document preview's default-application controls for one file |
+| `@deepseek-ai/dsh-client-ui-peak-hours` | yes | DeepSeek API peak-hour indicator: a composer pill that warns while DeepSeek bills peak (2×) rates, with weekends and Chinese public holidays off-peak |
 | `@deepseek-ai/dsh-client-ui-permission-presets` | no | Permission surfaces: a new-session default in General settings and a current-session /permission popup over the permissions projection |
+| `@deepseek-ai/dsh-client-ui-personalization` | no | Personalization settings section: fonts, line spacing, accent, layout widths, corners, scrollbars, real transparency, backdrop, blur, shadows, and motion, applied as token overrides |
 | `@deepseek-ai/dsh-client-ui-plan` | no | Plan mode controls, persistent transcript plan cards, and sidebar Markdown previews |
 | `@deepseek-ai/dsh-client-ui-plugin-manager` | yes | Plugin management for the dsh web client: the sidebar Plugins panel installs, enables, disables, retries, and composes installed plugin packages |
 | `@deepseek-ai/dsh-client-ui-polish` | no | Interaction polish for the whole client: one motion system, real materials, and consistent control feedback |
@@ -182,6 +185,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-tool-present` | yes | Explicit workspace file delivery declarations for the DeepSeek Harness |
 | `@deepseek-ai/dsh-workspace-changes` | yes | Per-turn workspace file changes recorded from git working-tree snapshots and whole-file captures, with per-file comparisons, for the DeepSeek Harness |
+
+## devtools
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-harness-dev-tools` | yes | Tools for changing the harness and seeing the result: desktop_test_instance drives a separate test copy of the Desktop app over the DevTools Protocol, build_workspace_package builds one workspace package |
 
 ## document
 
@@ -520,7 +529,8 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-tool-web` | yes | Model-facing web tools (web_search, web_fetch) over the DeepSeek Harness web capability seam (ctx.web) |
 | `@deepseek-ai/dsh-web` | yes | Abstract web access capability seam (ctx.web) for the DeepSeek Harness — search/fetch provider registry, registration-order-independent selection, request/result vocabulary, and the WebError taxonomy |
-| `@deepseek-ai/dsh-web-browser` | yes | Self-hosted headless-browser capability for the DeepSeek Harness: a text-first `browser` tool a vision-less model can drive, plus a Playwright fetch provider (ctx.web) |
+| `@deepseek-ai/dsh-web-browser` | yes | Real-browser capability for the DeepSeek Harness: a text-first `browser` tool a vision-less model can drive, carried by the Desktop sidebar or headless Chromium, plus a Playwright fetch provider (ctx.web) |
+| `@deepseek-ai/dsh-web-browser-sidebar` | yes | Carries the agent's browser pages in the Desktop window's right sidebar: the agentBrowser Host service and the AI Browser tab that performs and shows them |
 | `@deepseek-ai/dsh-web-fetch-http` | yes | Anonymous public HTTP(S) fetch provider for the DeepSeek Harness web capability seam (ctx.web) |
 | `@deepseek-ai/dsh-web-search-deepseek` | yes | DeepSeek-backed search provider (native web_search via the Anthropic-compatible API) for the DeepSeek Harness web capability seam (ctx.web) |
 | `@deepseek-ai/dsh-web-search-exa` | yes | Exa-backed search provider for the DeepSeek Harness web capability seam (ctx.web) |

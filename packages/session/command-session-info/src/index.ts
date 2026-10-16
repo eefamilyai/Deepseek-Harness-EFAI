@@ -110,8 +110,8 @@ function collect(invocation: CommandInvocation, ctx: Context): SessionInfo {
     createdAt: typeof header.createdAt === 'number' ? header.createdAt : undefined,
     cwd: header.cwd,
     agentPreset: header.agentPreset,
-    provider: selected?.provider ?? options?.provider,
-    model: selected?.model ?? options?.model,
+    provider: selected?.provider ?? options.provider,
+    model: selected?.model ?? options.model,
 
     uncachedInputTokens: num(usage?.uncachedInputTokens),
     cacheReadTokens: num(usage?.cacheReadTokens),
@@ -142,7 +142,11 @@ function collect(invocation: CommandInvocation, ctx: Context): SessionInfo {
   }
 }
 
-/** Render the report, keeping cumulative billing apart from current pressure. */
+/**
+ * Render the report, keeping cumulative billing apart from current pressure.
+ * @param info - the collected session facts.
+ * @returns the report text.
+ */
 export function renderSessionInfo(info: SessionInfo): string {
   const billed = info.uncachedInputTokens + info.cacheReadTokens + info.cacheWriteTokens
   const lifetimeBilled = info.lifetimeUncachedInputTokens
@@ -191,6 +195,12 @@ export function renderSessionInfo(info: SessionInfo): string {
   ].join('\n')
 }
 
+/**
+ * Run `/session-info`: report the invoking agent's session, or the usage text when arguments were given.
+ * @param ctx - the plugin context whose projections are read.
+ * @param invocation - the command invocation.
+ * @returns the report, or an error result.
+ */
 export function executeSessionInfo(
   ctx: Context,
   invocation: CommandInvocation,

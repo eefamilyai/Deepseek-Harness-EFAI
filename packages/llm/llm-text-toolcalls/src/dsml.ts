@@ -1150,6 +1150,7 @@ function jsonBodyArguments(
  * @param tool - the named tool's schema, when the request declared one.
  * @param body - the raw text between the invoke tags.
  * @param tagged - attributes written on the `<invoke>` tag.
+ * @param shapes - receives the id of each repair shape this read applied.
  * @returns the JSON arguments string for the harness tool call.
  */
 export function invokeArguments(
@@ -1269,7 +1270,7 @@ function firstOpener(rest: string): { readonly index: number; readonly closer: s
   // everything else: the stretch ahead of the opener must be empty, or nothing
   // but envelope tags.
   // EXIT: upstream accepts an unrecognised wrapper ahead of an opener.
-  const lead = candidates.filter(candidate => {
+  const lead = candidates.filter((candidate) => {
     const before = rest.slice(0, candidate.index)
     return before.trim().length === 0 || isWrapperOnly(before)
   })
@@ -1504,12 +1505,17 @@ export class DsmlTranslator {
    *
    * Reading does not clear them: a caller that owns a whole turn collects once
    * at the end, and a caller that owns one block sees the turn so far.
+   * @returns the repair shape ids applied so far.
    */
   repairedShapes(): readonly string[] {
     return [...this.shapes]
   }
 
-  /** Consume one chunk of provider text. */
+  /**
+   * Consume one chunk of provider text.
+   * @param chunk - the next text from the provider.
+   * @returns the text and call events this chunk completed.
+   */
   push(chunk: string): DsmlEvent[] {
     this.partial += chunk.replace(/\r\n?/g, '\n')
     const events: DsmlEvent[] = []
@@ -1587,6 +1593,7 @@ export class DsmlTranslator {
    * TEXT: inventing the end of a half-written command is how that command
    * wrongly runs. The distinction is exactly "is the call itself finished",
    * which is what `parseCalls` finding an invoke answers.
+   * @returns the events for everything still buffered.
    */
   end(): DsmlEvent[] {
     const events: DsmlEvent[] = []
@@ -2271,7 +2278,7 @@ export class DsmlTranslator {
       // wire protocol, not text the model chose to write, and showing it is
       // showing the transport.
       const shown = stripped.replace(DSML_TOKEN, (whole, slash: string, payload: string) => {
-        const body = (payload ?? '').trim().replace(/\/\s*$/, '').trim()
+        const body = payload.trim().replace(/\/\s*$/, '').trim()
         // Provider framing carries nothing to display, so inside a fence it is
         // still rewritten into the taught spelling rather than shown as wire
         // protocol. A token naming nothing is dropped; one naming something
@@ -2281,7 +2288,7 @@ export class DsmlTranslator {
       // A pipe-wrapped frame with no angle brackets never matches
       // DSML_TOKEN, so it survives every other rule and reaches the user
       // as wire protocol. It carries nothing to display, so it goes here too.
-      .replace(BARE_FRAME_DSML, '')
+        .replace(BARE_FRAME_DSML, '')
       events.push({ kind: 'text', text: `${shown}\n` })
       if (closesFence(stripped, fence)) this.fence = undefined
       return

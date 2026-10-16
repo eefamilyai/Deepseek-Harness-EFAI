@@ -19,6 +19,7 @@ import Settings from '@deepseek-ai/dsh-settings'
 import { onTestFinished } from 'vitest'
 import { describe, expect, it } from 'vitest'
 import { Config, apply } from '../src/index.ts'
+import { APPEARANCE_FIELDS } from '../src/options.ts'
 
 /** Boot a real profile whose one row is this plugin, under the id its section writes to. */
 async function bootRow(): Promise<{ ctx: Context; patchPath: string }> {
@@ -79,11 +80,8 @@ describe('the personalization row, through the real settings service', () => {
     // Every field the browser half writes must exist in the Host's schema: a field the
     // page offers and the Host does not know is a write the operator makes that does
     // nothing at all.
-    const declared = Object.keys(Config({}) as Record<string, unknown>)
-    expect(declared).toEqual(expect.arrayContaining([
-      'fontFamily', 'fontScale', 'accent', 'radiusScale',
-      'shellOpacity', 'surfaceOpacity', 'panelOpacity',
-    ]))
+    const declared = Object.keys(Config({}))
+    expect(declared.sort()).toEqual([...APPEARANCE_FIELDS].sort())
 
     for (const [field, value, expected] of [
       ['shellOpacity', 35, 'shellOpacity: 35'],
@@ -92,11 +90,15 @@ describe('the personalization row, through the real settings service', () => {
       ['radiusScale', 1.5, 'radiusScale: 1.5'],
       ['accent', '#7c5cff', 'accent: "#7c5cff"'],
       ['fontFamily', 'Inter, system-ui, sans-serif', 'fontFamily: Inter, system-ui, sans-serif'],
+      ['contentWidth', 'wider', 'contentWidth: wider'],
+      ['backdrop', 'aurora', 'backdrop: aurora'],
+      ['reduceMotion', true, 'reduceMotion: true'],
+      ['glassBlur', 16, 'glassBlur: 16'],
     ] as const) {
       // A write that the Host refuses rejects here, which is the failure the operator saw
       // as a number that snapped back.
       await expect(ctx.settings.update('ui-personalization', { [field]: value })).resolves.toBeUndefined()
-      const saved = await settled(patchPath, String(expected))
+      const saved = await settled(patchPath, expected)
       expect(saved, `${field} never reached the profile`).toContain(expected)
       // And the live view the page reads agrees with it.
       const row = ctx.settings.describe().find(entry => entry.ns === 'ui-personalization')
@@ -108,5 +110,7 @@ describe('the personalization row, through the real settings service', () => {
     const { ctx } = await bootRow()
     await expect(ctx.settings.update('ui-personalization', { shellOpacity: 400 })).rejects.toThrow()
     await expect(ctx.settings.update('ui-personalization', { panelOpacity: 0.1 })).rejects.toThrow()
+    await expect(ctx.settings.update('ui-personalization', { backdrop: 'lava' })).rejects.toThrow()
+    await expect(ctx.settings.update('ui-personalization', { lineHeight: 400 })).rejects.toThrow()
   })
 })

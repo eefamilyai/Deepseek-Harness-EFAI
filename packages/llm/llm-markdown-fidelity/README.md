@@ -46,6 +46,8 @@ What makes the repair safe is the table's own column count. A delimiter row stat
 - does it however the stream cut the text, because a line that looks like a table row is buffered until its own newline arrives while prose streams through untouched;
 - leaves a table that arrived correctly, a short row (markdown pads those), a row whose cells do not divide by the column count, a table whose delimiter row is not in the text, prose that mentions pipes and dashes, and a fenced block that quotes a glued table exactly as they were.
 
+No runtime invariant companion is published: the repair is a pure transform of each text stream and keeps no state beyond the line it is buffering.
+
 ## Model Experience
 
 ### The repair on the answer stream

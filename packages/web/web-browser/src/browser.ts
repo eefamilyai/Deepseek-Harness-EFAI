@@ -15,6 +15,7 @@
 
 import { chromium } from 'playwright'
 import type { Browser, BrowserContext, Page } from 'playwright'
+import type { BrowserDriver, BrowserPageTarget } from './driver.ts'
 import { snapshotScript } from './page-script.ts'
 import type { RawSnapshot } from './page-script.ts'
 
@@ -66,7 +67,9 @@ const INSTALL_HINT =
   'no headless browser is installed — run `npx playwright install chromium` once in the harness directory, then retry'
 
 /** One Chromium instance shared across sessions, each session isolated in its own context. */
-export class BrowserManager {
+export class BrowserManager implements BrowserDriver {
+  /** The page lives in this Host process and nobody sees it. */
+  readonly surface = 'headless' as const
   private browser: Browser | undefined
   private readonly sessions = new Map<string, { context: BrowserContext; page: Page }>()
 
@@ -105,50 +108,55 @@ export class BrowserManager {
   }
 
   /** Open a URL and return the resulting page. */
-  async navigate(key: string, url: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
+  async navigate(target: BrowserPageTarget, url: string): Promise<RawSnapshot> {
+    const page = await this.pageFor(target.pageId)
     await page.goto(url, { waitUntil: 'domcontentloaded' })
     return this.snapshot(page)
   }
 
   /** Re-read the current page without acting. */
-  async read(key: string): Promise<RawSnapshot> {
-    return this.snapshot(await this.pageFor(key))
+  async read(target: BrowserPageTarget): Promise<RawSnapshot> {
+    return this.snapshot(await this.pageFor(target.pageId))
   }
 
   /** Click the element with the given ref, then snapshot whatever the click produced. */
-  async click(key: string, ref: number): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
+  async click(target: BrowserPageTarget, ref: number): Promise<RawSnapshot> {
+    const page = await this.pageFor(target.pageId)
     await page.click(`[data-ai-ref="${ref}"]`)
     await page.waitForLoadState('domcontentloaded').catch(() => { /* SPA navigations need no full load */ })
     return this.snapshot(page)
   }
 
   /** Fill the input with the given ref, then snapshot. */
-  async type(key: string, ref: number, text: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
+  async type(target: BrowserPageTarget, ref: number, text: string): Promise<RawSnapshot> {
+    const page = await this.pageFor(target.pageId)
     await page.fill(`[data-ai-ref="${ref}"]`, text)
     return this.snapshot(page)
   }
 
-  /** Press one keyboard key (Enter, Tab, ArrowDown, …) on the focused element, then snapshot. */
-  async press(key: string, keyName: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
+  /**
+   * Press one keyboard key on the focused element, then snapshot.
+   * @param target - the page.
+   * @param keyName - a key name such as Enter, Tab, or ArrowDown.
+   * @returns the page afterwards.
+   */
+  async press(target: BrowserPageTarget, keyName: string): Promise<RawSnapshot> {
+    const page = await this.pageFor(target.pageId)
     await page.keyboard.press(keyName)
     await page.waitForLoadState('domcontentloaded').catch(() => { /* a keypress rarely triggers a full load */ })
     return this.snapshot(page)
   }
 
   /** Scroll the page up or down one viewport-ish step, then snapshot. */
-  async scroll(key: string, direction: 'up' | 'down'): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
+  async scroll(target: BrowserPageTarget, direction: 'up' | 'down'): Promise<RawSnapshot> {
+    const page = await this.pageFor(target.pageId)
     await page.mouse.wheel(0, direction === 'up' ? -800 : 800)
     return this.snapshot(page)
   }
 
   /** Go back one entry in history, then snapshot. */
-  async back(key: string): Promise<RawSnapshot> {
-    const page = await this.pageFor(key)
+  async back(target: BrowserPageTarget): Promise<RawSnapshot> {
+    const page = await this.pageFor(target.pageId)
     await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => { /* nothing to go back to is not an error */ })
     return this.snapshot(page)
   }
@@ -161,13 +169,17 @@ export class BrowserManager {
    * the detail the caller wanted is gone. The viewport is what the page shows,
    * and `scroll` moves it.
    */
-  async screenshot(key: string): Promise<CapturedScreenshot> {
-    const page = await this.pageFor(key)
+  async screenshot(target: BrowserPageTarget): Promise<CapturedScreenshot> {
+    const page = await this.pageFor(target.pageId)
     const data = await page.screenshot({ fullPage: false, type: 'png' })
     return { data, mediaType: 'image/png', url: page.url(), title: await page.title() }
   }
 
-  /** Render a URL for the fetch provider: navigate on the dedicated fetch page and return its text. */
+  /**
+   * Render a URL for the fetch provider: navigate on the dedicated fetch page and return its text.
+   * @param url - the address to render.
+   * @returns the rendered page's address, title, text, and HTTP status.
+   */
   async render(url: string): Promise<RenderedPage> {
     const page = await this.pageFor(FETCH_KEY)
     const response = await page.goto(url, { waitUntil: 'domcontentloaded' })

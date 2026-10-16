@@ -117,7 +117,11 @@ export function toolProtocolPrompt(tools: readonly ToolSchema[] | undefined): st
   return `${FORMAT}\n\n# Tools available to you\n\n${catalog}`
 }
 
-/** Escape the five XML metacharacters for a value written into DSML. */
+/**
+ * Escape the five XML metacharacters for a value written into DSML.
+ * @param value - raw text.
+ * @returns the escaped text.
+ */
 export function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -127,7 +131,11 @@ export function escapeXml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-/** Reverse {@link escapeXml}. `&amp;` unescapes last so `&amp;lt;` survives as `&lt;`. */
+/**
+ * Reverse {@link escapeXml}. `&amp;` unescapes last so `&amp;lt;` survives as `&lt;`.
+ * @param value - escaped text.
+ * @returns the raw text.
+ */
 export function unescapeXml(value: string): string {
   return value
     .replace(/&lt;/g, '<')
@@ -137,7 +145,12 @@ export function unescapeXml(value: string): string {
     .replace(/&amp;/g, '&')
 }
 
-/** The JSON Schema `type` declared for one parameter, when the tool declares one. */
+/**
+ * The JSON Schema `type` declared for one parameter, when the tool declares one.
+ * @param tool - the tool's schema, when the request declared one.
+ * @param name - the parameter name.
+ * @returns the type, the first concrete member of a type union, or undefined.
+ */
 export function parameterType(tool: ToolSchema | undefined, name: string): string | undefined {
   const properties = (tool?.parameters as { properties?: unknown } | undefined)?.properties
   if (typeof properties !== 'object' || properties === null) return undefined
@@ -150,7 +163,11 @@ export function parameterType(tool: ToolSchema | undefined, name: string): strin
   return undefined
 }
 
-/** The tool's declared parameter names, in schema order. */
+/**
+ * The tool's declared parameter names, in schema order.
+ * @param tool - the tool's schema, when the request declared one.
+ * @returns the names; empty when the tool declares none.
+ */
 export function parameterNames(tool: ToolSchema | undefined): string[] {
   const properties = (tool?.parameters as { properties?: unknown } | undefined)?.properties
   if (typeof properties !== 'object' || properties === null) return []

@@ -18,9 +18,9 @@ import {
   scheduleTitle,
 } from './domain.ts'
 import type {
-  DeliveryRetentionBounds, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleDeleteRequest, ScheduleDeleteResult,
-  ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult, ScheduleListRequest, ScheduleRecord,
-  ScheduleUpdateRequest, ScheduleUpdateResult,
+  DeliveryRetentionBounds, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleCreateTaskRequest, ScheduleCreateTaskResult,
+  ScheduleDeleteRequest, ScheduleDeleteResult, ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult,
+  ScheduleListRequest, ScheduleRecord, ScheduleUpdateRequest, ScheduleUpdateResult,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -279,6 +279,31 @@ export class ScheduleService extends TypertRemoteService {
       this.runtime?.requestDrive()
       return record
     })
+  }
+
+  // DSH-FORK(schedule): the Desktop's app.asar ships this package, so a client surface
+  // cannot reach `create` by editing a fork copy of it; the endpoint below is what the
+  // Automation tasks page calls. EXIT: upstream exposes a Remote create endpoint.
+  /**
+   * Create a task from a client surface under an explicit Session binding.
+   *
+   * The binding travels inside the request rather than as its own argument, so
+   * the Web carrier serializes one object, and the selectors are validated by
+   * {@link create} exactly as the model's tool call validates them. A refused
+   * rule is returned rather than thrown, mirroring `update`, so the browser can
+   * name the field to correct.
+   * @param request - Original Session binding, required name, and reminder selector.
+   * @param signal - Optional cancellation checked before persistence begins, including after FIFO waits.
+   * @returns The durably stored schedule, or the input code that refused it.
+   */
+  @Remote('create')
+  async createTask(request: ScheduleCreateTaskRequest, signal?: AbortSignal): Promise<ScheduleCreateTaskResult> {
+    try {
+      return { created: true, record: await this.create(request.sessionId, request, signal) }
+    } catch (error: unknown) {
+      if (error instanceof ScheduleInputError) return { created: false, code: error.code }
+      throw error
+    }
   }
 
   /**

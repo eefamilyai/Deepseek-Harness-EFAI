@@ -36,6 +36,7 @@ Both ride `agent/pre-step`, the same waterfall `tool-skill` uses, so this is a s
 
 Visibility is read from the session surface rather than the message list, because a compaction removes a body by shadowing its event: the message list no longer shows it, and the surface is what the model can actually read.
 
+No runtime invariant companion is published: the one durable relation, which bodies were injected, is the invokedSkills projection that the projection registry folds and replays.
 
 ## Model Experience
 

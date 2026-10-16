@@ -53,7 +53,12 @@ export function systemPromptFileScope(baseURL: string, apiKey: string): SystemPr
     .digest('hex'))
 }
 
-/** Digest identifying one prompt revision on one route. */
+/**
+ * Digest identifying one prompt revision on one route.
+ * @param schema - provider schema id, e.g. `openai` or `anthropic`.
+ * @param promptText - the exact prompt text.
+ * @returns a SHA-256 hex digest.
+ */
 export function promptVariantId(schema: string, promptText: string): string {
   return createHash('sha256')
     .update(schema)

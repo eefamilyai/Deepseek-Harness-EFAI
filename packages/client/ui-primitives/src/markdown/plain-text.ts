@@ -7,6 +7,7 @@
  */
 
 import { parseGfm } from './parse.ts'
+import { repairMarkdownTables } from './table-repair.ts'
 
 /** Amount of parsed Markdown content returned by the extractor. */
 export type MarkdownPlainTextMode = 'all' | 'first-line' | 'first-paragraph'
@@ -108,7 +109,7 @@ export function extractMarkdownPlainText(
   options: MarkdownPlainTextOptions = {},
 ): string {
   const { mode = 'all' } = options
-  const root = parseGfm(markdown) as MarkdownNode
+  const root = parseGfm(repairMarkdownTables(markdown)) as MarkdownNode
   const all = fullText(root)
   switch (mode) {
     case 'all':

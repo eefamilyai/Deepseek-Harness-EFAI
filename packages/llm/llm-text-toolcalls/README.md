@@ -77,6 +77,8 @@ A request that declares no tools is returned untouched, so an auxiliary call —
 | [`src/protocol.ts`](src/protocol.ts) | The format statement a channel-less transport teaches, and the schema-typed parameter coercion |
 | [`src/fallback.ts`](src/fallback.ts) | Recognising a native-tools refusal, and rewriting the refused request for the text channel |
 
+No runtime invariant companion is published: the reader is a per-stream transform and keeps no state that outlives the stream it reads.
+
 ## Model Experience
 
 ### Tool-call protocol in the system prompt

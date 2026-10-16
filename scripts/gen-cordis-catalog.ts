@@ -75,6 +75,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   ptcRuntime: 'ptc-runtime.md',
   // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
   kernel: 'ptc-runtime.md',
+  profileHub: 'boot.md',
+  agentBrowser: 'browser-use.md',
   aiAccounts: 'llm-streaming.md',
   browserUse: 'browser-use.md',
   computerUse: 'computer-use.md',
@@ -883,6 +885,16 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the fork's kernel provider exposes
   // background cell polling, so the projector must classify the poll result beside the other kernel seam types.
   KernelBackgroundPoll: 'kernel background poll result is owned by packages/kernel/kernel/src/types.ts',
+  // DSH-FORK(all): the fork's profile hub owns its own Remote vocabulary, documented with the service
+  // rather than in the subsystems catalog. EXIT: the generators see fork packages through a documented hook.
+  ProfileHubState: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
+  ProfileSummary: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
+  CreateProfileRequest: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
+  OpenProfileResult: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
+  OpenProfileTarget: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
+  AgentBrowserCall: 'the agentBrowser surface is owned by packages/web/web-browser-sidebar/README.md and src/index.ts',
+  AgentBrowserRequest: 'the agentBrowser surface is owned by packages/web/web-browser-sidebar/README.md and src/types.ts',
+  AgentBrowserReply: 'the agentBrowser surface is owned by packages/web/web-browser-sidebar/README.md and src/types.ts',
   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
   ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',

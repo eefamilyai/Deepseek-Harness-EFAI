@@ -391,6 +391,39 @@ export interface ScheduleDeleteRequest extends ScheduleListRequest {
   id: ScheduleId
 }
 
+// DSH-FORK(schedule): the Desktop's app.asar ships this package, so the browser's
+// creation surface lives here rather than in a fork-owned package.
+// EXIT: upstream exposes a Remote create endpoint.
+/**
+ * Task creation requested from a client surface rather than by the model.
+ *
+ * The binding travels inside the request, matching `list`, `delete`, and
+ * `update`, so a browser that has already chosen a Session can create the task
+ * without going through a tool call.
+ */
+export type ScheduleCreateTaskRequest = ScheduleListRequest & ScheduleCreateRequest
+
+/** Input code one browser-originated creation can be refused with; an internal fault still rejects. */
+export type ScheduleCreateTaskErrorCode =
+  | 'invalid_prompt'
+  | 'invalid_selector'
+  | 'invalid_rule'
+  | 'invalid_time_zone'
+  | 'not_future'
+  | 'time_out_of_range'
+  | 'frequency_too_high'
+
+/**
+ * Outcome of one browser-originated creation.
+ *
+ * A refused rule is a value rather than a rejection, the way `update` reports
+ * its own input failures, so the browser can name the field to correct instead
+ * of showing one generic transport error.
+ */
+export type ScheduleCreateTaskResult =
+  | { readonly created: true; readonly record: ScheduleRecord }
+  | { readonly created: false; readonly code: ScheduleCreateTaskErrorCode }
+
 /** Timing-only edit; it may select a different recurrence kind than the stored record, and one-shot targets use an absolute `at`. */
 export type ScheduleTimingChange =
   | { readonly kind: 'at'; readonly at: AtInput }

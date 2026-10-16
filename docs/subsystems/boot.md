@@ -205,6 +205,66 @@ Current profile facts; scheduling and mutation belong to their callers.
 
 Source: [`packages/boot/app-boot/src/profile-context.ts`](../../packages/boot/app-boot/src/profile-context.ts)
 
+<a id="ctxprofilehub--profilehub"></a>
+
+### `ctx.profileHub` — `ProfileHub`
+
+The `ctx.profileHub` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.
+
+```ts cordis-catalog
+/**
+ * Every profile this machine holds, with the facts the landing page renders.
+ * @returns the harness home, the running profile, the launcher profile, and one row per profile.
+ */
+@Remote listProfiles(): ProfileHubState
+
+/**
+ * Create one self-contained profile from the running profile's own stack.
+ * @param request - the name, optional title and working directory, and whether to copy the running layer.
+ * @returns the machine's state after the profile exists.
+ * @throws RemoteError with `profileHub/rejected` when the name is invalid, taken, or reserved.
+ */
+@Remote createProfile(request: CreateProfileRequest): ProfileHubState
+
+/**
+ * Remove one profile and everything it owns, including its chats and logins.
+ * @param name - the profile to remove.
+ * @returns the machine's state after the removal.
+ * @throws RemoteError with `profileHub/rejected` when the profile is reserved, running, or this one.
+ */
+@Remote removeProfile(name: string): ProfileHubState
+
+/**
+ * Choose which profile opens the landing page at startup.
+ * @param name - the profile whose startup should land on this page.
+ * @returns the machine's state after the choice.
+ * @throws RemoteError with `profileHub/rejected` when no such profile exists.
+ */
+@Remote setLauncherProfile(name: string): ProfileHubState
+
+/**
+ * Start a profile as its own host process and answer the URL to enter it at.
+ *
+ * A host serves exactly one profile, so entering another one starts a second
+ * process rather than reconfiguring this one; a profile this hub already
+ * started answers with the same URL instead of a second host.
+ * @param name - the profile to enter.
+ * @param target - open a second Desktop window, or start a Web Host and answer its URL.
+ * @returns which surface opened, and the URL when a Web Host did.
+ * @throws RemoteError with `profileHub/rejected` when the profile cannot be opened.
+ */
+@Remote async openProfile(name: string, target: OpenProfileTarget): Promise<OpenProfileResult>
+
+/**
+ * Stop a profile this hub started.
+ * @param name - the profile whose host should stop.
+ * @returns the machine's state after the stop.
+ */
+@Remote stopProfile(name: string): ProfileHubState
+```
+
+Source: [`packages/boot/profile-hub/src/index.ts`](../../packages/boot/profile-hub/src/index.ts)
+
 <a id="app-boot-events"></a>
 
 ### `app-boot/*` events

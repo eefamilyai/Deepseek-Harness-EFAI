@@ -38,7 +38,7 @@ const TOOLS = [
 const INDEX = new Map(TOOLS.map(tool => [tool.name, tool]))
 
 function run(text: string) {
-  const translator = new DsmlTranslator(INDEX as never)
+  const translator = new DsmlTranslator(INDEX)
   return [...translator.push(text), ...translator.end()]
 }
 
@@ -110,7 +110,7 @@ describe('structural salvage', () => {
       ['beta', { name: 'beta', description: 'b', parameters: { type: 'object', properties: { file_path: { type: 'string' } }, required: ['file_path'] } }],
     ])
     const block = open('tool_calls') + '\n' + open('parameter', 'name="file_path"') + 'a.txt' + shut('tool_calls')
-    const translator = new DsmlTranslator(ambiguous as never)
+    const translator = new DsmlTranslator(ambiguous)
     expect([...translator.push(block), ...translator.end()].filter(e => e.kind === 'tool-call')).toEqual([])
   })
 

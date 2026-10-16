@@ -32,6 +32,8 @@ The provider file id is cached in `DSH_HOME/llm-system-file/files-v1.json` under
 | `files-api.ts` | The upload-only OpenAI-compatible `/files` client |
 | `file-id.ts` | Branded file-id and scope types |
 
+No runtime invariant companion is published: the only state is a cache of provider file ids keyed by prompt digest, and a stale id is detected and replaced by the provider's own error.
+
 ## Model Experience
 
 ### The system prompt delivered as a provider file

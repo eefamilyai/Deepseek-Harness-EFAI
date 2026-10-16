@@ -475,7 +475,7 @@ export function AccountsSection({
     setOutcome(result.ok ? t('accounts.remove.ok') : result.message ?? t('accounts.list.loadError'))
     // The row is gone, so its purge answer no longer means anything; keeping it
     // would silently pre-arm the next row that reused the id.
-    setPurgeIds((previous) => previous.filter((id) => id !== account.id))
+    setPurgeIds(previous => previous.filter(id => id !== account.id))
     await Promise.all([loadRows(provider), poll()])
   }, [provider, removeAccount, loadRows, poll, t, purgeIds])
 
@@ -690,9 +690,9 @@ export function AccountsSection({
                       <Checkbox
                         checked={purgeIds.includes(row.id)}
                         onChange={(next) => {
-                          setPurgeIds((previous) => next
+                          setPurgeIds(previous => next
                             ? (previous.includes(row.id) ? previous : [...previous, row.id])
-                            : previous.filter((id) => id !== row.id))
+                            : previous.filter(id => id !== row.id))
                         }}
                         label={t('accounts.remove.purge')}
                         title={t('accounts.remove.purgeHint')}

@@ -14,7 +14,9 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 
-// One malformed shape the reader has learned to take.
+/**
+ * One malformed shape the reader has learned to take.
+ */
 export interface RepairShape {
   // Stable kebab-case key; the seed and the file are joined on this.
   readonly id: string
@@ -28,11 +30,13 @@ export interface RepairShape {
   readonly hits?: number
 }
 
-// Every malformed shape the reader repairs today.
-//
-// This is the seed, not a limit: recordShape grows the file beside it. The
-// order is the order the reader tests them, which is why a shape that can be
-// mistaken for another sits where the reader puts it.
+/**
+ * Every malformed shape the reader repairs today.
+ *
+ * This is the seed, not a limit: recordShape grows the file beside it. The
+ * order is the order the reader tests them, which is why a shape that can be
+ * mistaken for another sits where the reader puts it.
+ */
 export const KNOWN_SHAPES: readonly RepairShape[] = [
   {
     id: 'structural-notation',
@@ -140,7 +144,9 @@ export const KNOWN_SHAPES: readonly RepairShape[] = [
   },
 ]
 
-// The catalogue as it sits on disk.
+/**
+ * The catalogue as it sits on disk.
+ */
 export interface CatalogFile {
   readonly version: 1
   readonly shapes: readonly RepairShape[]
@@ -148,12 +154,14 @@ export interface CatalogFile {
   readonly literals?: readonly LearnedLiteral[]
 }
 
-// One exact-text rewrite the reader learned by observing its own repair.
-//
-// Literal, never a pattern. A catalogue that could inject a regular expression
-// into the reader would be a parser that anyone able to write that file could
-// rewrite, and this file is a diagnostics log rather than a rule engine. An
-// observed fragment is replayed verbatim or not at all.
+/**
+ * One exact-text rewrite the reader learned by observing its own repair.
+ *
+ * Literal, never a pattern. A catalogue that could inject a regular expression
+ * into the reader would be a parser that anyone able to write that file could
+ * rewrite, and this file is a diagnostics log rather than a rule engine. An
+ * observed fragment is replayed verbatim or not at all.
+ */
 export interface LearnedLiteral {
   // The exact text as it arrived.
   readonly broken: string
@@ -163,7 +171,9 @@ export interface LearnedLiteral {
   readonly hits?: number
 }
 
-// Where the catalogue lives when nothing names a path.
+/**
+ * Where the catalogue lives when nothing names a path.
+ */
 export const DEFAULT_CATALOG_PATH = join(homedir(), '.dsh', 'dsml-catalog.json')
 
 // The literals of one parsed file, kept for the life of the process.
@@ -174,13 +184,18 @@ export const DEFAULT_CATALOG_PATH = join(homedir(), '.dsh', 'dsml-catalog.json')
 // clears this, so a fragment learned this turn is live on the next one.
 let cached: { readonly path: string; readonly literals: readonly LearnedLiteral[] } | undefined
 
-// The one path this module reads and writes.
-//
-// Resolution is a fixed chain of lookups and never a search: an explicit
-// argument wins, then DSML_CATALOG, then a fixed path under the home
-// directory. A test points DSML_CATALOG at a temp file; a user points it at a
-// checkout to keep the catalogue in version control. Nothing here lists a
-// directory to find it.
+/**
+ * The one path this module reads and writes.
+ *
+ * Resolution is a fixed chain of lookups and never a search: an explicit
+ * argument wins, then DSML_CATALOG, then a fixed path under the home
+ * directory. A test points DSML_CATALOG at a temp file; a user points it at a
+ * checkout to keep the catalogue in version control. Nothing here lists a
+ * directory to find it.
+ * @param explicit - a path the caller names, which wins when non-empty.
+ * @param env - the environment holding `DSML_CATALOG`.
+ * @returns the catalogue file path.
+ */
 export function catalogPath(explicit?: string, env: NodeJS.ProcessEnv = process.env): string {
   if (explicit !== undefined && explicit.length > 0) return explicit
   const override = env.DSML_CATALOG
@@ -188,12 +203,16 @@ export function catalogPath(explicit?: string, env: NodeJS.ProcessEnv = process.
   return DEFAULT_CATALOG_PATH
 }
 
-// The hit-counter key for one learned literal.
-//
-// A literal has no stable id the way a named shape does — the broken text IS
-// its identity — so the counter is keyed on it. The prefix keeps the two key
-// spaces from colliding: a fragment that happened to spell a shape id is still
-// counted as a literal, not folded into that shape's total.
+/**
+ * The hit-counter key for one learned literal.
+ *
+ * A literal has no stable id the way a named shape does — the broken text IS
+ * its identity — so the counter is keyed on it. The prefix keeps the two key
+ * spaces from colliding: a fragment that happened to spell a shape id is still
+ * counted as a literal, not folded into that shape's total.
+ * @param broken - the literal's exact broken text.
+ * @returns its counter key.
+ */
 export function literalKey(broken: string): string {
   return 'literal:' + broken
 }
@@ -221,10 +240,14 @@ function asLiteral(value: unknown): LearnedLiteral | undefined {
   return hits === undefined ? { broken, fixed } : { broken, fixed, hits }
 }
 
-// Every literal rewrite the catalogue holds, parsed once per process.
-//
-// A missing or unreadable file is the normal first run, not an error: the
-// reader then behaves exactly as it did before it could learn.
+/**
+ * Every literal rewrite the catalogue holds, parsed once per process.
+ *
+ * A missing or unreadable file is the normal first run, not an error: the
+ * reader then behaves exactly as it did before it could learn.
+ * @param explicit - the catalogue path, when the caller names one.
+ * @returns the learned literals; empty when counting is off or the file is absent.
+ */
 export function learnedLiterals(explicit?: string): readonly LearnedLiteral[] {
   // A reader with no catalogue established learns nothing and replays nothing.
   // Without this the default path under the home directory was read anyway, so
@@ -259,11 +282,17 @@ function writeCatalog(path: string, file: CatalogFile): void {
   cached = undefined
 }
 
-// Remember one exact-text rewrite, so the next turn applies it before parsing.
-//
-// Best-effort like the rest of this module, and a no-op when the fragment is
-// already known: a model that repeats one malformation every turn appends one
-// entry and not one per turn.
+/**
+ * Remember one exact-text rewrite, so the next turn applies it before parsing.
+ *
+ * Best-effort like the rest of this module, and a no-op when the fragment is
+ * already known: a model that repeats one malformation every turn appends one
+ * entry and not one per turn.
+ * @param broken - the exact text as it arrived.
+ * @param fixed - what that text becomes.
+ * @param explicit - the catalogue path, when the caller names one.
+ * @returns whether a new entry was written.
+ */
 export function recordLiteral(broken: string, fixed: string, explicit?: string): boolean {
   const entry = asLiteral({ broken, fixed })
   if (entry === undefined) return false
@@ -288,12 +317,16 @@ export function recordLiteral(broken: string, fixed: string, explicit?: string):
   }
 }
 
-// Read the catalogue, or the seed when there is nothing to read.
-//
-// A missing file is the normal first run, not an error. So is a file holding
-// something this module did not write: it is ignored rather than repaired,
-// because guessing at a stranger JSON is how a diagnostics file starts failing
-// parses.
+/**
+ * Read the catalogue, or the seed when there is nothing to read.
+ *
+ * A missing file is the normal first run, not an error. So is a file holding
+ * something this module did not write: it is ignored rather than repaired,
+ * because guessing at a stranger JSON is how a diagnostics file starts failing
+ * parses.
+ * @param explicit - the catalogue path, when the caller names one.
+ * @returns the seed shapes merged with the file's, by id.
+ */
 export function loadCatalog(explicit?: string): readonly RepairShape[] {
   const merged = new Map<string, RepairShape>()
   for (const shape of KNOWN_SHAPES) merged.set(shape.id, shape)
@@ -327,14 +360,19 @@ export function loadCatalog(explicit?: string): readonly RepairShape[] {
   return [...merged.values()]
 }
 
-// Note a shape the seed has never seen, so the next investigation starts from
-// a written-down example instead of a transcript.
-//
-// Best-effort by construction. This runs while a malformed call is being read,
-// and a reader that throws here has turned a repaired call into a failed turn;
-// every failure path returns false and leaves the parse untouched. A shape
-// already present, by id, is a no-op, so a model that repeats its mistake
-// every turn appends one line and not one per turn.
+/**
+ * Note a shape the seed has never seen, so the next investigation starts from
+ * a written-down example instead of a transcript.
+ *
+ * Best-effort by construction. This runs while a malformed call is being read,
+ * and a reader that throws here has turned a repaired call into a failed turn;
+ * every failure path returns false and leaves the parse untouched. A shape
+ * already present, by id, is a no-op, so a model that repeats its mistake
+ * every turn appends one line and not one per turn.
+ * @param shape - the shape to record.
+ * @param explicit - the catalogue path, when the caller names one.
+ * @returns whether a new shape was written.
+ */
 export function recordShape(shape: RepairShape, explicit?: string): boolean {
   const path = catalogPath(explicit)
   try {
@@ -390,16 +428,21 @@ function countingOn(explicit?: string, env: NodeJS.ProcessEnv = process.env): bo
   return override !== undefined && override.length > 0
 }
 
-// Add one hit to each named shape, in a single read and a single write.
-//
-// Callers hand over every id one turn repaired, not one id at a time: the cost
-// of the file is the read and the write, so batching a turn into one pass keeps
-// a chatty model from turning the catalogue into a per-token disk workload. An
-// id the seed does not carry is ignored rather than invented, because a shape
-// with no rule behind it has nothing to say about what the reader does.
-//
-// Best-effort like the rest of this module. A turn that cannot write the
-// catalogue still runs its calls.
+/**
+ * Add one hit to each named shape, in a single read and a single write.
+ *
+ * Callers hand over every id one turn repaired, not one id at a time: the cost
+ * of the file is the read and the write, so batching a turn into one pass keeps
+ * a chatty model from turning the catalogue into a per-token disk workload. An
+ * id the seed does not carry is ignored rather than invented, because a shape
+ * with no rule behind it has nothing to say about what the reader does.
+ *
+ * Best-effort like the rest of this module. A turn that cannot write the
+ * catalogue still runs its calls.
+ * @param ids - the shape ids the reader applied.
+ * @param explicit - the catalogue path, when the caller names one.
+ * @returns whether the counters were written.
+ */
 export function bumpShapes(ids: readonly string[], explicit?: string): boolean {
   if (ids.length === 0) return false
   if (!countingOn(explicit)) return false

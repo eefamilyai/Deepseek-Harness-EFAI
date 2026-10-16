@@ -20,6 +20,8 @@ One schema, five commands:
 
 Cell indexes are zero-based and stable for a single command. Paths must be absolute.
 
+No runtime invariant companion is published: the tool adapter owns no independent durable state; notebook mutation relations stay with the provider and policy plugins.
+
 ## Model Experience
 
 ### `notebook_edit` tool schema

@@ -58,7 +58,11 @@ const GLITCH_NOTE =
   '\n\n[stopped: you repeated structural closers with no call between them. '
   + 'Nothing in that run was a call. Write the call you meant, once.]\n'
 
-/** Mint a call id for a call this pass recovered rather than the provider issuing. */
+/**
+ * Mint a call id for a call this pass recovered rather than the provider issuing.
+ * @param name - the called tool's name.
+ * @returns a unique `dsml-` prefixed id.
+ */
 export function mintDsmlCallId(name: string): ToolCallId {
   return ToolCallId(`dsml-${name}-${randomUUID()}`)
 }
@@ -389,7 +393,11 @@ export function readDsmlStream(
   })()
 }
 
-/** Index a request's tool schemas by name, the shape every reader here takes. */
+/**
+ * Index a request's tool schemas by name, the shape every reader here takes.
+ * @param tools - the request's tool schemas, if any.
+ * @returns the schemas by name.
+ */
 export function toolIndex(tools: readonly ToolSchema[] | undefined): Map<string, ToolSchema> {
   return new Map((tools ?? []).map(tool => [tool.name, tool]))
 }

@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import { IncrementalMarkdownParser } from './incremental.ts'
 import { parseGfm, parseGfmWithMath } from './parse.ts'
+import { repairMarkdownTables } from './table-repair.ts'
 import {
   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
   wrapBlockChildren,
@@ -184,15 +185,17 @@ export const MarkdownText = memo(function MarkdownText({
   const streamRef = useRef<StreamingRenderer | null>(null)
   const streamLabelsRef = useRef<MarkdownLabels>(labels)
   const children = useMemo(() => {
+    // Both arms read the repaired source, so a table renders the same while streaming and settled.
+    const source = repairMarkdownTables(text)
     if (!streaming) {
       streamRef.current = null
-      return renderSettled(text, labels, fileMentions, pathImages)
+      return renderSettled(source, labels, fileMentions, pathImages)
     }
     if (streamRef.current === null || streamLabelsRef.current !== labels) {
       streamRef.current = new StreamingRenderer(labels)
       streamLabelsRef.current = labels
     }
-    return streamRef.current.render(text)
+    return streamRef.current.render(source)
   }, [text, streaming, labels, fileMentions, pathImages])
   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
     data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>

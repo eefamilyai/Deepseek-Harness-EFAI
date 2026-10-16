@@ -15,6 +15,25 @@ import { installDesktopQuitInspection } from './quit-inspection.ts'
 import { installPlatformSessionPublisher } from './platform-session.ts'
 import { installOfficeEngineResolution } from './office-engine.ts'
 
+/** The profile the shell boots when no launch selected another. */
+const PRIMARY_PROFILE_NAME = 'desktop'
+
+/** The primary window's stable Host port. */
+const PRIMARY_PORT = '19387'
+
+/**
+ * The profile this Host boots.
+ *
+ * A second Desktop window selects another profile with `DSH_DESKTOP_PROFILE`;
+ * the shell resolves the directory it passes here from the same value, so the
+ * profile this Host reports and the profile it loads cannot disagree.
+ * @returns the profile name, never empty.
+ */
+function desktopProfileName(): string {
+  const requested = process.env.DSH_DESKTOP_PROFILE?.trim()
+  return requested === undefined || requested === '' ? PRIMARY_PROFILE_NAME : requested
+}
+
 async function main(): Promise<void> {
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
@@ -22,12 +41,16 @@ async function main(): Promise<void> {
   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
   reportSkippedBundles('dsh', profile)
+  const name = desktopProfileName()
   const application = runProfile({
     environment: loadLayeredEnv('dsh'),
-    profile: 'desktop',
+    profile: name,
     resolvedProfile: { profile, installAnchor },
     patchFiles: [],
-    args: ['--no-open', '--port', '19387'],
+    // The primary window owns a stable port so its own reloads reconnect; a
+    // second window takes whichever port is free, so two Desktop instances
+    // serving two profiles coexist instead of fighting over one.
+    args: ['--no-open', '--port', name === PRIMARY_PROFILE_NAME ? PRIMARY_PORT : '0'],
     ...(process.argv[5] === undefined ? {} : {
       packageManager: {
         command: process.execPath,

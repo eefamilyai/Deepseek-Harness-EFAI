@@ -34,6 +34,8 @@ Activity (whole log)
 
 `ctx.commands.register` publishes the command with `recordInput: false`, so the invocation text never enters the session log. The report is returned as a `CommandResult` and rendered to the operator.
 
+No runtime invariant companion is published: this read-only command owns no state or event stream.
+
 ## Model Experience
 
 None, as the command is operator-facing and registers no prompt, tool, schema, or session event.

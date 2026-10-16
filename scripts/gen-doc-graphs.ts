@@ -218,6 +218,27 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service\'s own aiAccounts Remote namespace.',
   },
   {
+    key: 'profileHub',
+    pkg: 'profile-hub',
+    title: 'Profile registry and launcher',
+    mode: 'seam',
+    // DSH-FORK(all): the fork's own profile surface, mounted by its own package on both faces.
+    // EXIT: the generators see fork packages through a documented hook.
+    implementations: [],
+    consumers: ['profile-hub'],
+    note: 'The service lists every profile under the harness home, creates and removes self-contained ones, records which profile opens on startup, and launches a profile other than the running one as its own host process; the landing page reaches all of it through the service\'s own profileHub Remote namespace.',
+  },
+  {
+    key: 'agentBrowser',
+    pkg: 'web-browser-sidebar',
+    title: 'Sidebar browser bridge',
+    mode: 'seam',
+    // DSH-FORK(all): the fork's own sidebar browser surface. EXIT: the generators see fork packages through a documented hook.
+    implementations: [],
+    consumers: ['web-browser', 'web-browser-sidebar'],
+    note: 'A Host caller\'s browser operation reaches the newest subscribed window\'s sidebar browser and resolves with that window\'s reply; the window subscribes and answers through the service\'s own agentBrowser Remote namespace.',
+  },
+  {
     key: 'kernel',
     pkg: 'kernel',
     title: 'Persistent code-execution kernel',

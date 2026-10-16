@@ -61,7 +61,7 @@ function prose(text: string): string {
 }
 
 function args(event: ToolCall): Record<string, unknown> {
-  return JSON.parse(event.arguments)
+  return JSON.parse(event.arguments) as Record<string, unknown>
 }
 
 /** Both arguments opened; the LAST one deliberately left without its own closer. */

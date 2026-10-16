@@ -43,6 +43,9 @@ Editing the string inside `packages/core/system-prompt` is the alternative this 
 The opener rides at the front of `sections` because the assembly is already sorted when the waterfall sees it; position, not `order`, is what carries −1000 here. Unmounting the plugin restores the shipped opener, which the tests pin.
 
 <a id="model-experience"></a>
+
+No runtime invariant companion is published: the plugin rewrites one assembled system-prompt section per request and keeps no state between requests.
+
 ## Model Experience
 
 ### The fork's identity opener

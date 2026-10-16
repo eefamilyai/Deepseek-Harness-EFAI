@@ -11,7 +11,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { Config, apply, atGestureNames, name, visibleInvokedSkillNames } from '../src/index.ts'
+import {
+  Config, apply, atGestureNames, inject, invokedSkillsProjection, name, visibleInvokedSkillNames, type InvokedSkills,
+} from '../src/index.ts'
 
 const signal = new AbortController().signal
 
@@ -38,6 +40,8 @@ function skill(skillName: string) {
 function harness(options: {
   available?: string[]
   visibleSkills?: string[]
+  /** Answer as a registry whose invokedSkills registration has gone. */
+  withdrawProjection?: boolean
   decision?: PreStepDecision
   messages?: UserMessage[]
 } = {}) {
@@ -60,9 +64,20 @@ function harness(options: {
     session: {
       header: { cwd: '/work' },
       surface: { nodes: events.map(event => event.seq) },
-      ownEvents: () => events,
     },
   } as unknown as Agent
+  // The registry folds the session's events through whatever the plugin registers.
+  const registered: string[] = []
+  ctx.provide('sessionProjections', {
+    register: (definition: typeof invokedSkillsProjection) => { registered.push(definition.key) },
+    stateOf: (_session: unknown, key: string) => {
+      if (!registered.includes(key) || options.withdrawProjection === true) return undefined
+      return events.reduce<InvokedSkills>(
+        (state, event) => invokedSkillsProjection.apply(state, event as never),
+        invokedSkillsProjection.init(),
+      )
+    },
+  })
 
   const base: PreStepDecision = options.decision ?? { kind: 'enter', messages: [] }
   return {
@@ -75,7 +90,7 @@ function harness(options: {
         'agent/pre-step',
         { agent, messages: options.messages ?? [], turn: 1, step: 1, signal },
         () => Promise.resolve(base),
-      ) as PreStepDecision
+      )
     },
   }
 }
@@ -96,24 +111,36 @@ describe('atGestureNames', () => {
   })
 })
 
-describe('visibleInvokedSkillNames', () => {
+describe('invoked skills', () => {
+  const events = [
+    { seq: 1, type: 'user/message', data: { source: { kind: 'skill-invocation', name: 'kept' } } },
+    { seq: 2, type: 'user/message', data: { source: { kind: 'skill-invocation', name: 'pruned' } } },
+    { seq: 3, type: 'user/message', data: { source: { kind: 'user' } } },
+    { seq: 4, type: 'assistant/message', data: {} },
+  ]
+  const fold = () => events.reduce<InvokedSkills>(
+    (state, event) => invokedSkillsProjection.apply(state, event as never),
+    invokedSkillsProjection.init(),
+  )
+
+  it('records each injected body by seq and ignores every other event by reference', () => {
+    expect(fold()).toEqual({ 1: 'kept', 2: 'pruned' })
+    const state = fold()
+    expect(invokedSkillsProjection.apply(state, events[2] as never)).toBe(state)
+    expect(invokedSkillsProjection.apply(state, events[3] as never)).toBe(state)
+    expect(invokedSkillsProjection.stateSchema.parse(state)).toEqual(state)
+  })
+
   it('names only the bodies the surface still carries', () => {
-    const events = [
-      { seq: 1, type: 'user/message', data: { source: { kind: 'skill-invocation', name: 'kept' } } },
-      { seq: 2, type: 'user/message', data: { source: { kind: 'skill-invocation', name: 'pruned' } } },
-      { seq: 3, type: 'user/message', data: { source: { kind: 'user' } } },
-    ]
-    const agent = {
-      session: { surface: { nodes: [1, 3] }, ownEvents: () => events },
-    } as unknown as Agent
-    expect([...visibleInvokedSkillNames(agent)]).toEqual(['kept'])
+    expect([...visibleInvokedSkillNames(fold(), [1, 3])]).toEqual(['kept'])
+    expect([...visibleInvokedSkillNames(fold(), [])]).toEqual([])
   })
 })
 
 describe('the pre-step listener', () => {
   it('injects the body an @skill gesture asked for', async () => {
     const h = harness({ available: ['dsh-session-history'], messages: [user('@skill dsh-session-history')] })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, {})
+    await h.ctx.plugin({ name, inject, apply, Config }, {})
 
     const decision = await h.step()
     expect(decision.kind).toBe('enter')
@@ -125,7 +152,7 @@ describe('the pre-step listener', () => {
 
   it('re-injects an always-loaded body the surface no longer carries', async () => {
     const h = harness({ available: ['dsh-session-history'] })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, {})
+    await h.ctx.plugin({ name, inject, apply, Config }, {})
 
     const decision = await h.step()
     const injected = (decision as { messages: UserMessage[] }).messages
@@ -134,7 +161,7 @@ describe('the pre-step listener', () => {
 
   it('adds nothing when the always-loaded body is still visible', async () => {
     const h = harness({ available: ['dsh-session-history'], visibleSkills: ['dsh-session-history'] })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, {})
+    await h.ctx.plugin({ name, inject, apply, Config }, {})
 
     expect((await h.step() as { messages: UserMessage[] }).messages).toEqual([])
     expect(h.looked).toEqual([])
@@ -149,14 +176,14 @@ describe('the pre-step listener', () => {
       available: ['dsh-session-history'],
       decision: { kind: 'enter', messages: [carried] },
     })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, {})
+    await h.ctx.plugin({ name, inject, apply, Config }, {})
 
     expect((await h.step() as { messages: UserMessage[] }).messages).toEqual([carried])
   })
 
   it('looks a missing name up once per agent, not once per step', async () => {
     const h = harness({ available: [] })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, {})
+    await h.ctx.plugin({ name, inject, apply, Config }, {})
 
     await h.step()
     await h.step()
@@ -165,7 +192,7 @@ describe('the pre-step listener', () => {
 
   it('leaves a rejected step alone', async () => {
     const h = harness({ available: ['dsh-session-history'], decision: { kind: 'reject' } })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, {})
+    await h.ctx.plugin({ name, inject, apply, Config }, {})
 
     expect(await h.step()).toEqual({ kind: 'reject' })
     expect(h.looked).toEqual([])
@@ -173,8 +200,16 @@ describe('the pre-step listener', () => {
 
   it('reads no gesture when the reader is switched off', async () => {
     const h = harness({ available: ['one'], messages: [user('@skill one')] })
-    await h.ctx.plugin({ name, inject: ['skills'], apply, Config }, { atGesture: false, alwaysLoadSkills: [] })
+    await h.ctx.plugin({ name, inject, apply, Config }, { atGesture: false, alwaysLoadSkills: [] })
 
     expect((await h.step() as { messages: UserMessage[] }).messages).toEqual([])
+  })
+})
+
+describe('projection registration', () => {
+  it('refuses to guess when the invokedSkills registration is gone', async () => {
+    const subject = harness({ available: ['dsh-session-history'], withdrawProjection: true })
+    await subject.ctx.plugin({ name, inject, apply, Config }, {})
+    await expect(subject.step()).rejects.toThrow('skill-injection: the invokedSkills projection is not registered')
   })
 })

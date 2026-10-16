@@ -1,6 +1,8 @@
 /**
- * The model-facing `browser` tool: drive a headless browser by text, and see it
- * when seeing it is the point.
+ * The model-facing `browser` tool: drive a browser by text, and see it when seeing
+ * it is the point. The page is carried by whichever {@link BrowserDriver} the
+ * composition resolves for the call: the Desktop window's sidebar, or headless
+ * Chromium.
  *
  * A vision-less model cannot look at a screenshot, so every action returns the
  * page as text — its readable content plus each interactive element on a
@@ -22,8 +24,9 @@ import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { ToolExecution } from '@deepseek-ai/dsh-tools'
-import type { BrowserManager, CapturedScreenshot } from './browser.ts'
+import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { CapturedScreenshot } from './browser.ts'
+import type { BrowserDriver, BrowserPageTarget } from './driver.ts'
 import type { RawSnapshot } from './page-script.ts'
 import { formatSnapshot } from './serialize.ts'
 
@@ -55,7 +58,7 @@ type DispatchOutcome =
   | { readonly kind: 'screenshot' }
 
 /** Run one action, validating the fields that action needs. */
-async function dispatch(browser: BrowserManager, sessionKey: string, args: BrowserArgs): Promise<DispatchOutcome> {
+async function dispatch(browser: BrowserDriver, target: BrowserPageTarget, args: BrowserArgs): Promise<DispatchOutcome> {
   const asSnapshot = async (pending: Promise<RawSnapshot>): Promise<DispatchOutcome> => ({
     kind: 'snapshot',
     snapshot: await pending,
@@ -63,23 +66,23 @@ async function dispatch(browser: BrowserManager, sessionKey: string, args: Brows
   switch (args.action) {
     case 'navigate':
       if (args.url === undefined || args.url.length === 0) throw new Error('navigate needs a "url"')
-      return asSnapshot(browser.navigate(sessionKey, args.url))
+      return asSnapshot(browser.navigate(target, args.url))
     case 'read':
-      return asSnapshot(browser.read(sessionKey))
+      return asSnapshot(browser.read(target))
     case 'click':
       if (args.ref === undefined) throw new Error('click needs a "ref" — the [n] of an element from the last snapshot')
-      return asSnapshot(browser.click(sessionKey, args.ref))
+      return asSnapshot(browser.click(target, args.ref))
     case 'type':
       if (args.ref === undefined) throw new Error('type needs a "ref"')
       if (args.text === undefined) throw new Error('type needs "text" to enter')
-      return asSnapshot(browser.type(sessionKey, args.ref, args.text))
+      return asSnapshot(browser.type(target, args.ref, args.text))
     case 'press':
       if (args.key === undefined || args.key.length === 0) throw new Error('press needs a "key" such as Enter or Tab')
-      return asSnapshot(browser.press(sessionKey, args.key))
+      return asSnapshot(browser.press(target, args.key))
     case 'scroll':
-      return asSnapshot(browser.scroll(sessionKey, args.text === 'up' ? 'up' : 'down'))
+      return asSnapshot(browser.scroll(target, args.text === 'up' ? 'up' : 'down'))
     case 'back':
-      return asSnapshot(browser.back(sessionKey))
+      return asSnapshot(browser.back(target))
     case 'screenshot':
       return { kind: 'screenshot' }
     default:
@@ -164,8 +167,8 @@ ${image.mediaType} screenshot of the viewport, ${image.width}x${image.height} px
  */
 async function captureScreenshot(
   ctx: Context,
-  browser: BrowserManager,
-  sessionKey: string,
+  browser: BrowserDriver,
+  target: BrowserPageTarget,
   exec: ToolExecution,
 ): Promise<BrowserValue> {
   const attachments = ctx.get('attachments')
@@ -173,7 +176,7 @@ async function captureScreenshot(
     throw new Error('cannot take a screenshot: no attachment service is mounted, so the image could not be stored')
   }
   await assertImageCapableRoute(ctx, exec)
-  const shot = await browser.screenshot(sessionKey)
+  const shot = await browser.screenshot(target)
   let ref: ImageAttachmentRef
   try {
     ref = await attachments.saveImage({ data: shot.data, mediaType: shot.mediaType, name: 'browser-screenshot.png' })
@@ -192,18 +195,33 @@ async function captureScreenshot(
   return { text: formatScreenshotOutput(shot, image), image }
 }
 
+/** The page a call addresses, and the conversation that shows it. */
+export interface BrowserCallTarget {
+  /** The owning Session, which keys the page. */
+  readonly pageId: string
+  /** The conversation that shows the page. */
+  readonly displaySessionId: string
+}
+
 /**
- * Build the `browser` tool bound to one manager.
+ * Build the `browser` tool.
  * @param ctx - the registration scope; execution resolves the optional
  *   `attachments` and `llm` services through it.
- * @param browser - the shared headless-browser manager.
+ * @param resolveDriver - the driver that carries the page for one call; it may throw
+ *   a model-facing reason when the configured browser is unavailable.
+ * @param resolveTarget - the page and display conversation of one call.
  * @param maxOutputChars - cap on the text returned for one action.
  * @returns the tool definition to register with `ctx.tools`.
  */
-export function browserTool(ctx: Context, browser: BrowserManager, maxOutputChars: number) {
+export function browserTool(
+  ctx: Context,
+  resolveDriver: () => BrowserDriver,
+  resolveTarget: (exec: ToolExecution) => BrowserCallTarget,
+  maxOutputChars: number,
+): ToolDefinition {
   return defineTool({
     name: 'browser',
-    description: 'Drive a real headless browser by text. Returns the page as readable text plus a numbered list of'
+    description: 'Drive a real browser by text. Returns the page as readable text plus a numbered list of'
       + ' interactive elements ([n] role: name). Read it, then act by ref: click/type take the [n] of an element.'
       + ' Actions: navigate (open a url), read (re-read the page), click (ref), type (ref + text), press (a key like'
       + ' Enter), scroll (text "up"/"down"), back. Refs are only valid until the next action; each action returns a'
@@ -246,10 +264,10 @@ export function browserTool(ctx: Context, browser: BrowserManager, maxOutputChar
       },
     },
     async execute(args, exec) {
-      // One page per session, so parallel conversations do not share a tab.
-      const sessionKey = String(exec.agent?.session.id ?? 'default')
-      const outcome = await dispatch(browser, sessionKey, args)
-      if (outcome.kind === 'screenshot') return captureScreenshot(ctx, browser, sessionKey, exec)
+      const browser = resolveDriver()
+      const target: BrowserPageTarget = { ...resolveTarget(exec), signal: exec.signal }
+      const outcome = await dispatch(browser, target, args)
+      if (outcome.kind === 'screenshot') return captureScreenshot(ctx, browser, target, exec)
       return { text: capOutput(formatSnapshot(outcome.snapshot), maxOutputChars) }
     },
   })

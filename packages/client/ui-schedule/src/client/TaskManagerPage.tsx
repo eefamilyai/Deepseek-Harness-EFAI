@@ -6,24 +6,30 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleCatalogEntry, ScheduleCreateTaskRequest, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { CatalogSnapshot } from './catalog-source.ts'
 import { CatalogFeedback } from './CatalogFeedback.tsx'
+import { NewTaskDialog, type NewTaskOutcome, type NewTaskSession } from './NewTaskDialog.tsx'
+import { sessionLabel } from './session-link.ts'
 import { TaskDetail, useTaskDetail, type TaskDetailInjected } from './TaskDetail.tsx'
 import { useRelativeClock } from './relative-clock.ts'
 import { formatScheduleFrequency, nextRunParts, taskName, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
 import css from './TaskManagerPage.module.css'
 
+// DSH-FORK(schedule): the page opens a creation form instead of starting a Session,
+// because the Desktop's app.asar ships this page and only a fork delta reaches it.
+// EXIT: upstream ships a creation form on the Automation tasks page.
 /** Injected catalog and task actions for the management page. */
 export interface TaskManagerInjected extends TaskDetailInjected {
   /** Host task catalog with its query and deletion state. */
   readonly hooks: { readonly catalog: HostObservable<CatalogSnapshot<ScheduleCatalogEntry>> }
   /**
-   * Start a new Session, where a reminder is created by asking the model to
-   * schedule it. The page deliberately has no creation form of its own.
+   * Create one task from the page's own form.
+   * @param request - Session binding, name, instruction, and reminder selector.
+   * @returns the settled outcome; a refused rule carries the message key to show.
    */
-  readonly onNewTask: () => void
+  readonly onCreateTask: (request: ScheduleCreateTaskRequest) => Promise<NewTaskOutcome>
 }
 
 /** Root-scoped task catalog props derived from the framework and injected actions. */
@@ -39,12 +45,20 @@ type StatusFilter = 'all' | ScheduleCatalogEntry['status']
  * @returns the searchable task list beside the selected task's detail.
  */
 export function TaskManagerPage(props: TaskManagerPageProps) {
-  const { useCatalog, onNewTask, onRetry, t } = props
+  const { useCatalog, onCreateTask, onRetry, t, useSessions, useWorkspaces } = props
   const catalog = useCatalog(snapshot => snapshot)
   const { records, status } = catalog
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedId, setSelectedId] = useState<ScheduleId | null>(null)
+  // The page owns its creation form: opening it starts a draft, and the task it
+  // creates binds to whichever Session the reader picks there.
+  const [creating, setCreating] = useState(false)
+  const sessions = useSessions(snapshot => snapshot)
+  const workspaces = useWorkspaces(snapshot => snapshot)
+  const sessionChoices = useMemo<readonly NewTaskSession[]>(() => sessions.ids
+    .filter(id => !workspaces.archivedSessionIds.includes(id))
+    .map(id => ({ id, label: sessionLabel(id, sessions).text })), [sessions, workspaces])
   // The rows state how long remains, so they read the shared ticking clock
   // rather than a value sampled at mount: a catalog refresh can move the target
   // this text describes.
@@ -117,7 +131,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
             <div className={css.pageHeading}>
               <h1 ref={headingRef} tabIndex={-1}>{t('title')}</h1>
               <div className={css.creationActions}>
-                <Button variant="primary" size="sm" className={css.newButton} icon={<IconPlusOutlineRegular size={13} />} onClick={onNewTask}>{t('new.action')}</Button>
+                <Button variant="primary" size="sm" className={css.newButton} icon={<IconPlusOutlineRegular size={13} />} onClick={() => { setCreating(true) }}>{t('new.action')}</Button>
               </div>
             </div>
             <div className={css.filters}>
@@ -153,7 +167,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
               {status === 'ready' && rows.length === 0 && <div className={css.empty} role="status">
                 <IconClockOutlineRegular size={24} className={css.emptyGlyph} />
                 <h2>{t(emptyTitle)}</h2>
-                <Button variant="outline" className={css.emptyAction} onClick={onNewTask}>
+                <Button variant="outline" className={css.emptyAction} onClick={() => { setCreating(true) }}>
                   {t('empty.action')}
                 </Button>
               </div>}
@@ -207,6 +221,16 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
         authoritative={catalogRecord !== undefined}
         onDeleted={closeDetails}
         onClose={closeDetails}
+      />}
+      {/* DSH-FORK(schedule): mounts the fork's creation form, which the upstream
+          page has no equivalent of. EXIT: upstream ships its own creation form. */}
+      {creating && <NewTaskDialog
+        sessions={sessionChoices}
+        sessionsLoading={sessions.phase === 'pending'}
+        zone={systemZone}
+        onSubmit={onCreateTask}
+        onClose={() => { setCreating(false) }}
+        t={t}
       />}
     </section>
   )

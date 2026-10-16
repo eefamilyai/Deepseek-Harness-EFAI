@@ -40,6 +40,8 @@ Both halves live in [`@deepseek-ai/dsh-llm-text-toolcalls`](../llm-text-toolcall
 | [`@deepseek-ai/dsh-llm-text-toolcalls`](../llm-text-toolcalls/README.md) | The format statement and its streaming reader, shared with every other route |
 | [`src/bridge.ts`](src/bridge.ts) | The sidecar client over newline-delimited JSON |
 
+No runtime invariant companion is published: this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.
+
 ## Model Experience
 
 ### Tool-call protocol in the system prompt

@@ -31,6 +31,12 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../../session/session-projection"
+    },
+    {
+      "path": "../../core/session"
     }
   ]
 }

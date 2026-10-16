@@ -174,7 +174,10 @@ export const Config = z.object({
   }).volatile(),
 })
 
-/** The bridge shipped with this repository: `python/kiln`. */
+/**
+ * The bridge shipped with this repository: `python/kiln`.
+ * @returns the bridge directory's absolute path.
+ */
 export function defaultBridgeDir(): string {
   return resolve(import.meta.dirname, '..', '..', '..', '..', 'python', 'kiln')
 }
@@ -183,7 +186,8 @@ export function defaultBridgeDir(): string {
  * The interpreter inside the uv-managed bundle under `python/kiln/runtime/.venv`,
  * once `uv sync` has provisioned it. Preferring it keeps the DeepSeek `ds_direct`
  * bridge on the same bundled Python (with `curl_cffi`) as the kernel, even for a
- * direct `dsh web` that never set `$DSH_KERNEL_PYTHON`. Undefined until provisioned.
+ * direct `dsh web` that never set `$DSH_KERNEL_PYTHON`.
+ * @returns the bundled interpreter's path, or undefined until provisioned.
  */
 export function bundledVenvPython(): string | undefined {
   const runtime = join(defaultBridgeDir(), 'runtime')

@@ -101,7 +101,7 @@ export function apply(ctx: ClientContext): void {
     return () => {
       settled()
       root.unmount()
-      host?.remove()
+      host.remove()
     }
   }, 'ui-effects: overlay root')
 }

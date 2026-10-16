@@ -15,7 +15,7 @@ import type { EffectsKey } from './locales.ts'
 import styles from './overlay.module.css'
 
 /** CSS-module lookup with a stable fallback (noUncheckedIndexedAccess). */
-const css = (key: string): string => (styles as Record<string, string>)[key] ?? key
+const css = (key: string): string => (styles)[key] ?? key
 
 /** Reactive store reader. */
 function useStore<T>(store: SnapshotStore<T>): T {

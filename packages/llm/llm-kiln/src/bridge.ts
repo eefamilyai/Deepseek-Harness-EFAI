@@ -334,7 +334,7 @@ function parseAccountOp(frame: Record<string, unknown>): KilnAccountOpResult {
 /** A pending single-response request. */
 interface Waiter {
   resolve(value: Record<string, unknown>): void
-  reject(reason: unknown): void
+  reject(reason: Error): void
 }
 
 /** A live stream's delivery hooks. */
@@ -508,6 +508,9 @@ export class KilnBridge {
    * The free DeepSeek web route (`deepseek`) reads `DEEPSEEK_TOKEN` and
    * `DEEPSEEK_COOKIE` from the child's environment, so configuration surfaces
    * can set them here without writing a `ds_config.json` beside the runtime.
+   * @param provider - the provider route the credentials belong to.
+   * @param config - the credential fields to set.
+   * @returns whether the sidecar accepted them, with its message when it did not.
    */
   async configure(provider: string, config: Readonly<Record<string, unknown>>): Promise<{ ok: boolean; message?: string }> {
     const frame = await this.request({ cmd: 'configure', provider, config })

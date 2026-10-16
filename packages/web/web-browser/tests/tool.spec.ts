@@ -11,7 +11,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { browserTool, BROWSER_ACTIONS } from '../src/tool.ts'
-import type { BrowserManager, CapturedScreenshot } from '../src/browser.ts'
+import type { CapturedScreenshot } from '../src/browser.ts'
+import type { BrowserDriver, BrowserPageTarget } from '../src/driver.ts'
 import type { RawSnapshot } from '../src/page-script.ts'
 
 const PNG_BYTES = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -22,7 +23,7 @@ const REF = {
 
 const SNAPSHOT: RawSnapshot = {
   url: 'https://example.test/', title: 'Example', text: 'Hello page', elements: [],
-} as unknown as RawSnapshot
+}
 
 /** A manager that records the calls made and never launches a browser. */
 function fakeBrowser(overrides: Partial<Record<string, unknown>> = {}) {
@@ -32,17 +33,17 @@ function fakeBrowser(overrides: Partial<Record<string, unknown>> = {}) {
   }
   const manager = {
     calls,
-    navigate: (key: string, url: string) => { calls.push(`navigate:${key}:${url}`); return Promise.resolve(SNAPSHOT) },
-    read: (key: string) => { calls.push(`read:${key}`); return Promise.resolve(SNAPSHOT) },
-    click: (key: string, ref: number) => { calls.push(`click:${key}:${ref}`); return Promise.resolve(SNAPSHOT) },
-    type: (key: string, ref: number, text: string) => { calls.push(`type:${key}:${ref}:${text}`); return Promise.resolve(SNAPSHOT) },
-    press: (key: string, k: string) => { calls.push(`press:${key}:${k}`); return Promise.resolve(SNAPSHOT) },
-    scroll: (key: string, d: string) => { calls.push(`scroll:${key}:${d}`); return Promise.resolve(SNAPSHOT) },
-    back: (key: string) => { calls.push(`back:${key}`); return Promise.resolve(SNAPSHOT) },
-    screenshot: (key: string) => { calls.push(`screenshot:${key}`); return Promise.resolve(shot) },
+    navigate: ({ pageId: key }: BrowserPageTarget, url: string) => { calls.push(`navigate:${key}:${url}`); return Promise.resolve(SNAPSHOT) },
+    read: ({ pageId: key }: BrowserPageTarget) => { calls.push(`read:${key}`); return Promise.resolve(SNAPSHOT) },
+    click: ({ pageId: key }: BrowserPageTarget, ref: number) => { calls.push(`click:${key}:${ref}`); return Promise.resolve(SNAPSHOT) },
+    type: ({ pageId: key }: BrowserPageTarget, ref: number, text: string) => { calls.push(`type:${key}:${ref}:${text}`); return Promise.resolve(SNAPSHOT) },
+    press: ({ pageId: key }: BrowserPageTarget, k: string) => { calls.push(`press:${key}:${k}`); return Promise.resolve(SNAPSHOT) },
+    scroll: ({ pageId: key }: BrowserPageTarget, d: string) => { calls.push(`scroll:${key}:${d}`); return Promise.resolve(SNAPSHOT) },
+    back: ({ pageId: key }: BrowserPageTarget) => { calls.push(`back:${key}`); return Promise.resolve(SNAPSHOT) },
+    screenshot: ({ pageId: key }: BrowserPageTarget) => { calls.push(`screenshot:${key}`); return Promise.resolve(shot) },
     ...overrides,
   }
-  return manager as unknown as BrowserManager & { calls: string[] }
+  return manager as unknown as BrowserDriver & { calls: string[] }
 }
 
 /** The services the tool resolves off the context, each independently absent-able. */
@@ -93,6 +94,14 @@ function fakeExecWithoutRoute() {
 
 type Tool = ReturnType<typeof browserTool>
 
+/** The tool over one fixed driver, keyed by the calling Session as the plugin keys it. */
+function withDriver(ctx: Context, browser: BrowserDriver, maxOutputChars: number): Tool {
+  return browserTool(ctx, () => browser, (exec) => {
+    const id = String(exec.agent?.session.id ?? 'default')
+    return { pageId: id, displaySessionId: id }
+  }, maxOutputChars)
+}
+
 function run(tool: Tool, args: unknown, exec: unknown = fakeExec()) {
   return (tool as unknown as { execute: (a: unknown, e: unknown) => Promise<{ text: string; image?: { attachmentId: string } }> })
     .execute(args, exec)
@@ -105,7 +114,7 @@ describe('browser action dispatch', () => {
 
   it('routes each acting action to its manager method and returns text only', async () => {
     const browser = fakeBrowser()
-    const tool = browserTool(fakeCtx(), browser, 10_000)
+    const tool = withDriver(fakeCtx(), browser, 10_000)
     for (const [args, expected] of [
       [{ action: 'navigate', url: 'https://a.test/' }, 'navigate:session-1:https://a.test/'],
       [{ action: 'read' }, 'read:session-1'],
@@ -124,12 +133,12 @@ describe('browser action dispatch', () => {
   })
 
   it('rejects an action it does not know, naming the ones it does', async () => {
-    const tool = browserTool(fakeCtx(), fakeBrowser(), 10_000)
+    const tool = withDriver(fakeCtx(), fakeBrowser(), 10_000)
     await expect(run(tool, { action: 'teleport' })).rejects.toThrow(/unknown action "teleport".*screenshot/s)
   })
 
   it('rejects each acting action whose required argument is missing', async () => {
-    const tool = browserTool(fakeCtx(), fakeBrowser(), 10_000)
+    const tool = withDriver(fakeCtx(), fakeBrowser(), 10_000)
     await expect(run(tool, { action: 'navigate' })).rejects.toThrow(/navigate needs a "url"/)
     await expect(run(tool, { action: 'click' })).rejects.toThrow(/click needs a "ref"/)
     await expect(run(tool, { action: 'type', ref: 1 })).rejects.toThrow(/type needs "text"/)
@@ -141,7 +150,7 @@ describe('browser screenshot', () => {
   it('captures, commits the bytes, and returns the image beside its envelope', async () => {
     const browser = fakeBrowser()
     const ctx = fakeCtx()
-    const value = await run(browserTool(ctx, browser, 10_000), { action: 'screenshot' })
+    const value = await run(withDriver(ctx, browser, 10_000), { action: 'screenshot' })
 
     expect(browser.calls).toEqual(['screenshot:session-1'])
     expect(ctx.saved).toEqual([
@@ -157,7 +166,7 @@ describe('browser screenshot', () => {
   it('refuses before capturing when the model does not accept image input', async () => {
     const browser = fakeBrowser()
     const ctx = fakeCtx({ modalities: ['text'] })
-    await expect(run(browserTool(ctx, browser, 10_000), { action: 'screenshot' }))
+    await expect(run(withDriver(ctx, browser, 10_000), { action: 'screenshot' }))
       .rejects.toThrow(/does not declare image input/)
     // The refusal costs no browser work and commits nothing.
     expect(browser.calls).toEqual([])
@@ -165,19 +174,19 @@ describe('browser screenshot', () => {
   })
 
   it('refuses when the calling route cannot be resolved', async () => {
-    const tool = browserTool(fakeCtx(), fakeBrowser(), 10_000)
+    const tool = withDriver(fakeCtx(), fakeBrowser(), 10_000)
     await expect(run(tool, { action: 'screenshot' }, fakeExecWithoutRoute()))
       .rejects.toThrow(/route could not be resolved/)
   })
 
   it('refuses when no llm service is mounted', async () => {
-    const tool = browserTool(fakeCtx({ llm: false }), fakeBrowser(), 10_000)
+    const tool = withDriver(fakeCtx({ llm: false }), fakeBrowser(), 10_000)
     await expect(run(tool, { action: 'screenshot' })).rejects.toThrow(/route could not be resolved/)
   })
 
   it('refuses when no attachment store is mounted, before capturing', async () => {
     const browser = fakeBrowser()
-    const tool = browserTool(fakeCtx({ attachments: false }), browser, 10_000)
+    const tool = withDriver(fakeCtx({ attachments: false }), browser, 10_000)
     await expect(run(tool, { action: 'screenshot' })).rejects.toThrow(/no attachment service is mounted/)
     expect(browser.calls).toEqual([])
   })
@@ -185,14 +194,14 @@ describe('browser screenshot', () => {
   it('reports a storage refusal as a tool error instead of leaking the raw failure', async () => {
     const { AttachmentError } = await import('@deepseek-ai/dsh-attachment')
     const failing = new AttachmentError('too big', 'IMAGE_TOO_LARGE')
-    const tool = browserTool(fakeCtx({ saveRejects: failing }), fakeBrowser(), 10_000)
+    const tool = withDriver(fakeCtx({ saveRejects: failing }), fakeBrowser(), 10_000)
     await expect(run(tool, { action: 'screenshot' })).rejects.toThrow(/could not be stored \(IMAGE_TOO_LARGE\)/)
   })
 
   it('caps long page text without touching the image', async () => {
     const long = 'x'.repeat(500)
     const browser = fakeBrowser({ read: () => Promise.resolve({ ...SNAPSHOT, text: long }) })
-    const value = await run(browserTool(fakeCtx(), browser, 100), { action: 'read' })
+    const value = await run(withDriver(fakeCtx(), browser, 100), { action: 'read' })
     expect(value.text).toContain('characters truncated')
     expect(value.image).toBeUndefined()
   })

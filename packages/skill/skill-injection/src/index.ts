@@ -31,7 +31,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { z as zod } from 'zod'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import { isModelInvocable, renderSkillContent } from '@deepseek-ai/dsh-skill'
@@ -40,8 +43,33 @@ import type { SkillLookupOptions } from '@deepseek-ai/dsh-skill'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'skill-injection'
 
-/** The registry supplies the bodies; the agent loop supplies the step. */
-export const inject = ['skills']
+/** The registry supplies the bodies; the projection registry remembers which bodies were injected. */
+export const inject = ['skills', 'sessionProjections']
+
+/** Skill name of every `skill-invocation` user message, keyed by the message's session seq. */
+export type InvokedSkills = Readonly<Record<string, string>>
+
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    /** Skill bodies injected into the session, by message seq. */
+    invokedSkills: InvokedSkills
+  }
+}
+
+/**
+ * The fold that records each injected skill body's seq and name, so the
+ * pre-step reads current state instead of rescanning the session log.
+ */
+export const invokedSkillsProjection = {
+  key: 'invokedSkills',
+  stateVersion: 1,
+  stateSchema: zod.record(zod.string(), zod.string()).readonly(),
+  init: (): InvokedSkills => ({}),
+  apply: (state: InvokedSkills, event: SessionEvent): InvokedSkills =>
+    event.type === 'user/message' && event.data.source.kind === 'skill-invocation'
+      ? { ...state, [event.seq]: event.data.source.name }
+      : state,
+} satisfies ProjectionDefinition<'invokedSkills', InvokedSkills>
 
 /** Names whose body re-enters after a compaction prunes it, unless configured otherwise. */
 export const DEFAULT_ALWAYS_LOAD_SKILLS: readonly string[] = ['dsh-session-history']
@@ -75,18 +103,18 @@ export const Config: z<Config> = z.object({
 /**
  * Skill names whose injected body is still visible on the session surface.
  *
- * Read from the surface rather than the message list: a compaction removes a
+ * Read against the surface rather than the message list: a compaction removes a
  * body by shadowing its event, which the message list no longer shows but the
  * surface does.
- * @param agent - the agent whose surface is inspected.
+ * @param invoked - every injected body's seq and name, from {@link invokedSkillsProjection}.
+ * @param surfaceNodes - the session surface's current event seqs.
  * @returns the names whose bodies the model can still read.
  */
-export function visibleInvokedSkillNames(agent: Agent): Set<string> {
-  const visible = new Set(agent.session.surface.nodes)
+export function visibleInvokedSkillNames(invoked: InvokedSkills, surfaceNodes: readonly number[]): Set<string> {
   const names = new Set<string>()
-  for (const event of agent.session.ownEvents()) {
-    if (event.type !== 'user/message' || event.data.source.kind !== 'skill-invocation') continue
-    if (visible.has(event.seq)) names.add(event.data.source.name)
+  for (const seq of surfaceNodes) {
+    const skillName = invoked[seq]
+    if (skillName !== undefined) names.add(skillName)
   }
   return names
 }
@@ -165,6 +193,7 @@ export function apply(ctx: Context, config: Config): void {
   const readAtGesture = config.atGesture ?? true
   /** Per-agent names that resolved to no usable body. */
   const missingByAgent = new WeakMap<Agent, Set<string>>()
+  ctx.sessionProjections.register(invokedSkillsProjection)
 
   ctx.on('agent/pre-step', async ({ agent, messages, signal }, next): Promise<PreStepDecision> => {
     const decision = await next()
@@ -172,7 +201,9 @@ export function apply(ctx: Context, config: Config): void {
     signal.throwIfAborted()
 
     const requested = readAtGesture ? atGestureNames(messages) : []
-    const visible = visibleInvokedSkillNames(agent)
+    const invoked = ctx.sessionProjections.stateOf(agent.session, 'invokedSkills')
+    if (invoked === undefined) throw new Error('skill-injection: the invokedSkills projection is not registered')
+    const visible = visibleInvokedSkillNames(invoked, agent.session.surface.nodes)
     const wantedAlways = alwaysLoad.filter(skillName => !visible.has(skillName))
     if (requested.length === 0 && wantedAlways.length === 0) return decision
 

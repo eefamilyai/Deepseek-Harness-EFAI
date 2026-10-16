@@ -15,6 +15,7 @@ import {
   appearanceCss,
   installAppearance,
   opacityPercent,
+  usableImageUrl,
   type AppearanceValues,
 } from '../src/client/appearance.ts'
 
@@ -249,5 +250,86 @@ describe('installAppearance', () => {
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).not.toBeNull()
     dispose()
     expect(doc.getElementById(APPEARANCE_STYLE_ID)).toBeNull()
+  })
+})
+
+describe('the wider choices', () => {
+  it('sets the code font on the root and the body, where the code composites resolve it', () => {
+    const css = appearanceCss(values({ codeFontFamily: '"Cascadia Code", Consolas' }))
+    expect(css).toContain(':root:root, :root:root body, :root:root body[data-ds-dark-theme] {')
+    expect(css).toContain('--ds-font-family-code: "Cascadia Code", Consolas;')
+    expect(appearanceCss(values({ codeFontFamily: 'x; color: red' }))).not.toContain('--ds-font-family-code')
+  })
+
+  it('multiplies the message-text line height inside every base composite', () => {
+    const css = appearanceCss(values({ lineHeight: 125 }))
+    expect(css).toContain('--dsw-font-markdown-base-line-height: calc((24px + var(--dsh-content-font-delta)) * 1.25);')
+    expect(css).toContain('--dsw-font-markdown-base-strong-italic: italic 600 var(--dsh-content-font-size, 14px) / calc((24px + var(--dsh-content-font-delta)) * 1.25) var(--dsw-font-family);')
+  })
+
+  it('tints links, bubbles, and the current row only when the accent is meant everywhere', () => {
+    expect(appearanceCss(values({ accent: '#10b981' }))).not.toContain('--dsw-alias-link')
+    const css = appearanceCss(values({ accent: '#10b981', accentEverywhere: true }))
+    expect(css).toContain('--dsw-alias-link: #10b981;')
+    expect(css).toContain('--dsw-specific-bubble: color-mix(in srgb, #10b981 16%, var(--dsw-alias-bg-layer-1));')
+    // Without an accent there is nothing to spread.
+    expect(appearanceCss(values({ accentEverywhere: true }))).not.toContain('--dsw-alias-link')
+  })
+
+  it('fixes the conversation width and hides the drag handles that would move it', () => {
+    const css = appearanceCss(values({ contentWidth: 'wider' }))
+    expect(css).toContain(':root:root [data-conversation-content] {\n  --dsh-chat-content-width: min(calc(100% - 32px)')
+    expect(css).toContain(':root:root [data-width-handle] {\n  display: none;')
+    expect(appearanceCss(values({ contentWidth: 'full' }))).toContain('--dsh-chat-content-width: calc(100% - 48px);')
+    expect(appearanceCss(values())).not.toContain('[data-width-handle]')
+  })
+
+  it('widens the settings panel', () => {
+    expect(appearanceCss(values({ settingsWidth: 'wide' }))).toContain("[data-shortcut-modal='settings'] {\n  width: 1040px;")
+    expect(appearanceCss(values({ settingsWidth: 'wider' }))).toContain('width: 1320px;')
+  })
+
+  it('thins or hides the scrollbar on every element, since the theme re-binds it per surface', () => {
+    const thin = appearanceCss(values({ scrollbars: 'thin' }))
+    expect(thin).toContain(':root:root body * {\n  --dsh-scrollbar-width: 3px;')
+    expect(thin).not.toContain('scrollbar-width: none;')
+    expect(appearanceCss(values({ scrollbars: 'hidden' }))).toContain('scrollbar-width: none;')
+  })
+
+  it('changes the glass blur, and blurs a translucent dialog by the same radius', () => {
+    expect(appearanceCss(values({ glassBlur: 12 }))).toContain('--dsw-menu-backdrop-filter: blur(12px) saturate(150%);')
+    expect(appearanceCss(values())).not.toContain('--dsw-menu-backdrop-filter')
+    expect(appearanceCss(values({ panelOpacity: 60, glassBlur: 20 }))).toContain("[role='dialog'] {\n  backdrop-filter: blur(20px) saturate(150%);")
+  })
+
+  it('removes or strengthens shadows on every element that re-declares elevation', () => {
+    const none = appearanceCss(values({ shadows: 'none' }))
+    expect(none).toContain('--dsw-shadow-lv2: none;')
+    expect(none).toContain(':root:root body, :root:root body * {\n  --dsw-elevation-panel: var(--dsw-elevation-stroke);')
+    expect(appearanceCss(values({ shadows: 'strong' }))).toContain('--dsw-elevation-prominent: var(--dsw-elevation-stroke), 0 10px 28px')
+  })
+
+  it('paints a named backdrop, or a usable image, on the document', () => {
+    const aurora = appearanceCss(values({ backdrop: 'aurora', shellOpacity: 80, surfaceOpacity: 80 }))
+    expect(aurora).toContain('background-image: radial-gradient(')
+    expect(aurora).toContain('background-attachment: fixed;')
+    const image = appearanceCss(values({ backdrop: 'image', backdropImage: 'https://example.com/w.jpg' }))
+    expect(image).toContain('background-image: url("https://example.com/w.jpg");')
+    // An address that could break out of the url() paints nothing.
+    expect(appearanceCss(values({ backdrop: 'image', backdropImage: 'https://x/a.jpg") ; color: red' }))).not.toContain('background-image')
+    expect(appearanceCss(values({ backdrop: 'image', backdropImage: '' }))).not.toContain('background-image')
+  })
+
+  it('accepts only https, http, and inline image addresses', () => {
+    expect(usableImageUrl('https://example.com/a.png')).toBe(true)
+    expect(usableImageUrl('data:image/png;base64,AAAA')).toBe(true)
+    expect(usableImageUrl('javascript:alert(1)')).toBe(false)
+    expect(usableImageUrl('file:///C:/a.png')).toBe(false)
+  })
+
+  it('cuts animations and transitions to an instant', () => {
+    const css = appearanceCss(values({ reduceMotion: true }))
+    expect(css).toContain('animation-duration: 0.01ms !important;')
+    expect(css).toContain('transition-duration: 0.01ms !important;')
   })
 })

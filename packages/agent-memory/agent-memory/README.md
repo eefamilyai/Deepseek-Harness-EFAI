@@ -60,6 +60,8 @@ The decision could have been a Loader `disabled: !!js …` expression on the eng
 
 `sync` compares the wanted state against whether a fiber exists, so writing the value the switch already holds does nothing — an edit that changes another field of this row does not remount the engine and lose its in-memory state.
 
+No runtime invariant companion is published: memory lives in files the agent writes and reads through its own tools, and the package keeps no second observation of that state that could diverge from it.
+
 ## Model Experience
 
 ### Auto-injected memory index
