@@ -1,0 +1,649 @@
+assistant text parts with a trailer: 141  families: 10
+
+========================================================================================
+FAMILY ('unfinished', True, True, True)  count=39  seqs=[344, 653, 653, 660, 660, 674, 674, 727]
+
+--- FIRST seq=344 prelen=504 ---
+The user wants a commit and push. Let me load the required skills first — `dsh-harness-edit` before committing, `dsh-github` for the operation, and `dsh-pre-push-checks` before pushing.
+
+<tool_calls>
+
+<invoke name="skill">
+<parameter name="name">dsh-harness-edit</parameter>
+</parameter>
+</invoke>
+<invoke name="skill">
+<parameter name="name">dsh-github</parameter>
+</parameter>
+</invoke>
+<invoke name="skill">
+<parameter name="name">dsh-pre-push-checks</parameter>
+</parameter>
+</invoke>
+</tool_calls>
+
+
+
+--- LONGEST seq=3326 prelen=8873 ---
+
+<invoke name="write">
+<parameter name="file_path">D:\deepseek-kernel-harness\.research-compaction\attack-dsml.mts</parameter>
+<parameter name="content">// Adversarial corpus + chunk-invariance fuzz against the DSML reader.
+//
+// Every tag below is assembled from parts, so this file never carries a literal
+// opener or closer tag in its own source. The reader under test is the thing
+// that has to survive one; a fixture that tripped it would be testing the
+// wrong layer.
+import { DsmlTranslator, restoreStrippedClosers, trailingReasoningCalls }
+  from 'file:///D:/deepseek-kernel-harness/packages/llm/llm-dsml/src/dsml.ts'
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type Any = any
+
+const o = (n: string, attrs = '') => '<' + n + (attrs ? ' ' + attrs : '') + '>'
+const c = (n: string) => '<' + '/' + n + '>'
+const A = (n: string, v: string) => n + '="' + v + '"'
+const P = (name: string, value: string) => o('parameter', A('name', name)) + value + c('parameter')
+const I = (name: string, body: string) => o('invoke', A('name', name)) + body + c('invoke')
+const W = (body: string) => o('tool_calls') + body + c('tool_calls')
+const F = (body: string) => o('function_calls') + body + c('function_calls')
+const PIPE = '\uFF5C'
+const N = (rest: string) => '<' + PIPE + PIPE + 'DSML' + PIPE + PIPE + rest + '>'
+
+const schema = (n: string, props: Any, req: string[] = []) => ({
+  name: n, description: n, parameters: { type: 'object', properties: props, required: req },
+})
+const TOOLS: Any = new Map<string, Any>([
+  ['kernel', schema('kernel', { code: { type: 'string' } }, ['code'])],
+  ['read', schema('read', { file_path: { type: 'string' } }, ['file_path'])],
+  ['write', schema('write', { file_path: { type: 'string' }, content: { type: 'string' } }, ['file_path', 'content'])],
+  ['skill', schema('skill', { name: { type: 'string' } }, ['name'])],
+])
+
+function run(text: string, opts: Any = {}) {
+  const t = new DsmlTranslator(TOOLS, { notes: true, ...opts })
+  const ev: Any[] = []
+  ev.push(...t.push(text.endsWith('\n') ? text : text + '\n'))
+  ev.push(...t.end())
+  return ev
+}
+function runChunked(text: string, size: number) {
+  const t = new DsmlTranslator(TOOLS, { notes: true })
+  const ev: Any[] = []
+  for (let i = 0; i < text.length; i += size) ev.push(...t.push(text.slice(i, i + size)))
+  ev.push(...t.end())
+  return ev
+}
+const calls = (ev: Any[]) => ev.filter(e => e.kind === 'tool-call')
+const prose = (ev: Any[]) => ev.filter(e => e.kind === 'text').map(e => Str
+
+========================================================================================
+FAMILY ('unfinished', True, True, False)  count=39  seqs=[490, 686, 708, 720, 773, 794, 1000, 1009]
+
+--- FIRST seq=490 prelen=270 ---
+<invoke name="read">
+<parameter name="file_path" string="true">D:\deepseek-kernel-harness\python\kiln\runtime\ds_direct.py</parameter>
+<parameter name="offset" string="false">1135</parameter>
+<parameter name="limit" string="false">90</parameter>
+</parameter>
+</invoke>
+
+
+
+--- LONGEST seq=3551 prelen=8635 ---
+
+<invoke name="kernel">
+<parameter name="code" string="true"># Rewrite shapes.ts: fix the broken STOP class and read every notation's binding
+from pathlib import Path
+import subprocess, sys
+
+ROOT = Path("D:/deepseek-kernel-harness")
+PKG = ROOT / "packages/llm/llm-dsml"
+target = PKG / "src/shapes.ts"
+
+SRC = r'''/**
+ * Read a tool call out of a notation nobody wrote a rule for.
+ *
+ * Every rule in the reader is about SPELLING: `<invoke name="x">`, a wrapper,
+ * a pipe token, an equals sign. That covers the dialects it was taught and
+ * nothing else, so a model writing the same call in the notation it grew up
+ * on — JSON, YAML, `key: value`, `<key>value</key>`, a shell flag, a Python
+ * call — gets no call at all, or worse, a call whose argument is the markup it
+ * was written in.
+ *
+ * What every one of those notations carries is the same two things: a tool
+ * name and a set of named argument values. This reads those two things
+ * directly, so the notation stops mattering — the only questions are whether a
+ * name and its values are present, and whether they are unambiguous.
+ *
+ * Four properties keep that from becoming a way to invent calls:
+ *
+ *   * The ROSTER is the oracle. A candidate exists only if it names a tool the
+ *     request declared, and an argument only if that tool declares the slot.
+ *   * The RESIDUE must be empty. Once the name, the bound values and every
+ *     complete tag run are cut out, what remains has to be punctuation and the
+ *     vocabulary every envelope is built from. A sentence about a call leaves
+ *     words behind, and words mean prose.
+ *   * A CONFLICT refuses. One slot bound to two different values is a guess,
+ *     not a reading, so the candidate is dropped rather than resolved.
+ *   * A LONE POSITIONAL argument is read only for a tool that declares exactly
+ *     one slot. With one slot there is nothing to choose between; with two, the
+ *     text never says which one the value belongs to, and refusing is the only
+ *     reading that cannot invent.
+ *
+ * None of the four is a spelling rule, so none needs extending when a new
+ * spelling appears. That is the whole point.
+ * @module @deepseek-ai/dsh-llm-dsml/shapes
+ */
+
+import type { ToolSchema } from '@deepseek-ai/dsh-llm'
+import { parameterNames, requiredNames } from './protocol.ts'
+
+/** One read call: the tool's registered name, and the value per declared slot. */
+export interface ShapeCandidate {
+  readonly name: string
+  readonly args: ReadonlyMap<string, string
+
+========================================================================================
+FAMILY ('malformed', True, True, True)  count=35  seqs=[6670, 6713, 6822, 7207, 7231, 7256, 7265, 7274]
+
+--- FIRST seq=6670 prelen=564 ---
+The rebuilt `lib/` carries the fix (`quotedReplay`, `summarized-conversation`, `QUOTED MATERIAL` all present). Now running the compaction suites to verify the repinned specs:
+
+<tool_calls>
+<parameter name="code" string="true"># Run the compaction suites against the rebuilt tree
+import os
+ROOT = r'D:\deepseek-kernel-harness'
+os.chdir(ROOT)
+
+r = sh('npx vitest run packages/compaction --reporter=dot 2>&1 | Select-Object -Last 45', result=True, timeout=900)
+print(r['stdout'])
+print('exit:', r['code'])
+</parameter>
+</invoke>
+</parameter>
+</invoke>
+</tool_calls>
+
+
+
+--- LONGEST seq=18651 prelen=7425 ---
+CSS fix pushed: `local == remote == f8e2886d1a`. The lane went 7 → 5 failures, and all 5 remaining are environmental. Let me do a final verification pass on the committed kiln work before closing the goal.
+
+<tool_calls>
+<parameter name="todo_write">
+<parameter name="todos">[{"content": "Fix biz_code 10 \"too many ref file\" to trigger harness auto-compaction and retry", "status": "completed"}, {"content": "Stop ref_file_ids accumulation at its source", "status": "completed"}, {"content": "Make every other non-success biz_code a no-retry receive-then-fail", "status": "completed"}, {"content": "Add no-retry regression coverage for the biz_code catch-all", "status": "completed"}, {"content": "Finish mute classification regression coverage", "status": "completed"}, {"content": "Close the accept-encoding browser-parity header item", "status": "completed"}, {"content": "Run the full kiln ds suite (18 files) green", "status": "completed"}, {"content": "Write recon notes for ds-direct auth/verdict taxonomy", "status": "completed"}, {"content": "Fix destructive Accounts-tab Remove default (purge opt-in)", "status": "completed"}, {"content": "Confirm fork ownership / no seam marker needed", "status": "completed"}, {"content": "Path-scoped commit + push the Accounts-tab fix", "status": "completed"}, {"content": "Rebuild ui-settings-accounts client bundle", "status": "completed"}, {"content": "Verify the purge checkbox end-to-end in the live GUI", "status": "completed"}, {"content": "Restore the broken node_modules install (vitest/vite links)", "status": "completed"}, {"content": "Repair the vite:oxc tsconfig failure (restore deleted vendor/schemastery)", "status": "completed"}, {"content": "Run the new AccountsSection spec green (5/5)", "status": "completed"}, {"content": "Commit + push the AccountsSection spec path-scoped", "status": "completed"}, {"content": "Rebuild the gutted node_modules/@deepseek-ai scope links (343 junctions)", "status": "completed"}, {"content": "Fix AccountsSection.module.css scrollbar rebind (spec 21/21 green)", "status": "completed"}, {"content": "Re-run the narrow GUI lane and confirm the resolution failures clear", "status": "completed"}, {"content": "Commit + push the CSS scrollbar-rebind fix path-scoped", "status": "completed"}, {"content": "Final verification: re-run the kiln biz/ref/mute suites and confirm readers in committed source", "status": "in_progress"}, {"content": "Read current goal and mark complete once objective is eviden
+
+========================================================================================
+FAMILY ('unfinished', False, False, False)  count=10  seqs=[3353, 18904, 18966, 18976, 18985, 18994, 19070, 19080]
+
+--- FIRST seq=3353 prelen=110 ---
+I can see the live breakage in my own transcript — my `write` call's `content` was split mid-value and got a `
+
+--- LONGEST seq=20876 prelen=4632 ---
+**This is the breakthrough.** Session `7cff4905` is **another agent's session in the same repo**, running 154 turns across 3 days — and its account list is `+p`, `hunt`, `v`, `9`, `parserfix`. It ran until **00:32 local**, then went quiet; the mutes landed at **01:55/01:56 local**.
+
+Let me pin down each muted account's **last request** before its mute.
+
+D:\deepseek-kernel-harness\python\kiln\runtime\_lastuse.py
+# Find, per account, the LAST real request it made before the 17:56 UTC mute.
+#
+# The question the operator raised. Two DIFFERENT accounts -- `f` (expiry
+# 2026-10-02 17:55 UTC) and `mutetest` (expiry 2026-10-03 01:56 local = 17:56
+# UTC) -- back-compute (expiry - 72 h) to starts 60 s apart. If both accounts were
+# still being driven right up to that instant, a single moderation action swept
+# them; if one went quiet much earlier, the "correlation" is arithmetic only.
+#
+# Only RUNTIME lines count: ds_direct prints `on account=<id>` when it opens a
+# chat and `token expired for account <id>` on a re-login. Prose that merely
+# NAMES an account is excluded, because the investigation itself writes those.
+#
+# Read-only: decompresses logs and counts. Touches no account.
+import collections
+import datetime
+import glob
+import json
+import os
+import re
+import subprocess
+SESS_ROOT = r"C:\Users\eejar\.dsh\sessions"
+UTC = datetime.timezone.utc
+TZ = datetime.timezone(datetime.timedelta(hours=8))
+ANCHOR = datetime.datetime(2026, 9, 29, 17, 56, tzinfo=UTC)
+# The runtime emits these; prose does not.
+RUNTIME = [
+    re.compile(r"on account=(deepseek\.ee\.1\+[A-Za-z0-9._-]+)"),
+    re.compile(r"token expired for account (deepseek\.ee\.1\+[A-Za-z0-9._-]+)"),
+    re.compile(r"account=(deepseek\.ee\.1\+[A-Za-z0-9._-]+)"),
+]
+TIME_RE = re.compile(r'"time"\s*:\s*(\d{10,})')
+def ts(v):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f / 1000.0 if f > 1e11 else (f if f > 1e9 else None)
+def fmt(t):
+    return (datetime.datetime.fromtimestamp(t, TZ).strftime("%m-%d %H:%M:%S") + " loc"
+            + "  " + datetime.datetime.fromtimestamp(t, UTC).strftime("%H:%M:%S") + " UTC")
+def main():
+    logs = sorted(glob.glob(os.path.join(SESS_ROOT, "**", "session.v4.jsonl.zstd"),
+                            recursive=True))
+    print("=== %d session log(s) ===" % len(logs))
+    print("=== mute anchor: %s ===" % fmt(ANCHOR.timestamp()))
+    print()
+    last_before = {}      # account -> (t, session)
+    first_after = {}
+    total = collection
+
+========================================================================================
+FAMILY ('malformed', False, False, False)  count=6  seqs=[20228, 20249, 20265, 20746, 20901, 20928]
+
+--- FIRST seq=20228 prelen=359 ---
+All four WAF tokens **and** all four `ds_session_id`s are distinct — the shared-cookie theory is now properly refuted on a 4-account sample (the `5d4cd3` prefix was just token framing, not shared material).
+
+Both operator leads now resolve to one architectural fact. Gathering the last facts needed to fix it.
+
+D:\deepseek-kernel-harness\python\kiln\runtime
+
+
+
+--- LONGEST seq=20901 prelen=7258 ---
+**The correlation is confirmed — and my earlier "zero events" measurement was looking at the wrong window.** The storms and the mutes line up:
+
+- Last big activity cluster ended **00:30:49 local**
+- `f` muted **01:55 local** → **84 min later**
+- `mutetest` muted **01:56 local** → **85 min later**
+
+The offence is the **storm**; the mute is the **verdict, ~85 min later**. My window scan looked at the mute instant, not the offence instant.
+
+But my detector was noisy — it matched my own probe output. Let me measure it precisely, and test the **long-pause** half of your hypothesis directly.
+
+D:\deepseek-kernel-harness\python\kiln\runtime\_pausestorm.py
+# Measure genuine retry storms and idle gaps per account.
+#
+# Two halves of the operator's model, both made measurable here.
+#
+#  STORM. A rate-limited turn resends RATE_MAX_TRIES=20 times at DS_RATE_WAIT=180 s
+#  -- ~60 min on the SAME account, session and prompt. An earlier detector matched
+#  any line containing "rate limit", which also matched this investigation's own
+#  probe output; this one matches only the literal notice the retry path yields,
+#  "retrying in <span>", so a storm count means a storm.
+#
+#  PAUSE. "It usually doesn't get muted until there's a long pause." If true, the
+#  mute start should follow an unusually LONG idle gap for that account, because a
+#  pause is when the session goes stale server-side and the next request presents
+#  a credential the server has already lapsed.
+#
+# Runtime account attribution comes from ds_direct's own lines ("on account=<id>",
+# "token expired for account <id>"), never from prose, so writing about an account
+# cannot count as using it.
+#
+# Read-only: decompresses logs and counts. Touches no account.
+import collections
+import datetime
+import glob
+import json
+import os
+import re
+import subprocess
+SESS_ROOT = r"C:\Users\eejar\.dsh\sessions"
+UTC = datetime.timezone.utc
+TZ = datetime.timezone(datetime.timedelta(hours=8))
+STORM_GAP_MIN = 30.0
+RETRY_RE = re.compile(r"retrying in \d")
+TIME_RE = re.compile(r'"time"\s*:\s*(\d{10,})')
+ACCT_RES = [
+    re.compile(r"on account=(deepseek\.ee\.1\+[A-Za-z0-9._-]+)"),
+    re.compile(r"token expired for account (deepseek\.ee\.1\+[A-Za-z0-9._-]+)"),
+]
+MUTES = [
+    ("v",        datetime.datetime(2026, 9, 27, 13, 41, tzinfo=UTC)),
+    ("j1",       datetime.datetime(2026, 9, 29, 13, 41, tzinfo=UTC)),
+    ("f",        datetime.datetime(2026, 9, 29, 17, 55, tzinfo=UTC)),
+    ("mutetest", datetime.datetime(2026, 9, 29, 17, 56, tzinf
+
+========================================================================================
+FAMILY ('malformed', False, True, True)  count=5  seqs=[14536, 17530, 17540, 18671, 18728]
+
+--- FIRST seq=14536 prelen=931 ---
+The todo is updated. Now the debug-log restyle — let me see the current markup and its surrounding context.
+
+<tool_calls>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\client\ui-settings-accounts\src\client\AccountsSection.tsx</parameter>
+<parameter name="offset" string="false">630</parameter>
+<parameter name="limit" string="false">70</parameter>
+</parameter>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\client\ui-settings-accounts\src\client\AccountsSection.tsx</parameter>
+<parameter name="offset" string="false">555</parameter>
+<parameter name="limit" string="false">75</parameter>
+</parameter>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\client\ui-settings-accounts\src\client\AccountsSection.module.css</parameter>
+<parameter name="offset" string="false">1</parameter>
+<parameter name="limit" string="false">140</parameter>
+</parameter>
+
+</parameter>
+</tool_calls>
+
+
+
+--- LONGEST seq=18671 prelen=3797 ---
+The pwsh spawn failed transiently (ENOENT). Retrying the final verification.
+
+<tool_calls>
+<parameter name="command">Set-Location 'D:\deepseek-kernel-harness'
+$py = 'python\kiln\runtime\.venv\Scripts\python.exe'
+'=== verdict readers in committed source ==='
+git grep -n -E 'def (_biz_verdict_in|_biz_verdict_of|_mute_verdict_in|_ref_file_verdict_in|_ref_ids_already_sent|_remember_ref_ids)' -- python/kiln/runtime/ds_direct.py
+''
+'=== no retry machinery ==='
+$r = git grep -n -E 'biz_tries|biz_heal|biz_retry' -- python/kiln/runtime/ds_direct.py
+if ($r) { $r } else { '(none - good)' }
+''
+'=== the three suites ==='
+foreach ($s in @('test_ds_direct_biz_verdict.py','test_ds_direct_ref_limit.py','test_ds_direct_mute.py')) {
+  $out = & $py "python\kiln\runtime\$s" 2>&1 | Select-Object -Last 3
+  "$s  exit=$LASTEXITCODE"
+  $out | ForEach-Object { '    ' + $_ }
+}
+''
+'=== dirty tree on my paths ==='
+git status --porcelain -- python/kiln packages/client/ui-settings-accounts .recon
+'(empty above means clean)'</parameter>
+<parameter name="description" string="true">Final verification of kiln verdict work</parameter>
+<parameter name="timeoutMs" string="false">900000</parameter>
+<parameter name="workdir" string="true">D:\deepseek-kernel-harness</parameter>
+<parameter name="run_in_background" string="false">true</parameter>
+</parameter>true</parameter>
+<parameter name="timeoutMs" string="false">900000</parameter>
+<parameter name="description" string="true">Final verification of kiln verdict work</parameter>
+<parameter name="workdir" string="true">D:\deepseek-kernel-harness</parameter>
+<parameter name="command" string="true">Set-Location 'D:\deepseek-kernel-harness'
+$py = 'python\kiln\runtime\.venv\Scripts\python.exe'
+'=== verdict readers in committed source ==='
+git grep -n -E 'def (_biz_verdict_in|_biz_verdict_of|_mute_verdict_in|_ref_file_verdict_in|_ref_ids_already_sent|_remember_ref_ids)' -- python/kiln/runtime/ds_direct.py
+''
+'=== no retry machinery ==='
+$r = git grep -n -E 'biz_tries|biz_heal|biz_retry' -- python/kiln/runtime/ds_direct.py
+if ($r) { $r } else { '(none - good)' }
+''
+'=== the three suites ==='
+foreach ($s in @('test_ds_direct_biz_verdict.py','test_ds_direct_ref_limit.py','test_ds_direct_mute.py')) {
+  $out = & $py "python\kiln\runtime\$s" 2>&1 | Select-Object -Last 3
+  "$s  exit=$LASTEXITCODE"
+  $out | ForEach-Object { '    ' + $_ }
+}
+''
+'=== dirty tree on my paths ==='
+git status --porcelain -- python/kiln packages/client/ui-settings-accounts .recon
+'(empt
+
+========================================================================================
+FAMILY ('nosuch', True, True, False)  count=3  seqs=[952, 3705, 3765]
+
+--- FIRST seq=952 prelen=517 ---
+',
+  },
+  {
+    id: 'orphan-parameter',
+    saw: 'a line-leading <parameter> with no invoke and no wrapper around it',
+    fix: 'the tool is inferred when one tool can own that argument, and an invoke is synthesized',
+    example: '<parameter name="pattern">**/*.ts',
+  },
+  {
+    id: 'json-body',
+    saw: 'a JSON arguments object where <parameter> elements belong',
+    fix: 'the object is read as the arguments when every key is this tool\'s own',
+    example: '<invoke name="search_files">{"query":"x"}</invoke>
+
+
+
+--- LONGEST seq=952 prelen=517 ---
+',
+  },
+  {
+    id: 'orphan-parameter',
+    saw: 'a line-leading <parameter> with no invoke and no wrapper around it',
+    fix: 'the tool is inferred when one tool can own that argument, and an invoke is synthesized',
+    example: '<parameter name="pattern">**/*.ts',
+  },
+  {
+    id: 'json-body',
+    saw: 'a JSON arguments object where <parameter> elements belong',
+    fix: 'the object is read as the arguments when every key is this tool\'s own',
+    example: '<invoke name="search_files">{"query":"x"}</invoke>
+
+
+
+========================================================================================
+FAMILY ('unfinished', False, True, False)  count=2  seqs=[19827, 20948]
+
+--- FIRST seq=19827 prelen=136 ---
+Malformed call. Re-issuing with both parameters closed correctly.
+
+D:\deepseek-kernel-harness\python\kiln\runtime\ds_direct.py
+1612
+50
+
+
+
+--- LONGEST seq=20948 prelen=255 ---
+Now the pattern is sharp. Let me read the retry-wait helpers so I can fix the storm cadence.
+
+D:\deepseek-kernel-harness\python\kiln\runtime\ds_direct.py
+3338 parameter>
+40>
+D:\deepseek-kernel-harness\python\kiln\runtime\ds_direct.py
+3380 parameter>
+40>
+
+
+
+========================================================================================
+FAMILY ('nosuch', True, True, True)  count=1  seqs=[952]
+
+--- FIRST seq=952 prelen=1386 ---
+',
+  },
+  {
+    id: 'fused-opener',
+    saw: 'two openers fused into one tag, the first cut off mid-write',
+    fix: 'everything ahead of the inner opener is dropped and the inner tag is read',
+    example: '<parameter name="invoke name="kernel">',
+  },
+  {
+    id: 'nameless-parameter',
+    saw: 'a parameter whose name=" was eaten, leaving a bare word and a stray closing quote',
+    fix: 'the leading word is read as the name and the opener is rebuilt',
+    example: '<\uFF5C\uFF5CDSML\uFF5C\uFF5C timeoutMs" string="false">',
+  },
+  {
+    id: 'equals-tag',
+    saw: '<invoke name="NAME"> or <parameter name="NAME"> — an `=` where ` name=` belongs',
+    fix: 'the tag is rebuilt as <invoke name="NAME">',
+    example: '<invoke name="kernel">',
+  },
+  {
+    id: 'pipe-wrapped-token',
+    saw: "DeepSeek's special tokens: <\uFF5C\uFF5CDSML\uFF5C\uFF5C\u2026>",
+    fix: 'the payload is read as a keyword plus attributes and rewritten into the taught tag',
+    example: '<\uFF5C\uFF5CDSML\uFF5C\uFF5C tool_calls>',
+  },
+  {
+    id: 'bare-frame',
+    saw: 'the model\'s own frame word with no pipes: , <\u2581call>, ',
+    fix: 'the frame carries nothing the reader needs and is removed',
+    example: '',
+  },
+  {
+    id: 'tool-named-tag',
+    saw: 'the tool named as its own tag: <run_code>\u2026</run_code>',
+    fix: 'the tag is rewritten as <invoke name="run_code">\u2026</invoke>
+
+
+
+--- LONGEST seq=952 prelen=1386 ---
+',
+  },
+  {
+    id: 'fused-opener',
+    saw: 'two openers fused into one tag, the first cut off mid-write',
+    fix: 'everything ahead of the inner opener is dropped and the inner tag is read',
+    example: '<parameter name="invoke name="kernel">',
+  },
+  {
+    id: 'nameless-parameter',
+    saw: 'a parameter whose name=" was eaten, leaving a bare word and a stray closing quote',
+    fix: 'the leading word is read as the name and the opener is rebuilt',
+    example: '<\uFF5C\uFF5CDSML\uFF5C\uFF5C timeoutMs" string="false">',
+  },
+  {
+    id: 'equals-tag',
+    saw: '<invoke name="NAME"> or <parameter name="NAME"> — an `=` where ` name=` belongs',
+    fix: 'the tag is rebuilt as <invoke name="NAME">',
+    example: '<invoke name="kernel">',
+  },
+  {
+    id: 'pipe-wrapped-token',
+    saw: "DeepSeek's special tokens: <\uFF5C\uFF5CDSML\uFF5C\uFF5C\u2026>",
+    fix: 'the payload is read as a keyword plus attributes and rewritten into the taught tag',
+    example: '<\uFF5C\uFF5CDSML\uFF5C\uFF5C tool_calls>',
+  },
+  {
+    id: 'bare-frame',
+    saw: 'the model\'s own frame word with no pipes: , <\u2581call>, ',
+    fix: 'the frame carries nothing the reader needs and is removed',
+    example: '',
+  },
+  {
+    id: 'tool-named-tag',
+    saw: 'the tool named as its own tag: <run_code>\u2026</run_code>',
+    fix: 'the tag is rewritten as <invoke name="run_code">\u2026</invoke>
+
+
+
+========================================================================================
+FAMILY ('malformed', True, True, False)  count=1  seqs=[2905]
+
+--- FIRST seq=2905 prelen=3868 ---
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<invoke name="edit"><parameter name="old_string" string="true">function stripTrailingClosers(value: string): string {
+  return value.replace(new RegExp('(?:<' + '/parameter\\s*>\\s*)+$'), '')
+}
+<parameter name="new_string" string="true">function parameterSurplus(body: string): number {
+  const token = new RegExp('<' + 'parameter\\b|<' + '/parameter\\s*>', 'gi')
+  let depth = 0
+  let surplus = 0
+  for (const match of body.matchAll(token)) {
+    if (!match[0].startsWith('<' + '/')) {
+      depth += 1
+      continue
+    }
+    if (depth > 0) depth -= 1
+    else surplus += 1
+  }
+  return surplus
+}
+
+<｜｜DSML｜｜ invoke>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_string" string="true">function parameterCounts(body: string): { readonly open: number; readonly close: number } {
+  return {
+    open: (body.match(/<parameter\b/gi) ?? []).length,
+    close: (body.match(/<\/parameter\s*>/gi) ?? []).length,
+  }
+}
+<parameter name="new_string" string="true">function parameterCounts(body: string): { readonly open: number; readonly close: number; readonly surplus: number } {
+  return {
+    open: (body.match(/<parameter\b/gi) ?? []).length,
+    close: (body.match(/<\/parameter\s*>/gi) ?? []).length,
+    surplus: parameterSurplus(body),
+  }
+}
+
+<｜｜DSML｜｜ invoke>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_string" string="true">function unfinished(body: string): boolean {
+  const counts = parameterCounts(body)
+  return counts.open > counts.close
+}
+<parameter name="new_string" string="true">function unfinished(body: string): boolean {
+  return scanParameters(body).some(span => span.to < 0)
+}
+<｜｜DSML｜｜ parameter>
+<｜｜DSML｜｜ invoke>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_string" string="true">    for (const match of raw.matchAll(INVOKE)) {
+      const start = match.index
+      consumed.push([start, start + match[0].length])
+      const tagged = attributes(match[1] ?? '')
+<parameter name="new_string" string="true">    for (const element of invokeElements(raw)) {
+      const start = element.start
+      consumed.push([element.start, element.end])
+      const tagged = attributes(element.run)
+
+
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_s
+
+--- LONGEST seq=2905 prelen=3868 ---
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<invoke name="edit"><parameter name="old_string" string="true">function stripTrailingClosers(value: string): string {
+  return value.replace(new RegExp('(?:<' + '/parameter\\s*>\\s*)+$'), '')
+}
+<parameter name="new_string" string="true">function parameterSurplus(body: string): number {
+  const token = new RegExp('<' + 'parameter\\b|<' + '/parameter\\s*>', 'gi')
+  let depth = 0
+  let surplus = 0
+  for (const match of body.matchAll(token)) {
+    if (!match[0].startsWith('<' + '/')) {
+      depth += 1
+      continue
+    }
+    if (depth > 0) depth -= 1
+    else surplus += 1
+  }
+  return surplus
+}
+
+<｜｜DSML｜｜ invoke>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_string" string="true">function parameterCounts(body: string): { readonly open: number; readonly close: number } {
+  return {
+    open: (body.match(/<parameter\b/gi) ?? []).length,
+    close: (body.match(/<\/parameter\s*>/gi) ?? []).length,
+  }
+}
+<parameter name="new_string" string="true">function parameterCounts(body: string): { readonly open: number; readonly close: number; readonly surplus: number } {
+  return {
+    open: (body.match(/<parameter\b/gi) ?? []).length,
+    close: (body.match(/<\/parameter\s*>/gi) ?? []).length,
+    surplus: parameterSurplus(body),
+  }
+}
+
+<｜｜DSML｜｜ invoke>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_string" string="true">function unfinished(body: string): boolean {
+  const counts = parameterCounts(body)
+  return counts.open > counts.close
+}
+<parameter name="new_string" string="true">function unfinished(body: string): boolean {
+  return scanParameters(body).some(span => span.to < 0)
+}
+<｜｜DSML｜｜ parameter>
+<｜｜DSML｜｜ invoke>
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_string" string="true">    for (const match of raw.matchAll(INVOKE)) {
+      const start = match.index
+      consumed.push([start, start + match[0].length])
+      const tagged = attributes(match[1] ?? '')
+<parameter name="new_string" string="true">    for (const element of invokeElements(raw)) {
+      const start = element.start
+      consumed.push([element.start, element.end])
+      const tagged = attributes(element.run)
+
+
+<parameter name="file_path">D:\deepseek-kernel-harness\packages\llm\llm-dsml\src\dsml.ts
+<parameter name="old_s

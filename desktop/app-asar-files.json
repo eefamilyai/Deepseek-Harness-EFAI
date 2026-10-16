@@ -1,0 +1,10 @@
+{
+  "_comment": "Files the installed Desktop app's app.asar is rewritten with, mapping an archive path to a built file relative to the repository root. Consumed by desktop/install-app-asar.mjs. Each source is a bundle tsdown emitted with no relative imports, so the archive needs no companion files.",
+  "files": {
+    "dsh/node_modules/@deepseek-ai/dsh-api-remotes/lib/client.js": "packages/api/remotes/lib/client.js",
+    "dsh/node_modules/@deepseek-ai/dsh-client-ui-schedule/lib/client.js": "packages/client/ui-schedule/lib/client.js",
+    "dsh/node_modules/@deepseek-ai/dsh-schedule/lib/index.js": "packages/schedule/schedule/lib/index.js",
+    "dsh/node_modules/@deepseek-ai/dsh-schedule/lib/typert.host.js": "packages/schedule/schedule/lib/typert.host.js",
+    "dsh/node_modules/@deepseek-ai/dsh-schedule/lib/typert.remote-client.js": "packages/schedule/schedule/lib/typert.remote-client.js"
+  }
+}
