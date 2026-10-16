@@ -32,7 +32,7 @@ import {
   CREATE_CHOICES, CREATE_INTERVAL_UNITS, CREATE_WEEKDAYS, intervalCountFor, initialCreateDraft,
   isClockChoice, isIntervalChoice, resolveCreate,
 } from './create-task.ts'
-import type { CreateChoice, CreateDraft, CreateIntervalChoice, CreateWeekday } from './create-task.ts'
+import type { CreateChoice, CreateDraft, CreateWeekday } from './create-task.ts'
 import type { TaskManagerKey } from './task-manager-locales.ts'
 import css from './NewTaskDialog.module.css'
 import shared from './TaskManagerPage.module.css'
@@ -326,7 +326,7 @@ export function NewTaskDialog({
             aria-describedby={rowId('interval-hint')}
             onChange={(event) => { edit({ count: event.target.value }) }}
           />
-          <span className={shared.ruleIntervalUnit}>{t(`timing.unit.${CREATE_INTERVAL_UNITS[draft.choice as CreateIntervalChoice]}`)}</span>
+          <span className={shared.ruleIntervalUnit}>{t(`timing.unit.${CREATE_INTERVAL_UNITS[draft.choice]}`)}</span>
         </span>
       </div>}
       {draft.choice === 'weekly' && <div className={shared.ruleRow}>
@@ -423,7 +423,7 @@ export function NewTaskDialog({
         replaces the rule's own description, and it clears on the next edit. */}
     {failure !== undefined && <p className={clsx(shared.ruleHint, shared.ruleHintError)} role="alert">{t(failure)}</p>}
     {failure === undefined && intervalChoice && <p className={shared.ruleHint}>
-      {t(`timing.intervalHint.${CREATE_INTERVAL_UNITS[draft.choice as CreateIntervalChoice]}`)}
+      {t(`timing.intervalHint.${CREATE_INTERVAL_UNITS[draft.choice]}`)}
     </p>}
     {failure === undefined && draft.choice === 'cron' && <p
       className={clsx(shared.ruleHint, parsedCron === undefined && shared.ruleHintError)}

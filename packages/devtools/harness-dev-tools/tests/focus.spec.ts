@@ -17,7 +17,7 @@ describe('foreground window', () => {
   })
 
   it('gives the foreground back after an Alt press, and reports whether it took', () => {
-    const run = vi.fn(() => 'True')
+    const run = vi.fn((_script: string) => 'True')
     expect(restoreForeground('42', run)).toBe(true)
     expect(run.mock.calls[0]![0]).toMatch(/keybd_event\(0x12[\s\S]*SetForegroundWindow/u)
     expect(run.mock.calls[0]![0]).toContain('[long]42')

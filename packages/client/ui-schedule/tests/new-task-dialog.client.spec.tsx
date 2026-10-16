@@ -20,7 +20,7 @@ function mount(options: {
   readonly sessionsLoading?: boolean
   readonly outcome?: { readonly ok: true } | { readonly ok: false; readonly message: keyof typeof en }
 } = {}) {
-  const onSubmit = vi.fn(async () => options.outcome ?? { ok: true })
+  const onSubmit = vi.fn(async (_request: unknown) => (options.outcome ?? { ok: true }) as never)
   const onClose = vi.fn()
   render(<NewTaskDialog
     sessions={options.sessions ?? SESSIONS}
@@ -62,7 +62,7 @@ describe('New task dialog', () => {
       sessionId: 'session-1',
       title: 'Nightly sweep',
       prompt: 'Summarize the logs',
-      daily: { time: expect.stringMatching(/^\d{2}:\d{2}:00$/), time_zone: 'UTC' },
+      daily: { time: expect.stringMatching(/^\d{2}:\d{2}:00$/) as string, time_zone: 'UTC' },
     })
   })
 

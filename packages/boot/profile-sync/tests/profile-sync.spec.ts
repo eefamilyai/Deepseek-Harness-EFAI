@@ -23,7 +23,7 @@ const PATCH = `# my profile
 
 const manifest = (bundles: string[]) => `${JSON.stringify({ name: 'p', private: true, dsh: { profile: { bundles } } }, null, 2)}\n`
 const CREDS = 'version: 1\nrefs:\n  GOOGLE_KEY: g-1\nrecords:\n  login: { kind: grant }\n'
-const resolved = (patch: Partial<Config> = {}) => Config(patch)
+const resolved = (patch: Partial<Config> = {}) => Config(patch as Config)
 
 describe('reading and writing shared fields', () => {
   it('reads provider configs, disabled flags, bundles, and refs', () => {
@@ -282,7 +282,7 @@ async function mountWithLog(ctx: Context, config: Partial<Config>) {
       vi.spyOn(inner.logger, 'warn').mockImplementation((...args: unknown[]) => { calls.push({ level: 'warn', args }) })
       apply(inner, resolvedConfig)
     },
-  }, config).await()
+  }, config as Config).await()
   return calls
 }
 
@@ -297,7 +297,7 @@ describe('the plugin', () => {
     writeFileSync(join(home, 'profiles', 'school', 'package.json'), manifest([]))
     const ctx = new Context()
     ctx.provide('profileContext', { name: 'harness', dir, home })
-    const fiber = ctx.plugin({ name: 'profile-sync', apply, Config }, { debounceMs: 20 })
+    const fiber = ctx.plugin({ name: 'profile-sync', apply, Config }, { debounceMs: 20 } as Config)
     await fiber.await()
     const schoolBundles = () => readBundles(readFileSync(join(home, 'profiles', 'school', 'package.json'), 'utf8'))
     await vi.waitFor(() => { expect(schoolBundles()).toEqual(['base']) })

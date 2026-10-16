@@ -15,7 +15,7 @@ class ClassProvider implements KernelProvider {
   readonly stopped: number[] = []
   private readonly control = async (message: { cmd: string; id: number }): Promise<KernelBackgroundPoll> => {
     if (message.cmd === 'stop') this.stopped.push(message.id)
-    return { known: true, running: false, output: `cell ${String(message.id)} done` }
+    return { known: true, running: false, text: `cell ${String(message.id)} done` }
   }
 
   available(): boolean { return true }
@@ -37,7 +37,7 @@ describe('background cells', () => {
   it('polls and stops through the backend as method calls, keeping its this', async () => {
     const provider = new ClassProvider()
     const kernel = await runtimeWith(provider)
-    expect(await kernel.pollBackground(4)).toEqual({ known: true, running: false, output: 'cell 4 done' })
+    expect(await kernel.pollBackground(4)).toEqual({ known: true, running: false, text: 'cell 4 done' })
     await kernel.stopBackground(5)
     expect(provider.stopped).toEqual([5])
   })

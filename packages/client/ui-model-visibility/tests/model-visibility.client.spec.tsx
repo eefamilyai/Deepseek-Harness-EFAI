@@ -264,7 +264,7 @@ describe('the provider card switch', () => {
   it('leaves carded providers out of the footer until their last card unmounts', async () => {
     const subject = await bench(form('ready', [{ id: 'gone', name: 'Gone' }]), catalogOf([{ id: 'a', name: 'A' }, { id: 'pool', name: 'Pool' }]))
     await vi.waitFor(() => { expect(subject.view().kind).toBe('ready') })
-    const ids = () => (subject.view() as { rows: { id: string }[] }).rows.map(row => row.id)
+    const ids = () => (subject.view() as unknown as { rows: { id: string }[] }).rows.map(row => row.id)
     expect(ids()).toEqual(['a', 'pool', 'gone'])
     const first = subject.card().carded('a')
     const second = subject.card().carded('a')

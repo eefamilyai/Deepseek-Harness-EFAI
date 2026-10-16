@@ -271,7 +271,7 @@ describe('the embedded conversation', () => {
       renderFactorySlot,
     } as never
     BuilderConversation(props)
-    return renderFactorySlot.mock.calls[0]!.slice(1, 2)[0] as { phase: string; hero: boolean }
+    return renderFactorySlot.mock.calls[0]!.slice(1, 2)[0] as unknown as { phase: string; hero: boolean }
   }
 
   it('shows the welcome until the first turn, settles while loading, then the conversation', () => {
@@ -286,7 +286,7 @@ describe('the embedded conversation', () => {
 
   it('fixes the views to chat', () => {
     const renderSlot = vi.fn(() => null)
-    render(<ChatOnlyView {...({ renderSlot } as never)} />)
+    render(<ChatOnlyView {...({ renderSlot } as unknown as Parameters<typeof ChatOnlyView>[0])} />)
     expect(renderSlot).toHaveBeenCalledWith('conversation.session', { view: 'chat' })
   })
 })

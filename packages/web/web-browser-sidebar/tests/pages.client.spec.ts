@@ -77,11 +77,11 @@ beforeEach(() => {
   activity = []
   leases = 0
   const create = (tag: string): HTMLElement => document.createElementNS('http://www.w3.org/1999/xhtml', tag)
-  vi.spyOn(document, 'createElement').mockImplementation((tag: string): HTMLElement => {
+  vi.spyOn(document, 'createElement').mockImplementation(((tag: string): HTMLElement => {
     const element: HTMLElement = create(tag)
     if (tag === 'webview') decorate(element)
     return element
-  })
+  }) as never)
   pages = new AgentPages({ bridge, document, workspace: id => `session:${id}`, activity: (id, op) => { activity.push(`${id}:${op}`) } })
 })
 

@@ -10,7 +10,7 @@ import type { SkillDocument, SkillEntry, SkillRootView } from '../src/types.ts'
 type Ref = BuilderReference<string> & { release: ReturnType<typeof vi.fn> }
 
 function refOf(sessionId: string, ready: Promise<string> = Promise.resolve(`binding-${sessionId}`)): Ref {
-  return { sessionId, ready, release: vi.fn() }
+  return { sessionId, ready, release: vi.fn() } as Ref
 }
 
 function depsOf(overrides: Partial<BuilderDeps<string, Ref>> = {}) {
@@ -90,7 +90,7 @@ describe('the embedded Skill Builder', () => {
 
   it('drops a session that arrives after the panel closed', async () => {
     let answer: (value: { cwd: string; draft: string }) => void = () => {}
-    const { deps, refs } = depsOf({ start: vi.fn(() => new Promise((resolve) => { answer = resolve })) })
+    const { deps, refs } = depsOf({ start: vi.fn(() => new Promise<{ cwd: string; draft: string }>((resolve) => { answer = resolve })) })
     const builder = new SkillBuilder(deps)
     builder.open()
     builder.close()
@@ -109,7 +109,7 @@ describe('the embedded Skill Builder', () => {
     expect(broken.release).toHaveBeenCalledOnce()
     expect(builder.view.getSnapshot()).toEqual({ kind: 'failed', message: 'no binding' })
     let fail: (reason: unknown) => void = () => {}
-    const late = depsOf({ start: vi.fn(() => new Promise((_, reject) => { fail = reject })) })
+    const late = depsOf({ start: vi.fn(() => new Promise<{ cwd: string; draft: string }>((_, reject) => { fail = reject })) })
     const closing = new SkillBuilder(late.deps)
     closing.open()
     closing.close()

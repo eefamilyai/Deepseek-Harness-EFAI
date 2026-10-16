@@ -366,11 +366,11 @@ describe('local helpers', () => {
 })
 
 describe('the site tool', () => {
-  async function run(args: never, api = fakeApis(), readFolder = vi.fn(async () => page)) {
+  async function run(args: Record<string, unknown>, api = fakeApis(), readFolder = vi.fn(async () => page)) {
     const { sites } = service(api)
     const tool = siteTool({ sites: async () => sites, readFolder, zone: 'z.example' })
     const exec: never = { signal: new AbortController().signal } as never
-    const value: { text: string; url?: string } = await tool.execute(args, exec)
+    const value = await tool.execute(args, exec) as { text: string; url?: string }
     return { value, api, readFolder, tool }
   }
 
@@ -385,39 +385,39 @@ describe('the site tool', () => {
 
   it('publishes inline files and folders, and lists, checks, and removes', async () => {
     const api = fakeApis()
-    const created = await run({ action: 'publish', name: 'demo', title: 'T', wait_seconds: 5, files: [{ path: 'index.html', content: '<p>x</p>' }] } as never, api)
+    const created = await run({ action: 'publish', name: 'demo', title: 'T', wait_seconds: 5, files: [{ path: 'index.html', content: '<p>x</p>' }] }, api)
     expect(created.value.url).toBe('http://demo.z.example/')
     expect(created.value.text.split('\n').slice(0, 2)).toEqual([
       'Created http://demo.z.example/ (4 files, 8 bytes; build built).', 'Source: https://github.com/octo/dshai-demo',
     ])
-    const folder = await run({ action: 'publish', name: 'demo', dir: 'C:\\site' } as never, api)
+    const folder = await run({ action: 'publish', name: 'demo', dir: 'C:\\site' }, api)
     expect(folder.readFolder).toHaveBeenCalledWith('C:\\site')
     expect(folder.value.text).toMatch(/^Updated https:/u)
-    expect((await run({ action: 'list' } as never, api)).value.text).toBe('- demo: https://demo.z.example/ — T')
-    expect((await run({ action: 'status', name: 'demo' } as never, api)).value.text).toContain('- answers: http 200; https 200')
-    expect((await run({ action: 'remove', name: 'demo' } as never, api)).value.text).toContain('- removed the DNS name demo.z.example')
-    expect((await run({ action: 'list' } as never, api)).value.text).toBe('- demo: https://demo.z.example/ — T (taken down)')
-    expect((await run({ action: 'status', name: 'demo' } as never, api)).value.text).toContain('(archived: taken down)')
+    expect((await run({ action: 'list' }, api)).value.text).toBe('- demo: https://demo.z.example/ — T')
+    expect((await run({ action: 'status', name: 'demo' }, api)).value.text).toContain('- answers: http 200; https 200')
+    expect((await run({ action: 'remove', name: 'demo' }, api)).value.text).toContain('- removed the DNS name demo.z.example')
+    expect((await run({ action: 'list' }, api)).value.text).toBe('- demo: https://demo.z.example/ — T (taken down)')
+    expect((await run({ action: 'status', name: 'demo' }, api)).value.text).toContain('(archived: taken down)')
   })
 
   it('shows sites without a DNS name, missing pieces, and an empty list', async () => {
     const api = fakeApis()
-    expect((await run({ action: 'list' } as never, api)).value.text).toBe('No sites yet.')
-    await run({ action: 'publish', name: 'demo', files: [{ path: 'index.html', content: 'x' }] } as never, api)
+    expect((await run({ action: 'list' }, api)).value.text).toBe('No sites yet.')
+    await run({ action: 'publish', name: 'demo', files: [{ path: 'index.html', content: 'x' }] }, api)
     api.rrsets.clear()
-    expect((await run({ action: 'list' } as never, api)).value.text).toBe('- demo: https://demo.z.example/ (no DNS name)')
-    const missing = (await run({ action: 'status', name: 'ghost' } as never, api)).value.text
+    expect((await run({ action: 'list' }, api)).value.text).toBe('- demo: https://demo.z.example/ (no DNS name)')
+    const missing = (await run({ action: 'status', name: 'ghost' }, api)).value.text
     expect(missing).toContain('- repository: none')
     expect(missing).toContain('- DNS: no record')
     expect(missing).toContain('- Pages: off; latest build none')
     expect(missing).toContain('- HTTPS certificate: none')
     api.buildOutcome = 'errored'
-    await run({ action: 'publish', name: 'demo', files: [{ path: 'index.html', content: 'x' }] } as never, api)
+    await run({ action: 'publish', name: 'demo', files: [{ path: 'index.html', content: 'x' }] }, api)
     const repo = api.repos.get('dshai-demo')!
     repo.pages!.https_enforced = false
     repo.pages!.https_certificate = { state: 'new' }
-    expect((await run({ action: 'status', name: 'demo' } as never, api)).value.text).toContain('latest build errored (bad liquid)')
-    expect((await run({ action: 'status', name: 'demo' } as never, api)).value.text).toContain('- HTTPS certificate: new\n')
+    expect((await run({ action: 'status', name: 'demo' }, api)).value.text).toContain('latest build errored (bad liquid)')
+    expect((await run({ action: 'status', name: 'demo' }, api)).value.text).toContain('- HTTPS certificate: new\n')
   })
 
   it('refuses incomplete requests', async () => {
@@ -431,7 +431,7 @@ describe('the site tool', () => {
 
 describe('the plugin', () => {
   const environment = (api: FakeApis, env: NodeJS.ProcessEnv) => ({ env, platform: 'linux' as const, fetch: api.fetch, run: vi.fn(async () => '') })
-  const config = Config({})
+  const config = Config({} as Config)
 
   it('reads its defaults', () => {
     expect(pluginName).toBe('tool-sites')
@@ -468,7 +468,7 @@ describe('the plugin', () => {
     const saved = { ...process.env }
     try {
       delete process.env.DESEC_TOKEN
-      const options: typeof config = Object.assign(Config({}), { tokenEnv: 'DSH_TEST_NO_SUCH_TOKEN' })
+      const options: typeof config = Object.assign(Config({} as Config), { tokenEnv: 'DSH_TEST_NO_SUCH_TOKEN' })
       await ctx.plugin({ name: 'sites', inject: ['tools'], apply: (scope: Context) => { apply(scope, options) } })
       expect(registered).toHaveLength(1)
       await expect(registered[0]!.execute({ action: 'list' }, {})).rejects.toThrow('DSH_TEST_NO_SUCH_TOKEN')

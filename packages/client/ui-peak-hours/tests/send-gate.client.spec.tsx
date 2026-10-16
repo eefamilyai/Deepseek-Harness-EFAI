@@ -7,6 +7,7 @@ import { apply, inject } from '../src/client/index.ts'
 import { en } from '../src/client/locales.ts'
 import { gateEnd, isGated, selectionOf, SendGate, type GatedSession, type GateQuestion, type GateView } from '../src/client/gate.ts'
 import { gatedSend, installSendGate, modelName, senderOf, type PeakSendRemote, type SendGateDeps } from '../src/client/send-gate.ts'
+import type { SendSession } from '../src/client/gate.ts'
 import { SendGateDialog, type SendGateDialogProps } from '../src/client/SendGateDialog.tsx'
 import { DEFAULT_SETTINGS, type PeakHoursSettings } from '../src/client/view.ts'
 
@@ -245,7 +246,7 @@ describe('the guarded send', () => {
     const ownOriginal = own.sendSession
     const restoreOwn = installSendGate(own, deps)
     expect(own.sendSession).not.toBe(ownOriginal)
-    await own.sendSession(sessionOf(deepseek), 'hi', [], 'queue')
+    await (own.sendSession as unknown as SendSession)(sessionOf(deepseek), 'hi', [], 'queue')
     expect(ownOriginal).toHaveBeenCalledOnce()
     restoreOwn()
     expect(own.sendSession).toBe(ownOriginal)
@@ -341,7 +342,7 @@ describe('plugin wiring', () => {
     expect(face.hooks.gate.getSnapshot()).toBeNull()
     face.choose({ kind: 'send' })
     // Off-peak or not, an unguarded default route goes straight through after one catalog read at most.
-    await subject.conversation.sendSession(sessionOf(null) as never, 'hi', [], 'queue')
+    await (subject.conversation.sendSession as unknown as SendSession)(sessionOf(null), 'hi', [], 'queue')
     expect(subject.original).toHaveBeenCalledOnce()
     await subject.fiber.dispose()
     expect(subject.conversation.sendSession).toBe(subject.original)
@@ -372,10 +373,10 @@ describe('plugin wiring', () => {
     vi.setSystemTime(PEAK)
     try {
       const subject = await bench(false)
-      await subject.conversation.sendSession(sessionOf(null) as never, 'hi', [], 'queue')
+      await (subject.conversation.sendSession as unknown as SendSession)(sessionOf(null), 'hi', [], 'queue')
       expect(subject.session.modelCatalog).toHaveBeenCalledOnce()
       subject.session.modelCatalog.mockImplementationOnce(() => Promise.resolve({ ok: false, error: { message: 'x' } }) as never)
-      await subject.conversation.sendSession(sessionOf(null) as never, 'hi', [], 'queue')
+      await (subject.conversation.sendSession as unknown as SendSession)(sessionOf(null), 'hi', [], 'queue')
       expect(subject.original).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
@@ -387,13 +388,13 @@ describe('plugin wiring', () => {
     vi.setSystemTime(PEAK)
     try {
       const subject = await bench(true, { gatedRoutes: ['anthropic'] })
-      const sent = subject.conversation.sendSession(sessionOf(null) as never, 'later please', [], 'queue')
+      const sent = (subject.conversation.sendSession as unknown as SendSession)(sessionOf(null), 'later please', [], 'queue')
       const face = () => (subject.slots.entries('shell.overlay')[0]!.inject as () => { hooks: { gate: { getSnapshot(): GateView } }; choose: (choice: unknown) => void })()
       await vi.waitFor(() => { expect(face().hooks.gate.getSnapshot()?.blocked).toBeNull() })
       face().choose({ kind: 'schedule', placement: 'alone' })
       const answer = await sent
       expect(answer.kind).toBe('success')
-      expect(answer.text).toMatch(/^Scheduled for /)
+      expect((answer as { text?: string }).text).toMatch(/^Scheduled for /)
       expect(subject.peakSend.defer).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's1', text: 'later please', placement: 'alone' }))
       expect(subject.original).not.toHaveBeenCalled()
     } finally {

@@ -66,7 +66,7 @@ export function fakeApis(owner = 'octo'): FakeApis {
         const rr = /\/rrsets\/(?:([^/]+)\/([A-Z]+)\/)?$/u.exec(pathname)!
         if (rr[1] === undefined) {
           if (method === 'GET') return json([...state.rrsets.values()])
-          const sets: { subname: string; type: string; ttl: number; records: string[] }[] = body
+          const sets = body as unknown[] as { subname: string; type: string; ttl: number; records: string[] }[]
           for (const item of sets) state.rrsets.set(`${item.subname}/${item.type}`, item)
           return json(body)
         }

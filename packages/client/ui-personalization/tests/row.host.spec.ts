@@ -60,7 +60,7 @@ describe('the personalization row', () => {
     expect(() => Config({ surfaceOpacity: 400 })).toThrow()
     expect(() => Config({ radiusScale: 9 })).toThrow()
     expect(() => Config({ fontScale: 10 })).toThrow()
-    expect(() => Config({ contentWidth: 'huge' })).toThrow()
+    expect(() => Config({ contentWidth: 'huge' as never })).toThrow()
     expect(() => Config({ glassBlur: 200 })).toThrow()
   })
 

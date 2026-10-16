@@ -41,7 +41,7 @@ async function bench(studio?: Record<string, ReturnType<typeof vi.fn>>) {
   ctx.provide('workspaces', workspaces)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  const face = () => (slots.entries('main')[0]!.inject as () => SkillsPageInjected)()
+  const face = () => (slots.entries('main')[0]!.inject as unknown as () => SkillsPageInjected)()
   return { ctx, slots, fiber, mount, face, setDraft, reference, sessions, uiWorkspace, workspaces }
 }
 
