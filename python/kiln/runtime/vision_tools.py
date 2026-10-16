@@ -650,3 +650,213 @@ def vision_status():
     if not info["capture"]:
         info["fix"] = _deps_error()
     return info
+
+
+# ── Real-window input ─────────────────────────────────────────────────────────
+# Click and type into a real top-level window, by handle or title, with
+# coordinates relative to the window's own top-left corner (the same rect
+# capture_window shoots, so a point read off its screenshot clicks the same
+# pixel). Input goes through SendInput, the path a person's mouse and keyboard
+# take, so a page cannot tell it from the operator. It drives the operator's
+# own windows: use it to reproduce what they report, and say so first.
+
+_VK = {"enter": 0x0D, "return": 0x0D, "tab": 0x09, "escape": 0x1B, "esc": 0x1B, "backspace": 0x08,
+       "delete": 0x2E, "space": 0x20, "left": 0x25, "up": 0x26, "right": 0x27, "down": 0x28,
+       "home": 0x24, "end": 0x23, "pageup": 0x21, "pagedown": 0x22, "f5": 0x74}
+_MODS = {"ctrl": 0x11, "control": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B}
+
+
+def _input_api():
+    import ctypes
+    import ctypes.wintypes as wt
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [("wVk", wt.WORD), ("wScan", wt.WORD), ("dwFlags", wt.DWORD),
+                    ("time", wt.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_ = [("dx", ctypes.c_long), ("dy", ctypes.c_long), ("mouseData", wt.DWORD),
+                    ("dwFlags", wt.DWORD), ("time", wt.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+    class _U(ctypes.Union):
+        _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT), ("pad", ctypes.c_byte * 32)]
+
+    class INPUT(ctypes.Structure):
+        _fields_ = [("type", wt.DWORD), ("u", _U)]
+
+    user32 = ctypes.windll.user32
+
+    def send(*items):
+        arr = (INPUT * len(items))(*items)
+        return user32.SendInput(len(items), arr, ctypes.sizeof(INPUT))
+
+    def key(vk=0, scan=0, flags=0):
+        i = INPUT(type=1)
+        i.u.ki = KEYBDINPUT(vk, scan, flags, 0, 0)
+        return i
+
+    def mouse(flags):
+        i = INPUT(type=0)
+        i.u.mi = MOUSEINPUT(0, 0, 0, flags, 0, 0)
+        return i
+
+    return user32, send, key, mouse
+
+
+def _resolve_window(handle, title):
+    """One window by handle, or by a title substring that matches exactly one visible window.
+
+    Several matches are refused rather than guessed: a substring like "Notepad"
+    also matches "Notepad++", and input sent to the wrong window types into the
+    operator's work.
+    """
+    if handle:
+        return int(handle), None
+    if not title:
+        return None, "needs a handle or a title substring"
+    listed = vision_windows(title=title)
+    if listed.get("error"):
+        return None, listed["error"]
+    cands = [w for w in listed["windows"] if not w["minimized"]] or listed["windows"]
+    exact = [w for w in cands if w["title"] == title]
+    if len(exact) == 1:
+        cands = exact
+    if not cands:
+        return None, "no window matched %r" % title
+    if len(cands) > 1:
+        names = "; ".join("%s (handle %s)" % (w["title"], w["handle"]) for w in cands[:6])
+        return None, "%d windows match %r, so none was chosen: %s. Pass handle=" % (len(cands), title, names)
+    return int(cands[0]["handle"]), None
+
+
+def _focus(user32, send, key, hwnd):
+    """Bring hwnd to the front without sending any keystroke.
+
+    Windows lets a process take the foreground only when it shares input with
+    the current foreground thread, so this thread attaches to it for the switch.
+    (A tapped Alt key also unlocks the switch, but the target then treats the
+    next key as a menu accelerator.)
+    """
+    import ctypes
+    import ctypes.wintypes as wt
+    target = wt.HWND(hwnd)
+    if int(user32.GetForegroundWindow() or 0) == hwnd:
+        return True
+    if user32.IsIconic(target):
+        user32.ShowWindow(target, 9)
+    kernel32 = ctypes.windll.kernel32
+    mine = kernel32.GetCurrentThreadId()
+    fg = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
+    theirs = user32.GetWindowThreadProcessId(target, None)
+    attached = [t for t in {fg, theirs} if t and t != mine and user32.AttachThreadInput(mine, t, True)]
+    try:
+        user32.BringWindowToTop(target)
+        user32.SetForegroundWindow(target)
+        user32.SetFocus(target)
+    finally:
+        for t in attached:
+            user32.AttachThreadInput(mine, t, False)
+    for _ in range(20):
+        if int(user32.GetForegroundWindow() or 0) == hwnd:
+            time.sleep(0.15)  # let the window settle focus before input arrives
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _window_input(handle, title, act, restore):
+    if sys.platform != "win32":
+        return {"error": "real-window input is Windows-only"}
+    hwnd, err = _resolve_window(handle, title)
+    if err:
+        return {"error": err}
+    user32, send, key, mouse = _input_api()
+    previous = int(user32.GetForegroundWindow() or 0)
+    if not _focus(user32, send, key, hwnd):
+        return {"error": "could not bring window %d to the front" % hwnd, "handle": hwnd}
+    try:
+        out = act(user32, send, key, mouse, hwnd)
+    finally:
+        if restore and previous and previous != hwnd:
+            time.sleep(0.15)
+            _focus(user32, send, key, previous)
+    out.update({"handle": hwnd})
+    return out
+
+
+def window_click(x, y, handle=None, title=None, button="left", double=False, restore_focus=False):
+    """Click at (x, y) inside a real window, relative to its top-left corner.
+
+    The window is found by handle or title substring (see vision_windows) and
+    brought to the front. Coordinates match capture_window's screenshot of the
+    same window, so a point read off that image clicks the same spot. Use it to
+    reproduce what the operator sees in their own windows, and tell them first:
+    it moves their real mouse. restore_focus=True gives the foreground back to
+    whatever window had it afterwards.
+    """
+    def act(user32, send, key, mouse, hwnd):
+        rect = _window_rect(hwnd)
+        if rect is None:
+            return {"error": "window %d has no on-screen rect (minimized?)" % hwnd}
+        sx, sy = rect["left"] + int(x), rect["top"] + int(y)
+        user32.SetCursorPos(sx, sy)
+        down, up = {"left": (0x02, 0x04), "right": (0x08, 0x10), "middle": (0x20, 0x40)}[button]
+        for _ in range(2 if double else 1):
+            send(mouse(down), mouse(up))
+        time.sleep(0.15)
+        return {"clicked": [sx, sy]}
+    return _window_input(handle, title, act, restore_focus)
+
+
+def window_type(text, handle=None, title=None, restore_focus=False):
+    """Type text into whatever has keyboard focus in a real window, as real keystrokes.
+
+    Characters are sent as Unicode key events (any language, no layout issues);
+    "\\n" presses Enter and "\\t" presses Tab. Click the field first with
+    window_click. Brings the window to the front; restore_focus=True gives the
+    foreground back afterwards.
+    """
+    def act(user32, send, key, mouse, hwnd):
+        for ch in text:
+            if ch == "\n":
+                send(key(0x0D), key(0x0D, flags=2))
+            elif ch == "\t":
+                send(key(0x09), key(0x09, flags=2))
+            else:
+                raw = ch.encode("utf-16-le")
+                units = [raw[i] | (raw[i + 1] << 8) for i in range(0, len(raw), 2)]
+                # One call per character: a surrogate pair must arrive as one unit.
+                send(*[e for u in units for e in (key(0, u, 0x0004), key(0, u, 0x0004 | 0x0002))])
+            # Per-character pacing: a burst of injected events can outrun a slow
+            # target's message loop, which then drops characters.
+            time.sleep(0.02)
+        return {"typed": len(text)}
+    return _window_input(handle, title, act, restore_focus)
+
+
+def window_key(combo, handle=None, title=None, restore_focus=False):
+    """Press one key or chord in a real window: "Enter", "Escape", "ctrl+a", "ctrl+shift+tab", "f5".
+
+    Brings the window to the front first; restore_focus=True gives the
+    foreground back afterwards.
+    """
+    parts = [p.strip().lower() for p in str(combo).split("+") if p.strip()]
+    if not parts:
+        return {"error": "window_key needs a key"}
+    mods, last = parts[:-1], parts[-1]
+    if any(m not in _MODS for m in mods):
+        return {"error": "unknown modifier in %r; use ctrl, shift, alt, win" % combo}
+    if last in _VK:
+        vk = _VK[last]
+    elif len(last) == 1 and last.isalnum():
+        vk = ord(last.upper())
+    else:
+        return {"error": "unknown key %r" % last}
+
+    def act(user32, send, key, mouse, hwnd):
+        downs = [key(_MODS[m]) for m in mods] + [key(vk)]
+        ups = [key(vk, flags=2)] + [key(_MODS[m], flags=2) for m in reversed(mods)]
+        send(*downs, *ups)
+        time.sleep(0.1)
+        return {"pressed": combo}
+    return _window_input(handle, title, act, restore_focus)

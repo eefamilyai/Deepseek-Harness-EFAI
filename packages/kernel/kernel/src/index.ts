@@ -146,8 +146,10 @@ export class KernelRuntime extends Service {
    */
   async pollBackground(id: number): Promise<KernelBackgroundPoll> {
     const provider = this.resolve()
-    const poll = provider.pollBackground
-    return poll === undefined ? { known: false } : await poll(id)
+    // Called on the provider, never detached: a class-based backend reads `this`,
+    // and a detached call lost every backgrounded cell's output to
+    // "Cannot read properties of undefined (reading 'control')".
+    return provider.pollBackground === undefined ? { known: false } : await provider.pollBackground(id)
   }
 
   /**
@@ -158,8 +160,7 @@ export class KernelRuntime extends Service {
    */
   async stopBackground(id: number): Promise<void> {
     const provider = this.resolve()
-    const stop = provider.stopBackground
-    if (stop !== undefined) await stop(id)
+    if (provider.stopBackground !== undefined) await provider.stopBackground(id)
   }
 
   /**

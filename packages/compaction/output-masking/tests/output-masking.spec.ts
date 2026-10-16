@@ -31,7 +31,7 @@ import {
 import type { Config, MaskingSurface } from '@deepseek-ai/dsh-output-masking'
 
 const SIGNAL = new AbortController().signal
-const POLICY = { keepRecent: 2, minChars: 100 }
+const POLICY = { keepRecent: 2, keepRecentInTurn: 2, minChars: 100 }
 
 let counter = 0
 /** Steps logged so far per session: every fixture session runs inside one open turn. */
@@ -89,7 +89,7 @@ describe('the surface fold', () => {
     const surface = surfaceOf(session)
     const results = surface.nodes.flatMap(node => node.result === null ? [] : [node.result])
     expect(results.map(result => [result.tool, result.target])).toEqual([['read', 'src/a.ts'], ['bash', 'pnpm test']])
-    expect(results[0]).toMatchObject({ head: 'A first line', tail: 'A exit 0', isError: false, textOnly: true, masked: false })
+    expect(results[0]).toMatchObject({ head: 'A first line\nbody\nbody', tail: 'body\nbody\nA exit 0', isError: false, textOnly: true, masked: false })
     expect(JSON.stringify(surface)).not.toContain('body\nbody')
     expect(surface.calls).toEqual({})
   })
@@ -102,6 +102,28 @@ describe('the surface fold', () => {
 })
 
 describe('which results are masked', () => {
+  it('keeps a wider window inside the turn in progress than across finished turns', () => {
+    const surface = {
+      nodes: [1, 2, 3, 4, 5, 6, 7, 8].map(seq => ({
+        seq, tokens: 10,
+        result: seq === 4 ? null : {
+          callId: `c${String(seq)}`, tool: 'read', target: `f${String(seq)}`, chars: 500, lines: 9,
+          head: '', tail: '', isError: false, textOnly: true, masked: false, data: {},
+        },
+      })),
+      calls: {}, compacting: false, turnStart: 4,
+    } as never
+    const targets = (policy: object) =>
+      maskCandidates(surface, { keepRecent: 1, minChars: 100, ...policy }).map(node => node.result?.target)
+    // Seq 4 is the user message: 5-8 are the turn in progress.
+    expect(targets({ keepRecentInTurn: 3 })).toEqual(['f1', 'f2', 'f3', 'f5'])
+    expect(targets({ keepRecentInTurn: 10 })).toEqual(['f1', 'f2', 'f3'])
+    expect(targets({})).toEqual(['f1', 'f2', 'f3', 'f5', 'f6', 'f7'])
+    // A stored state from before turns were tracked spares nothing extra.
+    const legacy = { ...(surface as object), turnStart: undefined } as never
+    expect(maskCandidates(legacy, { keepRecent: 1, keepRecentInTurn: 10, minChars: 100 }).map(node => node.result?.target)).toEqual(['f1', 'f2', 'f3', 'f5', 'f6', 'f7'])
+  })
+
   it('spares the newest results, small ones, errors, and ones already masked', () => {
     const session = Session.create(SessionId('candidates'))
     toolStep(session, 'read', { file_path: 'big.ts' }, output('big'))
@@ -121,9 +143,10 @@ describe('which results are masked', () => {
     const stub = renderStub(result!)
     expect(stub.startsWith(MASK_MARKER)).toBe(true)
     expect(stub).toContain('bash pnpm test')
-    expect(stub).toContain('It began: RUN first line')
-    expect(stub).toContain('It ended: RUN exit 0')
+    expect(stub).toContain('It began:\nRUN first line\nbody')
+    expect(stub).toContain('It ended:\nbody\nbody\nRUN exit 0')
     expect(stub).toContain('Run the call again')
+    expect(renderStub(result!, 41)).toContain("read it with the kernel's session_window(41)")
     expect(stub.length).toBeLessThan(400)
   })
 })

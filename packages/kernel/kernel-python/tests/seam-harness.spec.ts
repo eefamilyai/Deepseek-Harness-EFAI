@@ -339,6 +339,32 @@ describe('settings', () => {
   })
 })
 
+describe('plugins.failures', () => {
+  it('reads the real loader, whose entries() yields Entry objects, and reports each failure', async () => {
+    // The cordis loader's entries() is a generator of entries that carry their own id;
+    // destructuring it as [id, entry] pairs threw "… is not iterable".
+    const loader = {
+      * entries() {
+        yield { id: 'ok-row', fiber: { _error: undefined } }
+        yield { id: 'broken', fiber: { _error: new Error('boom') } }
+        yield { id: 'odd', fiber: { _error: { code: 7 } } }
+        yield { id: 'no-fiber' }
+      },
+    }
+    expect(valueOf(await run('plugins.failures', strictCtxWith({ loader })))).toEqual([
+      { id: 'broken', error: 'boom' },
+      { id: 'odd', error: 'object: {"code":7}' },
+    ])
+  })
+
+  it('also reads a Map of [id, entry] pairs, and names a missing loader', async () => {
+    const loader = { entries: new Map([[1, { fiber: { _error: new Error('x') } }]]) }
+    expect(valueOf(await run('plugins.failures', ctxWith({ loader })))).toEqual([{ id: '1', error: 'x' }])
+    expect((await run('plugins.failures', ctxWith({}))).unavailable).toBe(true)
+    expect((await run('plugins.failures', undefined)).unavailable).toBe(true)
+  })
+})
+
 describe('plugins, models, workspaces', () => {
   it('lists loader rows with their local metadata', async () => {
     const ctx = ctxWith({

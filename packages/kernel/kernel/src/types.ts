@@ -224,13 +224,13 @@ export interface KernelProvider {
    * @param id - the id from {@link KernelExecuteResult.background}.
    * @returns whether the cell is known, still running, and its output once drained.
    */
-  pollBackground?(this: void, id: number): Promise<KernelBackgroundPoll>
+  pollBackground?(id: number): Promise<KernelBackgroundPoll>
   /**
    * Ask one backgrounded cell to stop. Optional for the same reason as
    * {@link KernelProvider.pollBackground}.
    * @param id - the id from {@link KernelExecuteResult.background}.
    */
-  stopBackground?(this: void, id: number): Promise<void>
+  stopBackground?(id: number): Promise<void>
 }
 
 /** Error codes raised by the kernel seam. */

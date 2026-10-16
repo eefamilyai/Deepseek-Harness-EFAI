@@ -41,6 +41,8 @@ A tool absent from `tools` is enabled, so a newly mounted tool is available unti
 
 Fork-owned: `packages/kernel/roster` is Tier 1, so it touches no upstream file.
 
+No runtime invariant companion is published: this package holds its own live config fields and one in-memory roster snapshot, and states no relation across two live services.
+
 ## Model Experience
 
 ### The tool roster

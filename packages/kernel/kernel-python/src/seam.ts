@@ -351,7 +351,14 @@ function subprocessOf(ctx: Context | undefined): SubprocessSeamShape | undefined
   return c === undefined || c === null ? undefined : c as SubprocessSeamShape
 }
 
-/** Dispatch one seam request against the current cell's agent-scoped ctx. */
+/**
+ * Dispatch one seam request against the current cell's agent-scoped ctx.
+ * @param agentCtx - the agent's scoped context, or undefined outside an agent.
+ * @param agent - the agent that owns the cell, or undefined outside an agent.
+ * @param request - the seam request the cell sent.
+ * @param signal - aborts the operation with the cell.
+ * @returns the response written back to the cell; a failure is a response, not a rejection.
+ */
 export async function dispatchSeam(
   agentCtx: Context | undefined,
   agent: KernelAgent | undefined,

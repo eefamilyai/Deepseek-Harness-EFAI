@@ -341,6 +341,12 @@ export interface KernelArgs {
   timeoutMs?: number
 }
 
+/**
+ * Validate kernel tool arguments.
+ * @param args - the arguments the model sent.
+ * @returns the code and, when given, the timeout.
+ * @throws Error when the code is blank or the timeout is not a positive finite number.
+ */
 export function parseKernelArgs(args: KernelArgs): KernelArgs {
   if (args.code.trim().length === 0) throw new Error('code must be a non-empty string')
   const timeoutMs = args.timeoutMs
@@ -393,7 +399,11 @@ export function formatKernelOutput(output: string): string {
   return output
 }
 
-/** One line naming the cell in the background job's model-facing label. */
+/**
+ * One line naming the cell in the background job's model-facing label.
+ * @param code - the cell source.
+ * @returns its first line, at most 120 characters, or `python cell` when it is blank.
+ */
 export function cellLabel(code: string): string {
   const [first = ''] = code.split('\n')
   const line = first.trim().length === 0 ? 'python cell' : first.trim()
@@ -502,7 +512,11 @@ export function attachBackgroundCell(
   }
 }
 
-/** Pending-call presentation: a generic card holding the cell source. */
+/**
+ * Pending-call presentation: a generic card holding the cell source.
+ * @param args - the call's arguments.
+ * @returns a card titled with the cell's first line.
+ */
 export function presentKernelCall(args: { code: string }): GenericCallView {
   const [first = ''] = args.code.split('\n')
   return { card: 'generic', title: first, kind: 'execute', rawInput: args.code }

@@ -1,0 +1,140 @@
+/* The agent's pages and their sidebar tab. A page is a fixed-position webview in one
+ * root-level layer; the tab draws the toolbar and the viewport the page is laid over. */
+
+/* No box of its own: a fixed-position layer would be a stacking context, and each
+ * page has to compete with the sidebar's own stacking order directly. */
+.layer {
+  display: contents;
+}
+
+.page {
+  position: fixed;
+  display: flex;
+  box-sizing: border-box;
+  border: 0;
+  pointer-events: auto;
+  background: var(--dsw-alias-bg-base);
+  -webkit-app-region: no-drag;
+}
+
+/* Native guest input must not consume a docking gesture's window events. */
+:global(html:has([data-dockkit-pointer])) .page {
+  pointer-events: none !important;
+}
+
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-base);
+}
+
+.toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 5px 6px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.tool {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tool:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.address {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 9px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+}
+
+.address:focus {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.status {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.status[data-busy='true'] .dot {
+  background: var(--dsw-alias-state-business-primary);
+  animation: pulse 1.2s var(--ds-ease-in-out) infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+.viewport {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.empty {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  text-align: center;
+}
+
+.titleIcon {
+  flex: 0 0 auto;
+  margin-right: 4px;
+}

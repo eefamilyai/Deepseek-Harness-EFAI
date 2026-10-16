@@ -91,6 +91,7 @@ const PROBE_TIMEOUT_MS = 10_000
  * The vendored runtime shipped with this repository: `python/kiln/runtime`,
  * four levels above this module's directory whether it is running from `src`
  * (source launch) or `lib` (built).
+ * @returns the runtime directory's absolute path.
  */
 export function defaultRuntimeDir(): string {
   return resolve(import.meta.dirname, '..', '..', '..', '..', 'python', 'kiln', 'runtime')
@@ -104,7 +105,7 @@ export function defaultRuntimeDir(): string {
  * `.venv`. Preferring it means even a direct `dsh web` — no launcher, so
  * `$DSH_KERNEL_PYTHON` is unset — finds the bundled Python (with `curl_cffi`,
  * `playwright`, …) instead of a bare system interpreter that lacks them.
- * Returns undefined when the bundle has not been provisioned.
+ * @returns the bundled interpreter's path, or undefined when the bundle has not been provisioned.
  */
 export function bundledVenvPython(): string | undefined {
   const venv = process.platform === 'win32'

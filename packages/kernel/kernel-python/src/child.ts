@@ -269,7 +269,8 @@ export class KernelChild {
 
   /**
    * Write one seam response onto the fd-3 pipe as a base64 JSON line, matching
-   * the framing Python's seam reader expects.
+   * the framing Python's seam reader expects. A closed pipe drops the response.
+   * @param response - the reply to one seam request.
    */
   sendSeamResponse(response: SeamResponse): void {
     if (this.seamOut === null) return

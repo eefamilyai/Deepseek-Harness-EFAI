@@ -36,7 +36,8 @@ The same selection rules, the same effect-scoped registration, and the same spli
 
 - `src/index.ts` — the `KernelRuntime` service and its config schema.
 - `src/types.ts` — `KernelProvider`, `KernelExecuteRequest`, `KernelExecuteResult`, `KernelError`, and the error-code union.
-- `src/invariant.ts` — the invariant this package contributes.
+
+No runtime invariant companion is published: this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its own seam.
 
 ## Model Experience
 

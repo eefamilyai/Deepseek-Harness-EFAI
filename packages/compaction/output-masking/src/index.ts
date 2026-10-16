@@ -66,16 +66,21 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 export const DEFAULT_USAGE_RATIO = 0.5
 /** Newest tool results a pass never masks. */
 export const DEFAULT_KEEP_RECENT = 8
+/** Newest results of the turn in progress a pass never masks. */
+export const DEFAULT_KEEP_RECENT_IN_TURN = 24
 /** Results shorter than this many characters are left whole. */
 export const DEFAULT_MIN_CHARS = 2000
 /** Fewest results worth one pass. */
 export const DEFAULT_MIN_BATCH = 4
 
+/** When a masking pass runs and which tool results it may mask. */
 export interface Config {
   /** Mask once this share of the context window is in use. Defaults to 0.5. */
   usageRatio?: number
   /** The newest this-many tool results are never masked. Defaults to 8. */
   keepRecent?: number
+  /** The newest this-many results of the turn in progress are never masked. Defaults to 24. */
+  keepRecentInTurn?: number
   /** Only results at least this many characters long are masked. Defaults to 2000. */
   minChars?: number
   /**
@@ -90,6 +95,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   usageRatio: z.number().min(0).max(1).description('Mask once this share of the context window is in use.'),
   keepRecent: z.natural().description('The newest this-many tool results are never masked.'),
+  keepRecentInTurn: z.natural().description('The newest this-many results of the turn in progress are never masked.'),
   minChars: z.natural().description('Only results at least this many characters long are masked.'),
   minBatch: z.natural().description('A pass runs only when it can mask at least this many results.'),
   contextWindow: z.natural().description('The context window to assume when the routed model\'s cannot be resolved.'),
@@ -120,7 +126,7 @@ export function maskResults(session: Session, candidates: readonly SurfaceNode[]
     const data = result.data as SessionEvent<'tool/result'>['data']
     const message = freezeMessage<ToolResultMessage>({
       ...data.message,
-      content: [{ type: 'text', text: renderStub(result) }],
+      content: [{ type: 'text', text: renderStub(result, seq) }],
     })
     session.append('compaction/prune', {
       shadowedRange: { start: seq, end: seq },
@@ -146,6 +152,7 @@ export function apply(ctx: Context, config: Config = {}): void {
   const usageRatio = config.usageRatio ?? DEFAULT_USAGE_RATIO
   const policy = {
     keepRecent: config.keepRecent ?? DEFAULT_KEEP_RECENT,
+    keepRecentInTurn: config.keepRecentInTurn ?? DEFAULT_KEEP_RECENT_IN_TURN,
     minChars: config.minChars ?? DEFAULT_MIN_CHARS,
   }
   const minBatch = Math.max(1, config.minBatch ?? DEFAULT_MIN_BATCH)

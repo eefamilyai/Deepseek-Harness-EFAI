@@ -402,42 +402,50 @@ def _record_change(op, path, backup, had_original, diff=None):
         pass
 
 
-def read_file(path, max_chars=_READ_CAP, meta=False):
-    """Return a file's text (head+tail if huge).
+# The marker an explicitly shortened read inserts. A write refuses text that still
+# carries it: saving such text back would delete the omitted middle of the file.
+_OMISSION_MARK = "chars omitted -- read a slice]"
 
-    ``meta=True`` returns a structured dict instead of the text itself:
-    ``{ok, path, size, total_chars, returned_chars, truncated, text}`` on
-    success or ``{ok: False, path, error}`` on failure. The default string form
-    is unchanged, so existing one-shot ``read_file(x)`` calls keep working.
+
+def _shorten(text, max_chars):
+    """Head and tail of `text` around an omission marker, when it is longer than `max_chars`."""
+    if max_chars is None or len(text) <= max_chars:
+        return text, False
+    return (text[: max_chars // 2] + "\n…[%d %s…\n" % (len(text) - max_chars, _OMISSION_MARK)
+            + text[-max_chars // 2:]), True
+
+
+def read_file(path, max_chars=None, meta=False):
+    """Return a file's whole text.
+
+    The text is never shortened unless ``max_chars`` is given: a value a cell edits
+    and writes back must be the file, not a preview of it (display output is capped
+    separately). With ``max_chars`` the head and tail are kept around a marker, and
+    ``write``/``write_file`` refuse text that still carries that marker.
+
+    ``meta=True`` returns ``{ok, path, size, total_chars, returned_chars, truncated,
+    text}`` on success or ``{ok: False, path, error}`` on failure.
 
     Prefers the harness filesystem seam (policy, sandbox, observation); falls
     back to the local read when the seam or the foreground RPC is unavailable.
     """
     _seam = _seam_request("fs.readText", {"path": path})
     if _seam is not None and _seam.get("ok"):
-        text = _seam.get("value") or ""
-        if len(text) > max_chars:
-            text = text[: max_chars // 2] + f"\n…[{len(text) - max_chars} chars omitted — read a slice]…\n" + text[-max_chars // 2:]
-        return {"ok": True, "path": path, "size": len(text), "total_chars": len(text),
-                "returned_chars": len(text), "truncated": False, "text": text} if meta else text
-    try:
-        st = os.stat(path)
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            data = f.read()
-    except Exception as e:
-        msg = "read_file error: %s" % e
-        if meta:
-            return {"ok": False, "path": path, "error": msg}
-        return msg
-    truncated = len(data) > max_chars
-    shown = data
-    if truncated:
-        shown = (data[: max_chars // 2]
-                 + "\n…[%d chars omitted -- read a slice]…\n"
-                   % (len(data) - max_chars)
-                 + data[-max_chars // 2:])
+        data = _seam.get("value") or ""
+        size = len(data.encode("utf-8"))
+    else:
+        try:
+            size = os.stat(path).st_size
+            with open(path, "r", encoding="utf-8", errors="replace", newline="") as f:
+                data = f.read()
+        except Exception as e:
+            msg = "read_file error: %s" % e
+            if meta:
+                return {"ok": False, "path": path, "error": msg}
+            return msg
+    shown, truncated = _shorten(data, max_chars)
     if meta:
-        return {"ok": True, "path": path, "size": st.st_size,
+        return {"ok": True, "path": path, "size": size,
                 "total_chars": len(data), "returned_chars": len(shown),
                 "truncated": truncated, "text": shown}
     return shown
@@ -446,18 +454,9 @@ def read_file(path, max_chars=_READ_CAP, meta=False):
 def _detect_newline(path, default="\n"):
     """The line ending an existing file already uses; LF for a new one.
 
-
-
-    Text-mode writes translate "\\n" to os.linesep, so on Windows every file
-
-    the agent wrote silently became CRLF — it could not produce an LF file at
-
-    all, and the byte count never matched the character count it reported.
-
-    Editing a file must not rewrite every line ending either, so existing
-
-    files keep whatever they already use.
-
+    Text-mode writes translate "\\n" to os.linesep, so on Windows every file the
+    agent wrote silently became CRLF. Editing a file must not rewrite every line
+    ending either, so existing files keep whatever they already use.
     """
     try:
         with open(path, "rb") as f:
@@ -469,6 +468,20 @@ def _detect_newline(path, default="\n"):
     if b"\n" in head:
         return "\n"
     return default
+
+
+def _prepare_text(content):
+    """Text ready for a newline-translating write, or a refusal.
+
+    Lines are normalized to "\\n" first: text read back from a CRLF file already
+    holds "\\r\\n", and translating that again wrote "\\r\\r\\n" on every line.
+    Text that carries a shortened read's omission marker is refused, because
+    writing it would delete the part of the file the read left out.
+    """
+    if _OMISSION_MARK in content:
+        raise ValueError("refusing to write text that contains a shortened read's omission marker "
+                         "('…[N chars omitted -- read a slice]…'): read the whole file with read_file(path) and edit that")
+    return content.replace("\r\n", "\n")
 
 
 def _written(path, verb, chars):
@@ -497,9 +510,18 @@ def write_file(path, content):
     """Write text to a file (creates folders). Returns a confirmation.
 
     Prefers the harness filesystem seam; falls back to the local write when the
-    seam or the foreground RPC is unavailable.
+    seam or the foreground RPC is unavailable. Line endings follow the file's own;
+    text carrying a shortened read's omission marker is refused.
     """
-    _seam = _seam_request("fs.writeText", {"path": path, "content": content})
+    try:
+        text = _prepare_text(content)
+    except ValueError as e:
+        return f"write_file error: {e}"
+    if _detect_newline(path) == "\r\n":
+        seam_text = text.replace("\n", "\r\n")
+    else:
+        seam_text = text
+    _seam = _seam_request("fs.writeText", {"path": path, "content": seam_text})
     if _seam is not None and _seam.get("ok"):
         _out = _seam.get("value")
         if isinstance(_out, dict) and _out.get("operation"):
@@ -514,7 +536,7 @@ def write_file(path, content):
             with open(path, "rb") as f:
                 backup = f.read()
         with open(path, "w", encoding="utf-8", newline=_detect_newline(path)) as f:
-            f.write(content)
+            f.write(text)
         _record_change("write", path, backup, had)
         return _written(path, "wrote", len(content))
     except Exception as e:
@@ -531,8 +553,9 @@ def append_file(path, content):
         if had:
             with open(path, "rb") as f:
                 backup = f.read()
+        text = _prepare_text(content)
         with open(path, "a", encoding="utf-8", newline=_detect_newline(path)) as f:
-            f.write(content)
+            f.write(text)
         _record_change("append", path, backup, had)
         return _written(path, "appended to", len(content))
     except Exception as e:
@@ -1145,6 +1168,12 @@ try:  # noqa: E402
 except Exception as _vision_import_error:  # pragma: no cover
     vision_tools = None
     _vision_import_error = _vision_import_error
+# sites_tools: publish web pages through the harness `site` tool. Pure Python, so a
+# failed import means a broken install; the kernel still starts without the helpers.
+try:  # noqa: E402
+    import sites_tools  # noqa: E402
+except Exception:  # pragma: no cover
+    sites_tools = None
 from context_store import context_stats, index_context, search_context  # noqa: E402 — deferred: heavy deps
 # ── Skills (Cline-style) ─────────────────────────────────────────────────────
 
@@ -1724,7 +1753,7 @@ def write(path, content):
             "reported": result}
 
 
-def read(path, max_chars=_READ_CAP, meta=False):
+def read(path, max_chars=None, meta=False):
     """Read a file as text, falling back to read_nontext for binary/non-text."""
     import mimetypes
     if path.lower().endswith((".ipynb", ".png", ".jpg", ".jpeg", ".gif",
@@ -4975,6 +5004,9 @@ if vision_tools is not None:
         "vision_monitors": vision_tools.vision_monitors,
         "vision_windows": vision_tools.vision_windows,
         "vision_status": vision_tools.vision_status,
+        "window_click": vision_tools.window_click,
+        "window_type": vision_tools.window_type,
+        "window_key": vision_tools.window_key,
     }
     prompt_dict.update(_VISION_TOOLS)
     globals().update(_VISION_TOOLS)
@@ -4988,6 +5020,13 @@ _IMAGE_TOOLS = {
 }
 prompt_dict.update(_IMAGE_TOOLS)
 globals().update(_IMAGE_TOOLS)
+# Sites: the `site` tool's Python face. Bound to `call_tool` so credentials and the
+# GitHub/deSEC work stay in the one tool; registered in both places like the
+# vision tools, so `tool_help('site')` finds them.
+if sites_tools is not None:
+    sites_tools.bind(call_tool)
+    prompt_dict.update(sites_tools.HELPERS)
+    globals().update(sites_tools.HELPERS)
 _ns.update(prompt_dict)
 # The harness-observation helpers. Being module globals is what makes `tool_help` list
 # them; being in `prompt_dict` is what makes them *callable* in a cell. Registering only

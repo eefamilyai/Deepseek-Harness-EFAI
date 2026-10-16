@@ -35,6 +35,8 @@ Refusal is per image, never per cell. An unsupported media type or an oversized 
 
 Storing requires `attachments`, so this package declares it in `inject`. A kernel tool that silently dropped a cell's pictures would be worse than one that refuses to mount.
 
+No runtime invariant companion is published: this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.
+
 ## Model Experience
 
 ### `kernel` tool schema

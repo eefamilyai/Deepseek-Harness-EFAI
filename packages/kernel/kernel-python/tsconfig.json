@@ -21,7 +21,7 @@
       "path": "../kernel"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../../vendor/loader"
     }
   ]
 }

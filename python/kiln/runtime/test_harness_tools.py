@@ -229,6 +229,19 @@ fns = [_make(nm, {"name": nm, "parameters": {"type": "object", "properties": {}}
 check("generated functions carry distinct names",
       [f.__name__ for f in fns] == ["alpha", "beta"], repr([f.__name__ for f in fns]))
 
+# ── the first docstring line says what the tool is for ──────────────────
+check("the first docstring line carries the description's first sentence",
+      (read.__doc__ or "").splitlines()[0] == "Run the `read` harness tool: Read a file.",
+      repr((read.__doc__ or "").splitlines()[:1]))
+_summary = NS["_tool_summary"]
+check("a summary is the description's first sentence",
+      _summary("Start a test copy. Then drive it.") == "Start a test copy.", repr(_summary("Start a test copy. Then drive it.")))
+check("a summary joins wrapped lines", _summary("Build ONE\n  package.") == "Build ONE package.",
+      repr(_summary("Build ONE\n  package.")))
+check("a long summary is cut with an ellipsis", len(_summary("x" * 400)) == 140 and _summary("x" * 400).endswith("\u2026"),
+      repr(len(_summary("x" * 400))))
+check("a missing description summarises to nothing", _summary(None) == "", repr(_summary(None)))
+
 failed = [name for name, ok, _ in RESULTS if not ok]
 print("\n%d checks, %d failed" % (len(RESULTS), len(failed)))
 if failed:

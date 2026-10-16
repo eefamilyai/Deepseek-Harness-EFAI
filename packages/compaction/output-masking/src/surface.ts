@@ -65,21 +65,31 @@ export const maskingSurfaceSchema = zod.object({
   nodes: zod.array(nodeSchema),
   calls: zod.record(zod.string(), callSchema),
   compacting: zod.boolean(),
+  /** Seq of the newest user message: results after it belong to the turn in progress. Absent in older stored states. */
+  turnStart: zod.number().optional(),
 })
 
+/** The projected state: surface nodes, known tool calls, and whether a compaction is running. */
 export type MaskingSurface = zod.infer<typeof maskingSurfaceSchema>
+/** One node of the projected surface. */
 export type SurfaceNode = zod.infer<typeof nodeSchema>
+/** What the projection keeps of one tool result. */
 export type ResultShape = zod.infer<typeof resultSchema>
 
-/** A surface with nothing on it. */
+/**
+ * A surface with nothing on it.
+ * @returns the projection's initial state.
+ */
 export function emptyMaskingSurface(): MaskingSurface {
-  return { nodes: [], calls: {}, compacting: false }
+  return { nodes: [], calls: {}, compacting: false, turnStart: 0 }
 }
 
 /** Which results a pass may mask. */
 export interface MaskingPolicy {
   /** The newest this-many tool results are never masked. */
   readonly keepRecent: number
+  /** The newest this-many results of the turn in progress are never masked; defaults to keepRecent. */
+  readonly keepRecentInTurn?: number
   /** A result shorter than this many characters is not worth a stub. */
   readonly minChars: number
 }
@@ -117,13 +127,24 @@ export function callTarget(args: string): string {
   return ''
 }
 
-/** The first and last non-blank lines of a text. */
+/** Non-blank lines a stub keeps from each end of a masked output. */
+export const EDGE_LINES = 3
+
+/**
+ * The first and last few non-blank lines of a text. One line of each was rarely
+ * enough to tell which part of an output mattered (a header, a summary row, an
+ * error at the end), so the model re-ran calls just to see what it had read.
+ */
 function edgeLines(text: string): { head: string; tail: string; lines: number } {
   const all = text.split('\n')
-  const filled = all.filter(line => line.trim().length > 0)
-  const head = filled[0]?.trim() ?? ''
-  const tail = filled.length > 1 ? filled.at(-1)?.trim() ?? '' : ''
-  return { head: clip(head, LINE_CHARS), tail: clip(tail, LINE_CHARS), lines: all.length }
+  const filled = all.map(line => line.trim()).filter(line => line.length > 0).map(line => clip(line, LINE_CHARS))
+  const headCount = Math.min(EDGE_LINES, filled.length)
+  const tailCount = Math.min(EDGE_LINES, filled.length - headCount)
+  return {
+    head: filled.slice(0, headCount).join('\n'),
+    tail: tailCount === 0 ? '' : filled.slice(-tailCount).join('\n'),
+    lines: all.length,
+  }
 }
 
 /**
@@ -174,6 +195,8 @@ export function foldMaskingSurface(state: MaskingSurface, event: SessionEvent): 
 
   const message = deriveEventMessage(event)
   const tokens = message === null ? 0 : estimateMessage(message)
+  // A user message opens a turn; the turn's own results stay whole until it ends.
+  if (message?.role === 'user' && event.surfaceOp === 'append') state = { ...state, turnStart: event.seq }
   let calls = state.calls
   let result: ResultShape | null = null
   if (event.type === 'tool/result') {
@@ -217,9 +240,16 @@ export function foldMaskingSurface(state: MaskingSurface, event: SessionEvent): 
 export function maskCandidates(state: MaskingSurface, policy: MaskingPolicy): SurfaceNode[] {
   const results = state.nodes.filter(node => node.result !== null)
   const older = results.slice(0, Math.max(0, results.length - policy.keepRecent))
+  // The turn in progress keeps a wider window: its results are what the model is
+  // working from right now, and masking them eight calls later sent it back to re-run
+  // calls it had just made. A long single-turn task still masks its oldest results.
+  const turnStart = state.turnStart ?? Number.POSITIVE_INFINITY
+  const inTurn = results.filter(node => node.seq > turnStart)
+  const spared = new Set(inTurn.slice(Math.max(0, inTurn.length - (policy.keepRecentInTurn ?? policy.keepRecent))).map(node => node.seq))
   return older.filter((node) => {
     const result = node.result
-    return result !== null && !result.masked && !result.isError && result.textOnly && result.chars >= policy.minChars
+    if (result === null || spared.has(node.seq)) return false
+    return !result.masked && !result.isError && result.textOnly && result.chars >= policy.minChars
   })
 }
 
@@ -227,13 +257,17 @@ export function maskCandidates(state: MaskingSurface, policy: MaskingPolicy): Su
  * The stub that replaces a masked result: what ran, how large the output was,
  * its first and last lines, and how to see it again.
  * @param result - the result's shape.
+ * @param seq - the original result's seq, which stays in the session log.
  * @returns the stub text.
  */
-export function renderStub(result: ResultShape): string {
+export function renderStub(result: ResultShape, seq?: number): string {
   const call = [result.tool || 'tool', result.target].filter(part => part.length > 0).join(' ')
   const lines = [`${MASK_MARKER} to keep the context small — ${call}: ${result.chars} characters over ${result.lines} lines.`]
-  if (result.head.length > 0) lines.push(`It began: ${result.head}`)
-  if (result.tail.length > 0) lines.push(`It ended: ${result.tail}`)
-  lines.push('Run the call again if you need the full output.]')
+  if (result.head.length > 0) lines.push(`It began:\n${result.head}`)
+  if (result.tail.length > 0) lines.push(`It ended:\n${result.tail}`)
+  lines.push(seq === undefined
+    ? 'Run the call again if you need the full output.]'
+    : `The full output is still in the session log at seq ${String(seq)}: `
+      + `read it with the kernel's session_window(${String(seq)}), or run the call again.]`)
   return lines.join('\n')
 }

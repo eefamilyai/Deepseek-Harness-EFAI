@@ -19,6 +19,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+// Type-only: pulls the Loader's Context merge (ctx.get('loader')).
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type { KernelAgent } from '@deepseek-ai/dsh-kernel'
 import type { SeamRequest, SeamResponse } from './seam.ts'
 
@@ -76,18 +78,6 @@ export const HARNESS_OPS: readonly HarnessOp[] = [
   { op: 'storage.backends', args: [], summary: 'the storage backends this deployment registered' },
 
 ]
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    /**
-     * The cordis loader, when this deployment mounts one.
-     *
-     * Declared so `ctx.get('loader')` is a known key: an unknown name types as a
-     * statement in this build, which makes its result unusable in an expression.
-     */
-    loader?: unknown
-  }
-}
 
 /** Mirrored `ctx.agents` surface. */
 interface AgentsSeam {
@@ -826,18 +816,13 @@ async function dispatchPrompt(
 }
 
 /**
- * The loader off one context, read through the service store.
- *
- * `get` is typed as a statement in this cordis build, so the read happens inside a
- * function rather than in the middle of an expression.
+ * The loader off one context, read through the service store. The caller reads
+ * loader internals the public type does not declare, so it is returned untyped.
  * @param ctx - the dispatch context.
  * @returns the loader, or undefined when this deployment mounts none.
  */
 function loaderOf(ctx: Context): unknown {
-  // A bare assignment: this cordis build types `get` as a statement, so using its
-  // result inside another expression is what the lint rejects.
-  const loader = ctx.get('loader')
-  return loader
+  return ctx.get('loader')
 }
 
 /**
@@ -857,14 +842,17 @@ function dispatchPluginFailures(agentCtx: Context | undefined, request: SeamRequ
   const mounted = agentCtx === undefined ? undefined : loaderOf(agentCtx)
   const loader = asRecord(mounted)
   const list = loader['entries']
-  const entries: Iterable<[unknown, unknown]> | undefined = typeof list === 'function'
-    ? (list as () => Iterable<[unknown, unknown]>).call(loader)
+  // The cordis loader's `entries()` is a generator of Entry objects (each carrying
+  // its own `id`), not of `[id, entry]` pairs; a Map-shaped stand-in yields pairs.
+  const raw: Iterable<unknown> | undefined = typeof list === 'function'
+    ? (list as () => Iterable<unknown>).call(loader)
     : list instanceof Map ? list : undefined
-  if (entries === undefined) {
+  if (raw === undefined) {
     return unavailable(request.id, 'the loader is not mounted in this deployment')
   }
   const failures: { id: string; error: string }[] = []
-  for (const [id, entry] of entries) {
+  for (const item of raw) {
+    const [id, entry] = Array.isArray(item) ? item as [unknown, unknown] : [asRecord(item)['id'], item]
     // A failed fiber keeps its error on `_error`; the inventory reports only a phase,
     // which is why a row could say "failed" and nothing else.
     const error = asRecord(asRecord(entry)['fiber'])['_error']

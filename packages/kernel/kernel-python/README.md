@@ -83,6 +83,8 @@ list_storage_backends()                       # the storage backends this deploy
 
 Two rules shape that family. **History is read through `ctx.sessionQuery`**, which owns the live-preferred corpus and can read a session this process never opened; the synchronous `Session` readers are `@deprecated` and new code may not call them. **A missing service is `unavailable`, not empty**: a deployment without `ctx.sessionQuery` answers with the reason, so a cell can tell "no such data" from "no such seam" — the same distinction `tool_help()` draws for tools. `seam_ops()` is the authoritative table; every helper above is a thin, documented wrapper over one entry.
 
+No runtime invariant companion is published: this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.
+
 ## Model Experience
 
 Indirectly, through `@deepseek-ai/dsh-tool-kernel`, which renders a cell's captured output for the model.
