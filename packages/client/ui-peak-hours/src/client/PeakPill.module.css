@@ -1,0 +1,74 @@
+/* One pill in the composer dock beside the stats pills, on their 12/20 text
+   tier. The tone classes carry the meaning: amber fill while peak pricing is
+   on, amber outline while it is about to start, plain tertiary off-peak. */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  font-variant-numeric: tabular-nums;
+  line-height: calc(18px + var(--dsh-content-font-delta-secondary, 0px));
+  white-space: nowrap;
+  cursor: default;
+}
+
+.pill:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.offPeak {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.offPeak .dot {
+  background: var(--dsw-alias-state-success-primary, currentColor);
+}
+
+.soon {
+  border-color: var(--dsw-alias-state-warn-primary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.peak {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 45%, transparent);
+  color: var(--dsw-alias-state-warn-label);
+  font-weight: 600;
+}
+
+.peak .dot {
+  animation: peakPulse 2s ease-in-out infinite;
+}
+
+@keyframes peakPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peak .dot {
+    animation: none;
+  }
+}

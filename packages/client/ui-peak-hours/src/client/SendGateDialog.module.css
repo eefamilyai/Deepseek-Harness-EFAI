@@ -1,0 +1,87 @@
+/* The peak-hour send dialog, on the shared modal card. */
+
+.dialog {
+  width: min(520px, calc(100vw - 48px));
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: calc(var(--dsw-radius-xs) + 2px);
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.pending {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.item {
+  padding: 6px 10px;
+  border-radius: calc(var(--dsw-radius-xs) + 2px);
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.option:hover,
+.option:focus-visible {
+  border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+  background: var(--dsw-specific-sidebar-fill);
+}
+
+.optionTitle {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.optionHint {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
