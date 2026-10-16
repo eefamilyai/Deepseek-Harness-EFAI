@@ -1,3 +1,249 @@
+diff --git a/docs/subsystems/boot.md b/docs/subsystems/boot.md
+index 0739170597..aca209e867 100644
+--- a/docs/subsystems/boot.md
++++ b/docs/subsystems/boot.md
+@@ -205,6 +205,66 @@ Current profile facts; scheduling and mutation belong to their callers.
+ 
+ Source: [`packages/boot/app-boot/src/profile-context.ts`](../../packages/boot/app-boot/src/profile-context.ts)
+ 
++<a id="ctxprofilehub--profilehub"></a>
++
++### `ctx.profileHub` — `ProfileHub`
++
++The `ctx.profileHub` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.
++
++```ts cordis-catalog
++/**
++ * Every profile this machine holds, with the facts the landing page renders.
++ * @returns the harness home, the running profile, the launcher profile, and one row per profile.
++ */
++@Remote listProfiles(): ProfileHubState
++
++/**
++ * Create one self-contained profile from the running profile's own stack.
++ * @param request - the name, optional title and working directory, and whether to copy the running layer.
++ * @returns the machine's state after the profile exists.
++ * @throws RemoteError with `profileHub/rejected` when the name is invalid, taken, or reserved.
++ */
++@Remote createProfile(request: CreateProfileRequest): ProfileHubState
++
++/**
++ * Remove one profile and everything it owns, including its chats and logins.
++ * @param name - the profile to remove.
++ * @returns the machine's state after the removal.
++ * @throws RemoteError with `profileHub/rejected` when the profile is reserved, running, or this one.
++ */
++@Remote removeProfile(name: string): ProfileHubState
++
++/**
++ * Choose which profile opens the landing page at startup.
++ * @param name - the profile whose startup should land on this page.
++ * @returns the machine's state after the choice.
++ * @throws RemoteError with `profileHub/rejected` when no such profile exists.
++ */
++@Remote setLauncherProfile(name: string): ProfileHubState
++
++/**
++ * Start a profile as its own host process and answer the URL to enter it at.
++ *
++ * A host serves exactly one profile, so entering another one starts a second
++ * process rather than reconfiguring this one; a profile this hub already
++ * started answers with the same URL instead of a second host.
++ * @param name - the profile to enter.
++ * @param target - open a second Desktop window, or start a Web Host and answer its URL.
++ * @returns which surface opened, and the URL when a Web Host did.
++ * @throws RemoteError with `profileHub/rejected` when the profile cannot be opened.
++ */
++@Remote async openProfile(name: string, target: OpenProfileTarget): Promise<OpenProfileResult>
++
++/**
++ * Stop a profile this hub started.
++ * @param name - the profile whose host should stop.
++ * @returns the machine's state after the stop.
++ */
++@Remote stopProfile(name: string): ProfileHubState
++```
++
++Source: [`packages/boot/profile-hub/src/index.ts`](../../packages/boot/profile-hub/src/index.ts)
++
+ <a id="app-boot-events"></a>
+ 
+ ### `app-boot/*` events
+diff --git a/docs/subsystems/boot.zh.md b/docs/subsystems/boot.zh.md
+index 64ff36d412..5e3d052a89 100644
+--- a/docs/subsystems/boot.zh.md
++++ b/docs/subsystems/boot.zh.md
+@@ -205,6 +205,66 @@ Current profile facts; scheduling and mutation belong to their callers.
+ 
+ Source: [`packages/boot/app-boot/src/profile-context.ts`](../../packages/boot/app-boot/src/profile-context.ts)
+ 
++<a id="ctxprofilehub--profilehub"></a>
++
++### `ctx.profileHub` — `ProfileHub`
++
++The `ctx.profileHub` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.
++
++```ts cordis-catalog
++/**
++ * Every profile this machine holds, with the facts the landing page renders.
++ * @returns the harness home, the running profile, the launcher profile, and one row per profile.
++ */
++@Remote listProfiles(): ProfileHubState
++
++/**
++ * Create one self-contained profile from the running profile's own stack.
++ * @param request - the name, optional title and working directory, and whether to copy the running layer.
++ * @returns the machine's state after the profile exists.
++ * @throws RemoteError with `profileHub/rejected` when the name is invalid, taken, or reserved.
++ */
++@Remote createProfile(request: CreateProfileRequest): ProfileHubState
++
++/**
++ * Remove one profile and everything it owns, including its chats and logins.
++ * @param name - the profile to remove.
++ * @returns the machine's state after the removal.
++ * @throws RemoteError with `profileHub/rejected` when the profile is reserved, running, or this one.
++ */
++@Remote removeProfile(name: string): ProfileHubState
++
++/**
++ * Choose which profile opens the landing page at startup.
++ * @param name - the profile whose startup should land on this page.
++ * @returns the machine's state after the choice.
++ * @throws RemoteError with `profileHub/rejected` when no such profile exists.
++ */
++@Remote setLauncherProfile(name: string): ProfileHubState
++
++/**
++ * Start a profile as its own host process and answer the URL to enter it at.
++ *
++ * A host serves exactly one profile, so entering another one starts a second
++ * process rather than reconfiguring this one; a profile this hub already
++ * started answers with the same URL instead of a second host.
++ * @param name - the profile to enter.
++ * @param target - open a second Desktop window, or start a Web Host and answer its URL.
++ * @returns which surface opened, and the URL when a Web Host did.
++ * @throws RemoteError with `profileHub/rejected` when the profile cannot be opened.
++ */
++@Remote async openProfile(name: string, target: OpenProfileTarget): Promise<OpenProfileResult>
++
++/**
++ * Stop a profile this hub started.
++ * @param name - the profile whose host should stop.
++ * @returns the machine's state after the stop.
++ */
++@Remote stopProfile(name: string): ProfileHubState
++```
++
++Source: [`packages/boot/profile-hub/src/index.ts`](../../packages/boot/profile-hub/src/index.ts)
++
+ <a id="app-boot-events"></a>
+ 
+ ### `app-boot/*` events
+diff --git a/docs/subsystems/browser-use.md b/docs/subsystems/browser-use.md
+index 73cedae857..7f354cf177 100644
+--- a/docs/subsystems/browser-use.md
++++ b/docs/subsystems/browser-use.md
+@@ -46,6 +46,47 @@ The [decision record](../../.agents/notes/implemented/architecture/2026-09-12-br
+ 
+ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+ 
++<a id="ctxagentbrowser--agentbrowser"></a>
++
++### `ctx.agentBrowser` — `AgentBrowser`
++
++The `ctx.agentBrowser` service. The name is the literal the Typert analyzer binds the namespace to.
++
++```ts cordis-catalog
++/**
++ * Whether a Desktop window is subscribed to carry agent pages.
++ * @returns true while at least one window holds the command stream.
++ */
++available(): boolean
++
++/**
++ * Perform one page operation in the newest subscribed window.
++ * @param call - the operation and the page it addresses.
++ * @param signal - abandons the wait; the window may still finish the operation.
++ * @returns the window's successful reply.
++ * @throws {AgentBrowserUnavailableError} when no window is subscribed or the holding window disconnects.
++ * @throws Error with the window's reason when the operation fails, or when no reply arrives in time.
++ */
++run(call: AgentBrowserCall, signal?: AbortSignal): Promise<AgentBrowserReply>
++
++/**
++ * Carry agent pages in this window: receive every operation addressed to them.
++ * The first item is a `hello` with no operation, so the window can accept the stream.
++ * @param signal - stream lifetime; it ends when the window disconnects.
++ * @returns the operations, in the order the Host issued them.
++ */
++@Remote({ mode: 'stream' }) async *commands(signal: AbortSignal): AsyncIterable<AgentBrowserRequest>
++
++/**
++ * Settle one operation this window performed.
++ * @param reply - the outcome, naming the operation it settles.
++ * @returns whether an operation was waiting for this reply; false for a late or unknown one.
++ */
++@Remote respond(reply: AgentBrowserReply): boolean
++```
++
++Source: [`packages/web/web-browser-sidebar/src/index.ts`](../../packages/web/web-browser-sidebar/src/index.ts)
++
+ <a id="ctxbrowseruse--browseruseregistry"></a>
+ 
+ ### `ctx.browserUse` — `BrowserUseRegistry`
+diff --git a/docs/subsystems/browser-use.zh.md b/docs/subsystems/browser-use.zh.md
+index 573b15962e..93798ba9e3 100644
+--- a/docs/subsystems/browser-use.zh.md
++++ b/docs/subsystems/browser-use.zh.md
+@@ -46,6 +46,47 @@ MCP 提供方为其加载后创建的每个活动 Agent 初始化一个客户端
+ 
+ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+ 
++<a id="ctxagentbrowser--agentbrowser"></a>
++
++### `ctx.agentBrowser` — `AgentBrowser`
++
++The `ctx.agentBrowser` service. The name is the literal the Typert analyzer binds the namespace to.
++
++```ts cordis-catalog
++/**
++ * Whether a Desktop window is subscribed to carry agent pages.
++ * @returns true while at least one window holds the command stream.
++ */
++available(): boolean
++
++/**
++ * Perform one page operation in the newest subscribed window.
++ * @param call - the operation and the page it addresses.
++ * @param signal - abandons the wait; the window may still finish the operation.
++ * @returns the window's successful reply.
++ * @throws {AgentBrowserUnavailableError} when no window is subscribed or the holding window disconnects.
++ * @throws Error with the window's reason when the operation fails, or when no reply arrives in time.
++ */
++run(call: AgentBrowserCall, signal?: AbortSignal): Promise<AgentBrowserReply>
++
++/**
++ * Carry agent pages in this window: receive every operation addressed to them.
++ * The first item is a `hello` with no operation, so the window can accept the stream.
++ * @param signal - stream lifetime; it ends when the window disconnects.
++ * @returns the operations, in the order the Host issued them.
++ */
++@Remote({ mode: 'stream' }) async *commands(signal: AbortSignal): AsyncIterable<AgentBrowserRequest>
++
++/**
++ * Settle one operation this window performed.
++ * @param reply - the outcome, naming the operation it settles.
++ * @returns whether an operation was waiting for this reply; false for a late or unknown one.
++ */
++@Remote respond(reply: AgentBrowserReply): boolean
++```
++
++Source: [`packages/web/web-browser-sidebar/src/index.ts`](../../packages/web/web-browser-sidebar/src/index.ts)
++
+ <a id="ctxbrowseruse--browseruseregistry"></a>
+ 
+ ### `ctx.browserUse` — `BrowserUseRegistry`
 diff --git a/docs/subsystems/compaction.md b/docs/subsystems/compaction.md
 index 6e135025ab..528b33d2e5 100644
 --- a/docs/subsystems/compaction.md

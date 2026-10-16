@@ -76,6 +76,24 @@
     - id: ai-accounts
       name: '@deepseek-ai/dsh-ai-accounts'
 
+    # Deferred sends: the Remote surface the peak-hour send dialog
+    # (`ui-peak-hours`) uses to hold a DeepSeek API message until peak pricing
+    # ends, as an Automation task. Needs the schedule service.
+    - id: peak-send
+      name: '@deepseek-ai/dsh-peak-send'
+
+    # The Skills tab: list, write, and remove skills in the folders the skill
+    # loader scans, with an embedded Skill Builder chat. Both halves load from
+    # this row; the page sits in the sidebar after Automation tasks.
+    - id: skills-studio
+      name: '@deepseek-ai/dsh-skills-studio'
+
+    # The `site` tool: publish pages the agent builds (illustrations, slide
+    # decks, explainers, charts) at https://<name>.dshai.reggilion.com through
+    # GitHub Pages and deSEC DNS. Reads DESEC_TOKEN and the GitHub CLI login.
+    - id: tool-sites
+      name: '@deepseek-ai/dsh-tool-sites'
+
     - id: llm-kiln
       name: '@deepseek-ai/dsh-llm-kiln'
       config:
@@ -89,6 +107,12 @@
     # otherwise cannot open the GUI. `node scripts/web-access.mjs` reads it.
     - id: web-access
       name: '@deepseek-ai/dsh-host-web-access'
+
+    # The profiles on this machine, and the launch of a second host for one
+    # other than the running profile. A host serves exactly one profile, so
+    # entering a different one means starting it; this service owns that child.
+    - id: profile-hub
+      name: '@deepseek-ai/dsh-profile-hub'
 
     # What a compacted turn gets back. A summary drops exactly what code can
     # know for certain — the operator's own words, the files touched, the
@@ -185,16 +209,40 @@
       config:
         maxOutputChars: 16000
 
-    # A self-hosted headless browser (Playwright). It mounts two things. The
-    # `browser` tool lets the model read a page as text and act by element ref —
-    # for JS-rendered sites and multi-step flows a plain fetch cannot handle.
-    # The browser-rendered fetch provider registers with the web seam too,
-    # dormant until web_fetch is turned on and its fetchProvider is pointed at
-    # `browser`. Both need a one-time `npx playwright install chromium`; a launch
+    # The agent's browser pages in the Desktop window's right sidebar. The Host
+    # half is the `agentBrowser` service the `browser` tool drives; the browser
+    # half, inside the Desktop renderer only, carries each agent page in a
+    # webview and shows it in the "AI Browser" sidebar tab, so the operator sees
+    # the page the agent is on and can use it. Mounted ahead of `web-browser`,
+    # whose sidebar driver resolves this service per call.
+    - id: web-browser-sidebar
+      name: '@deepseek-ai/dsh-web-browser-sidebar'
+
+    # The `browser` tool and a browser-rendered fetch provider. The tool's page
+    # is carried by the Desktop sidebar whenever a Desktop window is connected
+    # (`driver: auto`), and by a self-hosted headless Playwright Chromium
+    # otherwise; the fetch provider always renders headless, dormant until
+    # web_fetch is turned on and its fetchProvider is pointed at `browser`.
+    # Headless needs a one-time `npx playwright install chromium`; a launch
     # without the binary fails with that exact instruction rather than a stack
     # trace.
     - id: web-browser
       name: '@deepseek-ai/dsh-web-browser'
+
+    # Tools for changing the harness and seeing the result: `desktop_test_instance`
+    # starts a separate test copy of the installed Desktop app on its own profile
+    # and drives its window over the DevTools Protocol, so a GUI change is checked
+    # in a real window while the operator keeps working in theirs;
+    # `build_workspace_package` builds one workspace package without the root build.
+    - id: harness-dev-tools
+      name: '@deepseek-ai/dsh-harness-dev-tools'
+
+    # Profile sync: providers, plugin enablement, and API key references stay
+    # identical across every profile under the harness home. An edit in any
+    # profile is written into every other profile's files; running profiles
+    # reload it live. Exclude a profile with `config.exclude`.
+    - id: profile-sync
+      name: '@deepseek-ai/dsh-profile-sync'
 
     # The runtime roster. It owns the kernel and conventional-tool switches as
     # live config fields, and the turn boundary that holds a change back until

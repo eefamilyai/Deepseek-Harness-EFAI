@@ -1,18 +1,20 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index 9bcbcda614..33a1a07c03 100644
+index 9bcbcda614..380e676b8d 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
-@@ -73,6 +73,9 @@ export const SERVICE_PAGE: Record<string, string> = {
+@@ -73,6 +73,11 @@ export const SERVICE_PAGE: Record<string, string> = {
    shellEnv: 'shell.md',
    clientModules: 'client-modules.md',
    ptcRuntime: 'ptc-runtime.md',
 +  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the generators see fork packages through a documented hook.
 +  kernel: 'ptc-runtime.md',
++  profileHub: 'boot.md',
++  agentBrowser: 'browser-use.md',
 +  aiAccounts: 'llm-streaming.md',
    browserUse: 'browser-use.md',
    computerUse: 'computer-use.md',
    commands: 'commands.md',
-@@ -168,6 +171,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+@@ -168,6 +173,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
    appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
    appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
    cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -20,7 +22,7 @@ index 9bcbcda614..33a1a07c03 100644
    configuredAgentIdentities: 'not a service: launcher-provided boot-context value (ConfiguredAgentIdentities | undefined) — packages/core/agent-loop/README.md owns this launcher contract',
    launcherSessionQueryPath: 'not a service: launcher-provided boot-context value (string | undefined) — packages/session-query/session-query-sqlite/README.md owns this launcher contract',
    dshHomePath: 'not a service: boot-provided root accessor function (typeof dshHomePath | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
-@@ -344,6 +348,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+@@ -344,6 +350,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmConfigurableProvider: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
@@ -34,7 +36,7 @@ index 9bcbcda614..33a1a07c03 100644
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -866,6 +877,12 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -866,6 +879,22 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-preset-registry/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
@@ -44,14 +46,24 @@ index 9bcbcda614..33a1a07c03 100644
 +  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: the fork's kernel provider exposes
 +  // background cell polling, so the projector must classify the poll result beside the other kernel seam types.
 +  KernelBackgroundPoll: 'kernel background poll result is owned by packages/kernel/kernel/src/types.ts',
++  // DSH-FORK(all): the fork's profile hub owns its own Remote vocabulary, documented with the service
++  // rather than in the subsystems catalog. EXIT: the generators see fork packages through a documented hook.
++  ProfileHubState: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
++  ProfileSummary: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
++  CreateProfileRequest: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
++  OpenProfileResult: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
++  OpenProfileTarget: 'the profileHub surface is owned by packages/boot/profile-hub/README.md and src/types.ts',
++  AgentBrowserCall: 'the agentBrowser surface is owned by packages/web/web-browser-sidebar/README.md and src/index.ts',
++  AgentBrowserRequest: 'the agentBrowser surface is owned by packages/web/web-browser-sidebar/README.md and src/types.ts',
++  AgentBrowserReply: 'the agentBrowser surface is owned by packages/web/web-browser-sidebar/README.md and src/types.ts',
    CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',
    ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
    ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',
 diff --git a/scripts/gen-doc-graphs.ts b/scripts/gen-doc-graphs.ts
-index 57ba922462..30e90618fe 100644
+index 57ba922462..e46ecd9a68 100644
 --- a/scripts/gen-doc-graphs.ts
 +++ b/scripts/gen-doc-graphs.ts
-@@ -201,10 +201,31 @@ const SERVICE_ROLES: ServiceRole[] = [
+@@ -201,10 +201,52 @@ const SERVICE_ROLES: ServiceRole[] = [
      pkg: 'llm',
      title: 'LLM adapter registry',
      mode: 'seam',
@@ -71,6 +83,27 @@ index 57ba922462..30e90618fe 100644
 +    implementations: ['llm-kiln'],
 +    consumers: ['client-ui-settings-accounts'],
 +    note: 'A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service\'s own aiAccounts Remote namespace.',
++  },
++  {
++    key: 'profileHub',
++    pkg: 'profile-hub',
++    title: 'Profile registry and launcher',
++    mode: 'seam',
++    // DSH-FORK(all): the fork's own profile surface, mounted by its own package on both faces.
++    // EXIT: the generators see fork packages through a documented hook.
++    implementations: [],
++    consumers: ['profile-hub'],
++    note: 'The service lists every profile under the harness home, creates and removes self-contained ones, records which profile opens on startup, and launches a profile other than the running one as its own host process; the landing page reaches all of it through the service\'s own profileHub Remote namespace.',
++  },
++  {
++    key: 'agentBrowser',
++    pkg: 'web-browser-sidebar',
++    title: 'Sidebar browser bridge',
++    mode: 'seam',
++    // DSH-FORK(all): the fork's own sidebar browser surface. EXIT: the generators see fork packages through a documented hook.
++    implementations: [],
++    consumers: ['web-browser', 'web-browser-sidebar'],
++    note: 'A Host caller\'s browser operation reaches the newest subscribed window\'s sidebar browser and resolves with that window\'s reply; the window subscribes and answers through the service\'s own agentBrowser Remote namespace.',
 +  },
 +  {
 +    key: 'kernel',
@@ -153,8 +186,20 @@ index bf0ddab2d0..a12114c882 100644
  ]
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
+diff --git a/scripts/package-dependency-policy.ts b/scripts/package-dependency-policy.ts
+index 06d86db2ff..31bcaaf710 100644
+--- a/scripts/package-dependency-policy.ts
++++ b/scripts/package-dependency-policy.ts
+@@ -46,6 +46,7 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
+  * prominent heading in the pull request description.
+  */
+ const SAFE_HOST_DEPENDENCY_EXPORTS = {
++  '@deepseek-ai/dsh-app-boot': ['PROFILE_TEMPLATES', 'initProfile', 'resolveProfileDir'],
+   '@deepseek-ai/dsh-credentials': ['credentialKey'],
+   '@deepseek-ai/dsh-deque': ['Deque'],
+   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
-index 2ca3653361..a03a22b76b 100644
+index 2ca3653361..fe0ea92fee 100644
 --- a/scripts/verify-package-readme-model-experience.ts
 +++ b/scripts/verify-package-readme-model-experience.ts
 @@ -37,6 +37,13 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
@@ -171,7 +216,7 @@ index 2ca3653361..a03a22b76b 100644
  }
  
  /**
-@@ -78,6 +85,18 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+@@ -78,6 +85,22 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
    'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
    'packages/ptc-runtime/ptc-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
    'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },
@@ -183,6 +228,10 @@ index 2ca3653361..a03a22b76b 100644
 +  'packages/session/command-session-info': { kind: 'none', reason: 'The command is operator-facing and registers no prompt, tool, schema, or session event.' },
 +  'packages/llm/ai-accounts': { kind: 'none', reason: 'The account surface registers no prompt section, tool schema, or Session event; a login changes which provider routes exist.' },
 +  'packages/client/ui-brand-efai': { kind: 'none', reason: 'Two sidebar slot occupants; the brand a person reads registers nothing model-facing.' },
++  'packages/client/ui-peak-hours': { kind: 'none', reason: 'A composer pill and desktop notifications about DeepSeek pricing hours; nothing reaches a model request.' },
++  'packages/boot/profile-hub': { kind: 'none', reason: 'Lists, creates, and launches profiles for the operator; a profile choice decides which harness answers, never what a request contains.' },
++  'packages/boot/profile-sync': { kind: 'none', reason: 'Copies provider, plugin, and API key settings between profile files; nothing reaches a model request.' },
++  'packages/client/ui-model-visibility': { kind: 'none', reason: 'Filters which providers the model picker offers; no prompt, tool, or event changes.' },
 +  'packages/client/ui-skill-mention': { kind: 'none', reason: 'The source registers composer candidates and lands draft text; what the model then reads is the tool-skill pre-step\'s decision.' },
 +  'packages/client/ui-flow-accents': { kind: 'none', reason: 'A theme token layer and a binding stylesheet; it paints rows that other packages own and register.' },
 +  'packages/host/web-access': { kind: 'none', reason: 'The row writes one local lock file; nothing it holds reaches a model request.' },

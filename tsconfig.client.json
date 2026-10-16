@@ -147,12 +147,18 @@
     { "path": "./packages/client/ui-effects" },
     { "path": "./packages/client/ui-polish" },
     { "path": "./packages/client/ui-brand-efai" },
+    { "path": "./packages/client/ui-peak-hours" },
+    { "path": "./packages/client/ui-model-visibility" },
     { "path": "./packages/client/ui-skill-mention" },
     { "path": "./packages/client/ui-settings-tools" },
     { "path": "./packages/client/ui-personalization/tsconfig.client.json" },
     { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
+    { "path": "./packages/schedule/peak-send/tsconfig.client.json" },
+    { "path": "./packages/skill/skills-studio/tsconfig.client.json" },
+    { "path": "./packages/web/web-browser-sidebar/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-accounts" },
     { "path": "./packages/client/ui-flow-accents" },
+    { "path": "./packages/boot/profile-hub/tsconfig.client.json" },
     // DSH-FORK end
   ]
 }

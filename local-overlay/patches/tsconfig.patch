@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index 738ed0c5b4..989429c079 100644
+index 738ed0c5b4..83edece82c 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -142,6 +142,17 @@
+@@ -142,6 +142,23 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -12,17 +12,23 @@ index 738ed0c5b4..989429c079 100644
 +    { "path": "./packages/client/ui-effects" },
 +    { "path": "./packages/client/ui-polish" },
 +    { "path": "./packages/client/ui-brand-efai" },
++    { "path": "./packages/client/ui-peak-hours" },
++    { "path": "./packages/client/ui-model-visibility" },
 +    { "path": "./packages/client/ui-skill-mention" },
 +    { "path": "./packages/client/ui-settings-tools" },
 +    { "path": "./packages/client/ui-personalization/tsconfig.client.json" },
 +    { "path": "./packages/llm/ai-accounts/tsconfig.client.json" },
++    { "path": "./packages/schedule/peak-send/tsconfig.client.json" },
++    { "path": "./packages/skill/skills-studio/tsconfig.client.json" },
++    { "path": "./packages/web/web-browser-sidebar/tsconfig.client.json" },
 +    { "path": "./packages/client/ui-settings-accounts" },
 +    { "path": "./packages/client/ui-flow-accents" },
++    { "path": "./packages/boot/profile-hub/tsconfig.client.json" },
 +    // DSH-FORK end
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 5c5c81b7e0..e90b8dc74a 100644
+index 5c5c81b7e0..05f009de74 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
 @@ -213,6 +213,7 @@
@@ -41,7 +47,7 @@ index 5c5c81b7e0..e90b8dc74a 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -476,6 +478,29 @@
+@@ -476,6 +478,36 @@
      { "path": "./packages/lsp/tool-lsp" },
      { "path": "./apps/cli" },
      { "path": "./apps/desktop-host" },
@@ -51,11 +57,16 @@ index 5c5c81b7e0..e90b8dc74a 100644
 +    { "path": "./packages/session/command-session-info" },
 +    { "path": "./packages/llm/llm-text-toolcalls" },
 +    { "path": "./packages/llm/ai-accounts/tsconfig.host.json" },
++    { "path": "./packages/schedule/peak-send/tsconfig.host.json" },
++    { "path": "./packages/skill/skills-studio/tsconfig.host.json" },
 +    { "path": "./packages/llm/llm-kiln" },
 +    { "path": "./packages/llm/llm-markdown-fidelity" },
 +    { "path": "./packages/llm/llm-system-file" },
 +    { "path": "./packages/fs/tool-notebook-edit" },
 +    { "path": "./packages/web/web-browser" },
++    { "path": "./packages/web/web-browser-sidebar/tsconfig.host.json" },
++    { "path": "./packages/devtools/harness-dev-tools" },
++    { "path": "./packages/web/tool-sites" },
 +    { "path": "./packages/kernel/kernel" },
 +    { "path": "./packages/kernel/kernel-python" },
 +    { "path": "./packages/kernel/tool-kernel" },
@@ -68,7 +79,9 @@ index 5c5c81b7e0..e90b8dc74a 100644
 +    { "path": "./packages/llm/token-usage-lifetime" },
 +    { "path": "./packages/skill/skill-injection" },
 +    { "path": "./packages/bundle/efai-base" },
-+    { "path": "./packages/bundle/efai-web" }
++    { "path": "./packages/bundle/efai-web" },
++    { "path": "./packages/boot/profile-hub/tsconfig.host.json" },
++    { "path": "./packages/boot/profile-sync" }
 +    // DSH-FORK end
    ]
  }

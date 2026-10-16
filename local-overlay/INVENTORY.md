@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **47** in **13** patch(es).
+Tier-2 files: **71** in **16** patch(es).
 
 ## Patches
 
@@ -31,17 +31,20 @@ Tier-2 files: **47** in **13** patch(es).
 - `tsconfig.client.json`
 - `tsconfig.host.json`
 
-### `patches/build.patch` — 4 file(s)
+### `patches/build.patch` — 5 file(s)
 
 - `scripts/gen-cordis-catalog.ts`
 - `scripts/gen-doc-graphs.ts`
 - `scripts/gen-tool-catalog.ts`
+- `scripts/package-dependency-policy.ts`
 - `scripts/verify-package-readme-model-experience.ts`
 
-### `patches/apps.patch` — 3 file(s)
+### `patches/apps.patch` — 5 file(s)
 
 - `apps/cli/package.json`
+- `apps/desktop-host/src/index.ts`
 - `apps/desktop/src/main.ts`
+- `apps/desktop/src/paths.ts`
 - `apps/web/tests/built-boot.expected.e2e.ts`
 
 ### `patches/core.patch` — 3 file(s)
@@ -71,12 +74,38 @@ Tier-2 files: **47** in **13** patch(es).
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
+### `patches/client-primitives.patch` — 3 file(s)
+
+- `packages/client/ui-primitives/README.md`
+- `packages/client/ui-primitives/src/markdown/MarkdownText.tsx`
+- `packages/client/ui-primitives/src/markdown/plain-text.ts`
+
 ### `patches/client-shell.patch` — 4 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
 - `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
 - `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
+
+### `patches/client-schedule.patch` — 9 file(s)
+
+- `packages/client/ui-schedule/README.i18n.yaml`
+- `packages/client/ui-schedule/README.md`
+- `packages/client/ui-schedule/README.zh.md`
+- `packages/client/ui-schedule/src/client/TaskManagerPage.tsx`
+- `packages/client/ui-schedule/src/client/index.ts`
+- `packages/client/ui-schedule/src/client/task-manager-locales.ts`
+- `packages/client/ui-schedule/tests/browser-plugin.client.spec.ts`
+- `packages/client/ui-schedule/tests/task-detail.client.spec.tsx`
+- `packages/client/ui-schedule/tests/task-manager-page.client.spec.tsx`
+
+### `patches/schedule.patch` — 5 file(s)
+
+- `packages/schedule/schedule/README.i18n.yaml`
+- `packages/schedule/schedule/README.md`
+- `packages/schedule/schedule/README.zh.md`
+- `packages/schedule/schedule/src/index.ts`
+- `packages/schedule/schedule/src/types.ts`
 
 ### `patches/session-format-migration.patch` — 4 file(s)
 
@@ -85,8 +114,12 @@ Tier-2 files: **47** in **13** patch(es).
 - `packages/session/session-format-v0-to-v1/src/validation.ts`
 - `packages/session/session-format-v0-to-v1/tests/relationships.spec.ts`
 
-### `patches/docs.patch` — 5 file(s)
+### `patches/docs.patch` — 9 file(s)
 
+- `docs/subsystems/boot.md`
+- `docs/subsystems/boot.zh.md`
+- `docs/subsystems/browser-use.md`
+- `docs/subsystems/browser-use.zh.md`
 - `docs/subsystems/compaction.md`
 - `docs/subsystems/compaction.zh.md`
 - `docs/subsystems/llm-streaming.md`
@@ -132,7 +165,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 595 paths do not exist upstream, so no patch covers them and none can conflict.
+These 586 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -366,7 +399,6 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/client/ui-effects/src/css-modules.d.ts`
 - `packages/client/ui-effects/src/effects-settings.ts`
 - `packages/client/ui-effects/src/index.ts`
-- `packages/client/ui-effects/src/invariant.ts`
 - `packages/client/ui-effects/tsconfig.json`
 - `packages/client/ui-effects/tsdown.config.ts`
 - `packages/client/ui-flow-accents/README.md`
@@ -461,7 +493,6 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/fs/tool-notebook-edit/README.md`
 - `packages/fs/tool-notebook-edit/package.json`
 - `packages/fs/tool-notebook-edit/src/index.ts`
-- `packages/fs/tool-notebook-edit/src/invariant.ts`
 - `packages/fs/tool-notebook-edit/tests/notebook-edit.spec.ts`
 - `packages/fs/tool-notebook-edit/tsconfig.json`
 - `packages/host/version-route/README.md`
@@ -479,7 +510,6 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel-python/src/child.ts`
 - `packages/kernel/kernel-python/src/env.ts`
 - `packages/kernel/kernel-python/src/index.ts`
-- `packages/kernel/kernel-python/src/invariant.ts`
 - `packages/kernel/kernel-python/src/provider.ts`
 - `packages/kernel/kernel-python/src/seam-harness.ts`
 - `packages/kernel/kernel-python/src/seam.ts`
@@ -495,20 +525,17 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/kernel/kernel/README.md`
 - `packages/kernel/kernel/package.json`
 - `packages/kernel/kernel/src/index.ts`
-- `packages/kernel/kernel/src/invariant.ts`
 - `packages/kernel/kernel/src/types.ts`
 - `packages/kernel/kernel/tsconfig.json`
 - `packages/kernel/roster/README.md`
 - `packages/kernel/roster/package.json`
 - `packages/kernel/roster/src/index.ts`
-- `packages/kernel/roster/src/invariant.ts`
 - `packages/kernel/roster/tests/roster-write.host.spec.ts`
 - `packages/kernel/roster/tests/roster.spec.ts`
 - `packages/kernel/roster/tsconfig.json`
 - `packages/kernel/tool-kernel/README.md`
 - `packages/kernel/tool-kernel/package.json`
 - `packages/kernel/tool-kernel/src/index.ts`
-- `packages/kernel/tool-kernel/src/invariant.ts`
 - `packages/kernel/tool-kernel/tests/background.spec.ts`
 - `packages/kernel/tool-kernel/tests/images.spec.ts`
 - `packages/kernel/tool-kernel/tsconfig.json`
@@ -528,7 +555,6 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/llm/llm-kiln/src/adapter.ts`
 - `packages/llm/llm-kiln/src/bridge.ts`
 - `packages/llm/llm-kiln/src/index.ts`
-- `packages/llm/llm-kiln/src/invariant.ts`
 - `packages/llm/llm-kiln/tests/compaction.spec.ts`
 - `packages/llm/llm-kiln/tests/dsml.spec.ts`
 - `packages/llm/llm-kiln/tests/images.spec.ts`
@@ -592,7 +618,6 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/session/command-session-info/README.md`
 - `packages/session/command-session-info/package.json`
 - `packages/session/command-session-info/src/index.ts`
-- `packages/session/command-session-info/src/invariant.ts`
 - `packages/session/command-session-info/tsconfig.json`
 - `packages/session/session-persistence-jsonl/diagnose-session.mjs`
 - `packages/session/session-recovery-context/README.i18n.yaml`
@@ -617,7 +642,6 @@ These 595 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/web/web-browser/package.json`
 - `packages/web/web-browser/src/browser.ts`
 - `packages/web/web-browser/src/index.ts`
-- `packages/web/web-browser/src/invariant.ts`
 - `packages/web/web-browser/src/page-script.ts`
 - `packages/web/web-browser/src/provider.ts`
 - `packages/web/web-browser/src/serialize.ts`

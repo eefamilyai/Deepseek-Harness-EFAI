@@ -1,0 +1,66 @@
+diff --git a/packages/client/ui-primitives/README.md b/packages/client/ui-primitives/README.md
+index 2ccc2b61e8..4210e857ad 100644
+--- a/packages/client/ui-primitives/README.md
++++ b/packages/client/ui-primitives/README.md
+@@ -96,6 +96,8 @@ The nearest `MarkdownDelegateProvider` supplies optional `openExternalLink` and
+ 
+ `MarkdownText` defaults to `variant="body"`. Use `variant="compact"` for secondary content: its 13px text and 20px line height follow the content-size setting, all heading levels use the same size with weight 600, and paragraphs and lists use tighter spacing. Text, links, and code keep the tertiary color; dotted underlines distinguish links. Code headers scroll with their blocks. Tables and math stay enabled at the surrounding text size and scroll horizontally within the available width. Both variants share the parser and streaming cache.
+ 
++Before parsing, `MarkdownText` and `extractMarkdownPlainText` repair pipe tables that model output damages (`src/markdown/table-repair.ts`): a line with no pipe directly under a table ends the table instead of becoming a row; rows fused onto one line, a delimiter fused with its header or first row, blank lines between header, delimiter, and body, and a delimiter whose cell count differs from its header's are rebuilt into the table GFM would have read. A table that already parses is never rewritten, and fenced code is never touched. The DeepSeek service produces all of these shapes when it re-serializes table lines before streaming them.
++
+ `CodeBlock.toolbarLabels` enables the shared code-card header and spacing. `ReadBlock` and `DiffBlock` use the same header: tertiary-colored language and filename text, secondary-colored copy and wrap icons, and hover or keyboard-focus tooltips. Missing or unsupported languages use the owner’s localized code-block title; mixed-language diffs use that title too. Code cards share typography and content insets; their headers and bodies use the same background in both themes. Read gutters fit the largest returned line number, and diff fills cover the full scrollable row. The wrap toggle keeps a fixed accessible name and exposes its state through `aria-pressed`; its tooltip describes the next action. Wrapping is local to each mounted card and never changes copied text; code fences start wrapped, while reads and diffs preserve source columns until wrapping is enabled. Compact Markdown shares this toolbar, spacing, and code typography while retaining monochrome text. With `toolbarLabels`, source previews can pass `wrap` to follow their owner’s preference and show only the language and copy icon; owner CSS retains the source layout.
+ 
+ `DiffBlock` compares the old and new content by line. It shows actual additions and deletions with up to three neutral context lines on each side, separates distant changes with `⋯`, and excludes shared context from tool-summary totals. The card ends after the diff body. Search stops beyond 256 line additions/deletions per fragment; those fragments display and count the complete old and new contents as a coarse replacement, including shared lines. Copy includes the full displayed diff with its prefixes. A final newline is treated as a terminator; differences only in the presence of a final newline are not displayed.
+diff --git a/packages/client/ui-primitives/src/markdown/MarkdownText.tsx b/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
+index ab2c0b380a..3ea5173848 100644
+--- a/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
++++ b/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
+@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
+ import clsx from 'clsx'
+ import { IncrementalMarkdownParser } from './incremental.ts'
+ import { parseGfm, parseGfmWithMath } from './parse.ts'
++import { repairMarkdownTables } from './table-repair.ts'
+ import {
+   collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
+   wrapBlockChildren,
+@@ -184,15 +185,17 @@ export const MarkdownText = memo(function MarkdownText({
+   const streamRef = useRef<StreamingRenderer | null>(null)
+   const streamLabelsRef = useRef<MarkdownLabels>(labels)
+   const children = useMemo(() => {
++    // Both arms read the repaired source, so a table renders the same while streaming and settled.
++    const source = repairMarkdownTables(text)
+     if (!streaming) {
+       streamRef.current = null
+-      return renderSettled(text, labels, fileMentions, pathImages)
++      return renderSettled(source, labels, fileMentions, pathImages)
+     }
+     if (streamRef.current === null || streamLabelsRef.current !== labels) {
+       streamRef.current = new StreamingRenderer(labels)
+       streamLabelsRef.current = labels
+     }
+-    return streamRef.current.render(text)
++    return streamRef.current.render(source)
+   }, [text, streaming, labels, fileMentions, pathImages])
+   return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
+     data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
+diff --git a/packages/client/ui-primitives/src/markdown/plain-text.ts b/packages/client/ui-primitives/src/markdown/plain-text.ts
+index 6797fdec6e..717d4fd3a7 100644
+--- a/packages/client/ui-primitives/src/markdown/plain-text.ts
++++ b/packages/client/ui-primitives/src/markdown/plain-text.ts
+@@ -7,6 +7,7 @@
+  */
+ 
+ import { parseGfm } from './parse.ts'
++import { repairMarkdownTables } from './table-repair.ts'
+ 
+ /** Amount of parsed Markdown content returned by the extractor. */
+ export type MarkdownPlainTextMode = 'all' | 'first-line' | 'first-paragraph'
+@@ -108,7 +109,7 @@ export function extractMarkdownPlainText(
+   options: MarkdownPlainTextOptions = {},
+ ): string {
+   const { mode = 'all' } = options
+-  const root = parseGfm(markdown) as MarkdownNode
++  const root = parseGfm(repairMarkdownTables(markdown)) as MarkdownNode
+   const all = fullText(root)
+   switch (mode) {
+     case 'all':

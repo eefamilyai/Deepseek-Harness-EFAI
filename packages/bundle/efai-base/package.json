@@ -38,6 +38,7 @@
     "@deepseek-ai/dsh-ai-accounts": "workspace:^",
     "@deepseek-ai/dsh-command-session-info": "workspace:^",
     "@deepseek-ai/dsh-efai-identity": "workspace:^",
+    "@deepseek-ai/dsh-harness-dev-tools": "workspace:^",
     "@deepseek-ai/dsh-host-web-access": "workspace:^",
     "@deepseek-ai/dsh-kernel": "workspace:^",
     "@deepseek-ai/dsh-kernel-python": "workspace:^",
@@ -45,13 +46,19 @@
     "@deepseek-ai/dsh-llm-markdown-fidelity": "workspace:^",
     "@deepseek-ai/dsh-llm-text-toolcalls": "workspace:^",
     "@deepseek-ai/dsh-output-masking": "workspace:^",
+    "@deepseek-ai/dsh-peak-send": "workspace:^",
+    "@deepseek-ai/dsh-profile-hub": "workspace:^",
+    "@deepseek-ai/dsh-profile-sync": "workspace:^",
     "@deepseek-ai/dsh-session-recovery-context": "workspace:^",
     "@deepseek-ai/dsh-skill-injection": "workspace:^",
+    "@deepseek-ai/dsh-skills-studio": "workspace:^",
     "@deepseek-ai/dsh-token-usage-lifetime": "workspace:^",
     "@deepseek-ai/dsh-tool-kernel": "workspace:^",
     "@deepseek-ai/dsh-tool-roster": "workspace:^",
+    "@deepseek-ai/dsh-tool-sites": "workspace:^",
     "@deepseek-ai/dsh-tool-str-replace-editor": "workspace:^",
-    "@deepseek-ai/dsh-web-browser": "workspace:^"
+    "@deepseek-ai/dsh-web-browser": "workspace:^",
+    "@deepseek-ai/dsh-web-browser-sidebar": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

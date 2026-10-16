@@ -34,16 +34,19 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-client-ui-polish": "workspace:^",
+    "@deepseek-ai/dsh-ai-accounts": "workspace:^",
     "@deepseek-ai/dsh-client-ui-brand-efai": "workspace:^",
     "@deepseek-ai/dsh-client-ui-effects": "workspace:^",
     "@deepseek-ai/dsh-client-ui-flow-accents": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-model-visibility": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-peak-hours": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-personalization": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-polish": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-accounts": "workspace:^",
     "@deepseek-ai/dsh-client-ui-settings-tools": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-personalization": "workspace:^",
     "@deepseek-ai/dsh-client-ui-skill-mention": "workspace:^",
     "@deepseek-ai/dsh-host-version-route": "workspace:^",
-    "@deepseek-ai/dsh-ai-accounts": "workspace:^"
+    "@deepseek-ai/dsh-profile-hub": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

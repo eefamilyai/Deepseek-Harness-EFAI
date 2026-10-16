@@ -48,16 +48,30 @@
     - id: ui-personalization
       name: '@deepseek-ai/dsh-client-ui-personalization'
 
-    # The account-pool Remote namespace, mounted by the package that owns it.
-    # It cannot ride the shared `dsh-api-remotes` assembly: that package is one
-    # the official Desktop also ships, and the installed copy wins at boot.
-    - id: ai-accounts
-      name: '@deepseek-ai/dsh-ai-accounts'
+    # The account-pool Remote namespace is mounted by `dsh-efai-base`, which
+    # this layer stacks over: one row id belongs to one bundle. Declaring it here
+    # as well would compose the id twice, and the Plugins page locks any row the
+    # Host cannot address through the profile patch — a twice-composed id is
+    # exactly that, so the row would run while its own switch refused to move.
 
     # The Accounts settings section — add a DeepSeek web login from the UI
     # instead of editing ds_config.json by hand.
     - id: ui-settings-accounts
       name: '@deepseek-ai/dsh-client-ui-settings-accounts'
+
+    # The DeepSeek pricing pill under the composer: amber while DeepSeek bills
+    # peak rates (2× off-peak) and shortly before, quiet off-peak. Weekends and
+    # Chinese public holidays count as off-peak, as DeepSeek prices them. During
+    # peak, a DeepSeek API message asks first: send anyway, schedule it for when
+    # peak ends (through `peak-send` in dsh-efai-base), or keep editing.
+    - id: ui-peak-hours
+      name: '@deepseek-ai/dsh-client-ui-peak-hours'
+
+    # Provider visibility: a switch on every provider card of the Models
+    # settings page, and a list at its end for providers without a card; a
+    # provider switched off is left out of the model picker.
+    - id: model-visibility
+      name: '@deepseek-ai/dsh-client-ui-model-visibility'
 
     # The `@skill` picker: the session skill catalog as an `@` trigger source
     # beside @file/@session. Upstream registers the same source inside a package
@@ -66,6 +80,10 @@
     # package registers the '/' form only.
     - id: ui-skill-mention
       name: '@deepseek-ai/dsh-client-ui-skill-mention'
+
+    # The `profileHub` service and its frame-wide profiles page are mounted by
+    # `dsh-efai-base`, for the same single-row-id reason as the account pool
+    # above.
 
 # Upstream's sidebar brand, replaced rather than restyled: `ui-brand-efai` above
 # registers the same two occupants for every build profile.

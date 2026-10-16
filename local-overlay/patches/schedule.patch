@@ -1,0 +1,134 @@
+diff --git a/packages/schedule/schedule/README.i18n.yaml b/packages/schedule/schedule/README.i18n.yaml
+index 6c1433dea0..c20a15f86c 100644
+--- a/packages/schedule/schedule/README.i18n.yaml
++++ b/packages/schedule/schedule/README.i18n.yaml
+@@ -15,8 +15,8 @@
+   en: 23386452a66b2fbd
+   zh: 4a8d91b2f313fead
+ /deepseek-ai-dsh-schedule/use-this-package:
+-  en: 318cad8a73818a95
+-  zh: 267b9c86cb9f06d1
++  en: 7ddc16d1077dab11
++  zh: e540a56f87b1da59
+ /deepseek-ai-dsh-schedule/understand-the-implementation:
+   en: 676b7c508f37a1b7
+   zh: c5e8520b3350f0b0
+diff --git a/packages/schedule/schedule/README.md b/packages/schedule/schedule/README.md
+index 352d32e5f4..b3b18e5492 100644
+--- a/packages/schedule/schedule/README.md
++++ b/packages/schedule/schedule/README.md
+@@ -44,7 +44,7 @@ Weekly input adds `weekdays`, a non-empty set of ISO weekday numbers from Monday
+ 
+ Cron input carries `expression` and `time_zone`. The expression is the standard five-field Vixie form `minute hour day-of-month month day-of-week`: minute 0-59, hour 0-23, day-of-month 1-31, month 1-12, and day-of-week 0-7 where both `0` and `7` mean Sunday. Every field accepts `*`, a single value, an `a-b` range, a `*/n` or `a-b/n` step with `n >= 1`, and a comma-separated list of those forms. `L`, `W`, `#`, `JAN`/`MON` names, `@daily`-style macros, six-field expressions, out-of-range values, inverted ranges, zero steps, and empty fields are rejected with `invalid_rule` and a message naming the offending field. Because the dialect has five fields, the smallest interval is one minute. Creation stores a canonical expression: repeated values collapse, adjacent values and ranges merge, a uniform step is written as `a-b/n` or, for a field that started with `*`, as a star-step (`*` for every value, otherwise the widest star-step walk plus any remaining values), a step of `1` is dropped, and Sunday is written as `0`. A field that did not start with `*` never becomes a star-step, so the day rule below survives storage. The durable decoder rejects a non-canonical stored expression, so the record always holds the canonical text. When either day-of-month or day-of-week is a star, a local date matches only when both fields match; when neither is a star, either field matching is enough. A field is a star when its text starts with `*`, independently of the values it matches, so a stepped star constrains alongside the other field instead of substituting for it. The first target is the first strictly future instant whose local date and time in that zone match, using the same gap skip and earlier-overlap rules as Daily. See [cron timing](../../../docs/subsystems/schedule.md#cron-wall-clock-input) for the full dialect and canonicalization rules.
+ 
+-A reminder is bound to the calling Agent's Session. The shared `schedule` Remote namespace exposes `catalog` for active and inactive Host tasks with their original Session ids, and `list`, `history`, `update`, and `delete` with an explicit Session id. Remote `list` and model `schedule_list` return only active tasks. Catalog entries retain only the latest receipt in `lastDelivery`; catalog and list responses omit saved delivery history. None of these operations activates an Agent or reads Session logs. Explicit deletion stops future delivery, leaves the original Session and already queued messages intact, and removes the stored task row together with its saved delivery records: the task leaves `list` and `catalog`, never schedules again, and `history` answers `schedule_not_found` for the same `(sessionId, id)`.
++A reminder is bound to the calling Agent's Session. The shared `schedule` Remote namespace exposes `catalog` for active and inactive Host tasks with their original Session ids, and `list`, `history`, `update`, and `delete` with an explicit Session id, plus `create`, which takes that binding with the name, instruction, and one selector and answers with the stored record or the input code that refused it.<!-- DSH-FORK(schedule): the browser's creation form needs an endpoint the model's tool call does not provide. EXIT: upstream exposes a Remote create endpoint. --> Remote `list` and model `schedule_list` return only active tasks. Catalog entries retain only the latest receipt in `lastDelivery`; catalog and list responses omit saved delivery history. None of these operations activates an Agent or reads Session logs. Explicit deletion stops future delivery, leaves the original Session and already queued messages intact, and removes the stored task row together with its saved delivery records: the task leaves `list` and `catalog`, never schedules again, and `history` answers `schedule_not_found` for the same `(sessionId, id)`.
+ 
+ Archiving a Session with active reminders is refused until they stop, and choosing to stop them deletes every active reminder; unarchiving does not bring them back.
+ 
+diff --git a/packages/schedule/schedule/README.zh.md b/packages/schedule/schedule/README.zh.md
+index 1f68aeef8f..8335f73e5d 100644
+--- a/packages/schedule/schedule/README.zh.md
++++ b/packages/schedule/schedule/README.zh.md
+@@ -44,7 +44,7 @@ Agent 获得 `schedule_create`、`schedule_list`、`schedule_delete` 和 `schedu
+ 
+ cron 输入携带 `expression` 和 `time_zone`。表达式是标准五字段 Vixie 形式 `minute hour day-of-month month day-of-week`：minute 0-59、hour 0-23、day-of-month 1-31、month 1-12、day-of-week 0-7，其中 `0` 和 `7` 都表示周日。每个字段接受 `*`、单个值、`a-b` 范围、`n >= 1` 的 `*/n` 与 `a-b/n` 步长，以及由这些形式组成的逗号分隔列表。`L`、`W`、`#`、`JAN`/`MON` 名称、`@daily` 风格宏、六字段表达式、超出范围的值、反向范围、零步长和空字段都会以 `invalid_rule` 拒绝，且错误信息会指出违规字段。由于该方言只有五个字段，最小间隔为一分钟。创建时存储规范化表达式：重复值合并，相邻的值与范围合并，均匀步长写为 `a-b/n`，而以 `*` 开头的字段写为星号步长（匹配全部取值时写 `*`，否则写最宽的星号步长并追加其余取值），步长 `1` 被移除，周日统一写为 `0`。不以 `*` 开头的字段绝不会变成星号步长，因此下文的日规则在存储后保持不变。持久化解码器拒绝非规范化的已存储表达式，因此记录始终保存规范化文本。day-of-month 或 day-of-week 中任一为星号字段时，本地日期需两个字段都匹配；两者都不是星号字段时，匹配任一字段即可。字段文本以 `*` 开头即为星号字段，与它匹配的取值集合无关，因此步长星号字段与其他字段同时约束，而不是替代它。首个目标是该时区内本地日期与时间匹配的第一个严格未来时点，使用与 Daily 相同的缺口跳过与重叠取较早时点规则。完整方言与规范化规则见 [cron 时间语义](../../../docs/subsystems/schedule.zh.md#cron-wall-clock-input)。
+ 
+-提醒绑定到调用 Agent 的会话。共享的 `schedule` Remote namespace 提供 `catalog`，返回活动和未运行的宿主任务及其原始会话 id，并提供带明确会话 id 的 `list`、`history`、`update` 和 `delete`。Remote `list` 和模型 `schedule_list` 仅返回活动任务。目录条目的 `lastDelivery` 仅保留最近一次回执；目录和列表响应均不包含已保存的发送历史。这些操作均不激活 Agent 或读取会话日志。显式删除会阻止后续投递，保留原会话和已经入队的消息，并移除已存储的任务行及其已保存的发送记录：任务从 `list` 和 `catalog` 中消失、不再调度，`history` 对相同的 `(sessionId, id)` 返回 `schedule_not_found`。
++提醒绑定到调用 Agent 的会话。共享的 `schedule` Remote namespace 提供 `catalog`，返回活动和未运行的宿主任务及其原始会话 id，并提供带明确会话 id 的 `list`、`history`、`update` 和 `delete`，以及 `create`：它接收该绑定连同名称、指令和一种选择器，返回已存储的记录，或被拒绝时的输入错误码。<!-- DSH-FORK(schedule)：浏览器的创建表单需要一个模型工具调用无法提供的端点。EXIT：上游提供 Remote `create` 端点。 -->Remote `list` 和模型 `schedule_list` 仅返回活动任务。目录条目的 `lastDelivery` 仅保留最近一次回执；目录和列表响应均不包含已保存的发送历史。这些操作均不激活 Agent 或读取会话日志。显式删除会阻止后续投递，保留原会话和已经入队的消息，并移除已存储的任务行及其已保存的发送记录：任务从 `list` 和 `catalog` 中消失、不再调度，`history` 对相同的 `(sessionId, id)` 返回 `schedule_not_found`。
+ 
+ 归档仍有活动提醒的会话会被拒绝，直到这些提醒停止；选择停止它们会删除全部活动提醒，取消归档不会把它们带回来。
+ 
+diff --git a/packages/schedule/schedule/src/index.ts b/packages/schedule/schedule/src/index.ts
+index 2fd4b35c84..f5f16ebbb6 100644
+--- a/packages/schedule/schedule/src/index.ts
++++ b/packages/schedule/schedule/src/index.ts
+@@ -18,9 +18,9 @@ import {
+   scheduleTitle,
+ } from './domain.ts'
+ import type {
+-  DeliveryRetentionBounds, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleDeleteRequest, ScheduleDeleteResult,
+-  ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult, ScheduleListRequest, ScheduleRecord,
+-  ScheduleUpdateRequest, ScheduleUpdateResult,
++  DeliveryRetentionBounds, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleCreateTaskRequest, ScheduleCreateTaskResult,
++  ScheduleDeleteRequest, ScheduleDeleteResult, ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult,
++  ScheduleListRequest, ScheduleRecord, ScheduleUpdateRequest, ScheduleUpdateResult,
+ } from './types.ts'
+ 
+ export type * from './types.ts'
+@@ -281,6 +281,31 @@ export class ScheduleService extends TypertRemoteService {
+     })
+   }
+ 
++  // DSH-FORK(schedule): the Desktop's app.asar ships this package, so a client surface
++  // cannot reach `create` by editing a fork copy of it; the endpoint below is what the
++  // Automation tasks page calls. EXIT: upstream exposes a Remote create endpoint.
++  /**
++   * Create a task from a client surface under an explicit Session binding.
++   *
++   * The binding travels inside the request rather than as its own argument, so
++   * the Web carrier serializes one object, and the selectors are validated by
++   * {@link create} exactly as the model's tool call validates them. A refused
++   * rule is returned rather than thrown, mirroring `update`, so the browser can
++   * name the field to correct.
++   * @param request - Original Session binding, required name, and reminder selector.
++   * @param signal - Optional cancellation checked before persistence begins, including after FIFO waits.
++   * @returns The durably stored schedule, or the input code that refused it.
++   */
++  @Remote('create')
++  async createTask(request: ScheduleCreateTaskRequest, signal?: AbortSignal): Promise<ScheduleCreateTaskResult> {
++    try {
++      return { created: true, record: await this.create(request.sessionId, request, signal) }
++    } catch (error: unknown) {
++      if (error instanceof ScheduleInputError) return { created: false, code: error.code }
++      throw error
++    }
++  }
++
+   /**
+    * Read the selected Session's active tasks without resuming its Agent.
+    * @param request - Session whose task list is requested.
+diff --git a/packages/schedule/schedule/src/types.ts b/packages/schedule/schedule/src/types.ts
+index ed6af0fada..bcbc64103d 100644
+--- a/packages/schedule/schedule/src/types.ts
++++ b/packages/schedule/schedule/src/types.ts
+@@ -391,6 +391,39 @@ export interface ScheduleDeleteRequest extends ScheduleListRequest {
+   id: ScheduleId
+ }
+ 
++// DSH-FORK(schedule): the Desktop's app.asar ships this package, so the browser's
++// creation surface lives here rather than in a fork-owned package.
++// EXIT: upstream exposes a Remote create endpoint.
++/**
++ * Task creation requested from a client surface rather than by the model.
++ *
++ * The binding travels inside the request, matching `list`, `delete`, and
++ * `update`, so a browser that has already chosen a Session can create the task
++ * without going through a tool call.
++ */
++export type ScheduleCreateTaskRequest = ScheduleListRequest & ScheduleCreateRequest
++
++/** Input code one browser-originated creation can be refused with; an internal fault still rejects. */
++export type ScheduleCreateTaskErrorCode =
++  | 'invalid_prompt'
++  | 'invalid_selector'
++  | 'invalid_rule'
++  | 'invalid_time_zone'
++  | 'not_future'
++  | 'time_out_of_range'
++  | 'frequency_too_high'
++
++/**
++ * Outcome of one browser-originated creation.
++ *
++ * A refused rule is a value rather than a rejection, the way `update` reports
++ * its own input failures, so the browser can name the field to correct instead
++ * of showing one generic transport error.
++ */
++export type ScheduleCreateTaskResult =
++  | { readonly created: true; readonly record: ScheduleRecord }
++  | { readonly created: false; readonly code: ScheduleCreateTaskErrorCode }
++
+ /** Timing-only edit; it may select a different recurrence kind than the stored record, and one-shot targets use an absolute `at`. */
+ export type ScheduleTimingChange =
+   | { readonly kind: 'at'; readonly at: AtInput }

@@ -483,11 +483,16 @@
     { "path": "./packages/session/command-session-info" },
     { "path": "./packages/llm/llm-text-toolcalls" },
     { "path": "./packages/llm/ai-accounts/tsconfig.host.json" },
+    { "path": "./packages/schedule/peak-send/tsconfig.host.json" },
+    { "path": "./packages/skill/skills-studio/tsconfig.host.json" },
     { "path": "./packages/llm/llm-kiln" },
     { "path": "./packages/llm/llm-markdown-fidelity" },
     { "path": "./packages/llm/llm-system-file" },
     { "path": "./packages/fs/tool-notebook-edit" },
     { "path": "./packages/web/web-browser" },
+    { "path": "./packages/web/web-browser-sidebar/tsconfig.host.json" },
+    { "path": "./packages/devtools/harness-dev-tools" },
+    { "path": "./packages/web/tool-sites" },
     { "path": "./packages/kernel/kernel" },
     { "path": "./packages/kernel/kernel-python" },
     { "path": "./packages/kernel/tool-kernel" },
@@ -500,7 +505,9 @@
     { "path": "./packages/llm/token-usage-lifetime" },
     { "path": "./packages/skill/skill-injection" },
     { "path": "./packages/bundle/efai-base" },
-    { "path": "./packages/bundle/efai-web" }
+    { "path": "./packages/bundle/efai-web" },
+    { "path": "./packages/boot/profile-hub/tsconfig.host.json" },
+    { "path": "./packages/boot/profile-sync" }
     // DSH-FORK end
   ]
 }
