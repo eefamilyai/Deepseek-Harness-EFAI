@@ -106,3 +106,24 @@ _show_block.txt
 _t.png
 e2e-shot.png
 efai/__pycache__/
+
+# Kiln runtime scratch: soak runs, probe scripts, their logs and states, wire logs,
+# and hand backups. Investigation output, not source; some hold session material.
+python/kiln/runtime/_*
+python/kiln/runtime/*.fix*bak
+python/kiln/runtime/ds_last_turn.json
+python/kiln/runtime/ds_muted.json
+python/kiln/runtime/ds_wirelog.jsonl
+python/kiln/runtime/ds_wirelog.on
+/_idstate.txt
+
+# Standalone build: outputs, logs, pids, and probe scripts stay out of history; the
+# build script, launcher sources, and README are the source.
+standalone/dist/
+standalone/verify-home/
+standalone/*.log
+standalone/*.pid
+standalone/_*
+
+# A published site the agent wrote into the skills folder while testing.
+.agents/skills/_lh/

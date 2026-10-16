@@ -6,3 +6,28 @@ _*
 check-*.log
 commit-*.txt
 *.log
+
+# Binaries, captures, session dumps, and scratch builds: the notes (*.md), the
+# evidence/ screenshots, and the reusable scripts are what this folder keeps.
+*.asar
+*.asar.*
+app.asar.*
+install-backups/
+install-staging/
+test-install/
+build-scratch/
+asar-extract/
+tidy/
+session*.jsonl
+*.png
+!evidence/*.png
+*.log.txt
+*.out.txt
+*.err.txt
+*.bak
+probe-*
+leak-records.json
+spill_*
+postfix-cases.json
+measure.json
+patched-desktop-host.js
