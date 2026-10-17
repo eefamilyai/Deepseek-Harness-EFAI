@@ -69,7 +69,7 @@ index dd91db8bf1..0000000000
 -      - "kind/dependency"
 -      - "area/infra"
 diff --git a/.gitignore b/.gitignore
-index 86e330fc0c..33cbd9db58 100644
+index 86e330fc0c..e02a5614e1 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -36,6 +36,10 @@ python/sdk-runtime/src/deepseek_harness_runtime/runtime/
@@ -83,7 +83,7 @@ index 86e330fc0c..33cbd9db58 100644
  apps/web/dist/
  .artifacts/
  .dsh-build/
-@@ -46,3 +50,80 @@ worktrees/
+@@ -46,3 +50,83 @@ worktrees/
  .agents/worktrees/
  .typert-*/
  native/system/test/bin/
@@ -164,6 +164,9 @@ index 86e330fc0c..33cbd9db58 100644
 +
 +# A published site the agent wrote into the skills folder while testing.
 +.agents/skills/_lh/
++
++# The packed copy of the Kiln runtime (scripts/pack-kiln.mjs); the source is python/kiln/runtime.
++packages/kernel/kernel-python/kiln/
 diff --git a/package.json b/package.json
 index f5ce66dc9e..9dbae2e720 100644
 --- a/package.json

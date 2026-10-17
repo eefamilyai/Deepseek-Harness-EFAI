@@ -88,12 +88,15 @@ const PROBE_TIMEOUT_MS = 10_000
 
 
 /**
- * The vendored runtime shipped with this repository: `python/kiln/runtime`,
- * four levels above this module's directory whether it is running from `src`
- * (source launch) or `lib` (built).
+ * The Kiln runtime: the copy packed into this package (`kiln/` beside `lib/`,
+ * which is what an installed Desktop has), else the repository's
+ * `python/kiln/runtime`, four levels above this module's directory in a source
+ * checkout.
  * @returns the runtime directory's absolute path.
  */
 export function defaultRuntimeDir(): string {
+  const packed = resolve(import.meta.dirname, '..', 'kiln')
+  if (existsSync(join(packed, 'kernel_child.py'))) return packed
   return resolve(import.meta.dirname, '..', '..', '..', '..', 'python', 'kiln', 'runtime')
 }
 

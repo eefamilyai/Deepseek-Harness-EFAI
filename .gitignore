@@ -127,3 +127,6 @@ standalone/_*
 
 # A published site the agent wrote into the skills folder while testing.
 .agents/skills/_lh/
+
+# The packed copy of the Kiln runtime (scripts/pack-kiln.mjs); the source is python/kiln/runtime.
+packages/kernel/kernel-python/kiln/

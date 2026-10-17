@@ -14,6 +14,7 @@ import { installDesktopUpdateTaskControl } from './update-tasks.ts'
 import { installDesktopQuitInspection } from './quit-inspection.ts'
 import { installPlatformSessionPublisher } from './platform-session.ts'
 import { installOfficeEngineResolution } from './office-engine.ts'
+import { ensureForkBundles } from './fork-bundles.ts'
 
 /** The profile the shell boots when no launch selected another. */
 const PRIMARY_PROFILE_NAME = 'desktop'
@@ -39,6 +40,9 @@ async function main(): Promise<void> {
   const projectDir = process.argv[3] as string
   installOfficeEngineResolution(runtimeDir)
   const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
+  // The fork's plugins ship as bundles a fresh profile does not name yet.
+  const added = ensureForkBundles(projectDir)
+  if (added.length > 0) console.log(`[desktop-host] added the fork bundles ${added.join(', ')} to the profile`)
   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
   reportSkippedBundles('dsh', profile)
   const name = desktopProfileName()
