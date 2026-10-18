@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-token-usage-lifetime",
   "description": "Lifetime token-usage projection: what a session has spent since it began, across every compaction",
-  "version": "0.1.0-local.1",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "restricted"
   },

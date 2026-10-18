@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-browser",
   "description": "Real-browser capability for the DeepSeek Harness: a text-first `browser` tool a vision-less model can drive, carried by the Desktop sidebar or headless Chromium, plus a Playwright fetch provider (ctx.web)",
-  "version": "0.1.0-rc.5",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

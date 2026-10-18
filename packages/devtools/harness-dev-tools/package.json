@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-harness-dev-tools",
   "description": "Tools for changing the harness and seeing the result: desktop_test_instance drives a separate test copy of the Desktop app over the DevTools Protocol, build_workspace_package builds one workspace package",
-  "version": "0.1.0-local.1",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "restricted"
   },

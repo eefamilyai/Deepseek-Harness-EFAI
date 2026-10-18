@@ -14,11 +14,20 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/** The fork bundle that follows each upstream bundle. */
-export const FORK_AFTER: Readonly<Record<string, string>> = {
-  '@deepseek-ai/dsh-base': '@deepseek-ai/dsh-efai-base',
-  '@deepseek-ai/dsh-web-app': '@deepseek-ai/dsh-efai-web',
+/**
+ * The bundles that follow each upstream one, in order: the fork's own, and after
+ * the web one the two optional bundles the fork's Desktop always runs
+ * (Automation tasks and voice input).
+ */
+export const FORK_AFTER: Readonly<Record<string, readonly string[]>> = {
+  '@deepseek-ai/dsh-base': ['@deepseek-ai/dsh-efai-base'],
+  '@deepseek-ai/dsh-web-app': [
+    '@deepseek-ai/dsh-efai-web', '@deepseek-ai/dsh-experimental-schedule-bundle', '@deepseek-ai/dsh-experimental-voice-input-bundle',
+  ],
 }
+
+/** Every bundle this module adds. */
+const ADDED = new Set(Object.values(FORK_AFTER).flat())
 
 /** A profile manifest key that opts the profile out of fork bundles entirely. */
 export const FORK_OPT_OUT = 'forkBundles'
@@ -38,8 +47,7 @@ export function withForkBundles(bundles: readonly string[]): string[] {
   const out: string[] = []
   for (const bundle of bundles) {
     out.push(bundle)
-    const fork = FORK_AFTER[bundle]
-    if (fork !== undefined && !bundles.includes(fork)) out.push(fork)
+    for (const fork of FORK_AFTER[bundle] ?? []) if (!bundles.includes(fork)) out.push(fork)
   }
   return out
 }
@@ -63,7 +71,7 @@ export function ensureForkBundles(profileDir: string, version = '*'): string[] {
   const deps = { ...manifest.dependencies }
   let depsChanged = false
   for (const bundle of next) {
-    if (Object.values(FORK_AFTER).includes(bundle) && deps[bundle] === undefined) {
+    if (ADDED.has(bundle) && deps[bundle] === undefined) {
       deps[bundle] = version
       depsChanged = true
     }

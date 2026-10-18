@@ -21,17 +21,19 @@ const read = (dir: string) => JSON.parse(readFileSync(join(dir, 'package.json'),
 describe('fork bundles on the Desktop profile', () => {
   it('puts each fork bundle right after the upstream one it extends', () => {
     expect(withForkBundles(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'other'])).toEqual([
-      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-efai-web', 'other',
+      '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-efai-web',
+      '@deepseek-ai/dsh-experimental-schedule-bundle', '@deepseek-ai/dsh-experimental-voice-input-bundle', 'other',
     ])
     expect(withForkBundles(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base'])).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base'])
   })
 
   it('adds them to a fresh profile, with installed dependencies, and changes nothing the second time', () => {
     const dir = profile({ name: 'p', dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } } })
-    expect(ensureForkBundles(dir)).toEqual(['@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-efai-web'])
+    const forks = ['@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-efai-web', '@deepseek-ai/dsh-experimental-schedule-bundle', '@deepseek-ai/dsh-experimental-voice-input-bundle']
+    expect(ensureForkBundles(dir)).toEqual(forks)
     const after = read(dir)
-    expect(after.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-efai-web'])
-    expect(after.dependencies).toEqual({ '@deepseek-ai/dsh-efai-base': '*', '@deepseek-ai/dsh-efai-web': '*' })
+    expect(after.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', forks[0], '@deepseek-ai/dsh-web-app', ...forks.slice(1)])
+    expect(after.dependencies).toEqual(Object.fromEntries(forks.map(name => [name, '*'])))
     const text = readFileSync(join(dir, 'package.json'), 'utf8')
     expect(ensureForkBundles(dir)).toEqual([])
     expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(text)

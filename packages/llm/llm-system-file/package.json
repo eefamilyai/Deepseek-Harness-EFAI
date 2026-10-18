@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm-system-file",
   "description": "Deliver a system prompt as an uploaded provider file, reusing one file id until the provider rejects it",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

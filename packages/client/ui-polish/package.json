@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-polish",
   "description": "Interaction polish for the whole client: one motion system, real materials, and consistent control feedback",
-  "version": "0.1.0-local.1",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "restricted"
   },

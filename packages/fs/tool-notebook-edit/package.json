@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-notebook-edit",
   "description": "Model-facing view, read, replace, insert, and delete tool for Jupyter .ipynb notebooks over the Harness filesystem service",
-  "version": "0.1.2-alpha.3",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

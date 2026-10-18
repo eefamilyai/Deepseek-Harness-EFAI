@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-roster",
   "description": "Runtime tool roster: which tools the model may see and call, decided per turn instead of at boot",
-  "version": "0.1.0-rc.5",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

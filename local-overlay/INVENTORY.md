@@ -165,7 +165,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 821 paths do not exist upstream, so no patch covers them and none can conflict.
+These 824 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -388,6 +388,8 @@ These 821 paths do not exist upstream, so no patch covers them and none can conf
 - `HARNESS.md`
 - `SESSION-system-prompt-as-file-upload.md`
 - `SESSION-tool-output-file-delivery.md`
+- `apps/desktop-host/src/fork-bundles.ts`
+- `apps/desktop-host/tests/fork-bundles.spec.ts`
 - `compaction.md`
 - `desktop/app-asar-files.json`
 - `desktop/harness-desktop/README.md`
@@ -665,6 +667,7 @@ These 821 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/host/web-access/tsconfig.json`
 - `packages/kernel/kernel-python/README.md`
 - `packages/kernel/kernel-python/package.json`
+- `packages/kernel/kernel-python/scripts/pack-kiln.mjs`
 - `packages/kernel/kernel-python/src/child.ts`
 - `packages/kernel/kernel-python/src/env.ts`
 - `packages/kernel/kernel-python/src/index.ts`

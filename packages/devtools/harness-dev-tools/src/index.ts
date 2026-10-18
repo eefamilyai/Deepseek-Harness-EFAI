@@ -113,11 +113,6 @@ export function resolveInstanceSpec(config: Config, execPath: string = process.e
 }
 
 /**
- * Register both tools; stop a test instance this Host started when the plugin unloads.
- * @param ctx - the plugin context.
- * @param config - the plugin config.
- */
-/**
  * Where this package's code really lives. The profiles' package folder links each
  * package to the checkout, so following the link finds the workspace the harness
  * runs from.
@@ -131,6 +126,11 @@ export function installDir(): string | undefined {
   }
 }
 
+/**
+ * Register both tools; stop a test instance this Host started when the plugin unloads.
+ * @param ctx - the plugin context.
+ * @param config - the plugin config.
+ */
 export function apply(ctx: Context, config: Config): void {
   let instance: DesktopTestInstance | undefined
   const current = (): DesktopTestInstance => {

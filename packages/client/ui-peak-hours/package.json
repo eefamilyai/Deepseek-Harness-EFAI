@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-peak-hours",
   "description": "DeepSeek API peak-hour indicator and send guard: a composer pill that warns while DeepSeek bills peak (2×) rates, and a dialog that asks before a DeepSeek API message is sent at peak",
-  "version": "0.1.0-local.1",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "restricted"
   },

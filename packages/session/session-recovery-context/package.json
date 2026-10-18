@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-recovery-context",
   "description": "Keeps a code-maintained ledger of the session and hands it to the model in the same step a compaction happens, plus the session log path as a prompt fact",
-  "version": "0.1.5-rc.2",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

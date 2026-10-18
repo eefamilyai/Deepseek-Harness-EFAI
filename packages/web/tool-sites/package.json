@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-sites",
   "description": "The site tool: publish static web pages the agent builds (illustrations, slide decks, explainers, charts) at https://<name>.<zone> through GitHub Pages and deSEC DNS",
-  "version": "0.1.0-local.1",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "restricted"
   },

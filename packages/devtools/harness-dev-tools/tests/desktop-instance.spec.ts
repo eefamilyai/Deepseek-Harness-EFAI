@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DesktopTestInstance, desktopProfile, runningDesktop, type DesktopInstanceSpec } from '../src/desktop-instance.ts'
+import { CdpError } from '../src/cdp.ts'
+import { vi } from 'vitest'
 import { resolveInstanceSpec, Config } from '../src/index.ts'
 
 let home: string
@@ -101,5 +103,31 @@ describe('an instance that is not running', () => {
     expect(await instance.stop()).toBe(false)
     expect(await instance.status()).toMatchObject({ running: false, pid: undefined, targets: [], logTail: '' })
     await expect(instance.evaluate('1')).rejects.toThrow(/not running; call it with action "launch" first/)
+  })
+})
+
+describe('waiting for a condition', () => {
+  const spec = (): DesktopInstanceSpec => ({
+    appDir: home, exeName: 'App.exe', dshHome: home, stateDir: join(home, 'state'), sourceProfile: 'a', testProfile: 'b',
+    port: 1, launchTimeoutMs: 1000, commandTimeoutMs: 1000, nodeExecutable: process.execPath,
+  })
+
+  it('treats a dropped connection as not yet, and returns once the page answers', async () => {
+    const instance = new DesktopTestInstance(spec())
+    const answers = [new CdpError('the target closed the connection'), 'false', '"ready"']
+    vi.spyOn(instance, 'evaluate').mockImplementation(async () => {
+      const next = answers.shift()
+      if (next instanceof Error) throw next
+      return next ?? '"ready"'
+    })
+    expect(await instance.waitFor('x', 5000)).toBe('"ready"')
+  })
+
+  it('still fails on an error from the page, and names the last transport error on a timeout', async () => {
+    const instance = new DesktopTestInstance(spec())
+    vi.spyOn(instance, 'evaluate').mockRejectedValueOnce(new Error('the page threw: boom'))
+    await expect(instance.waitFor('x', 5000)).rejects.toThrow('the page threw: boom')
+    vi.spyOn(instance, 'evaluate').mockRejectedValue(new CdpError('gone'))
+    await expect(instance.waitFor('x', 300)).rejects.toThrow('last value (gone)')
   })
 })

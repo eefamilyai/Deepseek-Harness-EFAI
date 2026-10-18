@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-output-masking",
   "description": "Observation masking: replaces old, large tool outputs with one-line stubs once the context fills, ahead of compaction",
-  "version": "0.1.0-local.1",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

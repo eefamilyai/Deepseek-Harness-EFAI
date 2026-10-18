@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-kernel",
   "description": "Model-facing kernel tool: run Python in a persistent namespace over the DeepSeek Harness kernel seam (ctx.kernel)",
-  "version": "0.1.0-rc.5",
+  "version": "0.2.0-rc.2",
   "publishConfig": {
     "access": "public"
   },

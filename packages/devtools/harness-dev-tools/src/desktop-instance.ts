@@ -447,8 +447,15 @@ export class DesktopTestInstance {
     const deadline = Date.now() + timeoutMs
     let last = ''
     while (Date.now() < deadline) {
-      last = await this.evaluate(`(async () => (${expression}))()`, selector)
-      if (last !== 'undefined' && last !== 'false' && last !== 'null' && last !== '0' && last !== '""') return last
+      try {
+        last = await this.evaluate(`(async () => (${expression}))()`, selector, Math.max(1, Math.min(this.spec.commandTimeoutMs, deadline - Date.now())))
+      } catch (error) {
+        // A page that reloads or navigates while booting closes the connection or drops the
+        // context mid-poll; that is "not yet", and the next poll reaches the new page.
+        if (!(error instanceof CdpError)) throw error
+        last = `(${error.message})`
+      }
+      if (last !== 'undefined' && last !== 'false' && last !== 'null' && last !== '0' && last !== '""' && !last.startsWith('(')) return last
       await delay(250)
     }
     throw new Error(`the condition stayed falsy for ${String(timeoutMs)} ms (last value ${last})`)
