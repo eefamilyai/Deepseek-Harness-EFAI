@@ -51,10 +51,11 @@ async function main(): Promise<void> {
     profile: name,
     resolvedProfile: { profile, installAnchor },
     patchFiles: [],
-    // The primary window owns a stable port so its own reloads reconnect; a
-    // second window takes whichever port is free, so two Desktop instances
-    // serving two profiles coexist instead of fighting over one.
-    args: ['--no-open', '--port', name === PRIMARY_PROFILE_NAME ? PRIMARY_PORT : '0'],
+    // DSH-FORK(desktop): the primary window owns a stable port so its own
+    // reloads reconnect; a second window takes whichever port is free, so two
+    // Desktop instances serving two profiles coexist instead of fighting over
+    // one. Host binding stays upstream's loopback default.
+    args: ['--no-open', '--host', '127.0.0.1', '--port', name === PRIMARY_PROFILE_NAME ? PRIMARY_PORT : '0'],
     ...(process.argv[5] === undefined ? {} : {
       packageManager: {
         command: process.execPath,
@@ -127,7 +128,7 @@ async function main(): Promise<void> {
   installPlatformSessionPublisher(ctx, (session) => {
     if (process.connected) process.send?.({ type: 'platform-session', session })
   })
-  const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${String(ctx.webServer.port)}`)
+  const url = ctx.connection.authenticatedUrl(`${ctx.webServer.protocol}//127.0.0.1:${String(ctx.webServer.port)}`)
   if (process.connected) process.send?.({ type: 'ready', url, injections: ctx.webServer.collectIndexInjections() }, (error) => { if (error !== null) console.error(error) })
 }
 
