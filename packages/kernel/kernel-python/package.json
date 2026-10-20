@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-kernel-python",
   "description": "Kiln-backed persistent Python kernel provider for the DeepSeek Harness kernel seam (ctx.kernel)",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -28,7 +28,7 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-kernel": "workspace:^",
+    "@deepseek-ai/dsh-kernel": "workspace:*",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "dependencies": {
@@ -37,8 +37,8 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
-    "@deepseek-ai/dsh-kernel": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^"
+    "@deepseek-ai/dsh-kernel": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*"
   },
   "scripts": {
     "prepack": "node scripts/pack-kiln.mjs"

@@ -82,6 +82,38 @@ export interface TypeApiEntry {
 /** Every harness `ctx.<key>` service, sorted by key. */
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
+    key: 'agentBrowser',
+    summary: 'The `ctx.agentBrowser` service.',
+    description: 'The `ctx.agentBrowser` service. The name is the literal the Typert analyzer binds the namespace to.',
+    methods: [
+      {
+        signature: 'available(): boolean',
+        description: 'Whether a Desktop window is subscribed to carry agent pages.',
+        parameters: [],
+        returns: 'true while at least one window holds the command stream.',
+      },
+      {
+        signature: 'run(call: AgentBrowserCall, signal?: AbortSignal): Promise<AgentBrowserReply>',
+        description: 'Perform one page operation in the newest subscribed window.',
+        parameters: [{ name: 'call', description: 'the operation and the page it addresses.' }, { name: 'signal', description: 'abandons the wait; the window may still finish the operation.' }],
+        returns: 'the window\'s successful reply.',
+        throws: ['{AgentBrowserUnavailableError} when no window is subscribed or the holding window disconnects.', 'Error with the window\'s reason when the operation fails, or when no reply arrives in time.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *commands(signal: AbortSignal): AsyncIterable<AgentBrowserRequest>',
+        description: 'Carry agent pages in this window: receive every operation addressed to them. The first item is a `hello` with no operation, so the window can accept the stream.',
+        parameters: [{ name: 'signal', description: 'stream lifetime; it ends when the window disconnects.' }],
+        returns: 'the operations, in the order the Host issued them.',
+      },
+      {
+        signature: '@Remote respond(reply: AgentBrowserReply): boolean',
+        description: 'Settle one operation this window performed.',
+        parameters: [{ name: 'reply', description: 'the outcome, naming the operation it settles.' }],
+        returns: 'whether an operation was waiting for this reply; false for a late or unknown one.',
+      },
+    ],
+  },
+  {
     key: 'agentDefaultModel',
     summary: 'Owns the default model selection independently of any Host or transport.',
     description: 'Owns the default model selection independently of any Host or transport. Each operation reads the owning Config references.',
@@ -391,6 +423,73 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'aiAccounts',
+    summary: 'The `ctx.aiAccounts` service: the account-pool registry and its Remote face.',
+    description: 'The `ctx.aiAccounts` service: the account-pool registry and its Remote face. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.',
+    methods: [
+      {
+        signature: 'registerAccountProvider(provider: string, add: AccountAdder): () => void',
+        description: 'Register the handler that tests and adds a login for one account-pooling provider route (`ds_direct` is the only one today). One handler per route, released with the returned disposer. The handler owns making the new login selectable — it re-registers its own routes — so this service only routes the call.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'add', description: 'tests a login and, on success, adds it.' }],
+        returns: 'a disposer that withdraws the handler.',
+      },
+      {
+        signature: 'registerAccountAdmin(provider: string, admin: AccountAdmin): () => void',
+        description: 'Register the account-ADMINISTRATION half of an account-pooling provider: the read an operator surface lists, and the repairs it can ask for. Mirrors registerAccountProvider: one admin per route, released with the returned disposer, and a provider that pools accounts normally registers both — the adder to create a login, the admin to inspect and repair one.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'admin', description: 'the read and repair operations for that route\'s logins.' }],
+        returns: 'a disposer that withdraws the admin.',
+      },
+      {
+        signature: '@Remote listAccountProviders(): string[]',
+        description: 'The provider routes that accept account additions, for a surface to offer.',
+        parameters: [],
+        returns: 'the registered account-provider routes, in registration order.',
+      },
+      {
+        signature: '@Remote async addAccount(provider: string, account: AccountDraft): Promise<AccountAddResult>',
+        description: 'Test a login for one account-pooling provider and, on success, make it a selectable route. The password is used only for the test and never stored or returned here — the reply is the account id and its route, or a reason.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login to test.' }],
+        returns: 'the added account and route, or the failure reason.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts, or when the draft is missing a password or an email/mobile.'],
+      },
+      {
+        signature: '@Remote async listAccounts(provider: string): Promise<AccountInfo[]>',
+        description: 'Every login one provider pools, for an operator surface to list and expand.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }],
+        returns: 'one row per login, in the provider\'s own order.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async reloginAccount(provider: string, account: string): Promise<AccountOpResult>',
+        description: 'Re-authenticate one login, so a session that has gone stale works again.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-authenticate.' }],
+        returns: 'whether the login now works, or a plain reason it does not.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async reprofileAccount(provider: string, account: string): Promise<AccountOpResult>',
+        description: 'Replace one login\'s browser identity, so it presents as a different device. The repair for a flagged fingerprint is a NEW identity, not the same one.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to re-profile.' }],
+        returns: 'whether a fresh identity is in place, or a plain reason it is not.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async removeAccount( provider: string, account: string, slug: string, purge: boolean, ): Promise<AccountOpResult>',
+        description: 'Forget one login, or one orphaned identity, from a provider\'s list.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'account', description: 'the login id to forget; \'\' when only a slug is known.' }, { name: 'slug', description: 'the profile slug, which is all an orphan carries.' }, { name: 'purge', description: 'also delete the browser profile.' }],
+        returns: 'whether the entry is gone, or a plain reason it is not.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+      {
+        signature: '@Remote async accountLog(provider: string, since: number): Promise<AccountLogEntry[]>',
+        description: 'The debug trail recorded since a sequence number, oldest first. Every entry names its account, which is what makes two logins running at once legible.',
+        parameters: [{ name: 'provider', description: 'the provider route that pools logins.' }, { name: 'since', description: 'return only entries with a higher sequence number.' }],
+        returns: 'the entries, in recording order.',
+        throws: ['RemoteError with `aiAccounts/account-rejected` when no route pools accounts.'],
+      },
+    ],
+  },
+  {
     key: 'approval',
     summary: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session.',
     description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
@@ -685,9 +784,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the compaction result, or `null` if no compaction was needed.',
       },
       {
-        signature: 'abstract compactNow( agent: ManualCompactAgentContext, signal: AbortSignal, sourceCommandId?: CommandId, ): Promise<CompactionResult | null>',
+        signature: 'abstract compactNow( agent: ManualCompactAgentContext, signal: AbortSignal, sourceCommandId?: CommandId, instruction?: string, ): Promise<CompactionResult | null>',
         description: 'Explicitly compact useful history even below automatic pressure thresholds. Implementations synchronously start an idle task before any asynchronous work, select a useful range without writing on a no-op, then append a standalone `compaction/start` before summarization. That durable marker is the compaction lock until one `compaction/end` attempt. Later waking prompts remain accepted in FIFO order and start only after the optional durability checkpoint and idle-task settlement. Context injected while the summary runs may sit between the marker pair; only the selected span must remain stable.',
-        parameters: [{ name: 'agent', description: 'idle agent whose durable history should be compacted.' }, { name: 'signal', description: 'cancellation scoped to this compaction request.' }, { name: 'sourceCommandId', description: 'initiating command identity for a manual compaction.' }],
+        parameters: [{ name: 'agent', description: 'idle agent whose durable history should be compacted.' }, { name: 'signal', description: 'cancellation scoped to this compaction request.' }, { name: 'sourceCommandId', description: 'initiating command identity for a manual compaction.' }, { name: 'instruction', description: 'per-call summarization instruction from `/compact <text>`, when present.' }],
         returns: 'the compaction result, or `null` when no safe useful range exists.',
         throws: ['{@link ManualCompactionError} for expected busy, agent-cancellation, changed-span, summarization/shrink, commit-stage, or persistence failures; an aborted request preserves its exact abort reason. Failed attempts remain visible in the log.'],
       },
@@ -1424,6 +1523,54 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'kernel',
+    summary: 'The persistent-kernel service, registered as `ctx.kernel` (one instance per context).',
+    description: 'The persistent-kernel service, registered as `ctx.kernel` (one instance per context).\n\nSelection semantics (resolved at execution time, never order-dependent):\n\n- A configured id that is registered and `available()` → that backend.\n- A configured id not registered → `KERNEL_PROVIDER_CONFIGURED_MISSING`.\n- A configured id registered but unavailable → `KERNEL_PROVIDER_CONFIGURED_UNAVAILABLE`.\n- No id configured, exactly one registered usable backend → that backend.\n- No id configured, multiple usable backends → `KERNEL_PROVIDER_AMBIGUOUS`.\n- No id configured, no usable backend → `KERNEL_PROVIDER_UNAVAILABLE`.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: KernelProvider): () => void',
+        description: 'Register a kernel backend. Throws KernelError `KERNEL_DUPLICATE_PROVIDER` if its id is already registered. Returns a disposer; disposed with the calling fiber.',
+        parameters: [{ name: 'provider', description: 'the backend; its `id` is the registry key.' }],
+        returns: 'the disposer that unregisters the backend.',
+      },
+      {
+        signature: 'async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>',
+        description: 'Execute one cell in the persistent namespace. Resolves the backend at call time with the selection rules above; throws KernelError when the capability itself cannot run. A cell that raises is a *result* carrying the traceback, never a throw — the model is expected to read it and fix the code.',
+        parameters: [{ name: 'request', description: 'the cell and its optional budget.' }, { name: 'signal', description: 'optional cancellation; an aborted cell restarts the kernel.' }],
+        returns: 'the captured output and how the cell ended.',
+      },
+      {
+        signature: 'async pollBackground(id: number): Promise<KernelBackgroundPoll>',
+        description: 'Poll one backgrounded cell through the resolved backend.\n\nA backend that cannot follow a detached cell reports it as unknown rather than throwing: the cell is gone from that backend\'s point of view, which is exactly what an unknown poll means, and a caller polling in a loop must not have to tell "finished" apart from "this backend never had it".',
+        parameters: [{ name: 'id', description: 'the id from {@link KernelExecuteResult.background}.' }],
+        returns: 'whether the cell is known, still running, and its drained output.',
+      },
+      {
+        signature: 'async stopBackground(id: number): Promise<void>',
+        description: 'Ask one backgrounded cell to stop through the resolved backend. A backend without the capability is a no-op: the cell will still end at its own deadline, so refusing here would only lose the request.',
+        parameters: [{ name: 'id', description: 'the id from {@link KernelExecuteResult.background}.' }],
+      },
+      {
+        signature: 'async restart(): Promise<void>',
+        description: 'Discard the namespace and start a fresh kernel.',
+        parameters: [],
+        returns: 'once the replacement kernel is ready.',
+      },
+      {
+        signature: 'async names(): Promise<readonly string[]>',
+        description: 'List the names currently bound in the namespace.',
+        parameters: [],
+        returns: 'the bound names, in the backend\'s order.',
+      },
+      {
+        signature: 'busy(): boolean',
+        description: 'Whether the resolved backend currently has a cell queued or running. Returns `false` when no backend is resolvable (no usable provider), which is the correct reading for a re-entrant guard: without a backend there is nothing to deadlock against.',
+        parameters: [],
+        returns: 'whether a cell is queued or running on the resolved backend.',
+      },
+    ],
+  },
+  {
     key: 'llm',
     summary: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
     description: 'The abstract `llm` service: an adapter registry plus a streaming model-call API, interceptable via the `llm/stream` waterfall.',
@@ -1631,6 +1778,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Create an independent byte-bounded Session-log channel. Authorization and redaction precede reporting; the consumer owns shutdown and its outer deadline.',
         parameters: [{ name: 'options', description: 'transport, scope, resource, queue, and diagnostic settings selected by the consumer.' }],
         returns: 'the caller-owned channel, preserving complete accepted events within the request byte ceiling.',
+      },
+    ],
+  },
+  {
+    key: 'peakSend',
+    summary: 'The `ctx.peakSend` service.',
+    description: 'The `ctx.peakSend` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.',
+    methods: [
+      {
+        signature: '@Remote async pending(sessionId: string): Promise<DeferredSend[]>',
+        description: 'The messages a Session holds for an off-peak send, earliest first.',
+        parameters: [{ name: 'sessionId', description: 'the Session.' }],
+        returns: 'its deferred messages.',
+      },
+      {
+        signature: '@Remote async defer(request: DeferRequest): Promise<DeferResult>',
+        description: 'Defer one message: on its own, after an earlier deferred message, or merged into it.',
+        parameters: [{ name: 'request', description: 'the Session, the text, the time, and the placement.' }],
+        returns: 'the task carrying the message and its send time.',
+        throws: ['RemoteError with `peakSend/defer-rejected` for an empty message, an unusable time, a missing earlier message, or a schedule refusal.'],
       },
     ],
   },
@@ -1888,6 +2055,53 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'profileHub',
+    summary: 'The `ctx.profileHub` service.',
+    description: 'The `ctx.profileHub` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.',
+    methods: [
+      {
+        signature: '@Remote listProfiles(): ProfileHubState',
+        description: 'Every profile this machine holds, with the facts the landing page renders.',
+        parameters: [],
+        returns: 'the harness home, the running profile, the launcher profile, and one row per profile.',
+      },
+      {
+        signature: '@Remote createProfile(request: CreateProfileRequest): ProfileHubState',
+        description: 'Create one self-contained profile from the running profile\'s own stack.',
+        parameters: [{ name: 'request', description: 'the name, optional title and working directory, and whether to copy the running layer.' }],
+        returns: 'the machine\'s state after the profile exists.',
+        throws: ['RemoteError with `profileHub/rejected` when the name is invalid, taken, or reserved.'],
+      },
+      {
+        signature: '@Remote removeProfile(name: string): ProfileHubState',
+        description: 'Remove one profile and everything it owns, including its chats and logins.',
+        parameters: [{ name: 'name', description: 'the profile to remove.' }],
+        returns: 'the machine\'s state after the removal.',
+        throws: ['RemoteError with `profileHub/rejected` when the profile is reserved, running, or this one.'],
+      },
+      {
+        signature: '@Remote setLauncherProfile(name: string): ProfileHubState',
+        description: 'Choose which profile opens the landing page at startup.',
+        parameters: [{ name: 'name', description: 'the profile whose startup should land on this page.' }],
+        returns: 'the machine\'s state after the choice.',
+        throws: ['RemoteError with `profileHub/rejected` when no such profile exists.'],
+      },
+      {
+        signature: '@Remote async openProfile(name: string, target: OpenProfileTarget): Promise<OpenProfileResult>',
+        description: 'Start a profile as its own host process and answer the URL to enter it at.\n\nA host serves exactly one profile, so entering another one starts a second process rather than reconfiguring this one; a profile this hub already started answers with the same URL instead of a second host.',
+        parameters: [{ name: 'name', description: 'the profile to enter.' }, { name: 'target', description: 'open a second Desktop window, or start a Web Host and answer its URL.' }],
+        returns: 'which surface opened, and the URL when a Web Host did.',
+        throws: ['RemoteError with `profileHub/rejected` when the profile cannot be opened.'],
+      },
+      {
+        signature: '@Remote stopProfile(name: string): ProfileHubState',
+        description: 'Stop a profile this hub started.',
+        parameters: [{ name: 'name', description: 'the profile whose host should stop.' }],
+        returns: 'the machine\'s state after the stop.',
+      },
+    ],
+  },
+  {
     key: 'ptcRuntime',
     summary: 'Registers one `ctx.ptcRuntime` implementation.',
     description: 'Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.',
@@ -2019,6 +2233,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Create a reminder bound to the caller-selected Session without activating it.\n\nThe request must supply a title; a missing, blank-after-trim, or over-long title rejects with `invalid_prompt` instead of deriving one from the prompt. A Session a delegated child owns rejects with `subagent_session`, because delivery can never reach it: the child is one whose delegation depth is above zero. The record is built from the clock reading taken before the request joins the serialized queue, so a create that waits behind a longer operation keeps its request-time anchor and may already be due when the queue reaches it.',
         parameters: [{ name: 'sessionId', description: 'Original Session receiving the reminder.' }, { name: 'request', description: 'Validated tool selector, required title, and reminder content.' }, { name: 'signal', description: 'Optional cancellation checked before persistence begins, including after FIFO waits.' }],
         returns: 'The durably stored schedule. Cancellation does not roll back an in-flight write.',
+      },
+      {
+        signature: '@Remote(\'create\') async createTask(request: ScheduleCreateTaskRequest, signal?: AbortSignal): Promise<ScheduleCreateTaskResult>',
+        description: 'Create a task from a client surface under an explicit Session binding.\n\nThe binding travels inside the request rather than as its own argument, so the Web carrier serializes one object, and the selectors are validated by create exactly as the model\'s tool call validates them. A refused rule is returned rather than thrown, mirroring `update`, so the browser can name the field to correct.',
+        parameters: [{ name: 'request', description: 'Original Session binding, required name, and reminder selector.' }, { name: 'signal', description: 'Optional cancellation checked before persistence begins, including after FIFO waits.' }],
+        returns: 'The durably stored schedule, or the input code that refused it.',
       },
       {
         signature: '@Remote(\'list\') async list(request: ScheduleListRequest): Promise<ScheduleRecord[]>',
@@ -2803,6 +3023,46 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Load and validate the winning candidate, passing its opaque discovery locator back to the provider. Cancellation is rechecked after selection, including cache hits, and raced against loading so an uncooperative provider cannot hang the caller.',
         parameters: [{ name: 'name', description: 'kebab-case skill name.' }, { name: 'options', description: 'view options; `scope` selects the viewing agent\'s layers, `cwd` selects workspace-sensitive skills, and `signal` cancels work.' }],
         returns: 'the full skill, including body content, or `undefined`.',
+      },
+    ],
+  },
+  {
+    key: 'skillsStudio',
+    summary: 'The `ctx.skillsStudio` service; the name is the literal the Typert analyzer binds.',
+    description: 'The `ctx.skillsStudio` service; the name is the literal the Typert analyzer binds.',
+    methods: [
+      {
+        signature: '@Remote async listSkills(projects: string[]): Promise<SkillsCatalog>',
+        description: 'Every skill in the loader\'s roots, for the given workspace folders.',
+        parameters: [{ name: 'projects', description: 'absolute workspace folders whose project skills to include.' }],
+        returns: 'the roots and the skills found in them.',
+      },
+      {
+        signature: '@Remote async readSkill(file: string): Promise<SkillDocument>',
+        description: 'Open one skill for editing.',
+        parameters: [{ name: 'file', description: 'its `SKILL.md`.' }],
+        returns: 'the parsed fields and body.',
+        throws: ['RemoteError `skillsStudio/rejected` for a path outside the roots or an unreadable file.'],
+      },
+      {
+        signature: '@Remote async saveSkill(request: SkillSaveRequest): Promise<SkillSaved>',
+        description: 'Create a skill, or change one, renaming its folder when its name changes.',
+        parameters: [{ name: 'request', description: 'the root, the current file when updating, and the fields.' }],
+        returns: 'the skill\'s file after the save.',
+        throws: ['RemoteError `skillsStudio/rejected` for invalid fields, a read-only or unknown root, or a name already taken.'],
+      },
+      {
+        signature: '@Remote async trashSkill(file: string): Promise<SkillRemoved>',
+        description: 'Move a skill\'s folder to `~/.dsh/skills-trash`.',
+        parameters: [{ name: 'file', description: 'its `SKILL.md`.' }],
+        returns: 'where the folder went.',
+        throws: ['RemoteError `skillsStudio/rejected` for a read-only or unknown skill.'],
+      },
+      {
+        signature: '@Remote async startBuilder(): Promise<SkillBuilderStart>',
+        description: 'Install or refresh the `skill-builder` skill, and say where a Skill Builder session works. A copy the user changed (one without this package\'s owner marker, or with a newer version) is kept.',
+        parameters: [],
+        returns: 'the session folder and its first draft.',
       },
     ],
   },
@@ -4658,6 +4918,18 @@ export const EVENT_API: readonly EventApiEntry[] = [
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
 export const TYPE_API: readonly TypeApiEntry[] = [
   {
+    name: 'AccountAdder',
+    declaration: 'export type AccountAdder = (account: AccountDraft) => Promise<AccountAddResult>;',
+  },
+  {
+    name: 'AccountAddResult',
+    declaration: 'export interface AccountAddResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly route?: string;\n    readonly message?: string;\n}',
+  },
+  {
+    name: 'AccountAdmin',
+    declaration: 'export interface AccountAdmin {\n    list: () => Promise<readonly AccountInfo[]>;\n    relogin: (account: string) => Promise<AccountOpResult>;\n    reprofile: (account: string) => Promise<AccountOpResult>;\n    remove: (account: string, slug: string, purge: boolean) => Promise<AccountOpResult>;\n    log: (since: number) => Promise<readonly AccountLogEntry[]>;\n}',
+  },
+  {
     name: 'AccountBonusBatch',
     declaration: 'export interface AccountBonusBatch {\n    readonly accountId: AccountUserId;\n    readonly bonuses: readonly AccountBonusNotification[];\n}',
   },
@@ -4678,8 +4950,28 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AccountDetails {\n    readonly profile: {\n        readonly status: \'ready\';\n        readonly value: AccountProfile;\n    } | {\n        readonly status: \'failed\';\n    };\n    readonly balance: {\n        readonly status: \'ready\';\n        readonly value: readonly AccountWallet[];\n        readonly bonusWallets: readonly AccountWallet[];\n    } | {\n        readonly status: \'failed\';\n    };\n}',
   },
   {
+    name: 'AccountDraft',
+    declaration: 'export interface AccountDraft {\n    readonly email?: string;\n    readonly mobile?: string;\n    readonly area_code?: string;\n    readonly password: string;\n}',
+  },
+  {
+    name: 'AccountField',
+    declaration: 'export interface AccountField {\n    readonly label: string;\n    readonly value: string;\n}',
+  },
+  {
+    name: 'AccountInfo',
+    declaration: 'export interface AccountInfo {\n    readonly id: string;\n    readonly slug: string;\n    readonly provider: string;\n    readonly label: string;\n    readonly configured: boolean;\n    readonly fields: readonly AccountField[];\n}',
+  },
+  {
     name: 'AccountLinks',
     declaration: 'export interface AccountLinks {\n    readonly usageUrl: string;\n    readonly topUpUrl: string;\n}',
+  },
+  {
+    name: 'AccountLogEntry',
+    declaration: 'export interface AccountLogEntry {\n    readonly seq: number;\n    readonly at: number;\n    readonly account: string;\n    readonly event: string;\n    readonly level: string;\n    readonly detail: string;\n}',
+  },
+  {
+    name: 'AccountOpResult',
+    declaration: 'export interface AccountOpResult {\n    readonly ok: boolean;\n    readonly account?: string;\n    readonly message?: string;\n}',
   },
   {
     name: 'AccountProfile',
@@ -4712,6 +5004,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Agent',
     declaration: 'export interface Agent {\n    readonly id: SessionId;\n}',
+  },
+  {
+    name: 'AgentBrowserCall',
+    declaration: 'export type AgentBrowserCall = Omit<AgentBrowserRequest, \'id\'>;',
+  },
+  {
+    name: 'AgentBrowserOp',
+    declaration: 'export type AgentBrowserOp = \'hello\' | \'navigate\' | \'evaluate\' | \'click\' | \'insertText\' | \'key\' | \'back\' | \'forward\' | \'settle\' | \'screenshot\' | \'close\';',
+  },
+  {
+    name: 'AgentBrowserReply',
+    declaration: 'export interface AgentBrowserReply {\n    readonly id: string;\n    readonly ok: boolean;\n    readonly error?: string;\n    readonly fresh?: boolean;\n    readonly url?: string;\n    readonly title?: string;\n    readonly value?: string;\n    readonly png?: string;\n    readonly width?: number;\n    readonly height?: number;\n}',
+  },
+  {
+    name: 'AgentBrowserRequest',
+    declaration: 'export interface AgentBrowserRequest {\n    readonly id: string;\n    readonly op: AgentBrowserOp;\n    readonly pageId: string;\n    readonly displaySessionId: string;\n    readonly viewportWidth: number;\n    readonly viewportHeight: number;\n    readonly timeoutMs: number;\n    readonly url?: string;\n    readonly script?: string;\n    readonly text?: string;\n    readonly key?: string;\n    readonly x?: number;\n    readonly y?: number;\n}',
   },
   {
     name: 'AgentCancelCause',
@@ -5262,6 +5570,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CreateGoalResult {\n    readonly ref: GoalRef;\n}',
   },
   {
+    name: 'CreateProfileRequest',
+    declaration: 'export interface CreateProfileRequest {\n    readonly name: string;\n    readonly title?: string;\n    readonly workdir?: string;\n    readonly clone?: boolean;\n}',
+  },
+  {
     name: 'CreateSessionOptions',
     declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
   },
@@ -5328,6 +5640,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DeepSeekLlmApiJson',
     declaration: 'export type DeepSeekLlmApiJson = null | boolean | number | string | DeepSeekLlmApiJson[] | {\n    [key: string]: DeepSeekLlmApiJson;\n};',
+  },
+  {
+    name: 'DeferPlacement',
+    declaration: 'export type DeferPlacement = \'alone\' | \'after\' | \'together\';',
+  },
+  {
+    name: 'DeferredSend',
+    declaration: 'export interface DeferredSend {\n    readonly id: string;\n    readonly at: string;\n    readonly text: string;\n}',
+  },
+  {
+    name: 'DeferRequest',
+    declaration: 'export interface DeferRequest {\n    readonly sessionId: string;\n    readonly text: string;\n    readonly at: string;\n    readonly placement: DeferPlacement;\n    readonly earlierId?: string;\n}',
+  },
+  {
+    name: 'DeferResult',
+    declaration: 'export interface DeferResult {\n    readonly id: string;\n    readonly at: string;\n}',
   },
   {
     name: 'DeliveryRetentionBounds',
@@ -5666,10 +5994,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ImageBlock {\n    type: \'image\';\n    attachment: ImageAttachmentRef;\n    offloaded?: true;\n}',
   },
   {
-    name: 'ImageMediaType',
-    declaration: 'export type ImageMediaType = \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'image/gif\';',
-  },
-  {
     name: 'ImageRequestTarget',
     declaration: 'export interface ImageRequestTarget {\n    width: number;\n    height: number;\n    maxBytes: number;\n}',
   },
@@ -5880,6 +6204,34 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'JsonValue',
     declaration: 'export type JsonValue = null | boolean | number | string | JsonValue[] | {\n    [key: string]: JsonValue;\n};',
+  },
+  {
+    name: 'KernelAgent',
+    declaration: 'export interface KernelAgent {\n    readonly id: string;\n    readonly session: {\n        readonly id: string;\n    };\n}',
+  },
+  {
+    name: 'KernelBackground',
+    declaration: 'export interface KernelBackground {\n    readonly id: number;\n    readonly timeoutMs: number;\n}',
+  },
+  {
+    name: 'KernelBackgroundPoll',
+    declaration: 'export interface KernelBackgroundPoll {\n    readonly known: boolean;\n    readonly running?: boolean;\n    readonly status?: string;\n    readonly text?: string;\n}',
+  },
+  {
+    name: 'KernelExecuteRequest',
+    declaration: 'export interface KernelExecuteRequest {\n    readonly code: string;\n    readonly timeoutMs?: number;\n    readonly backgroundTimeoutMs?: number;\n    readonly cwd?: string;\n    readonly agentCtx?: Context;\n    readonly agent?: KernelAgent;\n}',
+  },
+  {
+    name: 'KernelExecuteResult',
+    declaration: 'export interface KernelExecuteResult {\n    readonly output: string;\n    readonly outcome: KernelOutcome;\n    readonly restarted: boolean;\n    readonly images?: readonly KernelCellImage[];\n    readonly background?: KernelBackground;\n}',
+  },
+  {
+    name: 'KernelOutcome',
+    declaration: 'export type KernelOutcome = \'ok\' | \'timeout\' | \'cancelled\' | \'crashed\';',
+  },
+  {
+    name: 'KernelProvider',
+    declaration: 'export interface KernelProvider {\n    readonly id: string;\n    available(): boolean;\n    execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult>;\n    restart(): Promise<void>;\n    names(): Promise<readonly string[]>;\n    busy?(): boolean;\n    pollBackground?(id: number): Promise<KernelBackgroundPoll>;\n    stopBackground?(id: number): Promise<void>;\n}',
   },
   {
     name: 'KvFacet',
@@ -6326,6 +6678,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type OneShotScheduleRecord = AfterScheduleRecord | AtScheduleRecord;',
   },
   {
+    name: 'OpenProfileResult',
+    declaration: 'export interface OpenProfileResult {\n    readonly opened: OpenProfileTarget;\n    readonly url?: string;\n}',
+  },
+  {
+    name: 'OpenProfileTarget',
+    declaration: 'export type OpenProfileTarget = \'app\' | \'browser\';',
+  },
+  {
     name: 'OptionalSessionSeq',
     declaration: 'export type OptionalSessionSeq = SessionSeq | null;',
   },
@@ -6514,12 +6874,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ProductTelemetryRecord = OTelEventRecord;',
   },
   {
+    name: 'ProfileHubState',
+    declaration: 'export interface ProfileHubState {\n    readonly home: string;\n    readonly profilesDir: string;\n    readonly current: string;\n    readonly launcher: string;\n    readonly landing: boolean;\n    readonly canLaunch: boolean;\n    readonly canOpenDesktop: boolean;\n    readonly profiles: readonly ProfileSummary[];\n}',
+  },
+  {
     name: 'ProfilePnpmInvocation',
     declaration: 'export interface ProfilePnpmInvocation {\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: Readonly<Record<string, string>>;\n}',
   },
   {
     name: 'ProfileReconciliation',
     declaration: 'export interface ProfileReconciliation {\n    warnings: string[];\n    pending: PendingModule[];\n    restartReason?: \'module-comparison\' | \'package-moved\';\n}',
+  },
+  {
+    name: 'ProfileSummary',
+    declaration: 'export interface ProfileSummary {\n    readonly name: string;\n    readonly title: string;\n    readonly workdir?: string;\n    readonly bundles: readonly string[];\n    readonly isolated: boolean;\n    readonly chats?: number;\n    readonly locked: boolean;\n    readonly current: boolean;\n    readonly launcher: boolean;\n    readonly running: boolean;\n    readonly url?: string;\n}',
   },
   {
     name: 'ProjectionChangeListener',
@@ -6876,6 +7244,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ScheduleCreateRequest',
     declaration: 'export interface ScheduleCreateRequest {\n    prompt: string;\n    title: string;\n    after_seconds?: number;\n    at?: AtInput;\n    every_seconds?: number;\n    daily?: DailyInput;\n    weekly?: WeeklyInput;\n    cron?: CronInput;\n}',
+  },
+  {
+    name: 'ScheduleCreateTaskErrorCode',
+    declaration: 'export type ScheduleCreateTaskErrorCode = \'invalid_prompt\' | \'invalid_selector\' | \'invalid_rule\' | \'invalid_time_zone\' | \'not_future\' | \'time_out_of_range\' | \'frequency_too_high\';',
+  },
+  {
+    name: 'ScheduleCreateTaskRequest',
+    declaration: 'export type ScheduleCreateTaskRequest = ScheduleListRequest & ScheduleCreateRequest;',
+  },
+  {
+    name: 'ScheduleCreateTaskResult',
+    declaration: 'export type ScheduleCreateTaskResult = {\n    readonly created: true;\n    readonly record: ScheduleRecord;\n} | {\n    readonly created: false;\n    readonly code: ScheduleCreateTaskErrorCode;\n};',
   },
   {
     name: 'ScheduleDeleteRequest',
@@ -7638,6 +8018,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SignInErrorCode = \'no-response\' | \'network\' | \'protocol\' | \'expired\' | \'storage\';',
   },
   {
+    name: 'SkillBuilderStart',
+    declaration: 'export interface SkillBuilderStart {\n    readonly cwd: string;\n    readonly draft: string;\n}',
+  },
+  {
     name: 'SkillCandidate',
     declaration: 'export interface SkillCandidate extends SkillSummary {\n    readonly rank: number;\n    readonly locator: unknown;\n    readonly metadata?: Readonly<Record<string, unknown>>;\n}',
   },
@@ -7650,8 +8034,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SkillDefinition extends SkillSummary {\n    readonly content: string;\n    readonly metadata?: Readonly<Record<string, unknown>>;\n}',
   },
   {
-    name: 'SkillEntry',
-    declaration: 'export interface SkillEntry {\n    readonly path?: string;\n    readonly name: string;\n    readonly description: string;\n    readonly whenToUse?: string;\n    readonly modelInvocable: boolean;\n}',
+    name: 'SkillDocument',
+    declaration: 'export interface SkillDocument {\n    readonly file: string;\n    readonly root: string;\n    readonly writable: boolean;\n    readonly name: string;\n    readonly description: string;\n    readonly whenToUse: string;\n    readonly userInvocable: boolean;\n    readonly modelInvocable: boolean;\n    readonly body: string;\n    readonly problem?: string;\n}',
   },
   {
     name: 'SkillInvocationPolicy',
@@ -7686,8 +8070,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SkillRegistration = Omit<SkillDefinition, \'invocation\' | \'provider\'> & {\n    readonly invocation?: SkillInvocationPolicy;\n    readonly provider?: string;\n};',
   },
   {
+    name: 'SkillRemoved',
+    declaration: 'export interface SkillRemoved {\n    readonly trashedTo: string;\n}',
+  },
+  {
     name: 'SkillResourceBase',
     declaration: 'export type SkillResourceBase = {\n    readonly kind: \'directory\';\n    readonly path: string;\n} | {\n    readonly kind: \'url\';\n    readonly url: string;\n} | {\n    readonly kind: \'opaque\';\n    readonly description: string;\n};',
+  },
+  {
+    name: 'SkillRootSource',
+    declaration: 'export type SkillRootSource = \'project-dsh\' | \'project-agents\' | \'user-dsh\' | \'user-agents\' | \'bundled\';',
+  },
+  {
+    name: 'SkillRootView',
+    declaration: 'export interface SkillRootView {\n    readonly path: string;\n    readonly source: SkillRootSource;\n    readonly writable: boolean;\n    readonly project?: string;\n}',
+  },
+  {
+    name: 'SkillSaved',
+    declaration: 'export interface SkillSaved {\n    readonly file: string;\n}',
+  },
+  {
+    name: 'SkillSaveRequest',
+    declaration: 'export interface SkillSaveRequest {\n    readonly root: string;\n    readonly file?: string;\n    readonly name: string;\n    readonly description: string;\n    readonly whenToUse: string;\n    readonly userInvocable: boolean;\n    readonly modelInvocable: boolean;\n    readonly body: string;\n}',
+  },
+  {
+    name: 'SkillsCatalog',
+    declaration: 'export interface SkillsCatalog {\n    readonly roots: readonly SkillRootView[];\n    readonly skills: readonly SkillEntry[];\n}',
   },
   {
     name: 'SkillSource',

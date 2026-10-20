@@ -327,6 +327,54 @@ async get(name: string, options: SkillViewOptions = {}): Promise<SkillDefinition
 
 Source: [`packages/skill/skill/src/index.ts`](../../packages/skill/skill/src/index.ts)
 
+<a id="ctxskillsstudio--skillsstudio"></a>
+
+### `ctx.skillsStudio` — `SkillsStudio`
+
+The `ctx.skillsStudio` service; the name is the literal the Typert analyzer binds.
+
+```ts cordis-catalog
+/**
+ * Every skill in the loader's roots, for the given workspace folders.
+ * @param projects - absolute workspace folders whose project skills to include.
+ * @returns the roots and the skills found in them.
+ */
+@Remote async listSkills(projects: string[]): Promise<SkillsCatalog>
+
+/**
+ * Open one skill for editing.
+ * @param file - its `SKILL.md`.
+ * @returns the parsed fields and body.
+ * @throws RemoteError `skillsStudio/rejected` for a path outside the roots or an unreadable file.
+ */
+@Remote async readSkill(file: string): Promise<SkillDocument>
+
+/**
+ * Create a skill, or change one, renaming its folder when its name changes.
+ * @param request - the root, the current file when updating, and the fields.
+ * @returns the skill's file after the save.
+ * @throws RemoteError `skillsStudio/rejected` for invalid fields, a read-only or unknown root, or a name already taken.
+ */
+@Remote async saveSkill(request: SkillSaveRequest): Promise<SkillSaved>
+
+/**
+ * Move a skill's folder to `~/.dsh/skills-trash`.
+ * @param file - its `SKILL.md`.
+ * @returns where the folder went.
+ * @throws RemoteError `skillsStudio/rejected` for a read-only or unknown skill.
+ */
+@Remote async trashSkill(file: string): Promise<SkillRemoved>
+
+/**
+ * Install or refresh the `skill-builder` skill, and say where a Skill Builder session works.
+ * A copy the user changed (one without this package's owner marker, or with a newer version) is kept.
+ * @returns the session folder and its first draft.
+ */
+@Remote async startBuilder(): Promise<SkillBuilderStart>
+```
+
+Source: [`packages/skill/skills-studio/src/index.ts`](../../packages/skill/skills-studio/src/index.ts)
+
 <a id="skills-events"></a>
 
 ### `skills/*` events

@@ -625,10 +625,10 @@ index 3736aa5c5e..c436816ae8 100644
  
    it('resolves the latest routed provider/model before the AgentOptions pair', async () => {
 diff --git a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
-index b6c8ff7f86..03950fcf7f 100644
+index 8d762591eb..95c0135a56 100644
 --- a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
 +++ b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
-@@ -100,12 +100,10 @@ class OverflowRecoveryAdapter extends LlmAdapter {
+@@ -96,12 +96,10 @@ class OverflowRecoveryAdapter extends LlmAdapter {
    }
  
    override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -646,7 +646,7 @@ index b6c8ff7f86..03950fcf7f 100644
        yield { type: 'block-start', index: 0, blockType: 'text' }
        yield { type: 'block-end', index: 0, block: { type: 'text', text: 'RECOVERY CHECKPOINT' } }
 diff --git a/packages/compaction/compaction/src/index.ts b/packages/compaction/compaction/src/index.ts
-index 3efe4e87eb..412d3eaa0b 100644
+index c6dee6fbae..fb1e8efefa 100644
 --- a/packages/compaction/compaction/src/index.ts
 +++ b/packages/compaction/compaction/src/index.ts
 @@ -153,6 +153,10 @@ export abstract class CompactionEngine extends Service {

@@ -9,7 +9,7 @@
     {
       "name": "job-kind-augmentation",
       "paths": [
-        "packages/terminal/tool-terminal/",
+        "packages/experimental/tool-terminal/",
         "packages/shell/tool-pwsh/",
         "packages/workflow/tool-workflow/"
       ]
@@ -127,7 +127,7 @@
     },
     {
       "path": "tsconfig.base.json",
-      "regenerate": "pnpm run gen-tsconfig-paths"
+      "regenerate": "node efai/regen-tsconfig-paths.mjs"
     },
     {
       "path": "docs/config-catalog.md",
@@ -220,6 +220,22 @@
     {
       "path": "docs/capability-seams.i18n.yaml",
       "regenerate": "pnpm run verify-translation-pairing --write docs/capability-seams.md"
+    },
+    {
+      "path": "docs/subsystems/schedule.md",
+      "regenerate": "pnpm run gen-cordis-catalog"
+    },
+    {
+      "path": "docs/subsystems/schedule.zh.md",
+      "regenerate": "pnpm run gen-cordis-catalog"
+    },
+    {
+      "path": "docs/subsystems/skills.md",
+      "regenerate": "pnpm run gen-cordis-catalog"
+    },
+    {
+      "path": "docs/subsystems/skills.zh.md",
+      "regenerate": "pnpm run gen-cordis-catalog"
     }
   ],
   "tier1Prefixes": [

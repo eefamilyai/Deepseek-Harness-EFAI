@@ -63,9 +63,22 @@ flowchart LR
   svc_fileUploads["ctx.fileUploads<br/>Agent-scoped staged file uploads"]
   pkg_llm["llm"]
   svc_llm["ctx.llm<br/>LLM adapter registry"]
+  pkg_llm_kiln["llm-kiln"]
   pkg_llm_replay["llm-replay"]
   pkg_agent_loop["agent-loop"]
   pkg_compaction_basic["compaction-basic"]
+  pkg_ai_accounts["ai-accounts"]
+  svc_aiAccounts["ctx.aiAccounts<br/>Account-pool registry"]
+  pkg_client_ui_settings_accounts["client-ui-settings-accounts"]
+  pkg_profile_hub["profile-hub"]
+  svc_profileHub["ctx.profileHub<br/>Profile registry and launcher"]
+  pkg_web_browser_sidebar["web-browser-sidebar"]
+  svc_agentBrowser["ctx.agentBrowser<br/>Sidebar browser bridge"]
+  pkg_web_browser["web-browser"]
+  pkg_kernel["kernel"]
+  svc_kernel["ctx.kernel<br/>Persistent code-execution kernel"]
+  pkg_kernel_python["kernel-python"]
+  pkg_tool_kernel["tool-kernel"]
   pkg_deepseek_llm_api_extensions["deepseek-llm-api-extensions"]
   svc_deepseekLlmApiExtensions["ctx.deepseekLlmApiExtensions<br/>Official DeepSeek request extensions"]
   pkg_session_log_deepseek["session-log-deepseek"]
@@ -194,6 +207,11 @@ flowchart LR
   pkg_sdk_minimal["sdk-minimal"]
   pkg_schedule["schedule"]
   svc_schedule["ctx.schedule<br/>Host scheduled messages"]
+  pkg_peak_send["peak-send"]
+  svc_peakSend["ctx.peakSend<br/>Deferred DeepSeek sends"]
+  pkg_client_ui_peak_hours["client-ui-peak-hours"]
+  pkg_skills_studio["skills-studio"]
+  svc_skillsStudio["ctx.skillsStudio<br/>Skills editor and builder"]
   pkg_goal["goal"]
   svc_goals["ctx.goals<br/>Same-session goal domain"]
   pkg_ssh["ssh"]
@@ -298,6 +316,7 @@ flowchart LR
   pkg_agent_default_model --> svc_agentDefaultModel
   pkg_agent_loop --> svc_agentLoop
   pkg_agent_preset_registry --> svc_agentPresets
+  pkg_ai_accounts --> svc_aiAccounts
   pkg_api_gateway --> svc_typertGateway
   pkg_api_job_controller --> svc_jobController
   pkg_api_remote_access --> svc_remoteAccess
@@ -366,8 +385,12 @@ flowchart LR
   pkg_inspector --> svc_inspector
   pkg_jobs --> svc_jobs
   pkg_jobs_local --> svc_jobs
+  pkg_kernel --> svc_kernel
+  pkg_kernel_python --> svc_kernel
   pkg_llm --> svc_llm
   pkg_llm_deepseek --> svc_llm
+  pkg_llm_kiln --> svc_aiAccounts
+  pkg_llm_kiln --> svc_llm
   pkg_llm_pi_ai --> svc_llm
   pkg_llm_replay --> svc_llm
   pkg_lsp --> svc_lsp
@@ -377,11 +400,13 @@ flowchart LR
   pkg_message_feedback --> svc_messageFeedback
   pkg_office_to_pdf --> svc_officeToPdf
   pkg_otel --> svc_otel
+  pkg_peak_send --> svc_peakSend
   pkg_permission_presets --> svc_permissionPresets
   pkg_plan_mode --> svc_planMode
   pkg_plugin_manager --> svc_pluginManager
   pkg_plugin_market --> svc_pluginMarket
   pkg_plugin_package_inventory_deepseek --> svc_deepseekLlmApiExtensions
+  pkg_profile_hub --> svc_profileHub
   pkg_ptc_runtime --> svc_ptcRuntime
   pkg_ptc_runtime_node --> svc_ptcRuntime
   pkg_pwsh_local --> svc_shell
@@ -412,6 +437,7 @@ flowchart LR
   pkg_skill_badge --> svc_skills
   pkg_skill_filesystem --> svc_skills
   pkg_skill_office --> svc_skills
+  pkg_skills_studio --> svc_skillsStudio
   pkg_spill --> svc_spillStore
   pkg_spill_local --> svc_spillStore
   pkg_ssh --> svc_ssh
@@ -440,6 +466,7 @@ flowchart LR
   pkg_user_questions --> svc_userQuestions
   pkg_web --> svc_web
   pkg_web_app --> svc_webApp
+  pkg_web_browser_sidebar --> svc_agentBrowser
   pkg_web_deepseek_api --> svc_web
   pkg_web_fetch_http --> svc_web
   pkg_web_search_deepseek --> svc_web
@@ -451,6 +478,8 @@ flowchart LR
   pkg_working_directory --> svc_workingDirectory
   pkg_workspace --> svc_workspaceRegistry
   pkg_workspace_changes --> svc_workspaceChanges
+  svc_agentBrowser --> pkg_web_browser
+  svc_agentBrowser --> pkg_web_browser_sidebar
   svc_agentDefaultModel --> pkg_api_session_controller
   svc_agentDefaultModel --> pkg_headless
   svc_agentLoop --> pkg_base
@@ -459,6 +488,7 @@ flowchart LR
   svc_agents --> pkg_acp
   svc_agents --> pkg_agent_loop
   svc_agents --> pkg_subagent
+  svc_aiAccounts --> pkg_client_ui_settings_accounts
   svc_approval --> pkg_acp
   svc_approval --> pkg_tool_bash
   svc_approval --> pkg_tools
@@ -496,6 +526,7 @@ flowchart LR
   svc_jobs --> pkg_tool_jobs
   svc_jobs --> pkg_tool_pwsh
   svc_jobs --> pkg_tool_terminal
+  svc_kernel --> pkg_tool_kernel
   svc_llm --> pkg_agent_loop
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
@@ -503,12 +534,14 @@ flowchart LR
   svc_officeToPdf --> pkg_client_ui_sidebar_documentpreview
   svc_otel --> pkg_host_product_telemetry_otel
   svc_otel --> pkg_session_telemetry_otel
+  svc_peakSend --> pkg_client_ui_peak_hours
   svc_pluginManager --> pkg_plugin_manager
   svc_pluginManager --> pkg_ui_settings_plugin_inventory
   svc_pluginMarket --> pkg_client_ui_plugin_market
   svc_pluginMarket --> pkg_plugin_market
   svc_pluginRegistryProbe --> pkg_client_ui_plugin_manager
   svc_profileContext --> pkg_plugin_manager
+  svc_profileHub --> pkg_profile_hub
   svc_ptcRuntime --> pkg_tools
   svc_ptcRuntime --> pkg_workflow_ptc
   svc_remoteAccess --> pkg_api_gateway
@@ -627,7 +660,11 @@ flowchart LR
 | `ctx.officeToPdf` | `core` | [`office-to-pdf`](../packages/document/office-to-pdf) | - | [`client-ui-sidebar-documentpreview`](../packages/client/ui-sidebar-documentpreview) | - | Authorized Office bytes are converted on the Host using the declared native target engine, or Node WASM when no native target is declared. |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.fileUploads` | `core` | [`client-file-upload`](../packages/client/file-upload) | - | [`api-session-controller`](../packages/api/session-controller) | - | Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions. |
-| `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
+| `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-kiln`](../packages/llm/llm-kiln), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
+| `ctx.aiAccounts` | `seam` | [`ai-accounts`](../packages/llm/ai-accounts) | [`llm-kiln`](../packages/llm/llm-kiln) | [`client-ui-settings-accounts`](../packages/client/ui-settings-accounts) | - | A provider registers the handler that tests and adds a login plus the admin that lists and repairs one; the settings page reaches both through the service's own aiAccounts Remote namespace. |
+| `ctx.profileHub` | `seam` | [`profile-hub`](../packages/boot/profile-hub) | - | [`profile-hub`](../packages/boot/profile-hub) | - | The service lists every profile under the harness home, creates and removes self-contained ones, records which profile opens on startup, and launches a profile other than the running one as its own host process; the landing page reaches all of it through the service's own profileHub Remote namespace. |
+| `ctx.agentBrowser` | `seam` | [`web-browser-sidebar`](../packages/web/web-browser-sidebar) | - | [`web-browser`](../packages/web/web-browser), [`web-browser-sidebar`](../packages/web/web-browser-sidebar) | - | A Host caller's browser operation reaches the newest subscribed window's sidebar browser and resolves with that window's reply; the window subscribes and answers through the service's own agentBrowser Remote namespace. |
+| `ctx.kernel` | `seam` | [`kernel`](../packages/kernel/kernel) | [`kernel-python`](../packages/kernel/kernel-python) | [`tool-kernel`](../packages/kernel/tool-kernel) | - | A backend owns one namespace that survives across calls; the tool runs a cell in it and returns the captured output. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Rewrites oversized current tool results through replayable single-node surface replacements before summary compaction. |
@@ -680,6 +717,8 @@ flowchart LR
 | `ctx.agentDefaultModel` | `core` | [`agent-default-model`](../packages/core/agent-default-model) | - | [`api-session-controller`](../packages/api/session-controller), [`headless`](../packages/bundle/headless) | - | Reads the default ModelSelection from volatile Config and saves selections through the profile editor. |
 | `ctx.agentLoop` | `bundle` | [`agent-loop`](../packages/core/agent-loop) | - | [`base`](../packages/bundle/base), [`sdk-minimal`](../packages/bundle/sdk-minimal) | - | The one concrete loop plugin; extension packages depend on dsh-agent events and services, not on this package. |
 | `ctx.schedule` | `core` | [`schedule`](../packages/schedule/schedule) | - | - | - | Stores tasks independently of Session activation and queues due messages in the original Session. |
+| `ctx.peakSend` | `core` | [`peak-send`](../packages/schedule/peak-send) | - | [`client-ui-peak-hours`](../packages/client/ui-peak-hours) | - | Holds a DeepSeek API message until peak pricing ends by creating an Automation task, then queues or merges each deferred send per Session. |
+| `ctx.skillsStudio` | `core` | [`skills-studio`](../packages/skill/skills-studio) | - | - | - | Lists, writes, and removes skills in the folders the skill loader scans, with an embedded Skill Builder chat that drafts a skill in place. |
 | `ctx.goals` | `core` | [`goal`](../packages/goal/goal) | - | - | - | Folds revisioned objective state from the session log and keeps live continuation activation process-local. |
 | `ctx.ssh` | `core` | [`ssh`](../packages/ssh/ssh) | - | [`fs-ssh`](../packages/ssh/fs-ssh), [`subprocess-ssh`](../packages/ssh/subprocess-ssh), [`sandbox-ssh`](../packages/ssh/sandbox-ssh) | - | Owns one authenticated OpenSSH connection, installed helper identity, independent program streams and disconnect cleanup for the paired remote providers. |
 | `ctx.subprocess` | `seam` | [`subprocess`](../packages/subprocess/subprocess) | [`subprocess-local`](../packages/subprocess/subprocess-local), [`subprocess-ssh`](../packages/ssh/subprocess-ssh) | [`bash-local`](../packages/shell/bash-local), [`bash-sandbox`](../packages/shell/bash-sandbox), [`terminal-bash`](../packages/terminal/terminal-bash), [`lsp-stdio`](../packages/lsp/lsp-stdio), [`subagent-acp`](../packages/subagent/subagent-acp), [`subagent-codex`](../packages/subagent/subagent-codex), [`subagent-claude-code`](../packages/subagent/subagent-claude-code) | - | The bash executors, the PTY shell backend, the LSP host, and the out-of-process ACP, Codex, and Claude Code subagent backends spawn through ctx.subprocess; the service owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation. |

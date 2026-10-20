@@ -377,7 +377,8 @@ export function apply(ctx: Context, config: Config): void {
     }
     // The configured path belongs to whoever holds it while they serve: this host
     // publishes beside a live one instead of withdrawing a URL nothing can re-mint.
-    const target = heldByLiveHost(accessPath) ? portScopedPath(accessPath, ctx.webServer.port) : accessPath
+    const port = ctx.webServer.port
+    const target = port !== undefined && heldByLiveHost(accessPath) ? portScopedPath(accessPath, port) : accessPath
     mkdirSync(dirname(target), { recursive: true })
     writeFileSync(target, `${JSON.stringify(record, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
     published = true

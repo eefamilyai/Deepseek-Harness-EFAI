@@ -1,5 +1,5 @@
 diff --git a/packages/client/ui-settings/src/client/config-form.ts b/packages/client/ui-settings/src/client/config-form.ts
-index cf77536a97..7b614c6c4a 100644
+index 7e64f9f990..6021a13b0c 100644
 --- a/packages/client/ui-settings/src/client/config-form.ts
 +++ b/packages/client/ui-settings/src/client/config-form.ts
 @@ -25,10 +25,19 @@ import type {} from '@deepseek-ai/dsh-api-remotes/types'
@@ -35,7 +35,7 @@ index cf77536a97..7b614c6c4a 100644
  
    /**
     * @param ctx - the providing plugin's context, whose `remote.settings`
-@@ -196,7 +210,22 @@ export class ConfigFormController<T> implements ConfigForm<T> {
+@@ -191,7 +205,22 @@ export class ConfigFormController<T> implements ConfigForm<T> {
        })
        return
      }
@@ -59,7 +59,7 @@ index cf77536a97..7b614c6c4a 100644
      this.store.update((draft) => {
        draft.revision = view.revision
        draft.base = view.base
-@@ -215,7 +244,11 @@ export class ConfigFormController<T> implements ConfigForm<T> {
+@@ -210,7 +239,11 @@ export class ConfigFormController<T> implements ConfigForm<T> {
      if (typeof view.value !== 'object' || view.value === null || Array.isArray(view.value)) return undefined
      let failure: string | undefined
      try {

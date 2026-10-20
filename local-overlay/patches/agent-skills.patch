@@ -1,8 +1,8 @@
 diff --git a/.agents/skills/dsh-code-review/SKILL.md b/.agents/skills/dsh-code-review/SKILL.md
-index bc145e212a..28452a48ba 100644
+index 2dd48bda56..3523ffd5b2 100644
 --- a/.agents/skills/dsh-code-review/SKILL.md
 +++ b/.agents/skills/dsh-code-review/SKILL.md
-@@ -51,3 +51,25 @@ description: Use when reviewing a pull request in the deepseek-harness repo —
+@@ -59,3 +59,25 @@ description: Use when reviewing a pull request in the deepseek-harness repo —
  ## Reporting findings
  
  State the defect, location, impact, and evidence. Place a localized defect inline on the tightest relevant diff range; use a PR-level comment for cross-cutting architecture, scope, or review-wide synthesis. Separate blockers from suggestions and omit issues already enforced by a green gate. Use the existing GitHub review thread for replies. When receiving review, verify each claim and fix or rebut it on technical grounds without performative agreement.
@@ -29,7 +29,7 @@ index bc145e212a..28452a48ba 100644
 +`.merge-port/**` against upstream conventions. They are fork-owned; upstream has no
 +counterpart to compare them to.
 diff --git a/.agents/skills/dsh-pre-push-checks/SKILL.md b/.agents/skills/dsh-pre-push-checks/SKILL.md
-index 6567dde5dc..070c68e334 100644
+index 3d55a9dece..1281d67e04 100644
 --- a/.agents/skills/dsh-pre-push-checks/SKILL.md
 +++ b/.agents/skills/dsh-pre-push-checks/SKILL.md
 @@ -24,6 +24,24 @@ pnpm --silent run change-scope --base <verified-base-ref>

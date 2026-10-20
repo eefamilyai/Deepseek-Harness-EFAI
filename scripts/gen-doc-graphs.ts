@@ -693,6 +693,22 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
   },
+  // DSH-FORK(all): the fork's own services, beside the upstream domains they extend.
+  {
+    key: 'peakSend',
+    pkg: 'peak-send',
+    title: 'Deferred DeepSeek sends',
+    mode: 'core',
+    consumers: ['client-ui-peak-hours'],
+    note: 'Holds a DeepSeek API message until peak pricing ends by creating an Automation task, then queues or merges each deferred send per Session.',
+  },
+  {
+    key: 'skillsStudio',
+    pkg: 'skills-studio',
+    title: 'Skills editor and builder',
+    mode: 'core',
+    note: 'Lists, writes, and removes skills in the folders the skill loader scans, with an embedded Skill Builder chat that drafts a skill in place.',
+  },
   {
     key: 'goals',
     pkg: 'goal',

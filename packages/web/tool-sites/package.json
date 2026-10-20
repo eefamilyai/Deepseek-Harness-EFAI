@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-sites",
   "description": "The site tool: publish static web pages the agent builds (illustrations, slide decks, explainers, charts) at https://<name>.<zone> through GitHub Pages and deSEC DNS",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "restricted"
   },
@@ -31,10 +31,10 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^"
+    "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^"
+    "@deepseek-ai/dsh-tools": "workspace:*"
   }
 }

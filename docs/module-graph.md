@@ -28,21 +28,28 @@ flowchart TD
     pkg_util_workspace_path["util-workspace-path"]
   end
   subgraph group_llm["packages/llm"]
+    pkg_ai_accounts["ai-accounts"]
     pkg_deepseek_llm_api_extensions["deepseek-llm-api-extensions"]
     pkg_llm["llm"]
     pkg_llm_deepseek["llm-deepseek"]
     pkg_llm_deepseek_account["llm-deepseek-account"]
     pkg_llm_deepseek_api_key["llm-deepseek-api-key"]
+    pkg_llm_kiln["llm-kiln"]
+    pkg_llm_markdown_fidelity["llm-markdown-fidelity"]
     pkg_llm_pi_ai["llm-pi-ai"]
     pkg_llm_retry["llm-retry"]
+    pkg_llm_system_file["llm-system-file"]
+    pkg_llm_text_toolcalls["llm-text-toolcalls"]
     pkg_plugin_package_inventory_deepseek["plugin-package-inventory-deepseek"]
     pkg_token_meter["token-meter"]
+    pkg_token_usage_lifetime["token-usage-lifetime"]
   end
   subgraph group_core["packages/core"]
     pkg_agent["agent"]
     pkg_agent_default_model["agent-default-model"]
     pkg_agent_loop["agent-loop"]
     pkg_agent_tool_presentation["agent-tool-presentation"]
+    pkg_efai_identity["efai-identity"]
     pkg_scope["scope"]
     pkg_session["session"]
     pkg_system_prompt["system-prompt"]
@@ -61,12 +68,15 @@ flowchart TD
     pkg_fs_sandbox["fs-sandbox"]
     pkg_tool_fs["tool-fs"]
     pkg_tool_fs_search["tool-fs-search"]
+    pkg_tool_notebook_edit["tool-notebook-edit"]
     pkg_tool_str_replace_editor["tool-str-replace-editor"]
   end
   subgraph group_skill["packages/skill"]
     pkg_skill["skill"]
     pkg_skill_filesystem["skill-filesystem"]
+    pkg_skill_injection["skill-injection"]
     pkg_skill_office["skill-office"]
+    pkg_skills_studio["skills-studio"]
     pkg_tool_skill["tool-skill"]
     pkg_tool_workspace_dependencies["tool-workspace-dependencies"]
   end
@@ -82,8 +92,11 @@ flowchart TD
     pkg_tool_subagent_control["tool-subagent-control"]
   end
   subgraph group_web["packages/web"]
+    pkg_tool_sites["tool-sites"]
     pkg_tool_web["tool-web"]
     pkg_web["web"]
+    pkg_web_browser["web-browser"]
+    pkg_web_browser_sidebar["web-browser-sidebar"]
     pkg_web_deepseek_api["web-deepseek-api"]
     pkg_web_fetch_http["web-fetch-http"]
     pkg_web_search_deepseek["web-search-deepseek"]
@@ -109,6 +122,9 @@ flowchart TD
   subgraph group_acp["packages/acp"]
     pkg_acp["acp"]
   end
+  subgraph group_agent_memory["packages/agent-memory"]
+    pkg_agent_memory["agent-memory"]
+  end
   subgraph group_api["packages/api"]
     pkg_api_account_controller["api-account-controller"]
     pkg_api_gateway["api-gateway"]
@@ -132,6 +148,8 @@ flowchart TD
     pkg_hmr["hmr"]
     pkg_plugin_manager["plugin-manager"]
     pkg_plugin_market["plugin-market"]
+    pkg_profile_hub["profile-hub"]
+    pkg_profile_sync["profile-sync"]
   end
   subgraph group_browser_use["packages/browser-use"]
     pkg_browser_use["browser-use"]
@@ -139,6 +157,8 @@ flowchart TD
   subgraph group_bundle["packages/bundle"]
     pkg_acp_app["acp-app"]
     pkg_base["base"]
+    pkg_efai_base["efai-base"]
+    pkg_efai_web["efai-web"]
     pkg_headless["headless"]
     pkg_sdk_app["sdk-app"]
     pkg_sdk_minimal["sdk-minimal"]
@@ -157,6 +177,7 @@ flowchart TD
     pkg_client_ui_agent_preset["client-ui-agent-preset"]
     pkg_client_ui_approval["client-ui-approval"]
     pkg_client_ui_attachment["client-ui-attachment"]
+    pkg_client_ui_brand_efai["client-ui-brand-efai"]
     pkg_client_ui_brand_official["client-ui-brand-official"]
     pkg_client_ui_chat["client-ui-chat"]
     pkg_client_ui_commands["client-ui-commands"]
@@ -166,17 +187,23 @@ flowchart TD
     pkg_client_ui_directory_picker_browse["client-ui-directory-picker-browse"]
     pkg_client_ui_directory_picker_native["client-ui-directory-picker-native"]
     pkg_client_ui_dockkit["client-ui-dockkit"]
+    pkg_client_ui_effects["client-ui-effects"]
+    pkg_client_ui_flow_accents["client-ui-flow-accents"]
     pkg_client_ui_goal["client-ui-goal"]
     pkg_client_ui_input_trigger["client-ui-input-trigger"]
     pkg_client_ui_jobs["client-ui-jobs"]
     pkg_client_ui_layout["client-ui-layout"]
     pkg_client_ui_message_feedback["client-ui-message-feedback"]
     pkg_client_ui_model_selection["client-ui-model-selection"]
+    pkg_client_ui_model_visibility["client-ui-model-visibility"]
     pkg_client_ui_open_in_app["client-ui-open-in-app"]
+    pkg_client_ui_peak_hours["client-ui-peak-hours"]
     pkg_client_ui_permission_presets["client-ui-permission-presets"]
+    pkg_client_ui_personalization["client-ui-personalization"]
     pkg_client_ui_plan["client-ui-plan"]
     pkg_client_ui_plugin_manager["client-ui-plugin-manager"]
     pkg_client_ui_plugin_market["client-ui-plugin-market"]
+    pkg_client_ui_polish["client-ui-polish"]
     pkg_client_ui_primitives["client-ui-primitives"]
     pkg_client_ui_reference["client-ui-reference"]
     pkg_client_ui_renderer["client-ui-renderer"]
@@ -185,6 +212,7 @@ flowchart TD
     pkg_client_ui_session["client-ui-session"]
     pkg_client_ui_settings["client-ui-settings"]
     pkg_client_ui_settings_account["client-ui-settings-account"]
+    pkg_client_ui_settings_accounts["client-ui-settings-accounts"]
     pkg_client_ui_settings_agent_loop["client-ui-settings-agent-loop"]
     pkg_client_ui_settings_general["client-ui-settings-general"]
     pkg_client_ui_settings_models["client-ui-settings-models"]
@@ -193,6 +221,7 @@ flowchart TD
     pkg_client_ui_settings_session_log["client-ui-settings-session-log"]
     pkg_client_ui_settings_shell["client-ui-settings-shell"]
     pkg_client_ui_settings_subagent["client-ui-settings-subagent"]
+    pkg_client_ui_settings_tools["client-ui-settings-tools"]
     pkg_client_ui_settings_web_search["client-ui-settings-web-search"]
     pkg_client_ui_shortcuts["client-ui-shortcuts"]
     pkg_client_ui_sidebar["client-ui-sidebar"]
@@ -202,6 +231,7 @@ flowchart TD
     pkg_client_ui_sidebar_right["client-ui-sidebar-right"]
     pkg_client_ui_sidebar_terminal["client-ui-sidebar-terminal"]
     pkg_client_ui_skill["client-ui-skill"]
+    pkg_client_ui_skill_mention["client-ui-skill-mention"]
     pkg_client_ui_slots["client-ui-slots"]
     pkg_client_ui_subagent["client-ui-subagent"]
     pkg_client_ui_theme["client-ui-theme"]
@@ -218,6 +248,7 @@ flowchart TD
     pkg_compaction_basic["compaction-basic"]
     pkg_compaction_image_offload["compaction-image-offload"]
     pkg_compaction_tool_result_pruner["compaction-tool-result-pruner"]
+    pkg_output_masking["output-masking"]
   end
   subgraph group_computer_use["packages/computer-use"]
     pkg_computer_use["computer-use"]
@@ -241,6 +272,9 @@ flowchart TD
   subgraph group_deliverables["packages/deliverables"]
     pkg_tool_present["tool-present"]
     pkg_workspace_changes["workspace-changes"]
+  end
+  subgraph group_devtools["packages/devtools"]
+    pkg_harness_dev_tools["harness-dev-tools"]
   end
   subgraph group_document["packages/document"]
     pkg_office_to_pdf["office-to-pdf"]
@@ -317,6 +351,8 @@ flowchart TD
     pkg_host_open_in_app["host-open-in-app"]
     pkg_host_plugin_inventory["host-plugin-inventory"]
     pkg_host_product_telemetry_otel["host-product-telemetry-otel"]
+    pkg_host_version_route["host-version-route"]
+    pkg_host_web_access["host-web-access"]
     pkg_host_webserver["host-webserver"]
   end
   subgraph group_identity["packages/identity"]
@@ -333,6 +369,12 @@ flowchart TD
     pkg_jobs["jobs"]
     pkg_jobs_local["jobs-local"]
     pkg_tool_jobs["tool-jobs"]
+  end
+  subgraph group_kernel["packages/kernel"]
+    pkg_kernel["kernel"]
+    pkg_kernel_python["kernel-python"]
+    pkg_tool_kernel["tool-kernel"]
+    pkg_tool_roster["tool-roster"]
   end
   subgraph group_lsp["packages/lsp"]
     pkg_lsp["lsp"]
@@ -359,6 +401,7 @@ flowchart TD
     pkg_sandbox_windows_acl["sandbox-windows-acl"]
   end
   subgraph group_schedule["packages/schedule"]
+    pkg_peak_send["peak-send"]
     pkg_schedule["schedule"]
     pkg_tool_schedule["tool-schedule"]
   end
@@ -368,6 +411,7 @@ flowchart TD
     pkg_sdk_protocol["sdk-protocol"]
   end
   subgraph group_session["packages/session"]
+    pkg_command_session_info["command-session-info"]
     pkg_session_checkpoint_policy["session-checkpoint-policy"]
     pkg_session_format["session-format"]
     pkg_session_format_catalog["session-format-catalog"]
@@ -380,6 +424,7 @@ flowchart TD
     pkg_session_persistence_jsonl["session-persistence-jsonl"]
     pkg_session_projection["session-projection"]
     pkg_session_projection_cache["session-projection-cache"]
+    pkg_session_recovery_context["session-recovery-context"]
     pkg_session_stats["session-stats"]
     pkg_session_telemetry["session-telemetry"]
     pkg_session_telemetry_otel["session-telemetry-otel"]
@@ -453,6 +498,10 @@ flowchart TD
   subgraph group_workspace["packages/workspace"]
     pkg_workspace["workspace"]
   end
+  pkg_llm_system_file --> pkg_atomic_write
+  pkg_llm_system_file --> pkg_home_paths
+  pkg_llm_system_file --> pkg_llm
+  pkg_llm_text_toolcalls --> pkg_llm
   pkg_session --> pkg_scope
   pkg_system_prompt --> pkg_llm
   pkg_system_prompt --> pkg_scope
@@ -472,8 +521,10 @@ flowchart TD
   pkg_credentials_local --> pkg_credentials
   pkg_credentials_local --> pkg_home_paths
   pkg_credentials_local --> pkg_launch_environment
+  pkg_host_version_route --> pkg_host_webserver
   pkg_anonymous_user_id --> pkg_brand
   pkg_anonymous_user_id --> pkg_home_paths
+  pkg_kernel --> pkg_llm
   pkg_lsp --> pkg_brand
   pkg_lsp --> pkg_llm
   pkg_storage_domain --> pkg_storage
@@ -482,6 +533,7 @@ flowchart TD
   pkg_subprocess --> pkg_http_proxy
   pkg_remote_mock --> pkg_typert_protocol
   pkg_typert_loader --> pkg_typert_registry
+  pkg_efai_identity --> pkg_system_prompt
   pkg_skill_office --> pkg_skill
   pkg_web_fetch_http --> pkg_http_proxy
   pkg_web_fetch_http --> pkg_timeout
@@ -511,6 +563,7 @@ flowchart TD
   pkg_host_directory_picker_auto --> pkg_host_webserver
   pkg_host_frontend_static --> pkg_client_connection
   pkg_host_frontend_static --> pkg_host_webserver
+  pkg_kernel_python --> pkg_kernel
   pkg_persona --> pkg_system_prompt
   pkg_sandbox --> pkg_llm
   pkg_sandbox --> pkg_session
@@ -530,6 +583,11 @@ flowchart TD
   pkg_otel --> pkg_session
   pkg_session_snapshot --> pkg_http_proxy
   pkg_session_snapshot --> pkg_session
+  pkg_llm_kiln --> pkg_ai_accounts
+  pkg_llm_kiln --> pkg_attachment
+  pkg_llm_kiln --> pkg_llm
+  pkg_llm_kiln --> pkg_llm_text_toolcalls
+  pkg_llm_kiln --> pkg_settings
   pkg_fs --> pkg_brand
   pkg_fs --> pkg_llm
   pkg_fs --> pkg_sandbox
@@ -790,6 +848,8 @@ flowchart TD
   pkg_ptc_runtime_node --> pkg_session
   pkg_ptc_runtime_node --> pkg_subprocess
   pkg_ptc_runtime_node --> pkg_timeout
+  pkg_command_session_info --> pkg_commands
+  pkg_command_session_info --> pkg_session_projection
   pkg_session_title_llm --> pkg_llm
   pkg_session_title_llm --> pkg_session
   pkg_session_title_llm --> pkg_session_title
@@ -845,21 +905,37 @@ flowchart TD
   pkg_tool_fs_search --> pkg_timeout
   pkg_tool_fs_search --> pkg_tools
   pkg_tool_fs_search --> pkg_working_directory
+  pkg_tool_notebook_edit --> pkg_fs
+  pkg_tool_notebook_edit --> pkg_sandbox
+  pkg_tool_notebook_edit --> pkg_sandbox_policy
+  pkg_tool_notebook_edit --> pkg_tools
   pkg_tool_str_replace_editor --> pkg_fs
   pkg_tool_str_replace_editor --> pkg_output_retention
   pkg_tool_str_replace_editor --> pkg_sandbox
   pkg_tool_str_replace_editor --> pkg_sandbox_policy
   pkg_tool_str_replace_editor --> pkg_tools
+  pkg_skill_injection --> pkg_agent
+  pkg_skill_injection --> pkg_llm
+  pkg_skill_injection --> pkg_session
+  pkg_skill_injection --> pkg_session_projection
+  pkg_skill_injection --> pkg_skill
+  pkg_skill_injection --> pkg_tools
   pkg_tool_skill --> pkg_agent
   pkg_tool_skill --> pkg_llm
   pkg_tool_skill --> pkg_skill
   pkg_tool_skill --> pkg_tools
   pkg_tool_skill --> pkg_working_directory
   pkg_tool_workspace_dependencies --> pkg_tools
+  pkg_tool_sites --> pkg_tools
   pkg_tool_web --> pkg_llm
   pkg_tool_web --> pkg_system_prompt
   pkg_tool_web --> pkg_tools
   pkg_tool_web --> pkg_web
+  pkg_web_browser --> pkg_attachment
+  pkg_web_browser --> pkg_llm
+  pkg_web_browser --> pkg_system_prompt
+  pkg_web_browser --> pkg_tools
+  pkg_web_browser --> pkg_web
   pkg_tool_todo --> pkg_agent
   pkg_tool_todo --> pkg_session
   pkg_tool_todo --> pkg_session_projection
@@ -872,6 +948,11 @@ flowchart TD
   pkg_plan_mode --> pkg_system_prompt
   pkg_plan_mode --> pkg_tools
   pkg_plan_mode --> pkg_user_questions
+  pkg_agent_memory --> pkg_kernel
+  pkg_agent_memory --> pkg_llm
+  pkg_agent_memory --> pkg_settings
+  pkg_agent_memory --> pkg_system_prompt
+  pkg_agent_memory --> pkg_tools
   pkg_command_compact --> pkg_commands
   pkg_command_compact --> pkg_compaction
   pkg_compaction_image_offload --> pkg_agent
@@ -903,6 +984,9 @@ flowchart TD
   pkg_workspace_changes --> pkg_session
   pkg_workspace_changes --> pkg_subprocess
   pkg_workspace_changes --> pkg_tools
+  pkg_harness_dev_tools --> pkg_attachment
+  pkg_harness_dev_tools --> pkg_llm
+  pkg_harness_dev_tools --> pkg_tools
   pkg_cua --> pkg_agent
   pkg_cua --> pkg_attachment
   pkg_cua --> pkg_computer_use
@@ -982,6 +1066,15 @@ flowchart TD
   pkg_tool_jobs --> pkg_output_retention
   pkg_tool_jobs --> pkg_system_prompt
   pkg_tool_jobs --> pkg_tools
+  pkg_tool_kernel --> pkg_attachment
+  pkg_tool_kernel --> pkg_jobs
+  pkg_tool_kernel --> pkg_kernel
+  pkg_tool_kernel --> pkg_system_prompt
+  pkg_tool_kernel --> pkg_tools
+  pkg_tool_roster --> pkg_agent
+  pkg_tool_roster --> pkg_settings
+  pkg_tool_roster --> pkg_system_prompt
+  pkg_tool_roster --> pkg_tools
   pkg_tool_lsp --> pkg_llm
   pkg_tool_lsp --> pkg_lsp
   pkg_tool_lsp --> pkg_system_prompt
@@ -1105,6 +1198,14 @@ flowchart TD
   pkg_mcp_client --> pkg_timeout
   pkg_mcp_client --> pkg_tools
   pkg_agent_preset --> pkg_agent_preset_registry
+  pkg_session_recovery_context --> pkg_agent
+  pkg_session_recovery_context --> pkg_compaction
+  pkg_session_recovery_context --> pkg_llm
+  pkg_session_recovery_context --> pkg_session
+  pkg_session_recovery_context --> pkg_session_format
+  pkg_session_recovery_context --> pkg_session_projection
+  pkg_session_recovery_context --> pkg_system_prompt
+  pkg_session_recovery_context --> pkg_tool_todo
   pkg_session_telemetry_otel --> pkg_anonymous_user_id
   pkg_session_telemetry_otel --> pkg_command_feedback
   pkg_session_telemetry_otel --> pkg_llm
@@ -1152,6 +1253,12 @@ flowchart TD
   pkg_agent_loop_testkit --> pkg_system_prompt
   pkg_agent_loop_testkit --> pkg_tools
   pkg_agent_loop_testkit --> pkg_working_directory
+  pkg_token_usage_lifetime --> pkg_compaction
+  pkg_token_usage_lifetime --> pkg_llm
+  pkg_token_usage_lifetime --> pkg_llm_retry
+  pkg_token_usage_lifetime --> pkg_session
+  pkg_token_usage_lifetime --> pkg_session_projection
+  pkg_token_usage_lifetime --> pkg_token_meter
   pkg_subagent --> pkg_agent
   pkg_subagent --> pkg_agent_preset_registry
   pkg_subagent --> pkg_attachment
@@ -1203,6 +1310,12 @@ flowchart TD
   pkg_compaction_tool_result_pruner --> pkg_llm
   pkg_compaction_tool_result_pruner --> pkg_session
   pkg_compaction_tool_result_pruner --> pkg_token_meter
+  pkg_output_masking --> pkg_agent
+  pkg_output_masking --> pkg_compaction
+  pkg_output_masking --> pkg_llm
+  pkg_output_masking --> pkg_session
+  pkg_output_masking --> pkg_session_projection
+  pkg_output_masking --> pkg_token_meter
   pkg_experimental_browser_use_runtime --> pkg_agent
   pkg_experimental_browser_use_runtime --> pkg_browser_use
   pkg_experimental_browser_use_runtime --> pkg_mcp_client
@@ -1449,16 +1562,24 @@ flowchart TD
 | [`util-time`](../packages/util/time) | `util` | — |
 | [`util-values`](../packages/util/values) | `util` | — |
 | [`util-workspace-path`](../packages/util/workspace-path) | `util` | — |
+| [`ai-accounts`](../packages/llm/ai-accounts) | `llm` | — |
 | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | `llm` | — |
 | [`llm`](../packages/llm/llm) | `llm` | — |
+| [`llm-markdown-fidelity`](../packages/llm/llm-markdown-fidelity) | `llm` | — |
 | [`scope`](../packages/core/scope) | `core` | — |
+| [`skills-studio`](../packages/skill/skills-studio) | `skill` | — |
+| [`web-browser-sidebar`](../packages/web/web-browser-sidebar) | `web` | — |
 | [`api-gateway`](../packages/api/gateway) | `api` | — |
 | [`api-job-controller`](../packages/api/job-controller) | `api` | — |
 | [`api-remote-access`](../packages/api/remote-access) | `api` | — |
 | [`api-workspace-files`](../packages/api/workspace-files) | `api` | — |
 | [`cmdline`](../packages/boot/cmdline) | `boot` | — |
+| [`profile-hub`](../packages/boot/profile-hub) | `boot` | — |
+| [`profile-sync`](../packages/boot/profile-sync) | `boot` | — |
 | [`acp-app`](../packages/bundle/acp-app) | `bundle` | — |
 | [`base`](../packages/bundle/base) | `bundle` | — |
+| [`efai-base`](../packages/bundle/efai-base) | `bundle` | — |
+| [`efai-web`](../packages/bundle/efai-web) | `bundle` | — |
 | [`sdk-app`](../packages/bundle/sdk-app) | `bundle` | — |
 | [`sdk-minimal`](../packages/bundle/sdk-minimal) | `bundle` | — |
 | [`client-file-upload`](../packages/client/file-upload) | `client` | — |
@@ -1472,6 +1593,7 @@ flowchart TD
 | [`client-ui-agent-preset`](../packages/client/ui-agent-preset) | `client` | — |
 | [`client-ui-approval`](../packages/client/ui-approval) | `client` | — |
 | [`client-ui-attachment`](../packages/client/ui-attachment) | `client` | — |
+| [`client-ui-brand-efai`](../packages/client/ui-brand-efai) | `client` | — |
 | [`client-ui-brand-official`](../packages/client/ui-brand-official) | `client` | — |
 | [`client-ui-chat`](../packages/client/ui-chat) | `client` | — |
 | [`client-ui-commands`](../packages/client/ui-commands) | `client` | — |
@@ -1481,17 +1603,23 @@ flowchart TD
 | [`client-ui-directory-picker-browse`](../packages/client/ui-directory-picker-browse) | `client` | — |
 | [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native) | `client` | — |
 | [`client-ui-dockkit`](../packages/client/ui-dockkit) | `client` | — |
+| [`client-ui-effects`](../packages/client/ui-effects) | `client` | — |
+| [`client-ui-flow-accents`](../packages/client/ui-flow-accents) | `client` | — |
 | [`client-ui-goal`](../packages/client/ui-goal) | `client` | — |
 | [`client-ui-input-trigger`](../packages/client/ui-input-trigger) | `client` | — |
 | [`client-ui-jobs`](../packages/client/ui-jobs) | `client` | — |
 | [`client-ui-layout`](../packages/client/ui-layout) | `client` | — |
 | [`client-ui-message-feedback`](../packages/client/ui-message-feedback) | `client` | — |
 | [`client-ui-model-selection`](../packages/client/ui-model-selection) | `client` | — |
+| [`client-ui-model-visibility`](../packages/client/ui-model-visibility) | `client` | — |
 | [`client-ui-open-in-app`](../packages/client/ui-open-in-app) | `client` | — |
+| [`client-ui-peak-hours`](../packages/client/ui-peak-hours) | `client` | — |
 | [`client-ui-permission-presets`](../packages/client/ui-permission-presets) | `client` | — |
+| [`client-ui-personalization`](../packages/client/ui-personalization) | `client` | — |
 | [`client-ui-plan`](../packages/client/ui-plan) | `client` | — |
 | [`client-ui-plugin-manager`](../packages/client/ui-plugin-manager) | `client` | — |
 | [`client-ui-plugin-market`](../packages/client/ui-plugin-market) | `client` | — |
+| [`client-ui-polish`](../packages/client/ui-polish) | `client` | — |
 | [`client-ui-primitives`](../packages/client/ui-primitives) | `client` | — |
 | [`client-ui-reference`](../packages/client/ui-reference) | `client` | — |
 | [`client-ui-renderer`](../packages/client/ui-renderer) | `client` | — |
@@ -1500,6 +1628,7 @@ flowchart TD
 | [`client-ui-session`](../packages/client/ui-session) | `client` | — |
 | [`client-ui-settings`](../packages/client/ui-settings) | `client` | — |
 | [`client-ui-settings-account`](../packages/client/ui-settings-account) | `client` | — |
+| [`client-ui-settings-accounts`](../packages/client/ui-settings-accounts) | `client` | — |
 | [`client-ui-settings-agent-loop`](../packages/client/ui-settings-agent-loop) | `client` | — |
 | [`client-ui-settings-general`](../packages/client/ui-settings-general) | `client` | — |
 | [`client-ui-settings-models`](../packages/client/ui-settings-models) | `client` | — |
@@ -1508,6 +1637,7 @@ flowchart TD
 | [`client-ui-settings-session-log`](../packages/client/ui-settings-session-log) | `client` | — |
 | [`client-ui-settings-shell`](../packages/client/ui-settings-shell) | `client` | — |
 | [`client-ui-settings-subagent`](../packages/client/ui-settings-subagent) | `client` | — |
+| [`client-ui-settings-tools`](../packages/client/ui-settings-tools) | `client` | — |
 | [`client-ui-settings-web-search`](../packages/client/ui-settings-web-search) | `client` | — |
 | [`client-ui-shortcuts`](../packages/client/ui-shortcuts) | `client` | — |
 | [`client-ui-sidebar`](../packages/client/ui-sidebar) | `client` | — |
@@ -1517,6 +1647,7 @@ flowchart TD
 | [`client-ui-sidebar-right`](../packages/client/ui-sidebar-right) | `client` | — |
 | [`client-ui-sidebar-terminal`](../packages/client/ui-sidebar-terminal) | `client` | — |
 | [`client-ui-skill`](../packages/client/ui-skill) | `client` | — |
+| [`client-ui-skill-mention`](../packages/client/ui-skill-mention) | `client` | — |
 | [`client-ui-slots`](../packages/client/ui-slots) | `client` | — |
 | [`client-ui-subagent`](../packages/client/ui-subagent) | `client` | — |
 | [`client-ui-theme`](../packages/client/ui-theme) | `client` | — |
@@ -1550,7 +1681,9 @@ flowchart TD
 | [`host-directory-picker-browse`](../packages/host/directory-picker-browse) | `host` | — |
 | [`host-directory-picker-native`](../packages/host/directory-picker-native) | `host` | — |
 | [`host-open-in-app`](../packages/host/open-in-app) | `host` | — |
+| [`host-web-access`](../packages/host/web-access) | `host` | — |
 | [`host-webserver`](../packages/host/webserver) | `host` | — |
+| [`peak-send`](../packages/schedule/peak-send) | `schedule` | — |
 | [`session-format`](../packages/session/session-format) | `session` | — |
 | [`session-format-v0-to-v1`](../packages/session/session-format-v0-to-v1) | `session` | — |
 | [`session-format-v1-to-v2`](../packages/session/session-format-v1-to-v2) | `session` | — |
@@ -1563,6 +1696,8 @@ flowchart TD
 | [`typert-generator`](../packages/typert/generator) | `typert` | — |
 | [`typert-protocol`](../packages/typert/protocol) | `typert` | — |
 | [`typert-registry`](../packages/typert/registry) | `typert` | — |
+| [`llm-system-file`](../packages/llm/llm-system-file) | `llm` | [`atomic-write`](../packages/util/atomic-write), [`home-paths`](../packages/util/home-paths), [`llm`](../packages/llm/llm) |
+| [`llm-text-toolcalls`](../packages/llm/llm-text-toolcalls) | `llm` | [`llm`](../packages/llm/llm) |
 | [`session`](../packages/core/session) | `core` | [`scope`](../packages/core/scope) |
 | [`system-prompt`](../packages/core/system-prompt) | `core` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope) |
 | [`skill`](../packages/skill/skill) | `skill` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope) |
@@ -1575,7 +1710,9 @@ flowchart TD
 | [`computer-use`](../packages/computer-use/computer-use) | `computer-use` | [`brand`](../packages/util/brand) |
 | [`authorization`](../packages/credentials/authorization) | `credentials` | [`credentials`](../packages/credentials/credentials), [`llm`](../packages/llm/llm) |
 | [`credentials-local`](../packages/credentials/credentials-local) | `credentials` | [`atomic-write`](../packages/util/atomic-write), [`credentials`](../packages/credentials/credentials), [`home-paths`](../packages/util/home-paths), [`launch-environment`](../packages/util/launch-environment) |
+| [`host-version-route`](../packages/host/version-route) | `host` | [`host-webserver`](../packages/host/webserver) |
 | [`anonymous-user-id`](../packages/identity/anonymous-user-id) | `identity` | [`brand`](../packages/util/brand), [`home-paths`](../packages/util/home-paths) |
+| [`kernel`](../packages/kernel/kernel) | `kernel` | [`llm`](../packages/llm/llm) |
 | [`lsp`](../packages/lsp/lsp) | `lsp` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm) |
 | [`storage-domain`](../packages/storage/storage-domain) | `storage` | [`storage`](../packages/storage/storage) |
 | [`storage-json`](../packages/storage/storage-json) | `storage` | [`storage`](../packages/storage/storage) |
@@ -1583,6 +1720,7 @@ flowchart TD
 | [`subprocess`](../packages/subprocess/subprocess) | `subprocess` | [`http-proxy`](../packages/util/http-proxy) |
 | [`remote-mock`](../packages/test-support/remote-mock) | `test-support` | [`typert-protocol`](../packages/typert/protocol) |
 | [`typert-loader`](../packages/typert/loader) | `typert` | [`typert-registry`](../packages/typert/registry) |
+| [`efai-identity`](../packages/core/efai-identity) | `core` | [`system-prompt`](../packages/core/system-prompt) |
 | [`skill-office`](../packages/skill/skill-office) | `skill` | [`skill`](../packages/skill/skill) |
 | [`web-fetch-http`](../packages/web/web-fetch-http) | `web` | [`http-proxy`](../packages/util/http-proxy), [`timeout`](../packages/util/timeout), [`web`](../packages/web/web) |
 | [`web-search-exa`](../packages/web/web-search-exa) | `web` | [`launch-environment`](../packages/util/launch-environment), [`web`](../packages/web/web) |
@@ -1596,6 +1734,7 @@ flowchart TD
 | [`skill-badge`](../packages/experimental/skill-badge) | `experimental` | [`skill`](../packages/skill/skill) |
 | [`host-directory-picker-auto`](../packages/host/directory-picker-auto) | `host` | [`client-connection`](../packages/client/connection), [`client-ui-directory-picker-browse`](../packages/client/ui-directory-picker-browse), [`client-ui-directory-picker-native`](../packages/client/ui-directory-picker-native), [`host-directory-picker-browse`](../packages/host/directory-picker-browse), [`host-directory-picker-native`](../packages/host/directory-picker-native), [`host-webserver`](../packages/host/webserver) |
 | [`host-frontend-static`](../packages/host/frontend-static) | `host` | [`client-connection`](../packages/client/connection), [`host-webserver`](../packages/host/webserver) |
+| [`kernel-python`](../packages/kernel/kernel-python) | `kernel` | [`kernel`](../packages/kernel/kernel) |
 | [`persona`](../packages/preset/persona) | `preset` | [`system-prompt`](../packages/core/system-prompt) |
 | [`sandbox`](../packages/sandbox/sandbox) | `sandbox` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`sandbox-windows-acl`](../packages/sandbox/sandbox-windows-acl) | `sandbox` | [`skill`](../packages/skill/skill), [`subprocess`](../packages/subprocess/subprocess) |
@@ -1607,6 +1746,7 @@ flowchart TD
 | [`subprocess-local`](../packages/subprocess/subprocess-local) | `subprocess` | [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`otel`](../packages/telemetry/otel) | `telemetry` | [`session`](../packages/core/session) |
 | [`session-snapshot`](../packages/test-support/session-snapshot) | `test-support` | [`http-proxy`](../packages/util/http-proxy), [`session`](../packages/core/session) |
+| [`llm-kiln`](../packages/llm/llm-kiln) | `llm` | [`ai-accounts`](../packages/llm/ai-accounts), [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`llm-text-toolcalls`](../packages/llm/llm-text-toolcalls), [`settings`](../packages/settings/settings) |
 | [`fs`](../packages/fs/fs) | `fs` | [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox) |
 | [`spill-local`](../packages/spill/spill-local) | `spill` | [`spill`](../packages/spill/spill) |
 | [`session-log-export`](../packages/session-query/session-log-export) | `session-query` | [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
@@ -1671,6 +1811,7 @@ flowchart TD
 | [`permission-presets`](../packages/interaction/permission-presets) | `interaction` | [`commands`](../packages/interaction/commands), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell), [`typert-protocol`](../packages/typert/protocol), [`user-approval`](../packages/interaction/user-approval) |
 | [`jobs-local`](../packages/jobs/jobs-local) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`scope`](../packages/core/scope), [`timeout`](../packages/util/timeout) |
 | [`ptc-runtime-node`](../packages/ptc-runtime/ptc-runtime-node) | `ptc-runtime` | [`fs`](../packages/fs/fs), [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
+| [`command-session-info`](../packages/session/command-session-info) | `session` | [`commands`](../packages/interaction/commands), [`session-projection`](../packages/session/session-projection) |
 | [`session-title-llm`](../packages/session/session-title-llm) | `session` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`timeout`](../packages/util/timeout) |
 | [`bash-sandbox`](../packages/shell/bash-sandbox) | `shell` | [`bash-local`](../packages/shell/bash-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
 | [`pwsh-sandbox`](../packages/shell/pwsh-sandbox) | `shell` | [`pwsh-local`](../packages/shell/pwsh-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell) |
@@ -1680,18 +1821,24 @@ flowchart TD
 | [`tool-goal`](../packages/goal/tool-goal) | `goal` | [`agent`](../packages/core/agent), [`goal`](../packages/goal/goal), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`tool-fs`](../packages/fs/tool-fs) | `fs` | [`attachment`](../packages/attachment/attachment), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-approval`](../packages/interaction/user-approval), [`working-directory`](../packages/session/working-directory) |
 | [`tool-fs-search`](../packages/fs/tool-fs-search) | `fs` | [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`session`](../packages/core/session), [`spill`](../packages/spill/spill), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
+| [`tool-notebook-edit`](../packages/fs/tool-notebook-edit) | `fs` | [`fs`](../packages/fs/fs), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`tools`](../packages/core/tools) |
 | [`tool-str-replace-editor`](../packages/fs/tool-str-replace-editor) | `fs` | [`fs`](../packages/fs/fs), [`output-retention`](../packages/util/output-retention), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`tools`](../packages/core/tools) |
+| [`skill-injection`](../packages/skill/skill-injection) | `skill` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`skill`](../packages/skill/skill), [`tools`](../packages/core/tools) |
 | [`tool-skill`](../packages/skill/tool-skill) | `skill` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`skill`](../packages/skill/skill), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`tool-workspace-dependencies`](../packages/skill/tool-workspace-dependencies) | `skill` | [`tools`](../packages/core/tools) |
+| [`tool-sites`](../packages/web/tool-sites) | `web` | [`tools`](../packages/core/tools) |
 | [`tool-web`](../packages/web/tool-web) | `web` | [`llm`](../packages/llm/llm), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`web`](../packages/web/web) |
+| [`web-browser`](../packages/web/web-browser) | `web` | [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`web`](../packages/web/web) |
 | [`tool-todo`](../packages/todo/tool-todo) | `todo` | [`agent`](../packages/core/agent), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`tools`](../packages/core/tools) |
 | [`plan-mode`](../packages/plan/plan-mode) | `plan` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |
+| [`agent-memory`](../packages/agent-memory/agent-memory) | `agent-memory` | [`kernel`](../packages/kernel/kernel), [`llm`](../packages/llm/llm), [`settings`](../packages/settings/settings), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`command-compact`](../packages/compaction/command-compact) | `compaction` | [`commands`](../packages/interaction/commands), [`compaction`](../packages/compaction/compaction) |
 | [`compaction-image-offload`](../packages/compaction/compaction-image-offload) | `compaction` | [`agent`](../packages/core/agent), [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
 | [`agent-instructions`](../packages/context/agent-instructions) | `context` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`home-paths`](../packages/util/home-paths), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`file-reference-local`](../packages/context/file-reference-local) | `context` | [`agent`](../packages/core/agent), [`file-reference`](../packages/context/file-reference), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`tool-present`](../packages/deliverables/tool-present) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`workspace-changes`](../packages/deliverables/workspace-changes) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools) |
+| [`harness-dev-tools`](../packages/devtools/harness-dev-tools) | `devtools` | [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`tools`](../packages/core/tools) |
 | [`cua`](../packages/experimental/cua) | `experimental` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`computer-use`](../packages/computer-use/computer-use), [`llm`](../packages/llm/llm), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |
 | [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
@@ -1708,6 +1855,8 @@ flowchart TD
 | [`tool-call-timeout-policy`](../packages/guard/timeout-policy) | `guard` | [`llm`](../packages/llm/llm), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`tool-ask-user`](../packages/interaction/tool-ask-user) | `interaction` | [`agent`](../packages/core/agent), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |
 | [`tool-jobs`](../packages/jobs/tool-jobs) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
+| [`tool-kernel`](../packages/kernel/tool-kernel) | `kernel` | [`attachment`](../packages/attachment/attachment), [`jobs`](../packages/jobs/jobs), [`kernel`](../packages/kernel/kernel), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
+| [`tool-roster`](../packages/kernel/roster) | `kernel` | [`agent`](../packages/core/agent), [`settings`](../packages/settings/settings), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`tool-lsp`](../packages/lsp/tool-lsp) | `lsp` | [`llm`](../packages/llm/llm), [`lsp`](../packages/lsp/lsp), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`mcp-resources`](../packages/mcp/mcp-resources) | `mcp` | [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`agent-preset-registry`](../packages/preset/agent-preset-registry) | `preset` | [`agent`](../packages/core/agent), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`settings`](../packages/settings/settings), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
@@ -1731,6 +1880,7 @@ flowchart TD
 | [`host-plugin-inventory`](../packages/host/plugin-inventory) | `host` | [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`brand`](../packages/util/brand), [`typert-protocol`](../packages/typert/protocol) |
 | [`mcp-client`](../packages/mcp/mcp-client) | `mcp` | [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`mcp-resources`](../packages/mcp/mcp-resources), [`scope`](../packages/core/scope), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`agent-preset`](../packages/preset/agent-preset) | `preset` | [`agent-preset-registry`](../packages/preset/agent-preset-registry) |
+| [`session-recovery-context`](../packages/session/session-recovery-context) | `session` | [`agent`](../packages/core/agent), [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-format`](../packages/session/session-format), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt), [`tool-todo`](../packages/todo/tool-todo) |
 | [`session-telemetry-otel`](../packages/session/session-telemetry-otel) | `session` | [`anonymous-user-id`](../packages/identity/anonymous-user-id), [`command-feedback`](../packages/feedback/command-feedback), [`llm`](../packages/llm/llm), [`message-feedback`](../packages/feedback/message-feedback), [`otel`](../packages/telemetry/otel), [`session`](../packages/core/session), [`session-telemetry`](../packages/session/session-telemetry) |
 | [`tool-bash`](../packages/shell/tool-bash) | `shell` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell), [`shell-env`](../packages/shell/shell-env), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-approval`](../packages/interaction/user-approval), [`working-directory`](../packages/session/working-directory) |
 | [`tool-pwsh`](../packages/shell/tool-pwsh) | `shell` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`shell`](../packages/shell/shell), [`shell-env`](../packages/shell/shell-env), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`user-approval`](../packages/interaction/user-approval), [`working-directory`](../packages/session/working-directory) |
@@ -1738,12 +1888,14 @@ flowchart TD
 | [`sandbox-ssh`](../packages/ssh/sandbox-ssh) | `ssh` | [`sandbox`](../packages/sandbox/sandbox), [`ssh`](../packages/ssh/ssh) |
 | [`subprocess-ssh`](../packages/ssh/subprocess-ssh) | `ssh` | [`ssh`](../packages/ssh/ssh), [`subprocess`](../packages/subprocess/subprocess), [`subprocess-local`](../packages/subprocess/subprocess-local) |
 | [`agent-loop-testkit`](../packages/test-support/agent-loop-testkit) | `test-support` | [`agent`](../packages/core/agent), [`agent-loop`](../packages/core/agent-loop), [`fs-local`](../packages/fs/fs-local), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
+| [`token-usage-lifetime`](../packages/llm/token-usage-lifetime) | `llm` | [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`llm-retry`](../packages/llm/llm-retry), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`token-meter`](../packages/llm/token-meter) |
 | [`subagent`](../packages/subagent/subagent) | `subagent` | [`agent`](../packages/core/agent), [`agent-preset-registry`](../packages/preset/agent-preset-registry), [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-projection`](../packages/session/session-projection), [`session-query`](../packages/session-query/session-query), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`user-approval`](../packages/interaction/user-approval), [`util-time`](../packages/util/time), [`working-directory`](../packages/session/working-directory), [`workspace`](../packages/workspace/workspace) |
 | [`spill-policy`](../packages/spill/spill-policy) | `spill` | [`attachment`](../packages/attachment/attachment), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`session`](../packages/core/session), [`spill`](../packages/spill/spill), [`token-meter`](../packages/llm/token-meter), [`tools`](../packages/core/tools) |
 | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | `session-query` | [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query) |
 | [`acp`](../packages/acp/acp) | `acp` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`mcp-client`](../packages/mcp/mcp-client), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`token-meter`](../packages/llm/token-meter), [`user-approval`](../packages/interaction/user-approval) |
 | [`plugin-manager`](../packages/boot/plugin-manager) | `boot` | [`brand`](../packages/util/brand), [`hmr`](../packages/boot/hmr), [`host-plugin-inventory`](../packages/host/plugin-inventory), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`user-approval`](../packages/interaction/user-approval) |
 | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | `compaction` | [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`token-meter`](../packages/llm/token-meter) |
+| [`output-masking`](../packages/compaction/output-masking) | `compaction` | [`agent`](../packages/core/agent), [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`token-meter`](../packages/llm/token-meter) |
 | [`experimental-browser-use-runtime`](../packages/experimental/browser-use-runtime) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`mcp-client`](../packages/mcp/mcp-client), [`scope`](../packages/core/scope), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-claude-code-mods`](../packages/experimental/claude-code-mods) | `experimental` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`storage-domain`](../packages/storage/storage-domain), [`subprocess`](../packages/subprocess/subprocess), [`token-meter`](../packages/llm/token-meter), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol), [`user-questions`](../packages/interaction/user-questions), [`working-directory`](../packages/session/working-directory) |
 | [`tool-session-query`](../packages/experimental/tool-session-query) | `experimental` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`session-query`](../packages/session-query/session-query), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |

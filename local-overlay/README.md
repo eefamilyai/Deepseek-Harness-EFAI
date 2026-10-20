@@ -153,7 +153,7 @@ against; that is what makes the next update reproducible.
 | File | Command |
 | --- | --- |
 | `pnpm-lock.yaml` | `pnpm install --no-frozen-lockfile` |
-| `tsconfig.base.json` | `pnpm run gen-tsconfig-paths` |
+| `tsconfig.base.json` | `node efai/regen-tsconfig-paths.mjs` (restores the fork aliases, then upstream's generator) |
 | `docs/config-catalog.md` | `pnpm run gen-config-catalog` |
 | `docs/tool-catalog.md` | `pnpm run gen-tool-catalog` |
 | `apps/cli/composition.md` | `pnpm run gen-doc-graphs` |

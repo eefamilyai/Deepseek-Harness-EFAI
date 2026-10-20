@@ -140,20 +140,21 @@ index 27b2a7bffd..a43128e1fd 100644
 +  })
  })
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-index d707342258..31c6dff2c1 100644
+index bc0b2ba97d..2f265f2887 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
 +++ b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-@@ -30,8 +30,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
+@@ -30,9 +30,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
        'cordis_inspect_query',
-       'create_goal', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
+       'create_goal', 'create_worktree', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
        'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
 +      'kernel',
        'list_agents', 'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
--      'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'present', 'pwsh', 'pwsh', 'ralph',
+-      'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',
+-      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
 +      'list_subagent_models', 'load_workspace_dependencies', 'lsp',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
-+      'notebook_edit', 'plugin_manager', 'present', 'pwsh', 'pwsh', 'ralph',
-       'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
++      'notebook_edit', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
        'schedule_list', 'schedule_update', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
        'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',
+       'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs',

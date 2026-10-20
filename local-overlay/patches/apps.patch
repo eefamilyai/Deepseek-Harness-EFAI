@@ -1,5 +1,5 @@
 diff --git a/apps/cli/package.json b/apps/cli/package.json
-index d2a403283c..ab80195da3 100644
+index cd8c213149..3d2aeacec5 100644
 --- a/apps/cli/package.json
 +++ b/apps/cli/package.json
 @@ -38,6 +38,8 @@
@@ -9,13 +9,13 @@ index d2a403283c..ab80195da3 100644
 +    "@deepseek-ai/dsh-efai-base": "workspace:*",
 +    "@deepseek-ai/dsh-efai-web": "workspace:*",
      "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:*",
-     "@deepseek-ai/dsh-experimental-schedule-bundle": "workspace:*",
+     "@deepseek-ai/dsh-experimental-inspector-profile": "workspace:*",
      "@deepseek-ai/dsh-fs-local": "workspace:*",
 diff --git a/apps/desktop-host/src/index.ts b/apps/desktop-host/src/index.ts
-index 4a47a92ce8..ced6559362 100644
+index 3086755b0b..96a6d37596 100644
 --- a/apps/desktop-host/src/index.ts
 +++ b/apps/desktop-host/src/index.ts
-@@ -14,20 +14,47 @@ import { installDesktopUpdateTaskControl } from './update-tasks.ts'
+@@ -14,20 +14,48 @@ import { installDesktopUpdateTaskControl } from './update-tasks.ts'
  import { installDesktopQuitInspection } from './quit-inspection.ts'
  import { installPlatformSessionPublisher } from './platform-session.ts'
  import { installOfficeEngineResolution } from './office-engine.ts'
@@ -57,19 +57,20 @@ index 4a47a92ce8..ced6559362 100644
 +    profile: name,
      resolvedProfile: { profile, installAnchor },
      patchFiles: [],
--    args: ['--no-open', '--port', '19387'],
-+    // The primary window owns a stable port so its own reloads reconnect; a
-+    // second window takes whichever port is free, so two Desktop instances
-+    // serving two profiles coexist instead of fighting over one.
-+    args: ['--no-open', '--port', name === PRIMARY_PROFILE_NAME ? PRIMARY_PORT : '0'],
+-    args: ['--no-open', '--host', '127.0.0.1', '--port', '0'],
++    // DSH-FORK(desktop): the primary window owns a stable port so its own
++    // reloads reconnect; a second window takes whichever port is free, so two
++    // Desktop instances serving two profiles coexist instead of fighting over
++    // one. Host binding stays upstream's loopback default.
++    args: ['--no-open', '--host', '127.0.0.1', '--port', name === PRIMARY_PROFILE_NAME ? PRIMARY_PORT : '0'],
      ...(process.argv[5] === undefined ? {} : {
        packageManager: {
          command: process.execPath,
 diff --git a/apps/desktop/src/main.ts b/apps/desktop/src/main.ts
-index b4b8153b7f..5c764290d3 100644
+index 2afdfd7194..11155dbaa9 100644
 --- a/apps/desktop/src/main.ts
 +++ b/apps/desktop/src/main.ts
-@@ -212,6 +212,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
+@@ -214,6 +214,13 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
      show,
      ...(process.platform === 'win32' && primary ? {
        titleBarStyle: 'hidden' as const,
@@ -165,7 +166,7 @@ index cf03e38c36..a03db7635a 100644
    }
  }
 diff --git a/apps/web/tests/built-boot.expected.e2e.ts b/apps/web/tests/built-boot.expected.e2e.ts
-index f645214133..06c9d78141 100644
+index c7b7f41b65..073e9c8ff5 100644
 --- a/apps/web/tests/built-boot.expected.e2e.ts
 +++ b/apps/web/tests/built-boot.expected.e2e.ts
 @@ -61,20 +61,20 @@ it('boots the built plugin graph and renders a fixture session end to end', asyn

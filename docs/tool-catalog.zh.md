@@ -37,6 +37,7 @@
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.workingDirectory`、`ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
 | `@deepseek-ai/dsh-tool-notebook-edit` | `notebook_edit` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt` | `tool/call`、`fs/write-intent for mutations`、`tool/result` | - | notebook_edit 以独占方式注册：对同一文件的两次重叠编辑会丢失其中一次。路径必须是绝对路径，修改经过已挂载的文件系统策略。 |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.workingDirectory`、`ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 || `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
+| `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | 创建、编辑、暂停和恢复需要直接的人类根权限；完成和受阻还接受当前目标的确切轮次。受阻的默认下限是三个已接纳轮次。 |
 | `@deepseek-ai/dsh-tool-schedule` | `schedule_create`、`schedule_delete`、`schedule_list`、`schedule_update` | `ctx.tools`、`ctx.schedule` | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | preset 或 Agent scope 挂载本包；由 preset 决定哪些 agent 获得这四个管理工具。每次调用都作用于调用方 Agent 的 Session。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。 |
 | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.workingDirectory`、`ctx.tools`、`ctx.lsp`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。 |
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
@@ -52,6 +53,7 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+| `@deepseek-ai/dsh-tool-sites` | `site` | `ctx.tools` | `tool/call`、`tool/result` | - | site 通过公开的 GitHub Pages 仓库和 deSEC CNAME 记录，把智能体构建的静态页面发布到 <name>.<zone>。schema 与凭据无关，因此采集时挂载它不会读取 DESEC_TOKEN 或 GitHub CLI 登录。 |
 | `@deepseek-ai/dsh-tool-kernel` | `kernel` | `ctx.tools`、`ctx.kernel`、`ctx.systemPrompt`、`ctx.attachments` | `tool/call`、`tool/result` | - | kernel 以独占方式注册：两个重叠的单元格会交错赋值与输出。是否向模型提供它，由 `tool-roster` 行的 `kernel` 开关按轮决定。 |
 
 <a id="deepseek-aidsh-plugin-manager"></a>
@@ -1926,7 +1928,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。
 
-<a id="deepseek-aidsh-tool-skill"></a>
+<a id="deepseek-aidsh-tool-sites"></a>
 
 ## `@deepseek-ai/dsh-tool-skill`
 
@@ -2950,6 +2952,80 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
 
 <a id="deepseek-aidsh-tool-kernel"></a>
+
+## `@deepseek-ai/dsh-tool-sites`
+
+### `site`
+
+在 https://<name>.dshai.reggilion.com 发布一个静态网页或小型 Web 应用，并向用户展示。凡是结果“看”比“读”更合适时都可以使用：插图与动画（SVG、canvas、CSS）、幻灯片、交互式讲解与模拟、图表与仪表盘、示意图、报告、原型与线框图、小游戏。动作：publish（创建或整体替换一个站点：直接给出 `files`，或给出 `dir`，即本地绝对目录；必须包含 index.html；只支持相对链接；可以使用 CDN 上的库）、list（列出全部站点）、status（DNS、Pages 构建、HTTPS 证书，以及地址是否可访问）、remove（下线站点；其仓库会被归档，而不是删除）。每个站点都是一个由 GitHub Pages 托管的公开 GitHub 仓库，因此绝不要发布密钥或私密数据。发布操作会等待构建完成；新名称解析可能需要几分钟，获得 HTTPS 最长约需 30 分钟（期间 http 可用）。对已有名称重新发布会在一分钟内更新。把返回的 URL 交给用户。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "publish, list, status, or remove.",
+      "enum": [
+        "publish",
+        "list",
+        "status",
+        "remove"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "The site name and subdomain (publish, status, remove): 1-40 lowercase letters, digits, and inner hyphens, like \"solar-system\"."
+    },
+    "files": {
+      "type": "array",
+      "description": "publish: every file of the site. Set base64 for binary content (images, fonts).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path inside the site, e.g. index.html or assets/app.js."
+          },
+          "content": {
+            "type": "string",
+            "description": "The file text, or base64 bytes when base64 is true."
+          },
+          "base64": {
+            "type": "boolean",
+            "description": "Whether content is base64-encoded bytes."
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    },
+    "dir": {
+      "type": "string",
+      "description": "publish: an absolute local folder to publish instead of files (.git and node_modules are skipped)."
+    },
+    "title": {
+      "type": "string",
+      "description": "publish: a one-line title for the site list."
+    },
+    "wait_seconds": {
+      "type": "integer",
+      "description": "publish: seconds to wait for the Pages build (default 90; 0 returns at once)."
+    }
+  },
+  "required": [
+    "action"
+  ]
+}
+```
+
+来源：[`packages/web/tool-sites/src/index.ts`](../packages/web/tool-sites/src/index.ts)
+
+site 通过公开的 GitHub Pages 仓库和 deSEC CNAME 记录，把智能体构建的静态页面发布到 <name>.<zone>。schema 与凭据无关，因此采集时挂载它不会读取 DESEC_TOKEN 或 GitHub CLI 登录。
+<a id="deepseek-aidsh-tool-skill"></a>
 
 ## `@deepseek-ai/dsh-tool-kernel`
 

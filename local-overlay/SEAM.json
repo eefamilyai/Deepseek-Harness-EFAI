@@ -5,7 +5,7 @@
     "Shrinking is the goal; re-record after retiring an edit. Growing is a decision:",
     "record it in the same commit that adds the edit, so review sees the path arrive."
   ],
-  "base": "639ed015397290b3745d163aafe02ffee4aa3f84",
+  "base": "687f282e8625c6b8d11ff58211a90524be2e4317",
   "paths": [
     ".agents/skills/dsh-code-review/SKILL.md",
     ".agents/skills/dsh-pre-push-checks/SKILL.md",
@@ -59,6 +59,7 @@
     "packages/core/agent/src/model-selection.ts",
     "packages/core/agent/tests/model-selection.spec.ts",
     "packages/core/tools/tests/gen-tool-catalog.spec.ts",
+    "packages/experimental/tool-terminal/src/index.ts",
     "packages/schedule/schedule/README.i18n.yaml",
     "packages/schedule/schedule/README.md",
     "packages/schedule/schedule/README.zh.md",
@@ -69,7 +70,6 @@
     "packages/session/session-format-v0-to-v1/src/validation.ts",
     "packages/session/session-format-v0-to-v1/tests/relationships.spec.ts",
     "packages/shell/tool-pwsh/src/index.ts",
-    "packages/terminal/tool-terminal/src/index.ts",
     "packages/workflow/tool-workflow/src/index.ts",
     "scripts/gen-cordis-catalog.ts",
     "scripts/gen-doc-graphs.ts",

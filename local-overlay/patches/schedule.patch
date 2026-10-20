@@ -1,20 +1,20 @@
 diff --git a/packages/schedule/schedule/README.i18n.yaml b/packages/schedule/schedule/README.i18n.yaml
-index 6c1433dea0..c20a15f86c 100644
+index f0c56100d6..c5266529ed 100644
 --- a/packages/schedule/schedule/README.i18n.yaml
 +++ b/packages/schedule/schedule/README.i18n.yaml
 @@ -15,8 +15,8 @@
    en: 23386452a66b2fbd
    zh: 4a8d91b2f313fead
  /deepseek-ai-dsh-schedule/use-this-package:
--  en: 318cad8a73818a95
--  zh: 267b9c86cb9f06d1
-+  en: 7ddc16d1077dab11
-+  zh: e540a56f87b1da59
+-  en: 88aba0cd93ff0903
+-  zh: a8e4c257c319de53
++  en: 773325d2a393eb62
++  zh: a2e1d2eb926c1bc0
  /deepseek-ai-dsh-schedule/understand-the-implementation:
-   en: 676b7c508f37a1b7
-   zh: c5e8520b3350f0b0
+   en: 3d11c664125e32d8
+   zh: 01a007a5ffb2ab63
 diff --git a/packages/schedule/schedule/README.md b/packages/schedule/schedule/README.md
-index 352d32e5f4..b3b18e5492 100644
+index 19125f6137..1204798e41 100644
 --- a/packages/schedule/schedule/README.md
 +++ b/packages/schedule/schedule/README.md
 @@ -44,7 +44,7 @@ Weekly input adds `weekdays`, a non-empty set of ISO weekday numbers from Monday
@@ -27,10 +27,10 @@ index 352d32e5f4..b3b18e5492 100644
  Archiving a Session with active reminders is refused until they stop, and choosing to stop them deletes every active reminder; unarchiving does not bring them back.
  
 diff --git a/packages/schedule/schedule/README.zh.md b/packages/schedule/schedule/README.zh.md
-index 1f68aeef8f..8335f73e5d 100644
+index 39eb161d5c..dcfc6d0290 100644
 --- a/packages/schedule/schedule/README.zh.md
 +++ b/packages/schedule/schedule/README.zh.md
-@@ -44,7 +44,7 @@ Agent 获得 `schedule_create`、`schedule_list`、`schedule_delete` 和 `schedu
+@@ -44,7 +44,7 @@ Schedule 将一次性、固定周期、按每日、按每周以及 cron 本地
  
  cron 输入携带 `expression` 和 `time_zone`。表达式是标准五字段 Vixie 形式 `minute hour day-of-month month day-of-week`：minute 0-59、hour 0-23、day-of-month 1-31、month 1-12、day-of-week 0-7，其中 `0` 和 `7` 都表示周日。每个字段接受 `*`、单个值、`a-b` 范围、`n >= 1` 的 `*/n` 与 `a-b/n` 步长，以及由这些形式组成的逗号分隔列表。`L`、`W`、`#`、`JAN`/`MON` 名称、`@daily` 风格宏、六字段表达式、超出范围的值、反向范围、零步长和空字段都会以 `invalid_rule` 拒绝，且错误信息会指出违规字段。由于该方言只有五个字段，最小间隔为一分钟。创建时存储规范化表达式：重复值合并，相邻的值与范围合并，均匀步长写为 `a-b/n`，而以 `*` 开头的字段写为星号步长（匹配全部取值时写 `*`，否则写最宽的星号步长并追加其余取值），步长 `1` 被移除，周日统一写为 `0`。不以 `*` 开头的字段绝不会变成星号步长，因此下文的日规则在存储后保持不变。持久化解码器拒绝非规范化的已存储表达式，因此记录始终保存规范化文本。day-of-month 或 day-of-week 中任一为星号字段时，本地日期需两个字段都匹配；两者都不是星号字段时，匹配任一字段即可。字段文本以 `*` 开头即为星号字段，与它匹配的取值集合无关，因此步长星号字段与其他字段同时约束，而不是替代它。首个目标是该时区内本地日期与时间匹配的第一个严格未来时点，使用与 Daily 相同的缺口跳过与重叠取较早时点规则。完整方言与规范化规则见 [cron 时间语义](../../../docs/subsystems/schedule.zh.md#cron-wall-clock-input)。
  
@@ -40,23 +40,24 @@ index 1f68aeef8f..8335f73e5d 100644
  归档仍有活动提醒的会话会被拒绝，直到这些提醒停止；选择停止它们会删除全部活动提醒，取消归档不会把它们带回来。
  
 diff --git a/packages/schedule/schedule/src/index.ts b/packages/schedule/schedule/src/index.ts
-index 2fd4b35c84..f5f16ebbb6 100644
+index b7e4ecb62a..3eb0ac9a99 100644
 --- a/packages/schedule/schedule/src/index.ts
 +++ b/packages/schedule/schedule/src/index.ts
-@@ -18,9 +18,9 @@ import {
+@@ -17,10 +17,9 @@ import {
    scheduleTitle,
  } from './domain.ts'
  import type {
 -  DeliveryRetentionBounds, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleDeleteRequest, ScheduleDeleteResult,
 -  ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult, ScheduleListRequest, ScheduleRecord,
--  ScheduleUpdateRequest, ScheduleUpdateResult,
+-  ScheduleUpdateRequest, ScheduleUpdateResult, SubagentSessionError,
+-} from './types.ts'
 +  DeliveryRetentionBounds, ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleCreateTaskRequest, ScheduleCreateTaskResult,
 +  ScheduleDeleteRequest, ScheduleDeleteResult, ScheduleDeliveryHistoryRequest, ScheduleDeliveryHistoryResult,
-+  ScheduleListRequest, ScheduleRecord, ScheduleUpdateRequest, ScheduleUpdateResult,
- } from './types.ts'
++  ScheduleListRequest, ScheduleRecord, ScheduleUpdateRequest, ScheduleUpdateResult, SubagentSessionError,} from './types.ts'
  
  export type * from './types.ts'
-@@ -281,6 +281,31 @@ export class ScheduleService extends TypertRemoteService {
+ export { scheduleDomain } from './storage.ts'
+@@ -262,6 +261,31 @@ export class ScheduleService extends TypertRemoteService {
      })
    }
  
@@ -89,10 +90,10 @@ index 2fd4b35c84..f5f16ebbb6 100644
     * Read the selected Session's active tasks without resuming its Agent.
     * @param request - Session whose task list is requested.
 diff --git a/packages/schedule/schedule/src/types.ts b/packages/schedule/schedule/src/types.ts
-index ed6af0fada..bcbc64103d 100644
+index d072de64b8..e3567fe30e 100644
 --- a/packages/schedule/schedule/src/types.ts
 +++ b/packages/schedule/schedule/src/types.ts
-@@ -391,6 +391,39 @@ export interface ScheduleDeleteRequest extends ScheduleListRequest {
+@@ -398,6 +398,40 @@ export interface ScheduleDeleteRequest extends ScheduleListRequest {
    id: ScheduleId
  }
  
@@ -117,6 +118,7 @@ index ed6af0fada..bcbc64103d 100644
 +  | 'not_future'
 +  | 'time_out_of_range'
 +  | 'frequency_too_high'
++  | 'subagent_session'
 +
 +/**
 + * Outcome of one browser-originated creation.

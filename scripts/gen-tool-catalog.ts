@@ -81,6 +81,7 @@ import { registerListSubagentModels } from '../packages/subagent/tool-subagent/s
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 import KernelRuntime from '@deepseek-ai/dsh-kernel'
 import * as ToolKernel from '@deepseek-ai/dsh-tool-kernel'
+import * as ToolSites from '@deepseek-ai/dsh-tool-sites'
 import WorkflowEngine from '@deepseek-ai/dsh-workflow'
 import type { WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
@@ -425,8 +426,9 @@ const TOOL_PACKAGES: ToolPackage[] = [
     writes: ['tool/call', 'fs/write-intent for mutations', 'tool/result'],
     async mount(ctx) {
       // The tool injects `fs`; the bare provider is sufficient because the
-      // sandbox/observation policy changes behavior, not schema shape.
-      await ctx.plugin(LocalFileSystem)
+      // sandbox/observation policy changes behavior, not schema shape. The
+      // provider is mounted once by collectToolCatalog, and a second mount now
+      // fails as a duplicate service registration.
       await ctx.plugin(ToolNotebookEdit)
     },
     note:
@@ -706,6 +708,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-sites',
+    dir: 'tool-sites',
+    source: 'packages/web/tool-sites/src/index.ts',
+    requires: ['ctx.tools'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // Schema harvest never calls deSEC or GitHub: the tool's schema is
+      // declared statically, and publishing only happens on an execution.
+      await ctx.plugin(ToolSites)
+    },
+    note:
+      'site publishes static pages the agent builds at <name>.<zone> through a public GitHub Pages repository and a deSEC CNAME record. The schema is independent of the credentials, so harvesting mounts it without reading DESEC_TOKEN or the GitHub CLI login.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-kernel',

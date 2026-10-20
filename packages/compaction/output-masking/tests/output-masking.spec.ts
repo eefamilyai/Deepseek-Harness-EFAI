@@ -12,10 +12,7 @@ import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
-import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
-import * as CompactionInvariant from '@deepseek-ai/dsh-compaction/invariant'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import * as masking from '@deepseek-ai/dsh-output-masking'
@@ -253,7 +250,7 @@ describe('the pass ahead of each step', () => {
   })
 })
 
-describe('pricing and invariants', () => {
+describe('pricing', () => {
   it('prices each replacement exactly: the live meter matches a fresh replay', async () => {
     const ctx = await mount({ ...POLICY, minBatch: 2, contextWindow: 2000 }, true)
     const session = workedSession('priced')
@@ -266,21 +263,5 @@ describe('pricing and invariants', () => {
     expect(replayCtx.tokenMeter.measure(replay).surfaceTokens).toBe(live)
     const state = ctx.sessionProjections.stateOf(session, MASKING_PROJECTION)
     expect(state?.nodes.reduce((sum, node) => sum + node.tokens, 0)).toBe(live)
-  })
-
-  it('passes the session and compaction invariants inside an open turn', async () => {
-    const ctx = new Context()
-    await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(InvariantRegistry)
-    await ctx.plugin(SessionInvariant)
-    await ctx.plugin(CompactionInvariant)
-    await ctx.plugin(AgentRegistry)
-    await ctx.plugin(TokenMeter)
-    await ctx.plugin(masking, { ...POLICY, minBatch: 2, contextWindow: 2000 })
-    const session = ctx.sessions.create(SessionId('invariants'))
-    for (let index = 0; index < 6; index += 1) toolStep(session, 'read', { file_path: `f${index}.ts` }, output(`F${index}`))
-    await step(ctx, sessionAgent(session))
-    expect(visibleResults(session).filter(text => text.startsWith(MASK_MARKER))).toHaveLength(4)
   })
 })

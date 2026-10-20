@@ -99,6 +99,9 @@ export const SERVICE_PAGE: Record<string, string> = {
   fs: 'filesystem.md',
   goals: 'goal.md',
   schedule: 'schedule.md',
+  // DSH-FORK(all): the fork's two services.
+  peakSend: 'schedule.md',
+  skillsStudio: 'skills.md',
   inspector: 'extensions.md',
   webServer: 'web-server.md',
   webApp: 'web-server.md',
@@ -290,6 +293,19 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  // DSH-FORK(all): the fork's own service contracts. Their types are documented
+  // in the subsystem page that describes the service, not in a generated table.
+  DeferredSend: 'schedule.md',
+  DeferRequest: 'schedule.md',
+  DeferResult: 'schedule.md',
+  ScheduleCreateTaskRequest: 'schedule.md',
+  ScheduleCreateTaskResult: 'schedule.md',
+  SkillsCatalog: 'skills.md',
+  SkillDocument: 'skills.md',
+  SkillBuilderStart: 'skills.md',
+  SkillRemoved: 'skills.md',
+  SkillSaveRequest: 'skills.md',
+  SkillSaved: 'skills.md',
   Principal: 'typert.md',
   PrincipalMap: 'typert.md',
   RemoteAccessResource: 'typert.md',

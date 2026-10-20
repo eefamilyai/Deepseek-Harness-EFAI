@@ -30,8 +30,12 @@ const unusedSeats = {
   useSessionRetainInfo: throwingSeat,
   useWorkspaces: throwingSeat,
   useResource: throwingSeat,
+  useRemoteAccess: throwingSeat,
+  useSessionAccess: throwingSeat,
+  useWorkspaceAccess: throwingSeat,
 } as Pick<ToolsSectionComponentProps, 'usePanelInfo' | 'useSessions' | 'useSessionStatus'
-| 'useSessionRetainInfo' | 'useWorkspaces' | 'useResource'>
+| 'useSessionRetainInfo' | 'useWorkspaces' | 'useResource'
+| 'useRemoteAccess' | 'useSessionAccess' | 'useWorkspaceAccess'>
 
 /** Throws on call: a seat this spec deliberately leaves without a value. */
 function throwingSeat(): never {

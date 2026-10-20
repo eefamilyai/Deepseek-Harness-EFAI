@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-peak-send",
   "description": "Deferred sends: the Remote surface the peak-hour send dialog uses to schedule a message for when DeepSeek peak pricing ends, alone, after an earlier deferred message, or merged into it",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "restricted"
   },

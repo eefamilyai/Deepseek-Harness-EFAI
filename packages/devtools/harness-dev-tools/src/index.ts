@@ -57,6 +57,7 @@ export interface Config {
   launchTimeoutMs: number
   /** Upper bound on one DevTools command, in milliseconds. */
   commandTimeoutMs: number
+  /** Whether a launched test window is brought to the front and kept focused while it is driven. */
   keepFocus: boolean
   /** Cap on one `desktop_test_instance` result's text, in characters. */
   maxOutputChars: number

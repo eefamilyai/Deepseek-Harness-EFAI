@@ -13,14 +13,14 @@ For what the fork *is* — every plugin it adds, where each mounts, and which sw
 | | commit | note |
 |---|---|---|
 | Fork point | `47f943859b` | upstream merge of PR #2519, 2026-08-13 |
-| Upstream base | `00102833df` | `deepseek-harness` 0.1.7-alpha.2; recorded in `local-overlay/BASE` |
-| Upstream merge landed | `merge/upstream-0.1.7-alpha.2` | `deepseek-harness` 0.1.7-alpha.2 (3,009 commits) absorbed; the previous base was `c291e7961a` (0.1.5-rc.2) |
-| `master` | merge + 43 commits | tool-notebook-edit, kernel-python provider, session-recovery-context |
-| `upstream/master` | `00102833df` | the current base |
+| Upstream base | `687f282e86` | `deepseek-harness` 0.2.1-rc.2; recorded in `local-overlay/BASE` |
+| Upstream merge landed | `sync/upstream-2026-10-18` | 0.2.1-rc.2 absorbed; the previous base was `639ed01539` (0.2.0-rc.2) |
+| `master` | merge + fork work | Windows Desktop, Kiln kernel, plugin bundles |
+| `upstream/master` | `687f282e86` | the current base |
 
 `upstream/master` is not an ancestor of `master`: this is a divergent fork, and what separates the two is ordinary work rather than a pending sync.
 
-Measured against the base `00102833df`, the fork modifies **87 upstream files** (17 patch groups) and regenerates 25 more. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
+Measured against the base `687f282e86`, the fork modifies **71 upstream files** (16 patch groups) and regenerates 29 more. Everything else it adds is a path upstream does not own, and therefore free forever. `local-overlay/INVENTORY.md` enumerates all of it from the rules that produce the patches, so it cannot drift the way a hand-written table can; every count in this document is re-derived from it.
 
 Those 87 files are the entire cost of every future update, and the list is **frozen**: `local-overlay/SEAM.json` records it, and `pnpm run verify-seam-frozen` fails a tree that modifies an upstream file absent from it.
 
@@ -272,7 +272,7 @@ After editing an upstream-owned file, fold the edit into its patch and re-prove 
 ```sh
 git checkout --theirs docs/config-catalog.md docs/tool-catalog.md docs/capability-seams.md \
                       apps/cli/composition.md THIRD_PARTY_NOTICES.md tsconfig.base.json
-pnpm run gen-tsconfig-paths
+node efai/regen-tsconfig-paths.mjs   # fork aliases first, then upstream's generator
 pnpm run gen-config-catalog && pnpm run gen-tool-catalog
 pnpm run gen-doc-graphs && pnpm run gen-cordis-catalog
 pnpm run gen-client-catalog && pnpm run gen-persistence-catalog

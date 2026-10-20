@@ -87,3 +87,56 @@ matches upstream, whose settings controller already serves
   example or rewrite it around the kernel tool, then re-record.
 - The new packages still owe documentation: several have no README, and
   `verify-export-jsdoc` reports missing contracts. `pnpm run doc-sync` names them.
+
+## Sync 2: upstream 0.2.1-rc.2 (`687f282e86`, 2026-10-18)
+
+Base moved from `639ed01539` (0.2.0-rc.2) to `687f282e86` (0.2.1-rc.2): 1,925
+upstream commits. The merge produced 21 conflicts; 13 were generated files taken
+from upstream wholesale, and 8 were seam files resolved by re-applying their
+patch with `git apply -3` (desktop-host args, schedule create-task and its docs,
+the notebook-edit catalog row, and the catalog spec).
+
+Upstream API moves the fork had to follow:
+
+- `@deepseek-ai/dsh-invariants` and every `/invariant` subpath are gone. The two
+  fork packages that mounted them (output-masking, session-recovery-context)
+  dropped the dependency, the imports, and the invariant-only test block.
+- `clientBundle()` takes the package directory, not the package name. All 14
+  fork client `tsdown.config.ts` files now pass `import.meta.dirname`.
+- `tool-terminal` moved from `packages/terminal` to `packages/experimental`;
+  the job-kind patch group follows the new path.
+- `webServer.port` is now `number | undefined`; web-access degrades to the
+  un-scoped path instead of publishing a port-less name.
+- `ScheduleInputError` gained `subagent_session`; the browser create-task result
+  carries it so the form can explain the refusal.
+- `gen-tool-catalog` now rejects a tool package missing from TOOL_PACKAGES
+  (`tool-sites` added) and `gen-config-catalog` requires JSDoc on every field
+  (`harness-dev-tools.keepFocus` documented).
+- The Cordis catalog gates require every service and signature type to be
+  classified; `peakSend`, `skillsStudio`, and their types are registered, and
+  the generated subsystem pages for schedule/skills are declared generated.
+
+Green after the sync: `pnpm run typecheck`, `pnpm run build` (9/9 gates),
+`pnpm run verify-fork-overlay` (16 patches, 71 seam files, base `687f282e86`),
+and 1,743 tests across the affected packages.
+
+### Follow-up: the fork bundles are template entries, not dependencies
+
+`ad29cf48e2` made the Desktop Host append the fork bundles to a fresh profile
+*and* record each as a profile dependency (`@deepseek-ai/dsh-efai-base: "*"`).
+That manifest cannot be installed: the packages are unpublished, so pnpm fails
+with `ERR_PNPM_NO_OFFLINE_META` and one unresolvable entry breaks every
+`dsh plugin add`/`remove` for the whole profile. It also survived into the
+packaged application, whose dsh tree lives inside `app.asar` — a path pnpm
+cannot link into — and it failed the packaging runtime smoke.
+
+The Host now treats them exactly like upstream's own `dsh-base` and
+`dsh-web-app`: template entries in `dsh.profile.bundles`, resolved from the
+running installation, never dependencies. Profiles an older build wrote are
+repaired on the next start — the fork entries are removed from `dependencies`
+and every other entry, including user plugins, is left alone. Covered by
+`apps/desktop-host/tests/fork-bundles.spec.ts`.
+
+One consequence worth knowing: the Plugins page lists installed *dependencies*,
+so the four fork bundles no longer appear there, for the same reason upstream's
+two do not. They still load and still run.

@@ -745,7 +745,10 @@ def regenerate(repo: Path, worktree: Path, state: State, fork: Fork) -> None:
     log = log_file(repo)
     run(["pnpm", "install", "--no-frozen-lockfile"], worktree, timeout=3600, log=log)
     say("  pnpm install")
-    commands = ["pnpm run gen-tsconfig-paths"]
+    # Every generator comes from rules.json, in its declared order: the
+    # tsconfig entry is a fork-owned wrapper that restores the fork aliases
+    # before upstream's generator validates that every package is mapped.
+    commands: list[str] = []
     for command in fork.generated.values():
         if command not in commands and "install" not in command:
             commands.append(command)

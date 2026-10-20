@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-harness-dev-tools",
   "description": "Tools for changing the harness and seeing the result: desktop_test_instance drives a separate test copy of the Desktop app over the DevTools Protocol, build_workspace_package builds one workspace package",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "restricted"
   },
@@ -32,18 +32,18 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^"
+    "@deepseek-ai/dsh-attachment": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
+    "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-agent": "workspace:^",
-    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "@deepseek-ai/dsh-agent": "workspace:*",
+    "@deepseek-ai/dsh-attachment": "workspace:*",
     "@deepseek-ai/dsh-kernel-python": "workspace:*",
-    "@deepseek-ai/dsh-llm": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",
-    "@deepseek-ai/dsh-tools": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:*",
     "@types/ws": "^8.18.1",
     "ws": "^8.21.0"
   }

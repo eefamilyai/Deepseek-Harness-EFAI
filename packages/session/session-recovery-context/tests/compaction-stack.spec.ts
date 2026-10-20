@@ -2,7 +2,7 @@
  * The whole compaction stack, as a profile composes it, through the real loop.
  *
  * Every other test here isolates one piece. This one mounts the production
- * agent loop with its invariants, upstream's real `compaction-basic` driven by
+ * agent loop, upstream's real `compaction-basic` driven by
  * real token pressure, the real token meter, this plugin, and output masking,
  * and scripts only the model: it reads one large file per step until it has
  * read them all. The question each test answers is the one the plugins exist
@@ -16,18 +16,14 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import * as masking from '@deepseek-ai/dsh-output-masking'
 import { MASK_MARKER } from '@deepseek-ai/dsh-output-masking'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import * as recovery from '@deepseek-ai/dsh-session-recovery-context'
@@ -76,7 +72,9 @@ class ScriptedReader extends LlmAdapter {
   }
 
   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    if (textOf(options.messages.at(-1)).includes('acting as a compaction engine')) {
+    // The request carries `purpose: 'compaction'`; the fork's summarizer also
+    // replaced upstream's role sentence, so the purpose is the stable marker.
+    if (options.purpose === 'compaction' || textOf(options.messages.at(-1)).includes('transcript-summarization engine')) {
       this.summaries.push(options)
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'block-end', index: 0, block: { type: 'text', text: CHECKPOINT } }
@@ -114,10 +112,6 @@ function idle(ctx: Context, agent: Agent): Promise<void> {
 async function stack(model: ScriptedReader, withMasking: boolean): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(InvariantRegistry)
-  await ctx.plugin(SessionInvariant)
-  await ctx.plugin(AgentInvariant)
-  await ctx.plugin(AgentLoopInvariant)
   await ctx.plugin(recovery, { root: await mkdtemp(join(tmpdir(), 'compaction-stack-')), git: false })
   if (withMasking) await ctx.plugin(masking, { usageRatio: 0.4, keepRecent: 2, minChars: 1000, minBatch: 2 })
   await ctx.plugin(AgentLoop, { agents: [] })

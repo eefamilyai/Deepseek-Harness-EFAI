@@ -445,6 +445,32 @@ Session 获取、消息入队或持久化确认失败时，任务继续保存在
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxpeaksend--peaksend"></a>
+
+### `ctx.peakSend` — `PeakSend`
+
+The `ctx.peakSend` service. The service name is the literal the Typert analyzer reads to bind the namespace, so it cannot be factored into a constant.
+
+```ts cordis-catalog
+/**
+ * The messages a Session holds for an off-peak send, earliest first.
+ * @param sessionId - the Session.
+ * @returns its deferred messages.
+ */
+@Remote async pending(sessionId: string): Promise<DeferredSend[]>
+
+/**
+ * Defer one message: on its own, after an earlier deferred message, or merged into it.
+ * @param request - the Session, the text, the time, and the placement.
+ * @returns the task carrying the message and its send time.
+ * @throws RemoteError with `peakSend/defer-rejected` for an empty message, an
+ * unusable time, a missing earlier message, or a schedule refusal.
+ */
+@Remote async defer(request: DeferRequest): Promise<DeferResult>
+```
+
+Source: [`packages/schedule/peak-send/src/index.ts`](../../packages/schedule/peak-send/src/index.ts)
+
 <a id="ctxschedule--scheduleservice"></a>
 
 ### `ctx.schedule` — `ScheduleService`
@@ -470,6 +496,20 @@ Shared management service; reads, deletion, and timing edits never activate a Se
  * @returns The durably stored schedule. Cancellation does not roll back an in-flight write.
  */
 async create(sessionId: SessionId, request: ScheduleCreateRequest, signal?: AbortSignal): Promise<ScheduleRecord>
+
+/**
+ * Create a task from a client surface under an explicit Session binding.
+ *
+ * The binding travels inside the request rather than as its own argument, so
+ * the Web carrier serializes one object, and the selectors are validated by
+ * {@link create} exactly as the model's tool call validates them. A refused
+ * rule is returned rather than thrown, mirroring `update`, so the browser can
+ * name the field to correct.
+ * @param request - Original Session binding, required name, and reminder selector.
+ * @param signal - Optional cancellation checked before persistence begins, including after FIFO waits.
+ * @returns The durably stored schedule, or the input code that refused it.
+ */
+@Remote('create') async createTask(request: ScheduleCreateTaskRequest, signal?: AbortSignal): Promise<ScheduleCreateTaskResult>
 
 /**
  * Read the selected Session's active tasks without resuming its Agent.

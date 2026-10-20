@@ -31,6 +31,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
 | `@deepseek-ai/dsh-tool-fs` | `edit`, `read`, `read_image`, `write` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (image-tool registration)`, `ctx.llm + an image-capable route (image-tool execution)` | `tool/call`, `fs/write-intent or fs/edit-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.workingDirectory`, `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
+| `@deepseek-ai/dsh-tool-notebook-edit` | `notebook_edit` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt` | `tool/call`, `fs/write-intent for mutations`, `tool/result` | - | notebook_edit is one tool with five commands (`view`, `create`, `str_replace`, `insert`, `delete`) over Jupyter `.ipynb` files, and it is registered exclusive (no `isConcurrencySafe`): a mutating command re-reads the whole notebook and writes it back, so two overlapping edits to one file would lose one of them. Paths must be absolute, and mutations go through the mounted filesystem policy. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
 | `@deepseek-ai/dsh-tool-schedule` | `schedule_create`, `schedule_delete`, `schedule_list`, `schedule_update` | `ctx.tools`, `ctx.schedule` | `tool/call`, `Schedule storage domain create, update, or delete`, `tool/result` | - | A preset or Agent scope mounts this package; the preset decides which agents receive the four management tools. Each call acts on the calling Agent's Session. Accepts after_seconds, explicit absolute at, bounded fixed-rate every_seconds, daily and weekly local times in an explicit IANA zone, and cron as a five-field expression. Management uses the Host storage domain; due messages resume the original Session. |
@@ -48,6 +49,8 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+| `@deepseek-ai/dsh-tool-sites` | `site` | `ctx.tools` | `tool/call`, `tool/result` | - | site publishes static pages the agent builds at <name>.<zone> through a public GitHub Pages repository and a deSEC CNAME record. The schema is independent of the credentials, so harvesting mounts it without reading DESEC_TOKEN or the GitHub CLI login. |
+| `@deepseek-ai/dsh-tool-kernel` | `kernel` | `ctx.tools`, `ctx.kernel`, `ctx.systemPrompt`, `ctx.attachments` | `tool/call`, `tool/result` | - | kernel runs one cell in a namespace that persists across calls, so it is registered exclusive (no `isConcurrencySafe`): two overlapping cells would interleave their assignments and their captured output. Whether the model is offered it is the `kernel` switch of the `tool-roster` row, applied per turn. |
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 
@@ -1170,6 +1173,124 @@ Search file contents with a ripgrep regular expression. Returns matching lines w
 Source: [`packages/fs/tool-fs-search/src/index.ts`](../packages/fs/tool-fs-search/src/index.ts)
 
 glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.
+
+<a id="deepseek-aidsh-tool-notebook-edit"></a>
+
+## `@deepseek-ai/dsh-tool-notebook-edit`
+
+### `notebook_edit`
+
+Editing tool for Jupyter (.ipynb) notebooks. One schema, five commands.
+
+- 'view' renders every cell: zero-based index, cell type, code execution count (or 'unexecuted'), and the cell source indented two spaces. It does not modify the notebook.
+- 'create' writes a new notebook and refuses to overwrite an existing path. Omit 'cells' for an empty notebook, or pass a JSON array of nbformat cells (each with 'cell_type' and 'source').
+- 'str_replace' replaces one literal 'old_str' inside the 'cell_id' cell's source. The match must be exact and unique within that cell; omit 'new_str' (never null) to delete the match.
+- 'insert' adds a new cell at zero-based 'cell_id' (0 prepends, the cell count appends) with 'cell_type' and 'source'.
+- 'delete' removes the cell at zero-based 'cell_id'.
+
+Cell indexes are zero-based and stable for a single command. Paths must be absolute. Mutating commands re-read the notebook and write the whole file back through the mounted filesystem policy.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string",
+      "description": "The command to run. Allowed options are: 'view', 'create', 'str_replace', 'insert', 'delete'.",
+      "enum": [
+        "view",
+        "create",
+        "str_replace",
+        "insert",
+        "delete"
+      ]
+    },
+    "path": {
+      "type": "string",
+      "description": "Absolute path to the .ipynb notebook, e.g. /repo/analysis.ipynb."
+    },
+    "cell_id": {
+      "oneOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Zero-based cell index. Required by 'str_replace', 'insert', and 'delete'; ignored by other commands."
+    },
+    "cell_type": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "code",
+            "markdown",
+            "raw"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Cell type for 'insert' and 'create' cells: 'code', 'markdown', or 'raw'. Required by 'insert'; ignored otherwise."
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Cell source for 'insert'. Required by 'insert'; ignored otherwise."
+    },
+    "old_str": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Required string of 'str_replace': the literal cell-source fragment to replace (must be unique within the target cell)."
+    },
+    "new_str": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional replacement string of 'str_replace'; omit (never null) to delete the match."
+    },
+    "cells": {
+      "oneOf": [
+        {
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Optional JSON array of cells for 'create'; each cell is an nbformat object with 'cell_type' and 'source'."
+    }
+  },
+  "required": [
+    "command",
+    "path"
+  ]
+}
+```
+
+Source: [`packages/fs/tool-notebook-edit/src/index.ts`](../packages/fs/tool-notebook-edit/src/index.ts)
+
+notebook_edit is one tool with five commands (`view`, `create`, `str_replace`, `insert`, `delete`) over Jupyter `.ipynb` files, and it is registered exclusive (no `isConcurrencySafe`): a mutating command re-reads the whole notebook and writes it back, so two overlapping edits to one file would lose one of them. Paths must be absolute, and mutations go through the mounted filesystem policy.
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 
@@ -2822,3 +2943,109 @@ Search the web for current information. Returns an optional summary answer and a
 Source: [`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.
+
+<a id="deepseek-aidsh-tool-sites"></a>
+
+## `@deepseek-ai/dsh-tool-sites`
+
+### `site`
+
+Publish a static web page or small web app at https://<name>.dshai.reggilion.com and show it to the user. Use it whenever a result is better seen than read: illustrations and animations (SVG, canvas, CSS), slide decks, interactive explainers and simulations, charts and dashboards, diagrams, reports, prototypes and mockups, small games. Actions: publish (create or replace a whole site: give `files` inline, or `dir`, an absolute local folder; index.html is required; relative links only; libraries from a CDN are fine), list (every site), status (DNS, Pages build, HTTPS certificate, and whether the address answers), remove (take a site down; its repository is archived, not deleted). Each site is a public GitHub repository served by GitHub Pages, so never publish secrets or private data. Publishing waits for the build; a NEW name can take a few minutes to resolve and up to ~30 minutes to get HTTPS (http works meanwhile). Republishing to an existing name updates it within a minute. Give the user the returned URL.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "publish, list, status, or remove.",
+      "enum": [
+        "publish",
+        "list",
+        "status",
+        "remove"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "The site name and subdomain (publish, status, remove): 1-40 lowercase letters, digits, and inner hyphens, like \"solar-system\"."
+    },
+    "files": {
+      "type": "array",
+      "description": "publish: every file of the site. Set base64 for binary content (images, fonts).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path inside the site, e.g. index.html or assets/app.js."
+          },
+          "content": {
+            "type": "string",
+            "description": "The file text, or base64 bytes when base64 is true."
+          },
+          "base64": {
+            "type": "boolean",
+            "description": "Whether content is base64-encoded bytes."
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    },
+    "dir": {
+      "type": "string",
+      "description": "publish: an absolute local folder to publish instead of files (.git and node_modules are skipped)."
+    },
+    "title": {
+      "type": "string",
+      "description": "publish: a one-line title for the site list."
+    },
+    "wait_seconds": {
+      "type": "integer",
+      "description": "publish: seconds to wait for the Pages build (default 90; 0 returns at once)."
+    }
+  },
+  "required": [
+    "action"
+  ]
+}
+```
+
+Source: [`packages/web/tool-sites/src/index.ts`](../packages/web/tool-sites/src/index.ts)
+
+site publishes static pages the agent builds at <name>.<zone> through a public GitHub Pages repository and a deSEC CNAME record. The schema is independent of the credentials, so harvesting mounts it without reading DESEC_TOKEN or the GitHub CLI login.
+
+<a id="deepseek-aidsh-tool-kernel"></a>
+
+## `@deepseek-ai/dsh-tool-kernel`
+
+### `kernel`
+
+Run Python in a persistent kernel namespace. Returns the cell's captured output: printed text plus the value of every top-level bare expression. Variables and imports persist across calls. Shell commands run via sh("..."); files are read and written with the preloaded helpers. Start every cell with a one-line `#` comment stating what the script does; that line titles the call in the transcript.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "The Python source to execute in the persistent namespace. Its first line must be a `#` comment stating what the cell does."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "description": "Optional per-cell timeout in milliseconds. Defaults to the configured timeoutMs and is capped by maxTimeoutMs."
+    }
+  },
+  "required": [
+    "code"
+  ]
+}
+```
+
+Source: [`packages/kernel/tool-kernel/src/index.ts`](../packages/kernel/tool-kernel/src/index.ts)
+
+kernel runs one cell in a namespace that persists across calls, so it is registered exclusive (no `isConcurrencySafe`): two overlapping cells would interleave their assignments and their captured output. Whether the model is offered it is the `kernel` switch of the `tool-roster` row, applied per turn.

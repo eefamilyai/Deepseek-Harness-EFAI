@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-version-route",
   "description": "Diagnostics route answering with the checkout commit the running host was started from, at GET /version",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "restricted"
   },
@@ -28,13 +28,13 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+    "@deepseek-ai/dsh-host-webserver": "workspace:*"
   }
 }

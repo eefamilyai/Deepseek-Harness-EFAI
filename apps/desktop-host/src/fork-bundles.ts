@@ -5,10 +5,20 @@
  * names only `dsh-base` and `dsh-web-app`. The fork ships its plugins as two
  * more bundles that follow those (`dsh-efai-base`, `dsh-efai-web`), so before
  * the profile is loaded each upstream bundle gets its fork bundle placed right
- * after it, and each fork bundle is registered as an installed dependency (what
- * the Plugins page reads). A profile that already lists them is left byte for
- * byte as it was, and a profile that removed a fork bundle on purpose keeps it
- * removed (see {@link FORK_OPT_OUT}).
+ * after it. A profile that already lists them is left byte for byte as it was,
+ * and a profile that removed a fork bundle on purpose keeps it removed (see
+ * {@link FORK_OPT_OUT}).
+ *
+ * The fork bundles are template entries, exactly like upstream's own
+ * `dsh-base` and `dsh-web-app`: they resolve from the running dsh installation
+ * (the runtime directory the Host boots from) and are never profile
+ * dependencies. A dependency here would have to name a package that is not
+ * published — `*` fails pnpm resolution, and the packaged application lives
+ * inside an ASAR archive that pnpm cannot link into — and one unresolvable
+ * entry makes every later `dsh plugin add`/`remove` fail for the whole profile.
+ * Older fork builds did record such dependencies, so any left behind are
+ * removed here; the Plugins page lists installed dependencies, so the fork
+ * bundles stay out of it for the same reason upstream's own bundles do.
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -55,10 +65,9 @@ export function withForkBundles(bundles: readonly string[]): string[] {
 /**
  * Add the fork bundles to one profile, if it lacks them.
  * @param profileDir - the profile directory (holding package.json).
- * @param version - the dependency range to record for each fork bundle.
  * @returns the fork bundles that were added, empty when the profile was already current.
  */
-export function ensureForkBundles(profileDir: string, version = '*'): string[] {
+export function ensureForkBundles(profileDir: string): string[] {
   const path = join(profileDir, 'package.json')
   if (!existsSync(path)) return []
   const text = readFileSync(path, 'utf8')
@@ -68,14 +77,10 @@ export function ensureForkBundles(profileDir: string, version = '*'): string[] {
   if (!Array.isArray(bundles)) return []
   const next = withForkBundles(bundles)
   const added = next.filter(bundle => !bundles.includes(bundle))
-  const deps = { ...manifest.dependencies }
-  let depsChanged = false
-  for (const bundle of next) {
-    if (ADDED.has(bundle) && deps[bundle] === undefined) {
-      deps[bundle] = version
-      depsChanged = true
-    }
-  }
+  const entries = Object.entries(manifest.dependencies ?? {})
+  const kept = entries.filter(([name]) => !ADDED.has(name))
+  const deps = Object.fromEntries(kept)
+  const depsChanged = kept.length !== entries.length
   if (added.length === 0 && !depsChanged) return []
   const updated: ProfileManifest = {
     ...manifest,

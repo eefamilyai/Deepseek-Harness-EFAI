@@ -419,6 +419,7 @@ export type ScheduleCreateTaskErrorCode =
   | 'not_future'
   | 'time_out_of_range'
   | 'frequency_too_high'
+  | 'subagent_session'
 
 /**
  * Outcome of one browser-originated creation.

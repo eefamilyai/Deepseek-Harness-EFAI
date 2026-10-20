@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-efai-identity",
   "description": "The fork identity opener: the first line of the system prompt, rewritten on the assembly so it holds however the shipped opener is configured",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.1-rc.2",
   "publishConfig": {
     "access": "restricted"
   },
@@ -28,13 +28,13 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-system-prompt": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^"
+    "@deepseek-ai/dsh-system-prompt": "workspace:*"
   }
 }
