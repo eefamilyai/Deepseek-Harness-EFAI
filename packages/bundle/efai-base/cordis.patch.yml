@@ -82,12 +82,6 @@
     - id: peak-send
       name: '@deepseek-ai/dsh-peak-send'
 
-    # The Skills tab: list, write, and remove skills in the folders the skill
-    # loader scans, with an embedded Skill Builder chat. Both halves load from
-    # this row; the page sits in the sidebar after Automation tasks.
-    - id: skills-studio
-      name: '@deepseek-ai/dsh-skills-studio'
-
     # The `site` tool: publish pages the agent builds (illustrations, slide
     # decks, explainers, charts) at https://<name>.dshai.reggilion.com through
     # GitHub Pages and deSEC DNS. Reads DESEC_TOKEN and the GitHub CLI login.
@@ -107,12 +101,6 @@
     # otherwise cannot open the GUI. `node scripts/web-access.mjs` reads it.
     - id: web-access
       name: '@deepseek-ai/dsh-host-web-access'
-
-    # The profiles on this machine, and the launch of a second host for one
-    # other than the running profile. A host serves exactly one profile, so
-    # entering a different one means starting it; this service owns that child.
-    - id: profile-hub
-      name: '@deepseek-ai/dsh-profile-hub'
 
     # What a compacted turn gets back. A summary drops exactly what code can
     # know for certain — the operator's own words, the files touched, the

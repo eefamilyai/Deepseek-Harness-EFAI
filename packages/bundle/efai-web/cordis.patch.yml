@@ -81,9 +81,8 @@
     - id: ui-skill-mention
       name: '@deepseek-ai/dsh-client-ui-skill-mention'
 
-    # The `profileHub` service and its frame-wide profiles page are mounted by
-    # `dsh-efai-base`, for the same single-row-id reason as the account pool
-    # above.
+# The Profiles tab (`profile-hub`) and the Skills tab (`skills-studio`) are
+# switched off; EFAI-REMOVED-PLUGINS.md has their rows and how to restore them.
 
 # Upstream's sidebar brand, replaced rather than restyled: `ui-brand-efai` above
 # registers the same two occupants for every build profile.

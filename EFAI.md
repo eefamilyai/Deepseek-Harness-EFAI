@@ -12,12 +12,13 @@ On first start the Desktop puts the fork's bundles on its profile, so every plug
 
 | Area | What you get |
 |---|---|
-| Skills tab | A sidebar page to list, write, and delete skills, with a Skill Builder chat beside the editor or in its own session. |
 | Peak hours | A pill under the composer, and a dialog before a DeepSeek API message is sent at peak price: send anyway, schedule for when peak ends, or keep editing. Deferred messages queue or merge. |
 | Providers | A show/hide switch on every provider card; providers and plugin switches are kept the same across profiles. |
 | Sites | The `site` tool and kernel helpers publish agent-built pages at `https://<name>.dshai.reggilion.com` (needs `DESEC_TOKEN` and a GitHub login; see `packages/web/tool-sites/README.md`). |
 | Kernel | A persistent Python kernel (Kiln) with file, search, vision, and real-window input helpers. |
-| Profiles, Automation tasks, accounts, personalization | Profile hub, scheduled tasks, DeepSeek web-account pool, and appearance settings including window transparency. |
+| Automation tasks, accounts, personalization | Scheduled tasks, DeepSeek web-account pool, and appearance settings including window transparency. |
+
+The Profiles and Skills tabs are switched off; see `EFAI-REMOVED-PLUGINS.md` to add them back.
 
 ## Build the installer
 
