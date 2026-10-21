@@ -26,18 +26,20 @@ import { join } from 'node:path'
 
 /**
  * The bundles that follow each upstream one, in order: the fork's own, and after
- * the web one the two optional bundles the fork's Desktop always runs
- * (Automation tasks and voice input).
+ * the web one the optional bundle the fork's Desktop always runs (voice input).
+ * Automation tasks need no bundle: upstream's Web composition mounts Schedule
+ * itself since 0.2.0-rc.2 and strips the retired schedule bundle at load.
  */
 export const FORK_AFTER: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-base': ['@deepseek-ai/dsh-efai-base'],
-  '@deepseek-ai/dsh-web-app': [
-    '@deepseek-ai/dsh-efai-web', '@deepseek-ai/dsh-experimental-schedule-bundle', '@deepseek-ai/dsh-experimental-voice-input-bundle',
-  ],
+  '@deepseek-ai/dsh-web-app': ['@deepseek-ai/dsh-efai-web', '@deepseek-ai/dsh-experimental-voice-input-bundle'],
 }
 
 /** Every bundle this module adds. */
 const ADDED = new Set(Object.values(FORK_AFTER).flat())
+
+/** Bundles this module once added and no longer does; only their recorded dependencies are removed. */
+const RETIRED = new Set(['@deepseek-ai/dsh-experimental-schedule-bundle'])
 
 /** A profile manifest key that opts the profile out of fork bundles entirely. */
 export const FORK_OPT_OUT = 'forkBundles'
@@ -78,7 +80,7 @@ export function ensureForkBundles(profileDir: string): string[] {
   const next = withForkBundles(bundles)
   const added = next.filter(bundle => !bundles.includes(bundle))
   const entries = Object.entries(manifest.dependencies ?? {})
-  const kept = entries.filter(([name]) => !ADDED.has(name))
+  const kept = entries.filter(([name]) => !ADDED.has(name) && !RETIRED.has(name))
   const deps = Object.fromEntries(kept)
   const depsChanged = kept.length !== entries.length
   if (added.length === 0 && !depsChanged) return []

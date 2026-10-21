@@ -18,14 +18,14 @@ const read = (dir: string) => JSON.parse(readFileSync(join(dir, 'package.json'),
   dsh: { profile: { bundles: string[] } }
 }
 
-const FORKS = ['@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-efai-web',
-  '@deepseek-ai/dsh-experimental-schedule-bundle', '@deepseek-ai/dsh-experimental-voice-input-bundle']
+const SCHEDULE = '@deepseek-ai/dsh-experimental-schedule-bundle'
+const FORKS = ['@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-efai-web', '@deepseek-ai/dsh-experimental-voice-input-bundle']
 
 describe('fork bundles on the Desktop profile', () => {
   it('puts each fork bundle right after the upstream one it extends', () => {
     expect(withForkBundles(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'other'])).toEqual([
       '@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-efai-web',
-      '@deepseek-ai/dsh-experimental-schedule-bundle', '@deepseek-ai/dsh-experimental-voice-input-bundle', 'other',
+      '@deepseek-ai/dsh-experimental-voice-input-bundle', 'other',
     ])
     expect(withForkBundles(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base'])).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base'])
   })
@@ -53,6 +53,15 @@ describe('fork bundles on the Desktop profile', () => {
     expect(ensureForkBundles(dir)).toEqual([])
     expect(read(dir).dependencies).toEqual({ 'some-plugin': 'file:../some-plugin' })
     expect(read(dir).dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base'])
+  })
+
+  it('never re-adds the retired schedule bundle, but still removes its recorded dependency', () => {
+    const bundles = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-efai-base', '@deepseek-ai/dsh-web-app', ...FORKS.slice(1)]
+    expect(withForkBundles(bundles)).not.toContain(SCHEDULE)
+    const dir = profile({ dsh: { profile: { bundles } }, dependencies: { [SCHEDULE]: '*' } })
+    expect(ensureForkBundles(dir)).toEqual([])
+    expect(read(dir).dependencies).toEqual({})
+    expect(read(dir).dsh.profile.bundles).toEqual(bundles)
   })
 
   it('leaves alone a missing profile, one without a bundle list, and one that opted out', () => {
