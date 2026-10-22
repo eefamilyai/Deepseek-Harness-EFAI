@@ -82,6 +82,11 @@ const RESTART_NOTICE: Readonly<Record<Exclude<KernelOutcome, 'ok'>, (request: Ke
   crashed: () => 'ERROR: Kernel crashed mid-run; restarted. State lost.',
 }
 
+/** How one cell attempt ended: its result, or the reason the kernel was replaced. */
+type CellOutcome =
+  | { kind: 'ok'; output: string; images: readonly KernelCellImage[]; background?: { id: number; timeoutMs: number } }
+  | { kind: Exclude<KernelOutcome, 'ok'> }
+
 /** Launch facts plus the id this backend registers under. */
 export interface KilnKernelProviderOptions extends KernelChildOptions {
   /** Registry key on `ctx.kernel`. */
@@ -142,15 +147,26 @@ export class KilnKernelProvider implements KernelProvider {
 
   async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult> {
     return this.serialize(async () => {
-      const child = this.ensureChild()
       // The owning agent's shared session id is the durable-conversation key:
       // one kernel process serves every session, so `remember()`/`recall()`
       // must be scoped per cell, exactly like `cwd`. Without a live agent the
       // conversation key is
       // absent and the Python side falls back to standalone behavior.
       const conv = conversationOf(request.agent)
-      const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
-      const outcome = await this.awaitCell(child, id, request, signal, request.agentCtx, request.agent)
+      const attempt = async (): Promise<{ child: KernelChild; outcome: CellOutcome }> => {
+        const child = this.ensureChild()
+        const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
+        return { child, outcome: await this.awaitCell(child, id, request, signal, request.agentCtx, request.agent) }
+      }
+      let { child, outcome } = await attempt()
+      // A kernel that never reached its ready frame never ran the cell — the
+      // interpreter could not start, so nothing was executed and re-sending
+      // cannot repeat a side effect. Retrying once turns a failed launch into a
+      // working call instead of reporting a lost namespace the cell never used.
+      if (outcome.kind === 'crashed' && !child.everReady && signal?.aborted !== true) {
+        await this.replace(child)
+        ;({ child, outcome } = await attempt())
+      }
       if (outcome.kind === 'ok') {
         return {
           output: outcome.output,
@@ -185,10 +201,7 @@ export class KilnKernelProvider implements KernelProvider {
     signal?: AbortSignal,
     agentCtx?: KernelExecuteRequest['agentCtx'],
     agent?: KernelExecuteRequest['agent'],
-  ): Promise<
-    | { kind: 'ok'; output: string; images: readonly KernelCellImage[]; background?: { id: number; timeoutMs: number } }
-    | { kind: Exclude<KernelOutcome, 'ok'> }
-  > {
+  ): Promise<CellOutcome> {
     const prevHandler = child.seamHandler
     child.seamHandler = (seam: SeamRequest): void => {
       void dispatchSeam(agentCtx, agent, seam, signal).then(

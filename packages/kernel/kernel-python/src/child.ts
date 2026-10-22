@@ -173,6 +173,8 @@ export class KernelChild {
   private discarded = 0
   private buffer = ''
   private exited = false
+  /** Whether the child ever reached its ready frame; see {@link everReady}. */
+  private sawReady = false
 
   constructor(options: KernelChildOptions) {
     try {
@@ -219,6 +221,19 @@ export class KernelChild {
     return this.exited
   }
 
+  /**
+   * Whether this child ever answered its startup frame.
+   *
+   * A child that died without one never executed a cell: the interpreter could
+   * not open the script, or it exited while importing the runtime. That is what
+   * makes an automatic retry safe — no cell source ran, so re-sending it cannot
+   * repeat a side effect. A child that died AFTER `ready` gives no such
+   * guarantee, and its crash is reported instead.
+   */
+  get everReady(): boolean {
+    return this.sawReady
+  }
+
   private onData(chunk: string): void {
     this.buffer += chunk
     let index = this.buffer.indexOf('\n')
@@ -245,6 +260,7 @@ export class KernelChild {
    * for the rest of the process's life.
    */
   private deliver(frame: KernelFrame): void {
+    if (frame.ready === true) this.sawReady = true
     const { id } = frame
     if (id === undefined) {
       if (frame.ready !== true) this.discarded += 1

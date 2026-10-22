@@ -13,6 +13,7 @@
  *   config:
  *     python: python3        # omitted = probe the platform defaults
  *     cwd: /path/to/project  # omitted = the harness working directory
+ *     runtimeDir: /path/to/runtime  # omitted = the packed copy, else the repository's
  * ```
  *
  * @module @deepseek-ai/dsh-kernel-python
@@ -20,7 +21,7 @@
 
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-kernel'
@@ -88,15 +89,42 @@ const PROBE_TIMEOUT_MS = 10_000
 
 
 /**
+ * The archive-external path for a location inside an asar archive.
+ *
+ * Electron reads files inside `app.asar` through its patched `fs`, but a spawned
+ * interpreter is an ordinary process: the same path is `ENOENT` for it. That
+ * asymmetry is why an installed Desktop reported every cell as a crash while the
+ * provider's own `existsSync` guard passed — the runtime resolved to a path
+ * Electron could list and Python could not open. An unpacking build places the
+ * same files under the archive's `.unpacked` sibling, so that is the copy to
+ * reach for; nothing here proves the sibling exists.
+ * @param path - a candidate path, possibly inside an asar archive.
+ * @returns the `.unpacked` sibling when `path` names an archive, else `path`.
+ */
+export function outsideAsar(path: string): string {
+  const segments = path.split(/[\\/]/)
+  const index = segments.findIndex(segment => segment.toLowerCase().endsWith('.asar'))
+  if (index === -1) return path
+  return [...segments.slice(0, index), `${segments[index]}.unpacked`, ...segments.slice(index + 1)].join(sep)
+}
+
+/**
  * The Kiln runtime: the copy packed into this package (`kiln/` beside `lib/`,
  * which is what an installed Desktop has), else the repository's
  * `python/kiln/runtime`, four levels above this module's directory in a source
  * checkout.
+ *
+ * A packaged runtime inside an asar archive is only reached when its `.unpacked`
+ * sibling is absent, because a spawned interpreter cannot open the archived
+ * copy; {@link apply} refuses that launch rather than starting a child that dies.
  * @returns the runtime directory's absolute path.
  */
 export function defaultRuntimeDir(): string {
   const packed = resolve(import.meta.dirname, '..', 'kiln')
-  if (existsSync(join(packed, 'kernel_child.py'))) return packed
+  const unpacked = outsideAsar(packed)
+  if (unpacked !== packed) {
+    if (existsSync(join(unpacked, 'kernel_child.py'))) return unpacked
+  } else if (existsSync(join(packed, 'kernel_child.py'))) return packed
   return resolve(import.meta.dirname, '..', '..', '..', '..', 'python', 'kiln', 'runtime')
 }
 
@@ -108,12 +136,13 @@ export function defaultRuntimeDir(): string {
  * `.venv`. Preferring it means even a direct `dsh web` — no launcher, so
  * `$DSH_KERNEL_PYTHON` is unset — finds the bundled Python (with `curl_cffi`,
  * `playwright`, …) instead of a bare system interpreter that lacks them.
+ * @param runtimeDir - the runtime whose bundle to inspect; defaults to {@link defaultRuntimeDir}.
  * @returns the bundled interpreter's path, or undefined when the bundle has not been provisioned.
  */
-export function bundledVenvPython(): string | undefined {
+export function bundledVenvPython(runtimeDir: string = defaultRuntimeDir()): string | undefined {
   const venv = process.platform === 'win32'
-    ? join(defaultRuntimeDir(), '.venv', 'Scripts', 'python.exe')
-    : join(defaultRuntimeDir(), '.venv', 'bin', 'python')
+    ? join(runtimeDir, '.venv', 'Scripts', 'python.exe')
+    : join(runtimeDir, '.venv', 'bin', 'python')
   return existsSync(venv) ? venv : undefined
 }
 
@@ -122,14 +151,18 @@ export function bundledVenvPython(): string | undefined {
  * Windows Store shim is on PATH and answers `--version` with an advertisement —
  * so each candidate is executed and only a clean exit counts.
  * @param configured - an explicitly configured interpreter, tried alone.
+ * @param runtimeDir - the runtime whose bundled venv is preferred; defaults to {@link defaultRuntimeDir}.
  * @returns the first working interpreter, or undefined when none is.
  */
-export async function resolvePython(configured?: string): Promise<string | undefined> {
+export async function resolvePython(
+  configured?: string,
+  runtimeDir: string = defaultRuntimeDir(),
+): Promise<string | undefined> {
   const { execFileSync } = await import('node:child_process')
   const explicit = configured ?? process.env.DSH_KERNEL_PYTHON
   const candidates = explicit !== undefined && explicit.length > 0
     ? [explicit]
-    : [bundledVenvPython(), ...PYTHON_CANDIDATES[process.platform === 'win32' ? 'win32' : 'other']]
+    : [bundledVenvPython(runtimeDir), ...PYTHON_CANDIDATES[process.platform === 'win32' ? 'win32' : 'other']]
       .filter((candidate): candidate is string => candidate !== undefined)
   for (const candidate of candidates) {
     try {
@@ -159,13 +192,22 @@ export async function resolvePython(configured?: string): Promise<string | undef
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const runtimeDir = config.runtimeDir ?? defaultRuntimeDir()
   const script = join(runtimeDir, 'kernel_child.py')
+  // Before the existence check, not after: inside Electron `existsSync` answers
+  // for the archive's own index, so a runtime the child cannot open passes it.
+  if (outsideAsar(script) !== script) {
+    throw new KernelError(
+      `the Kiln kernel runtime at "${script}" is inside an asar archive, which the kernel's Python`
+      + ' process cannot open: set `runtimeDir` on the kernel-python row to a runtime directory on disk',
+      'KERNEL_START_FAILED',
+    )
+  }
   if (!existsSync(script)) {
     throw new KernelError(
       `the Kiln kernel runtime is missing: no kernel_child.py under "${runtimeDir}"`,
       'KERNEL_START_FAILED',
     )
   }
-  const python = await resolvePython(config.python)
+  const python = await resolvePython(config.python, runtimeDir)
   if (python === undefined) {
     throw new KernelError(
       'no working Python interpreter was found; set `python` on the kernel-python row or $DSH_KERNEL_PYTHON',
