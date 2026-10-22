@@ -169,7 +169,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 825 paths do not exist upstream, so no patch covers them and none can conflict.
+These 829 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -285,6 +285,7 @@ These 825 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/profile-hub-probe.mjs`
 - `.recon/register-external-plugins-in-plugins-tab.md`
 - `.recon/register-hooks.mjs`
+- `.recon/release-notes-efai-desktop-0.2.0-rc.2.md`
 - `.recon/repack-desktop-asar.mjs`
 - `.recon/repaint-caption-strip.py`
 - `.recon/replay.mjs`
@@ -388,6 +389,7 @@ These 825 paths do not exist upstream, so no patch covers them and none can conf
 - `.research-compaction/vitest3.txt`
 - `AGENTS.local.md`
 - `AI_BIG_PROJECT_DESIGN.md`
+- `EFAI-REMOVED-PLUGINS.md`
 - `EFAI.md`
 - `HARNESS-EDITS.md`
 - `HARNESS.md`
@@ -409,7 +411,9 @@ These 825 paths do not exist upstream, so no patch covers them and none can conf
 - `docs/tool-call-formats.txt`
 - `efai/ensure-profile-bundles.mjs`
 - `efai/ensure-profile-bundles.test.mjs`
+- `efai/fork-aliases.mjs`
 - `efai/merge_upstream.py`
+- `efai/regen-tsconfig-paths.mjs`
 - `efai/test_merge_upstream.py`
 - `install.ps1`
 - `install.sh`
