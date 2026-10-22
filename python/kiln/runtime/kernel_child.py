@@ -1174,6 +1174,14 @@ try:  # noqa: E402
     import sites_tools  # noqa: E402
 except Exception:  # pragma: no cover
     sites_tools = None
+# image_tools: measure a rendered image instead of looking at it — silhouette box,
+# luminance profile, frame diff. Pillow is already a runtime dependency for
+# vision_tools, so a failed import means a broken install; the kernel still starts
+# and the helpers report the reason when called.
+try:  # noqa: E402
+    import image_tools  # noqa: E402
+except Exception:  # pragma: no cover
+    image_tools = None
 from context_store import context_stats, index_context, search_context  # noqa: E402 — deferred: heavy deps
 # ── Skills (Cline-style) ─────────────────────────────────────────────────────
 
@@ -5020,6 +5028,14 @@ _IMAGE_TOOLS = {
 }
 prompt_dict.update(_IMAGE_TOOLS)
 globals().update(_IMAGE_TOOLS)
+# Pixel measurements for a rendered image. Registered in both places for the same
+# reason again: `prompt_dict` is what makes a helper callable inside a cell, and
+# `globals()` is what `tool_help` scans for functions with a docstring. A model
+# asked "is the silhouette there, did the frame change, is the band where it
+# should be" needs the measurement, not another screenshot to guess from.
+if image_tools is not None:
+    prompt_dict.update(image_tools.HELPERS)
+    globals().update(image_tools.HELPERS)
 # Sites: the `site` tool's Python face. Bound to `call_tool` so credentials and the
 # GitHub/deSEC work stay in the one tool; registered in both places like the
 # vision tools, so `tool_help('site')` finds them.
