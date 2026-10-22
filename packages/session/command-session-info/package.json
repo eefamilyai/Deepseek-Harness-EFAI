@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-command-session-info",
   "description": "Human-facing slash command reporting session token usage, context pressure, and activity",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

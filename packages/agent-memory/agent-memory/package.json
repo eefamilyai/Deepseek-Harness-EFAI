@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-agent-memory",
   "description": "Durable, cache-friendly agent memory: a bounded prompt index plus on-disk evidence recalled by ref",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "restricted"
   },

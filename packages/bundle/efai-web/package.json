@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-efai-web",
   "description": "The fork's rows for the browser profile as a bundle: the /version route, the effects and accent layers, and the Tools and Accounts settings sections",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "restricted"
   },

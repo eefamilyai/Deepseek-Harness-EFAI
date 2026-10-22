@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm-kiln",
   "description": "Kiln multi-provider LLM adapter (16 presets plus ds_direct, DeepSeek's free web session) for the DeepSeek Harness",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

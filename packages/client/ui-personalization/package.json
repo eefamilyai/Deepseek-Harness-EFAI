@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-personalization",
   "description": "Personalization settings section: fonts, line spacing, accent, layout widths, corners, scrollbars, real transparency, backdrop, blur, shadows, and motion, applied as token overrides",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },

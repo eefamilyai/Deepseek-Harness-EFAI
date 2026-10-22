@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm-text-toolcalls",
   "description": "Provider-neutral DSML tool-call reader: parses text-channel tool calls out of any adapter's stream for the DeepSeek Harness",
-  "version": "0.2.1-rc.2",
+  "version": "0.2.1-rc.3",
   "publishConfig": {
     "access": "public"
   },
