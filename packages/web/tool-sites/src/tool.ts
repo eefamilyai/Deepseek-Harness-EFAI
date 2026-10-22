@@ -9,7 +9,7 @@ import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Sites, SiteFileContent } from './sites.ts'
 
 /** The actions `site` accepts. */
-export const SITE_ACTIONS = ['publish', 'list', 'status', 'remove'] as const
+export const SITE_ACTIONS = ['publish', 'list', 'status', 'secure', 'remove'] as const
 
 /** One file as the model passes it. */
 interface FileArg {
@@ -57,10 +57,10 @@ export function siteTool(deps: SiteToolDeps): ToolDefinition {
       + ' Publishing waits for the build; a NEW name can take a few minutes to resolve and up to ~30 minutes to get HTTPS'
       + ' (http works meanwhile). Republishing to an existing name updates it within a minute. Give the user the returned URL.',
     parameters: {
-      action: { type: 'string', enum: [...SITE_ACTIONS], required: true, description: 'publish, list, status, or remove.' },
+      action: { type: 'string', enum: [...SITE_ACTIONS], required: true, description: 'publish, list, status, secure, or remove.' },
       name: {
         type: 'string',
-        description: 'The site name and subdomain (publish, status, remove): 1-40 lowercase letters, digits, and inner hyphens, like "solar-system".',
+        description: 'The site name and subdomain (publish, status, secure, remove): 1-40 lowercase letters, digits, and inner hyphens, like "solar-system". Omit on secure to repair every site.',
       },
       files: {
         type: 'array',
@@ -99,6 +99,12 @@ export function siteTool(deps: SiteToolDeps): ToolDefinition {
       }
       if (args.action === 'status') {
         const s = await sites.status(need())
+        // The Pages API reports the certificate as issued well before GitHub's
+        // edge serves it, and until it does every browser rejects the name with
+        // a certificate error. Reporting the API state alone told the operator
+        // the site was ready while it was unusable, so readiness is stated from
+        // what an actual request answered.
+        const serving = /^[23]/u.test(s.reachable.https)
         return {
           url: s.url,
           text: [
@@ -106,8 +112,26 @@ export function siteTool(deps: SiteToolDeps): ToolDefinition {
             `- repository: ${s.repo ?? 'none'}${s.archived ? ' (archived: taken down)' : ''}`,
             `- DNS: ${s.dns ?? 'no record'}`,
             `- Pages: ${s.pages ?? 'off'}; latest build ${s.build ?? 'none'}${s.buildError === null ? '' : ` (${s.buildError})`}`,
-            `- HTTPS certificate: ${s.certificate ?? 'none'}${s.httpsEnforced ? ', enforced' : ''}`,
+            `- HTTPS certificate: ${s.certificate ?? 'none'}${s.httpsEnforced ? ', enforced' : ''}`
+              + ` — ${serving
+                ? 'served: browsers load the https address'
+                : 'NOT served by the edge yet, so browsers reject the name with a certificate error;'
+                  + ' GitHub issues the certificate first and propagates it minutes to hours later.'
+                  + ' The http address works in the meantime.'}`,
             `- answers: http ${s.reachable.http}; https ${s.reachable.https}`,
+          ].join('\n'),
+        }
+      }
+      if (args.action === 'secure') {
+        const rows = await sites.secureAll(args.name === undefined || args.name === '' ? undefined : args.name)
+        if (rows.length === 0) return { text: 'No live sites to secure.' }
+        const unserved = rows.filter(row => !row.serving).length
+        return {
+          text: [
+            `HTTPS repair across ${String(rows.length)} site(s): ${String(rows.length - unserved)} serving, ${String(unserved)} still waiting`
+              + (unserved === 0 ? '' : ' (a certificate GitHub has to issue and propagate; the http address works meanwhile)'),
+            ...rows.map(row => `- ${row.name}: ${row.host} — certificate ${row.certificate ?? 'none'}`
+              + `${row.enforced ? ', enforced' : ''}; ${row.serving ? 'serves https now' : 'NOT serving a certificate for this host yet'}`),
           ].join('\n'),
         }
       }

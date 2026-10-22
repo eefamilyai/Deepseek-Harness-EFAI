@@ -417,7 +417,42 @@ describe('the site tool', () => {
     repo.pages!.https_enforced = false
     repo.pages!.https_certificate = { state: 'new' }
     expect((await run({ action: 'status', name: 'demo' }, api)).value.text).toContain('latest build errored (bad liquid)')
-    expect((await run({ action: 'status', name: 'demo' }, api)).value.text).toContain('- HTTPS certificate: new\n')
+    // The API state is not readiness: the line always says whether GitHub's edge
+    // is actually serving a certificate a browser accepts, because the two are
+    // minutes to hours apart and only the second one makes the site usable.
+    const statusText = (await run({ action: 'status', name: 'demo' }, api)).value.text
+    expect(statusText).toContain('- HTTPS certificate: new')
+    expect(statusText).toMatch(/HTTPS certificate: new[^\n]*— (served|NOT served)/)
+  })
+
+  it('sweeps every site for HTTPS and reports what each host actually serves', async () => {
+    const api = fakeApis()
+    // Two live sites: one already approved but not enforced, one whose
+    // certificate request failed and must be asked for again.
+    await run({ action: 'publish', name: 'ready', files: [{ path: 'index.html', content: 'x' }] }, api)
+    await run({ action: 'publish', name: 'broken', files: [{ path: 'index.html', content: 'x' }] }, api)
+    const ready = api.repos.get('dshai-ready')!
+    const broken = api.repos.get('dshai-broken')!
+    ready.pages!.https_enforced = false
+    ready.pages!.https_certificate = { state: 'approved' }
+    broken.pages!.https_enforced = false
+    broken.pages!.https_certificate = { state: 'bad_authz' }
+
+    const sweep = await run({ action: 'secure' }, api)
+    expect(sweep.value.text).toContain('HTTPS repair across 2 site(s)')
+    expect(sweep.value.text).toContain('ready: ready.z.example')
+    expect(sweep.value.text).toContain('serves https now')
+    // The approved certificate is enforced, and the failed one is asked for
+    // again rather than reported as fine — the request is what recovers it.
+    expect(ready.pages!.https_enforced).toBe(true)
+    expect(broken.pages!.https_certificate!.state).not.toBe('bad_authz')
+    expect(broken.pages!.https_enforced).toBe(true)
+    expect(sweep.value.text).toContain('broken: broken.z.example')
+
+    // One named site sweeps just that one.
+    const single = await run({ action: 'secure', name: 'ready' }, api)
+    expect(single.value.text).toContain('across 1 site(s)')
+    expect(single.value.text).not.toContain('broken.z.example')
   })
 
   it('refuses incomplete requests', async () => {

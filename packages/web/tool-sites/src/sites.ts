@@ -88,6 +88,19 @@ export interface SiteEntry {
   readonly updatedAt?: string
 }
 
+/** What one HTTPS repair pass found and did for a site. */
+export interface SecureResult {
+  readonly name: string
+  /** The host name the site answers on. */
+  readonly host: string
+  /** The certificate state GitHub reports, or null when it reports none. */
+  readonly certificate: string | null
+  /** Whether GitHub now enforces HTTPS for the host. */
+  readonly enforced: boolean
+  /** Whether a request to the host answered over https with a certificate for it. */
+  readonly serving: boolean
+}
+
 /** A site's state, piece by piece. */
 export interface SiteStatus {
   readonly name: string
@@ -334,6 +347,44 @@ export class Sites {
       }
     }
     return check && /^[23]/u.test(await this.probe(`https://${host}/`))
+  }
+
+  /**
+   * Repair HTTPS for every site, or for one.
+   *
+   * A published site is not usable until GitHub's edge serves a certificate for
+   * its own host. The Pages API reports a certificate as approved well before
+   * that, and a site whose certificate request failed stays broken with no
+   * signal at all — the name simply answers with GitHub's default `*.github.io`
+   * certificate and every browser rejects it.
+   *
+   * This runs the same repair per site: re-request a certificate GitHub gave up
+   * on, enforce HTTPS once one is approved, and report what the host actually
+   * serves. Publish and status already take this path for the site they touch;
+   * this is the sweep that covers every site, including ones published before.
+   * @param name - one site, or every live site with a DNS name when omitted.
+   * @returns one row per site checked.
+   */
+  async secureAll(name?: string): Promise<SecureResult[]> {
+    const owner = await this.account()
+    const names = name === undefined
+      ? (await this.list()).filter(site => site.live && site.dns).map(site => site.name)
+      : [name]
+    const results: SecureResult[] = []
+    for (const site of names) {
+      const repo = `${this.settings.repoPrefix}${site}`
+      const host = this.host(site)
+      const serving = await this.secure(owner, repo, host)
+      const pages = await this.github.pages(owner, repo)
+      results.push({
+        name: site,
+        host,
+        certificate: pages?.https_certificate?.state ?? null,
+        enforced: pages?.https_enforced === true,
+        serving,
+      })
+    }
+    return results
   }
 
   /**
