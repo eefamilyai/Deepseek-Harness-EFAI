@@ -27,11 +27,17 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { CapturedScreenshot } from './browser.ts'
 import type { BrowserDriver, BrowserPageTarget } from './driver.ts'
+import {
+  evalScript, formatConsoleRead, formatEvalResult, installConsoleScript, readConsoleScript,
+} from './inspect.ts'
+import type { ConsoleRead, EvalResult } from './inspect.ts'
 import type { RawSnapshot } from './page-script.ts'
 import { formatSnapshot } from './serialize.ts'
 
 /** The actions the tool accepts, named in the schema and the error text. */
-export const BROWSER_ACTIONS = ['navigate', 'read', 'click', 'type', 'press', 'scroll', 'back', 'screenshot'] as const
+export const BROWSER_ACTIONS = [
+  'navigate', 'read', 'click', 'type', 'press', 'scroll', 'back', 'screenshot', 'eval', 'console',
+] as const
 
 /** Cut tool output to the cap, keeping the head (a page's most useful part). */
 function capOutput(text: string, maxChars: number): string {
@@ -46,16 +52,37 @@ interface BrowserArgs {
   ref?: number
   text?: string
   key?: string
+  script?: string
 }
 
 /**
- * What one dispatched action produces: a page snapshot, or the decision to
- * capture the viewport. Argument validation lives in the single switch below,
- * so `screenshot` is checked there even though `execute` carries it out.
+ * What one dispatched action produces: a page snapshot, a block of text, or the
+ * decision to capture the viewport. Argument validation lives in the single
+ * switch below, so text actions are checked there even though `execute` carries
+ * them out.
  */
 type DispatchOutcome =
   | { readonly kind: 'snapshot'; readonly snapshot: RawSnapshot }
+  | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'screenshot' }
+
+/**
+ * Parse a page script's JSON text, naming the failure as the page's own.
+ *
+ * The text comes from a page the harness does not control, so a value that does
+ * not parse is reported as a broken page script rather than escaping as a raw
+ * `SyntaxError` from an internal helper.
+ * @param text - the JSON text a page script returned.
+ * @param what - the action being attempted, for the message.
+ * @returns the parsed value.
+ */
+function parsePageJson<T>(text: string, what: string): T {
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new Error(`${what}: the page returned a value that is not JSON (first 200 characters: ${text.slice(0, 200)})`)
+  }
+}
 
 /** Run one action, validating the fields that action needs. */
 async function dispatch(browser: BrowserDriver, target: BrowserPageTarget, args: BrowserArgs): Promise<DispatchOutcome> {
@@ -83,6 +110,30 @@ async function dispatch(browser: BrowserDriver, target: BrowserPageTarget, args:
       return asSnapshot(browser.scroll(target, args.text === 'up' ? 'up' : 'down'))
     case 'back':
       return asSnapshot(browser.back(target))
+    case 'eval':
+      if (args.script === undefined || args.script.trim().length === 0) {
+        throw new Error('eval needs a "script" — JavaScript to run in the page, such as "renderer.info.render.triangles"')
+      }
+      return {
+        kind: 'text',
+        text: formatEvalResult(parsePageJson<EvalResult>(
+          await browser.evaluateScript(target, evalScript(args.script)),
+          'eval',
+        )),
+      }
+    case 'console': {
+      // Installing first makes this action correct even when the page was
+      // reached without `navigate` — a click into a new document, or a sidebar
+      // page carried over from an earlier call.
+      await browser.evaluateScript(target, installConsoleScript())
+      return {
+        kind: 'text',
+        text: formatConsoleRead(parsePageJson<ConsoleRead>(
+          await browser.evaluateScript(target, readConsoleScript()),
+          'console',
+        )),
+      }
+    }
     case 'screenshot':
       return { kind: 'screenshot' }
     default:
@@ -225,7 +276,10 @@ export function browserTool(
       + ' interactive elements ([n] role: name). Read it, then act by ref: click/type take the [n] of an element.'
       + ' Actions: navigate (open a url), read (re-read the page), click (ref), type (ref + text), press (a key like'
       + ' Enter), scroll (text "up"/"down"), back. Refs are only valid until the next action; each action returns a'
-      + ' fresh snapshot to act on. The one exception is screenshot, which returns the viewport image itself instead'
+      + ' fresh snapshot to act on. `eval` runs JavaScript in the page and returns its completion value as JSON —'
+      + ' use it to read state the DOM does not carry (renderer counters, globals, computed values). `console`'
+      + ' returns the console messages and uncaught errors recorded since the last read, so a page whose JavaScript'
+      + ' throws is not silent. The exception to text is screenshot, which returns the viewport image itself instead'
       + ' of a text snapshot — use it when how the page LOOKS is the point; it requires a model that accepts image'
       + ' input.',
     parameters: {
@@ -234,6 +288,7 @@ export function browserTool(
       ref: { type: 'integer', description: 'For click and type: the [n] ref of the element from the last snapshot.' },
       text: { type: 'string', description: 'For type: the text to enter. For scroll: "up" or "down" (default down).' },
       key: { type: 'string', description: 'For press: a key name — Enter, Tab, ArrowDown, Escape, etc.' },
+      script: { type: 'string', description: 'For eval: JavaScript to run in the page. An expression yields its value; a returned promise is awaited; the completion value comes back as JSON.' },
     },
     output: {
       schema: {
@@ -268,6 +323,7 @@ export function browserTool(
       const target: BrowserPageTarget = { ...resolveTarget(exec), signal: exec.signal }
       const outcome = await dispatch(browser, target, args)
       if (outcome.kind === 'screenshot') return captureScreenshot(ctx, browser, target, exec)
+      if (outcome.kind === 'text') return { text: capOutput(outcome.text, maxOutputChars) }
       return { text: capOutput(formatSnapshot(outcome.snapshot), maxOutputChars) }
     },
   })

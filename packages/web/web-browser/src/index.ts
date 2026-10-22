@@ -45,6 +45,10 @@ export type { SidebarDriverLimits } from './sidebar-driver.ts'
 export { formatSnapshot } from './serialize.ts'
 export { snapshotScript } from './page-script.ts'
 export type { RawElement, RawSnapshot } from './page-script.ts'
+export {
+  evalScript, formatConsoleRead, formatEvalResult, installConsoleScript, readConsoleScript,
+} from './inspect.ts'
+export type { ConsoleEntry, ConsoleRead, EvalResult } from './inspect.ts'
 
 /** A recent desktop Chrome UA, so sites serve their normal (not bot) markup. */
 export const DEFAULT_USER_AGENT =
@@ -140,6 +144,12 @@ export function apply(ctx: Context, config: Config): void {
       'canvas the DOM does not describe — call `screenshot`. It returns the page as an image you',
       'can look at, with the page URL and title in the caption. Reach for it only when reading is',
       'insufficient: the text snapshot is cheaper and gives you the refs you act on.',
+      '',
+      'A rendering task is answered by the page, not by its text. `eval` runs JavaScript in the',
+      'page and returns the completion value as JSON — read renderer counters, uniforms, object',
+      'transforms, or any global, and set state and read it back. `console` returns the console',
+      'messages and uncaught errors recorded since the last read: a page whose JavaScript throws',
+      'is visible instead of silent, so check it before concluding a blank canvas is a layout bug.',
       '',
       'When the user is in the desktop app, the page is shown to them live while you use it, and',
       'they can act on it too — so they can sign in or solve a check for you if a page needs it.',

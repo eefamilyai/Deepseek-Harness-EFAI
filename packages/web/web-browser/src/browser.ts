@@ -16,6 +16,7 @@
 import { chromium } from 'playwright'
 import type { Browser, BrowserContext, Page } from 'playwright'
 import type { BrowserDriver, BrowserPageTarget } from './driver.ts'
+import { installConsoleScript } from './inspect.ts'
 import { snapshotScript } from './page-script.ts'
 import type { RawSnapshot } from './page-script.ts'
 
@@ -98,6 +99,12 @@ export class BrowserManager implements BrowserDriver {
     const page = await context.newPage()
     page.setDefaultTimeout(this.limits.actionTimeoutMs)
     page.setDefaultNavigationTimeout(this.limits.navigationTimeoutMs)
+    // Installed before any document script runs, so an error thrown during
+    // module evaluation — the one a page cannot report about itself — is in the
+    // buffer by the time the model asks for it. The `{ content }` form is
+    // required: Playwright's bare-string overload does not run the source as
+    // written, and the recorder silently never installed.
+    await page.addInitScript({ content: installConsoleScript() })
     this.sessions.set(key, { context, page })
     return page
   }
@@ -173,6 +180,18 @@ export class BrowserManager implements BrowserDriver {
     const page = await this.pageFor(target.pageId)
     const data = await page.screenshot({ fullPage: false, type: 'png' })
     return { data, mediaType: 'image/png', url: page.url(), title: await page.title() }
+  }
+
+  /**
+   * Run one script in the page and return its JSON text.
+   * @param target - the page to run in.
+   * @param script - a JS expression whose completion value is JSON text.
+   * @returns the script's JSON text.
+   */
+  async evaluateScript(target: BrowserPageTarget, script: string): Promise<string> {
+    const page = await this.pageFor(target.pageId)
+    const value: unknown = await page.evaluate(script)
+    return typeof value === 'string' ? value : JSON.stringify(value ?? null)
   }
 
   /**

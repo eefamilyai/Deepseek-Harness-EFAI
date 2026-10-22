@@ -35,4 +35,16 @@ export interface BrowserDriver {
   scroll(target: BrowserPageTarget, direction: 'up' | 'down'): Promise<RawSnapshot>
   back(target: BrowserPageTarget): Promise<RawSnapshot>
   screenshot(target: BrowserPageTarget): Promise<CapturedScreenshot>
+  /**
+   * Run one script in the page's main world and return its JSON text.
+   *
+   * The script builders in `inspect.ts` return JSON text rather than a value so
+   * one serialization rule serves both surfaces: a page value can be a DOM
+   * node, a function, a `BigInt`, or a cycle, none of which survive a structured
+   * clone the same way on Playwright and on the sidebar's CDP bridge.
+   * @param target - the page to run in.
+   * @param script - a JS expression whose completion value is JSON text.
+   * @returns the script's JSON text.
+   */
+  evaluateScript(target: BrowserPageTarget, script: string): Promise<string>
 }

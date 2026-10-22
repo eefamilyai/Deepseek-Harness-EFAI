@@ -206,3 +206,78 @@ describe('browser screenshot', () => {
     expect(value.image).toBeUndefined()
   })
 })
+
+describe('browser eval', () => {
+  it('runs the model script in the page and returns its completion value', async () => {
+    const seen: string[] = []
+    const browser = fakeBrowser({
+      evaluateScript: (_target: BrowserPageTarget, script: string) => {
+        seen.push(script)
+        return Promise.resolve(JSON.stringify({ ok: true, value: '{"triangles":12}' }))
+      },
+    })
+    const value = await run(withDriver(fakeCtx(), browser, 10_000), {
+      action: 'eval', script: 'renderer.info.render.triangles',
+    })
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toContain('renderer.info.render.triangles')
+    expect(value.text).toContain('RESULT:')
+    expect(value.text).toContain('"triangles":12')
+    expect(value.image).toBeUndefined()
+  })
+
+  it('reports a page-side throw as SCRIPT ERROR instead of failing the call', async () => {
+    const browser = fakeBrowser({
+      evaluateScript: () => Promise.resolve(JSON.stringify({ ok: false, error: 'TypeError: x is not defined' })),
+    })
+    const value = await run(withDriver(fakeCtx(), browser, 10_000), { action: 'eval', script: 'x' })
+    expect(value.text).toContain('SCRIPT ERROR: TypeError: x is not defined')
+  })
+
+  it('requires a script', async () => {
+    await expect(run(withDriver(fakeCtx(), fakeBrowser(), 10_000), { action: 'eval' }))
+      .rejects.toThrow(/eval needs a "script"/)
+  })
+
+  it('names a page answer that is not JSON rather than leaking a parse error', async () => {
+    const browser = fakeBrowser({ evaluateScript: () => Promise.resolve('not json at all') })
+    await expect(run(withDriver(fakeCtx(), browser, 10_000), { action: 'eval', script: 'x' }))
+      .rejects.toThrow(/eval: the page returned a value that is not JSON/)
+  })
+})
+
+describe('browser console', () => {
+  it('installs the recorder before reading, then reports new entries', async () => {
+    const seen: string[] = []
+    let call = 0
+    const browser = fakeBrowser({
+      evaluateScript: (_target: BrowserPageTarget, script: string) => {
+        seen.push(script)
+        call += 1
+        if (call === 1) return Promise.resolve('true')
+        return Promise.resolve(JSON.stringify({
+          recording: true,
+          entries: [{ level: 'error', text: 'boom', at: 0, where: 'app.js:1:1' }],
+          dropped: 0,
+        }))
+      },
+    })
+    const value = await run(withDriver(fakeCtx(), browser, 10_000), { action: 'console' })
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toContain('__dshConsole')
+    expect(value.text).toContain('[error] boom (app.js:1:1)')
+  })
+
+  it('says so when no recorder could be installed', async () => {
+    let call = 0
+    const browser = fakeBrowser({
+      evaluateScript: () => {
+        call += 1
+        if (call === 1) return Promise.resolve('true')
+        return Promise.resolve(JSON.stringify({ recording: false, entries: [], dropped: 0 }))
+      },
+    })
+    const value = await run(withDriver(fakeCtx(), browser, 10_000), { action: 'console' })
+    expect(value.text).toContain('no recorder is installed')
+  })
+})

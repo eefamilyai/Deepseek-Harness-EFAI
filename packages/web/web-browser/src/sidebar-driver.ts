@@ -15,6 +15,7 @@
 import type { AgentBrowser, AgentBrowserCall, AgentBrowserReply } from '@deepseek-ai/dsh-web-browser-sidebar'
 import type { CapturedScreenshot } from './browser.ts'
 import type { BrowserDriver, BrowserPageTarget } from './driver.ts'
+import { installConsoleScript } from './inspect.ts'
 import { snapshotScript, type RawSnapshot } from './page-script.ts'
 
 /** Resolved limits the sidebar driver applies to each operation. */
@@ -133,12 +134,30 @@ export class SidebarBrowserDriver implements BrowserDriver {
     return JSON.parse(reply.value ?? 'null') as T
   }
 
+  /**
+   * Run one script in the page and return its JSON text.
+   *
+   * The window's `evaluate` operation already answers in JSON text, so this is
+   * the one operation whose result passes through unchanged.
+   * @param target - the page to run in.
+   * @param script - a JS expression whose completion value is JSON text.
+   * @returns the script's JSON text.
+   */
+  async evaluateScript(target: BrowserPageTarget, script: string): Promise<string> {
+    const reply = await this.call(target, 'evaluate', { script })
+    return reply.value ?? 'null'
+  }
+
   private snapshot(target: BrowserPageTarget): Promise<RawSnapshot> {
     return this.evaluate<RawSnapshot>(target, snapshotScript(this.limits.maxTextChars))
   }
 
   async navigate(target: BrowserPageTarget, url: string): Promise<RawSnapshot> {
     await this.call(target, 'navigate', { url }, this.limits.navigationTimeoutMs)
+    // The window cannot inject a script before the document's own scripts run,
+    // so this is the earliest the recorder can be in place. Best-effort: a page
+    // that refuses instrumentation must still be readable.
+    await this.call(target, 'evaluate', { script: installConsoleScript() }).catch(() => undefined)
     return this.snapshot(target)
   }
 
