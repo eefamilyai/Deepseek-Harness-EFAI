@@ -37,27 +37,18 @@
     - id: ui-effects
       name: '@deepseek-ai/dsh-client-ui-effects'
 
-    # The Tools settings section — independent kernel and conventional-tool
-    # switches, one switch per registered tool, over `tool-roster`.
-    - id: ui-settings-tools
-      name: '@deepseek-ai/dsh-client-ui-settings-tools'
-
-    # The Personalization settings section — font, accent, corner scale, and the
-    # Opacity group (shell and surface), applied as token overrides. This bundle is
-    # what the Desktop GUI composes, so the section ships there.
-    - id: ui-personalization
-      name: '@deepseek-ai/dsh-client-ui-personalization'
+    # The fork's own settings sections (Tools, Personalization, Accounts) are NOT
+    # composed. Each restated a subject the upstream sections already own — tool
+    # rows are toggled in Built-in plugins, appearance and font size in General,
+    # and sign-in in Models — so they only added a second place to set the same
+    # thing. Their packages stay installed but unmounted; re-add a row here to
+    # bring one back.
 
     # The account-pool Remote namespace is mounted by `dsh-efai-base`, which
     # this layer stacks over: one row id belongs to one bundle. Declaring it here
     # as well would compose the id twice, and the Plugins page locks any row the
     # Host cannot address through the profile patch — a twice-composed id is
     # exactly that, so the row would run while its own switch refused to move.
-
-    # The Accounts settings section — add a DeepSeek web login from the UI
-    # instead of editing ds_config.json by hand.
-    - id: ui-settings-accounts
-      name: '@deepseek-ai/dsh-client-ui-settings-accounts'
 
     # The DeepSeek pricing pill under the composer: amber while DeepSeek bills
     # peak rates (2× off-peak) and shortly before, quiet off-peak. Weekends and
