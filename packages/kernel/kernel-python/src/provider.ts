@@ -91,54 +91,156 @@ type CellOutcome =
 export interface KilnKernelProviderOptions extends KernelChildOptions {
   /** Registry key on `ctx.kernel`. */
   readonly id: string
+  /**
+   * Kernels kept alive at once, one per conversation. The least recently idle
+   * conversation is reaped first, and a conversation running a cell never is.
+   * Defaults to 4.
+   */
+  readonly maxKernels?: number
+  /** Reap a conversation's kernel after this long without work (ms). Defaults to 30 minutes; 0 disables. */
+  readonly idleKernelMs?: number
+  /** Clock for the idle sweep, injectable for tests. Defaults to `Date.now`. */
+  readonly clock?: () => number
+}
+
+/** Kernels kept alive at once when the composition names no limit. */
+const DEFAULT_MAX_KERNELS = 4
+
+/** Reap a conversation's kernel after this long without work (ms); 0 disables. */
+const DEFAULT_IDLE_KERNEL_MS = 30 * 60 * 1000
+
+/**
+ * One conversation's kernel: its process, its serialization chain, and how much
+ * work is in flight on it.
+ *
+ * A slot is the unit of isolation. Everything shared and mutable that this
+ * provider owns — the Python namespace above all — belongs to exactly one slot,
+ * so a cell in one conversation can neither see nor delay another's. The single
+ * process this provider used to keep was shared by every chat, which meant one
+ * wedged cell stopped all of them and every chat's variables were visible to
+ * every other.
+ */
+interface KernelSlot {
+  /** The live child, started on first use and after every restart. */
+  child: KernelChild | undefined
+  /** Tail of this conversation's chain; each of its cells links onto it. */
+  queue: Promise<unknown>
+  /** Cells queued or running on this conversation. */
+  pending: number
+  /** When this conversation last had no work; the idle sweep measures from here. */
+  idleSince: number
 }
 
 /**
- * A persistent Python kernel over the vendored Kiln runtime.
+ * A persistent Python kernel over the vendored Kiln runtime, one per conversation.
  *
- * Cells are serialized: the namespace is shared mutable state, so two cells in
- * flight against one process would interleave their writes and their captured
- * output. The queue is the reason a caller never has to reason about that.
+ * Cells within a conversation are serialized, because that conversation's
+ * namespace is shared mutable state. Cells in different conversations are not,
+ * and do not share a process at all.
  */
 export class KilnKernelProvider implements KernelProvider {
   readonly id: string
   private readonly launch: KernelChildOptions
-  private child: KernelChild | undefined
-  /** Tail of the serialization chain; each execute links onto it. */
-  private queue: Promise<unknown> = Promise.resolve()
-  /** Non-zero while a cell is queued or running; incremented inside serialize. */
-  private pending = 0
+  /** One slot per conversation; the empty key serves an agent-less dispatch. */
+  private readonly slots = new Map<string, KernelSlot>()
+  /**
+   * Provider-level handles for detached cells, and the kernel that owns each.
+   *
+   * A child numbers its own background cells from 1, so two conversations both
+   * hold a cell 1. The tool keeps whatever number this map handed it, which is
+   * how a poll reaches the kernel actually running that cell.
+   */
+  private readonly backgrounds = new Map<number, { key: string; cellId: number }>()
+  private nextBackgroundHandle = 1
+  private readonly maxKernels: number
+  private readonly idleKernelMs: number
+  private readonly clock: () => number
   private disposed = false
 
   constructor(options: KilnKernelProviderOptions) {
     this.id = options.id
     this.launch = options
+    this.maxKernels = Math.max(1, options.maxKernels ?? DEFAULT_MAX_KERNELS)
+    this.idleKernelMs = Math.max(0, options.idleKernelMs ?? DEFAULT_IDLE_KERNEL_MS)
+    this.clock = options.clock ?? Date.now
   }
 
   available(): boolean {
     return !this.disposed
   }
 
-  /** True while any cell is queued or running (serialization in flight). */
+  /** True while any conversation has a cell queued or running. */
   busy(): boolean {
-    return this.pending > 0
+    for (const slot of this.slots.values()) if (slot.pending > 0) return true
+    return false
   }
 
-  /** The live child, started on first use and after every restart. */
-  private ensureChild(): KernelChild {
-    if (this.child === undefined || this.child.dead) this.child = new KernelChild(this.launch)
-    return this.child
+  /** The slot for one conversation, created on first use. */
+  private slotFor(key: string): KernelSlot {
+    const existing = this.slots.get(key)
+    if (existing !== undefined) {
+      existing.idleSince = this.clock()
+      return existing
+    }
+    this.makeRoom()
+    const slot: KernelSlot = { child: undefined, queue: Promise.resolve(), pending: 0, idleSince: this.clock() }
+    this.slots.set(key, slot)
+    return slot
   }
 
-  /** Run `task` after every previously queued one, whatever their outcome. */
-  private serialize<T>(task: () => Promise<T>): Promise<T> {
-    this.pending += 1
-    const finish = (): void => { this.pending -= 1 }
-    const run = this.queue.then(task, task)
+  /**
+   * Keep the number of live kernels bounded, without ever interrupting work.
+   *
+   * The least recently idle conversation gives up its process first. A
+   * conversation that is running a cell is never evicted: keeping a cap by
+   * killing someone's run would be the cross-conversation interference this
+   * exists to remove, so the cap is a target rather than a hard limit.
+   */
+  private makeRoom(): void {
+    while (this.slots.size >= this.maxKernels) {
+      const victim = [...this.slots.entries()]
+        .filter(([, slot]) => slot.pending === 0 && slot.child !== undefined)
+        .sort((a, b) => a[1].idleSince - b[1].idleSince)[0]
+      if (victim === undefined) return
+      this.slots.delete(victim[0])
+      void victim[1].child?.kill()
+    }
+  }
+
+  /**
+   * Reap kernels that have sat idle past the configured window.
+   *
+   * A reaped conversation keeps its `remember()` entries — that tier is durable —
+   * but loses its namespace, so the next cell there starts clean.
+   */
+  private sweepIdle(): void {
+    if (this.idleKernelMs === 0) return
+    const cutoff = this.clock() - this.idleKernelMs
+    for (const [key, slot] of [...this.slots.entries()]) {
+      if (slot.pending > 0 || slot.child === undefined || slot.idleSince > cutoff) continue
+      this.slots.delete(key)
+      void slot.child.kill()
+    }
+  }
+
+  /** The live child for one conversation, started on first use and after a restart. */
+  private ensureChild(slot: KernelSlot): KernelChild {
+    if (slot.child === undefined || slot.child.dead) slot.child = new KernelChild(this.launch)
+    return slot.child
+  }
+
+  /** Run `task` after this conversation's previously queued cells, whatever their outcome. */
+  private serialize<T>(slot: KernelSlot, task: () => Promise<T>): Promise<T> {
+    slot.pending += 1
+    const finish = (): void => {
+      slot.pending -= 1
+      if (slot.pending === 0) slot.idleSince = this.clock()
+    }
+    const run = slot.queue.then(task, task)
     // Swallow on the chain only: the returned promise still rejects. Without
     // this a failed cell would mark the shared tail rejected and take the next
-    // caller down with an error that was never theirs.
-    this.queue = run.then(() => undefined, () => undefined)
+    // caller in this conversation down with an error that was never theirs.
+    slot.queue = run.then(() => undefined, () => undefined)
     // Decrement on BOTH completion paths so busy() returns to false even when
     // the cell rejects; the queue tail already swallows the rejection separately.
     void run.then(finish, finish)
@@ -146,25 +248,28 @@ export class KilnKernelProvider implements KernelProvider {
   }
 
   async execute(request: KernelExecuteRequest, signal?: AbortSignal): Promise<KernelExecuteResult> {
-    return this.serialize(async () => {
-      // The owning agent's shared session id is the durable-conversation key:
-      // one kernel process serves every session, so `remember()`/`recall()`
-      // must be scoped per cell, exactly like `cwd`. Without a live agent the
-      // conversation key is
-      // absent and the Python side falls back to standalone behavior.
-      const conv = conversationOf(request.agent)
+    // The owning agent's shared session id is the conversation key: one kernel
+    // per conversation is what keeps one chat's wedged cell from stopping
+    // another's, and what keeps its variables out of another's namespace.
+    // Absence means the cell was dispatched without an owning agent, and every
+    // such dispatch shares one slot, the way the Python side treats it as
+    // standalone.
+    const key = conversationOf(request.agent) ?? ''
+    this.sweepIdle()
+    const slot = this.slotFor(key)
+    return this.serialize(slot, async () => {
       const attempt = async (): Promise<{ child: KernelChild; outcome: CellOutcome }> => {
-        const child = this.ensureChild()
-        const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, conv)
+        const child = this.ensureChild(slot)
+        const id = child.send(request.code, request.timeoutMs, request.cwd, request.backgroundTimeoutMs, key === '' ? undefined : key)
         return { child, outcome: await this.awaitCell(child, id, request, signal, request.agentCtx, request.agent) }
       }
       let { child, outcome } = await attempt()
-      // A kernel that never reached its ready frame never ran the cell — the
-      // interpreter could not start, so nothing was executed and re-sending
+      // A kernel that never reached its ready frame never ran the cell —
+      // the interpreter could not start, so nothing was executed and re-sending
       // cannot repeat a side effect. Retrying once turns a failed launch into a
       // working call instead of reporting a lost namespace the cell never used.
       if (outcome.kind === 'crashed' && !child.everReady && signal?.aborted !== true) {
-        await this.replace(child)
+        await this.replace(slot, child)
         ;({ child, outcome } = await attempt())
       }
       if (outcome.kind === 'ok') {
@@ -178,16 +283,32 @@ export class KilnKernelProvider implements KernelProvider {
           ...outcome.images.length > 0 ? { images: outcome.images } : {},
           // Also absent rather than empty: the field is what tells a caller the
           // work is still running somewhere it can still be reached.
-          ...outcome.background !== undefined ? { background: outcome.background } : {},
+          ...outcome.background !== undefined
+            ? { background: { ...outcome.background, id: this.trackBackground(key, outcome.background.id) } }
+            : {},
         }
       }
-      await this.replace(child)
+      await this.replace(slot, child)
       return {
         output: RESTART_NOTICE[outcome.kind](request) + LOST_NOTICE,
         outcome: outcome.kind,
         restarted: true,
       }
     })
+  }
+
+  /**
+   * Give one detached cell a provider-wide handle, so a poll reaches the kernel
+   * running it. Child ids restart at 1 in every kernel, so they collide across
+   * conversations and cannot be handed to the tool unchanged.
+   * @param key - the conversation whose kernel detached the cell.
+   * @param cellId - the child's own id for that cell.
+   * @returns the handle to report to the caller.
+   */
+  private trackBackground(key: string, cellId: number): number {
+    const handle = this.nextBackgroundHandle++
+    this.backgrounds.set(handle, { key, cellId })
+    return handle
   }
 
   /**
@@ -253,36 +374,49 @@ export class KilnKernelProvider implements KernelProvider {
     }
   }
 
-  /** Kill `child` and drop it, so the next cell starts a fresh namespace. */
-  private async replace(child: KernelChild): Promise<void> {
+  /** Kill `child` and drop it from its conversation, so that conversation starts a fresh namespace. */
+  private async replace(slot: KernelSlot, child: KernelChild): Promise<void> {
     await child.kill()
-    if (this.child === child) this.child = undefined
+    if (slot.child === child) slot.child = undefined
   }
 
+  /** Replace every conversation's kernel. */
   async restart(): Promise<void> {
-    await this.serialize(async () => {
-      const child = this.child
-      if (child !== undefined) await this.replace(child)
-    })
+    await Promise.all([...this.slots.values()].map(slot => this.serialize(slot, async () => {
+      const child = slot.child
+      if (child !== undefined) await this.replace(slot, child)
+    })))
   }
 
   /**
-   * Poll one detached cell through the kernel's control channel.
+   * Poll one detached cell through the kernel that owns it.
    *
    * The reply is whatever the child last wrote, so every field is checked
    * before it is believed: a `running` that is not `true` and a `text` that is
    * not a string both mean the frame did not carry what the caller needs, and
    * an unrecognized shape is reported as an unknown cell rather than as empty
    * output — the two are opposite facts about the work.
-   * @param id - the kernel's id for the detached cell.
+   * @param id - the handle this provider issued when the cell detached.
    * @returns whether the cell is known, still running, and its drained output.
    */
   async pollBackground(id: number): Promise<KernelBackgroundPoll> {
-    const result = await this.control({ cmd: 'bg_poll', bg_id: id })
+    const owner = this.backgrounds.get(id)
+    if (owner === undefined) return { known: false }
+    const slot = this.slots.get(owner.key)
+    if (slot === undefined) {
+      this.backgrounds.delete(id)
+      return { known: false }
+    }
+    const result = await this.control(slot, { cmd: 'bg_poll', bg_id: owner.cellId })
     if (typeof result !== 'object' || result === null) return { known: false }
     const { known, running, status, text } = result as Record<string, unknown>
-    if (known !== true) return { known: false }
+    if (known !== true) {
+      this.backgrounds.delete(id)
+      return { known: false }
+    }
     if (running === true) return { known: true, running: true }
+    // Settled: the handle will never name a live cell again.
+    this.backgrounds.delete(id)
     return {
       known: true,
       running: false,
@@ -295,45 +429,69 @@ export class KilnKernelProvider implements KernelProvider {
    * Ask one detached cell to stop. Best-effort by contract: the child raises
    * the interrupt at a bytecode boundary, so a thread parked in an
    * uninterruptible call may not stop until its own secondary deadline.
-   * @param id - the kernel's id for the detached cell.
+   * @param id - the handle this provider issued when the cell detached.
    */
   async stopBackground(id: number): Promise<void> {
-    await this.control({ cmd: 'bg_stop', bg_id: id })
+    const owner = this.backgrounds.get(id)
+    if (owner === undefined) return
+    const slot = this.slots.get(owner.key)
+    if (slot === undefined) {
+      this.backgrounds.delete(id)
+      return
+    }
+    await this.control(slot, { cmd: 'bg_stop', bg_id: owner.cellId })
   }
 
   /**
-   * Send one control request and return its decoded payload.
+   * Send one control request to one conversation's kernel and return its decoded payload.
    *
    * Deliberately NOT serialized itself: every caller wraps the call in
    * {@link serialize}, and nesting the two would queue this request behind the
    * very task that is awaiting it.
    */
-  private async control(request: object): Promise<unknown> {
-    return this.serialize(async () => {
-      const child = this.ensureChild()
+  private async control(slot: KernelSlot, request: object): Promise<unknown> {
+    return this.serialize(slot, async () => {
+      const child = this.ensureChild(slot)
       const id = child.sendControl(request)
       return parseControlResult(await child.nextFrame(id))
     })
   }
 
+  /**
+   * Every name any live conversation's kernel defines.
+   *
+   * With one kernel per conversation there is no single namespace to report, so
+   * this is the union: the seam's question is what the model can reach, and a
+   * name reachable in some conversation is reachable.
+   * @returns the sorted names.
+   */
   async names(): Promise<readonly string[]> {
-    return this.serialize(async () => {
-      const child = this.ensureChild()
-      const id = child.sendControl({ cmd: 'list_names' })
-      const result = parseControlResult(await child.nextFrame(id))
-      if (typeof result !== 'object' || result === null) return []
-      const { names } = result as { names?: unknown }
-      if (!Array.isArray(names)) return []
-      return names.filter((name): name is string => typeof name === 'string')
-    })
+    const found = new Set<string>()
+    for (const slot of [...this.slots.values()]) {
+      const child = slot.child
+      if (child === undefined || child.dead) continue
+      try {
+        const result = await this.control(slot, { cmd: 'list_names' })
+        if (typeof result !== 'object' || result === null) continue
+        const { names } = result as { names?: unknown }
+        if (!Array.isArray(names)) continue
+        for (const name of names) if (typeof name === 'string') found.add(name)
+      } catch {
+        // One unresponsive kernel must not answer for the others.
+      }
+    }
+    return [...found].sort()
   }
 
-  /** Stop the kernel and refuse further work. Called on plugin dispose. */
+  /** Stop every conversation's kernel and refuse further work. Called on plugin dispose. */
   async dispose(): Promise<void> {
     this.disposed = true
-    const child = this.child
-    this.child = undefined
-    if (child !== undefined) await child.kill()
+    const children = [...this.slots.values()]
+      .map(slot => slot.child)
+      .filter((child): child is KernelChild => child !== undefined)
+    this.slots.clear()
+    this.backgrounds.clear()
+    await Promise.all(children.map(child => child.kill()))
   }
 }
 

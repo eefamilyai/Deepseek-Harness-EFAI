@@ -65,6 +65,13 @@ export interface Config {
   /** Vendored Kiln runtime directory. Omitted = the copy shipped with this repo. */
   runtimeDir?: string
   /**
+   * Kernels kept alive at once, one per conversation. The least recently idle is
+   * reaped first, and a conversation running a cell never is. Defaults to 4.
+   */
+  maxKernels?: number
+  /** Reap a conversation's kernel after this many idle minutes. Defaults to 30; 0 keeps every kernel. */
+  idleKernelMinutes?: number
+  /**
    * Whether the agent's browser may open a real Chromium window. Default: no
    * window, which is what an agent working on your behalf should do unless you
    * asked to watch. Editable from Settings; takes effect on restart.
@@ -77,6 +84,12 @@ export const Config = z.object({
   cwd: z.string(),
   stateDir: z.string(),
   runtimeDir: z.string(),
+  maxKernels: z.natural().min(1).default(4)
+    .description('Python kernels kept alive at once, one per conversation, so one chat\'s slow cell'
+      + ' cannot block another. The least recently used is reaped first; a running cell never is.'),
+  idleKernelMinutes: z.natural().default(30)
+    .description('Reap a conversation\'s kernel after this many idle minutes. Its remember() entries'
+      + ' survive; its namespace does not. 0 keeps every kernel until the harness exits.'),
   browserWindow: z.boolean().default(false)
     .description('Let the agent open a real Chromium window on your desktop. Off, it browses'
       + ' windowless and nothing appears while it works; screenshots still work.'
@@ -226,6 +239,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     python,
     script,
     cwd,
+    // One kernel per conversation is the isolation unit: a wedged cell in one
+    // chat must not queue behind — or be visible to — any other.
+    ...config.maxKernels === undefined ? {} : { maxKernels: config.maxKernels },
+    idleKernelMs: (config.idleKernelMinutes ?? 30) * 60_000,
     env: {
       // Keeps `subkernels.json` and the ds_direct session pin out of the
       // vendored (read-only, reinstallable) runtime tree.
