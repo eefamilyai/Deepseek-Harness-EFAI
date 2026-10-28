@@ -14,6 +14,9 @@ docs/persistence-changes/*.schema.json linguist-generated=true
 docs/persistence-changes/releases/*.schema.json linguist-generated=true
 docs/persistence-changes/historical-formats/*.schema.json linguist-generated=true
 
+# Unified patch blank context lines require their leading space.
+patches/*.patch whitespace=-blank-at-eol
+
 # DSH-FORK(all): the fork's mod layer is committed as unified diffs, and the format
 # writes a context line for an empty line as a single space, so the patch set cannot
 # satisfy the blank-at-eol check its own format demands.

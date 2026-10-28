@@ -188,12 +188,14 @@ async function bodyInjections(
  * @param ctx - the plugin context.
  * @param config - the resolved configuration.
  */
-export function apply(ctx: Context, config: Config): void {
+export async function apply(ctx: Context, config: Config): Promise<void> {
   const alwaysLoad = config.alwaysLoadSkills ?? [...DEFAULT_ALWAYS_LOAD_SKILLS]
   const readAtGesture = config.atGesture ?? true
   /** Per-agent names that resolved to no usable body. */
   const missingByAgent = new WeakMap<Agent, Set<string>>()
-  ctx.sessionProjections.register(invokedSkillsProjection)
+  // The handle is the only reader that carries the state type: the deprecated
+  // `stateOf(session, key)` answers `unknown`.
+  const invokedSkills = await ctx.sessionProjections.register(invokedSkillsProjection)
 
   ctx.on('agent/pre-step', async ({ agent, messages, signal }, next): Promise<PreStepDecision> => {
     const decision = await next()
@@ -201,9 +203,7 @@ export function apply(ctx: Context, config: Config): void {
     signal.throwIfAborted()
 
     const requested = readAtGesture ? atGestureNames(messages) : []
-    const invoked = ctx.sessionProjections.stateOf(agent.session, 'invokedSkills')
-    if (invoked === undefined) throw new Error('skill-injection: the invokedSkills projection is not registered')
-    const visible = visibleInvokedSkillNames(invoked, agent.session.surface.nodes)
+    const visible = visibleInvokedSkillNames(invokedSkills.stateOf(agent.session), agent.session.surface.nodes)
     const wantedAlways = alwaysLoad.filter(skillName => !visible.has(skillName))
     if (requested.length === 0 && wantedAlways.length === 0) return decision
 

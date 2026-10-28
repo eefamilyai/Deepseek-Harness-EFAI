@@ -18,10 +18,10 @@ index 990aa985f6..a3cbecc5de 100644
     the whole transcript width instead of clipping at the 748px message
     column, while the table content keeps starting at its normal x (the lead
 diff --git a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
-index 22ae5bac70..5cd89ad8de 100644
+index 3d946f8c91..e8b9b76e28 100644
 --- a/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
 +++ b/packages/client/ui-chat/src/client/chat/AssistantMarkdown.tsx
-@@ -80,6 +80,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
+@@ -82,6 +82,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
      if (groupPart === 'response' && block.kind === 'reasoning') continue
      switch (block.kind) {
        case 'text':

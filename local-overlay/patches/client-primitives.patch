@@ -1,10 +1,10 @@
 diff --git a/packages/client/ui-primitives/README.md b/packages/client/ui-primitives/README.md
-index 5b29187be1..e559755c8e 100644
+index d95d802886..f05f5c9dfd 100644
 --- a/packages/client/ui-primitives/README.md
 +++ b/packages/client/ui-primitives/README.md
-@@ -103,6 +103,8 @@ The nearest `MarkdownDelegateProvider` supplies optional `openExternalLink` and
+@@ -114,6 +114,8 @@ The nearest `MarkdownDelegateProvider` supplies optional `openExternalLink` and
  
- `MarkdownText` defaults to `variant="body"`. Use `variant="compact"` for secondary content: its 13px text and 20px line height follow the content-size setting, all heading levels use the same size with weight 600, and paragraphs and lists use tighter spacing. Text, links, and code keep the tertiary color; dotted underlines distinguish links. Code headers scroll with their blocks. Tables and math stay enabled at the surrounding text size and scroll horizontally within the available width. Both variants share the parser and streaming cache.
+ `MarkdownText` defaults to `variant="body"`. Use `variant="compact"` for secondary content: its 13px text and 20px line height follow the content-size setting, all heading levels use the same size with weight 600, and paragraphs and lists use tighter spacing. Text, links, and code keep the tertiary color; dotted underlines distinguish links. Code headers scroll with their blocks. Tables and math stay enabled at the surrounding text size and scroll horizontally within the available width. Both variants share the parser and streaming cache. `textInteractionSource` marks its existing root as a source for text selection interactions.
  
 +Before parsing, `MarkdownText` and `extractMarkdownPlainText` repair pipe tables that model output damages (`src/markdown/table-repair.ts`): a line with no pipe directly under a table ends the table instead of becoming a row; rows fused onto one line, a delimiter fused with its header or first row, blank lines between header, delimiter, and body, and a delimiter whose cell count differs from its header's are rebuilt into the table GFM would have read. A table that already parses is never rewritten, and fenced code is never touched. The DeepSeek service produces all of these shapes when it re-serializes table lines before streaming them.
 +
@@ -12,7 +12,7 @@ index 5b29187be1..e559755c8e 100644
  
  `DiffBlock` compares the old and new content by line. It shows actual additions and deletions with up to three neutral context lines on each side, separates distant changes with `⋯`, and excludes shared context from tool-summary totals. The card ends after the diff body. Search stops beyond 256 line additions/deletions per fragment; those fragments display and count the complete old and new contents as a coarse replacement, including shared lines. Copy includes the full displayed diff with its prefixes. A final newline is treated as a terminator; differences only in the presence of a final newline are not displayed.
 diff --git a/packages/client/ui-primitives/src/markdown/MarkdownText.tsx b/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
-index ab2c0b380a..3ea5173848 100644
+index fac585e700..3582aff1c0 100644
 --- a/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
 +++ b/packages/client/ui-primitives/src/markdown/MarkdownText.tsx
 @@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
@@ -23,7 +23,7 @@ index ab2c0b380a..3ea5173848 100644
  import {
    collectReferenceTargets, createReferenceTargets, renderBlocks, renderFootnoteSection,
    wrapBlockChildren,
-@@ -184,15 +185,17 @@ export const MarkdownText = memo(function MarkdownText({
+@@ -196,15 +197,17 @@ export const MarkdownText = memo(function MarkdownText({
    const streamRef = useRef<StreamingRenderer | null>(null)
    const streamLabelsRef = useRef<MarkdownLabels>(labels)
    const children = useMemo(() => {
@@ -31,18 +31,18 @@ index ab2c0b380a..3ea5173848 100644
 +    const source = repairMarkdownTables(text)
      if (!streaming) {
        streamRef.current = null
--      return renderSettled(text, labels, fileMentions, pathImages)
-+      return renderSettled(source, labels, fileMentions, pathImages)
+-      return renderSettled(text, labels, fileMentions, pathImages, omitHtml)
++      return renderSettled(source, labels, fileMentions, pathImages, omitHtml)
      }
-     if (streamRef.current === null || streamLabelsRef.current !== labels) {
-       streamRef.current = new StreamingRenderer(labels)
+     if (streamRef.current === null || streamLabelsRef.current !== labels || streamRef.current.omitHtml !== omitHtml) {
+       streamRef.current = new StreamingRenderer(labels, omitHtml)
        streamLabelsRef.current = labels
      }
 -    return streamRef.current.render(text)
 +    return streamRef.current.render(source)
-   }, [text, streaming, labels, fileMentions, pathImages])
+   }, [text, streaming, labels, fileMentions, pathImages, omitHtml])
    return <div className={clsx(css.markdown, variant === 'compact' && css.compact)}
-     data-markdown-variant={variant === 'compact' ? variant : undefined}>{children}</div>
+     data-text-interaction-source={textInteractionSource ? '' : undefined}
 diff --git a/packages/client/ui-primitives/src/markdown/plain-text.ts b/packages/client/ui-primitives/src/markdown/plain-text.ts
 index 6797fdec6e..717d4fd3a7 100644
 --- a/packages/client/ui-primitives/src/markdown/plain-text.ts

@@ -172,9 +172,8 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
  * Register the unit for this plugin's lifetime.
  * @param ctx - the plugin context.
  */
-export function apply(ctx: Context): void {
-  ctx.effect(
-    () => ctx.sessionProjections.register(tokenUsageLifetimeProjectionDefinition),
-    'token-usage-lifetime: projection unit',
-  )
+export async function apply(ctx: Context): Promise<void> {
+  // Registration belongs to the calling fiber, which releases it on unload; the
+  // handle has no reader here because consumers read the owned projection.
+  await ctx.sessionProjections.register(tokenUsageLifetimeProjectionDefinition)
 }

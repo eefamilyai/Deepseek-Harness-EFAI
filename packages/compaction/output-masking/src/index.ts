@@ -148,7 +148,7 @@ export function maskResults(session: Session, candidates: readonly SurfaceNode[]
  * @param ctx - the plugin context.
  * @param config - the deployment's policy.
  */
-export function apply(ctx: Context, config: Config = {}): void {
+export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   const usageRatio = config.usageRatio ?? DEFAULT_USAGE_RATIO
   const policy = {
     keepRecent: config.keepRecent ?? DEFAULT_KEEP_RECENT,
@@ -157,7 +157,9 @@ export function apply(ctx: Context, config: Config = {}): void {
   }
   const minBatch = Math.max(1, config.minBatch ?? DEFAULT_MIN_BATCH)
 
-  ctx.sessionProjections.register({
+  // The handle is the only reader that carries the state type: the deprecated
+  // `stateOf(session, key)` answers `unknown`.
+  const maskingSurface = await ctx.sessionProjections.register({
     key: MASKING_PROJECTION,
     stateVersion: 1,
     stateSchema: maskingSurfaceSchema,
@@ -165,8 +167,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     apply: foldMaskingSurface,
   })
 
-  const surfaceOf = (session: Session): MaskingSurface =>
-    ctx.sessionProjections.stateOf(session, MASKING_PROJECTION) ?? emptyMaskingSurface()
+  const surfaceOf = (session: Session): MaskingSurface => maskingSurface.stateOf(session)
 
   /** The routed model's context window, or the configured fallback. */
   const contextWindowOf = async (session: Session, signal: AbortSignal): Promise<number | undefined> => {

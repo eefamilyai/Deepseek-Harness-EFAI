@@ -8,12 +8,13 @@
  * and that a settings change does not reach the model mid-turn.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { createScope } from '@deepseek-ai/dsh-scope'
+import { createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -49,11 +50,11 @@ function tool(name: string, reply = `ran:${name}`): ToolDefinition {
 
 /** Execute one tool and return its text, or the denial reason. */
 async function run(ctx: Context, name: string): Promise<string> {
-  const result = await ctx.tools.execute({
-    signal, callId: ToolCallId('c1'), name, arguments: {},
-  })
-  const first = result.content[0]
-  return first?.type === 'text' ? first.text : JSON.stringify(result.content)
+  const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id: ToolCallId('c1'), name, arguments: '{}' }], signal })
+  const settled = batch.results[0]?.result
+  if (settled === undefined) throw new Error('the batch settled no result for the single call')
+  const first = settled.content[0]
+  return first?.type === 'text' ? first.text : JSON.stringify(settled.content)
 }
 
 /**
@@ -64,6 +65,7 @@ async function mount(initial: Record<string, unknown> = {}) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
   ctx.tools.register(tool('read'))
   ctx.tools.register(tool('bash'))
   ctx.tools.register(tool('kernel', 'ran:kernel'))
@@ -91,6 +93,7 @@ describe('the per-tool map is learned from what an agent is offered', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     ctx.tools.register(tool('read'))
     ctx.tools.register(tool('bash'))
     ctx.tools.register(tool('kernel'))
@@ -120,6 +123,7 @@ describe('the per-tool map is learned from what an agent is offered', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     ctx.tools.register(tool('read'))
     const writes: { path: string[] }[] = []
     const mutate = (_ns: string, ops: { path: string[] }[]): Promise<void> => {
@@ -139,6 +143,7 @@ describe('the per-tool map is learned from what an agent is offered', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     const key = { id: 'agent-a' as SessionId } as Agent
     let scope!: Scope
     await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, key) }, {
@@ -218,16 +223,44 @@ describe('a hidden tool loses its schema and its guidance together', () => {
     expect(sectionHidden(hidden, 'tool:web_fetch')).toBe(true)
   })
 
-  it('drops the hidden tool and its section from the assembled prompt', async () => {
+  it('drops the hidden tool\'s guidance section from the assembled prompt', async () => {
     const { ctx, live } = await mount()
+    ctx.effect(() => ctx.systemPrompt.section({ name: 'tool:bash', order: 10, text: 'Run a shell command.' }))
     await live.update({ tools: { bash: false } })
 
-    // The change is held until the turn boundary, so the assembly is unchanged
-    // until the model stops generating.
+    // The change is held until the turn boundary, so the section stays until the
+    // model stops generating.
+    expect((await assemble(ctx)).sections).toContain('tool:bash')
     await ctx.parallel('agent/turn-stopping', { agent: subject, turn: 1, signal })
-    const after = await assemble(ctx)
-    expect(after.tools).not.toContain('bash')
-    expect(after.tools).toContain('read')
+    expect((await assemble(ctx)).sections).not.toContain('tool:bash')
+    await ctx.fiber.dispose()
+  })
+
+  it('masks the hidden tool out of the agent\'s admitted set at the next step', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
+    ctx.tools.register(tool('read'))
+    ctx.tools.register(tool('bash'))
+    const key = { id: 'agent-a' as SessionId } as Agent
+    let scope!: Scope
+    await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, key) }, {
+      inject: ['tools', 'systemPrompt'],
+    }))
+    const agent = { id: key.id, ctx: scope.ctx } as Agent
+    ctx.provide('settings', { configure: () => () => {}, mutate: () => Promise.resolve() } as never)
+    await ctx.plugin({ name: 'tool-roster', apply, Config }, { tools: { bash: false } })
+    await ctx.fiber.await()
+    const admitted = (): string[] => scope.ctx.tools.schemas(scopeOf(scope.ctx)).map(schema => schema.name)
+    expect(admitted()).toContain('bash')
+
+    // The mask is installed where an agent is in hand, which is the step.
+    await ctx.waterfall('agent/pre-step', {
+      agent, messages: [], turn: 1, step: 1, signal, modelSelection: { provider: 'test', model: 'test' },
+    }, () => Promise.resolve({ kind: 'enter', messages: [] }))
+    expect(admitted()).not.toContain('bash')
+    expect(admitted()).toContain('read')
     await ctx.fiber.dispose()
   })
 })
@@ -264,13 +297,11 @@ describe('a change lands when the model stops generating', () => {
     await live.update({ tools: { bash: false } })
     // Mid-turn: the roster in force is still the one the turn started under.
     expect(await run(ctx, 'bash')).toBe('ran:bash')
-    expect((await assemble(ctx)).tools).toContain('bash')
 
     await ctx.parallel('agent/turn-stopping', { agent: subject, turn: 1, signal })
 
     // After the boundary the change is in force, on both halves.
     expect(await run(ctx, 'bash')).toContain('switched off in settings')
-    expect((await assemble(ctx)).tools).not.toContain('bash')
     await ctx.fiber.dispose()
   })
 
@@ -278,7 +309,6 @@ describe('a change lands when the model stops generating', () => {
     // The hold is for a change made while the model is generating. A switch
     // the operator set before boot is in force on the first turn.
     const { ctx } = await mount({ kernel: false })
-    expect((await assemble(ctx)).tools).not.toContain('kernel')
     expect(await run(ctx, 'kernel')).toContain('switched off in settings')
     await ctx.fiber.dispose()
   })

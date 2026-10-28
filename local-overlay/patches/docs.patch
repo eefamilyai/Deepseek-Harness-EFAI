@@ -1,8 +1,8 @@
 diff --git a/docs/subsystems/boot.md b/docs/subsystems/boot.md
-index ba75525a03..f53cf72089 100644
+index 157ef5da64..1fd35b5304 100644
 --- a/docs/subsystems/boot.md
 +++ b/docs/subsystems/boot.md
-@@ -310,6 +310,66 @@ Current profile facts; scheduling and mutation belong to their callers.
+@@ -448,6 +448,66 @@ Current profile facts; scheduling and mutation belong to their callers.
  
  Source: [`packages/boot/app-boot/src/profile-context.ts`](../../packages/boot/app-boot/src/profile-context.ts)
  
@@ -70,10 +70,10 @@ index ba75525a03..f53cf72089 100644
  
  ### `app-boot/*` events
 diff --git a/docs/subsystems/boot.zh.md b/docs/subsystems/boot.zh.md
-index f6260e8583..0bc882c990 100644
+index 1e5f78cf0e..f5f7f11a13 100644
 --- a/docs/subsystems/boot.zh.md
 +++ b/docs/subsystems/boot.zh.md
-@@ -310,6 +310,66 @@ Current profile facts; scheduling and mutation belong to their callers.
+@@ -448,6 +448,66 @@ Current profile facts; scheduling and mutation belong to their callers.
  
  Source: [`packages/boot/app-boot/src/profile-context.ts`](../../packages/boot/app-boot/src/profile-context.ts)
  
@@ -245,7 +245,7 @@ index 573b15962e..93798ba9e3 100644
  
  ### `ctx.browserUse` — `BrowserUseRegistry`
 diff --git a/docs/subsystems/compaction.md b/docs/subsystems/compaction.md
-index f2e8848bcf..2a2b99ceb3 100644
+index 415c3b06be..be5e612a05 100644
 --- a/docs/subsystems/compaction.md
 +++ b/docs/subsystems/compaction.md
 @@ -175,13 +175,17 @@ abstract compactIfNeeded( agent: CompactionAgentContext, trigger: CompactionTrig
@@ -268,7 +268,7 @@ index f2e8848bcf..2a2b99ceb3 100644
  /**
   * Forcibly compact a range of surface nodes into a single summary node.
 diff --git a/docs/subsystems/compaction.zh.md b/docs/subsystems/compaction.zh.md
-index 38aca41794..b9b125c4a3 100644
+index 94b9256e05..eefe45a964 100644
 --- a/docs/subsystems/compaction.zh.md
 +++ b/docs/subsystems/compaction.zh.md
 @@ -175,13 +175,17 @@ abstract compactIfNeeded( agent: CompactionAgentContext, trigger: CompactionTrig
@@ -291,10 +291,10 @@ index 38aca41794..b9b125c4a3 100644
  /**
   * Forcibly compact a range of surface nodes into a single summary node.
 diff --git a/docs/subsystems/llm-streaming.md b/docs/subsystems/llm-streaming.md
-index 1f652c1ee4..ed01f82d02 100644
+index 70adbab81e..6314e7a9d1 100644
 --- a/docs/subsystems/llm-streaming.md
 +++ b/docs/subsystems/llm-streaming.md
-@@ -945,6 +945,106 @@ declare abstract class LlmAdapter {
+@@ -970,6 +970,106 @@ declare abstract class LlmAdapter {
  
  Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
  
@@ -402,10 +402,10 @@ index 1f652c1ee4..ed01f82d02 100644
  
  ### `ctx.deepseekLlmApiExtensions` — `DeepSeekLlmApiExtensionRegistry`
 diff --git a/docs/subsystems/llm-streaming.zh.md b/docs/subsystems/llm-streaming.zh.md
-index 410b6eb2b6..48582689a7 100644
+index 05accb437c..7ab5df8e1c 100644
 --- a/docs/subsystems/llm-streaming.zh.md
 +++ b/docs/subsystems/llm-streaming.zh.md
-@@ -951,6 +951,106 @@ declare abstract class LlmAdapter {
+@@ -976,6 +976,106 @@ declare abstract class LlmAdapter {
  
  Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
  
@@ -513,10 +513,10 @@ index 410b6eb2b6..48582689a7 100644
  
  ### `ctx.deepseekLlmApiExtensions` — `DeepSeekLlmApiExtensionRegistry`
 diff --git a/docs/tool-catalog.zh.md b/docs/tool-catalog.zh.md
-index fd304d6ddc..5f176b67e9 100644
+index eeb607a067..e7ef1fecbb 100644
 --- a/docs/tool-catalog.zh.md
 +++ b/docs/tool-catalog.zh.md
-@@ -35,8 +35,9 @@
+@@ -36,8 +36,9 @@
  | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
  | `@deepseek-ai/dsh-tool-fs` | `edit`、`read`、`read_image`、`write` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (image-tool registration)`、`ctx.llm + an image-capable route (image-tool execution)` | `tool/call`、`fs/write-intent or fs/edit-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时图片工具不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图片输入，否则拒绝。 |
  | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.workingDirectory`、`ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
@@ -528,7 +528,7 @@ index fd304d6ddc..5f176b67e9 100644
  | `@deepseek-ai/dsh-tool-schedule` | `schedule_create`、`schedule_delete`、`schedule_list`、`schedule_update` | `ctx.tools`、`ctx.schedule` | `tool/call`、Schedule storage domain 创建、更新或删除、`tool/result` | - | preset 或 Agent scope 挂载本包；由 preset 决定哪些 agent 获得这四个管理工具。每次调用都作用于调用方 Agent 的 Session。接受 after_seconds、显式绝对 at、有界固定速率 every_seconds、带显式 IANA 时区的每日与每周本地时间，以及作为五字段表达式的 cron。管理使用宿主 storage domain；到期消息会恢复原 Session。 |
  | `@deepseek-ai/dsh-tool-lsp` | `lsp` | `ctx.workingDirectory`、`ctx.tools`、`ctx.lsp`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，因此其模型可见 schema 在更换提供方时保持稳定。运行时要求已注册提供方，例如 `@deepseek-ai/dsh-lsp-stdio`；如果没有提供方，查询会返回结构化 `LSP_UNAVAILABLE` 错误，而不会改变 schema。 |
  | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
-@@ -52,6 +53,8 @@
+@@ -54,6 +55,8 @@
  | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
  | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
  | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
@@ -537,7 +537,7 @@ index fd304d6ddc..5f176b67e9 100644
  
  <a id="deepseek-aidsh-plugin-manager"></a>
  
-@@ -1177,8 +1180,125 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
+@@ -1222,8 +1225,125 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
  
  glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。
  
@@ -664,7 +664,7 @@ index fd304d6ddc..5f176b67e9 100644
  ## `@deepseek-ai/dsh-tool-terminal`
  
  ### `terminal_close`
-@@ -1808,7 +1928,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，
+@@ -1853,7 +1973,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，
  
  固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。
  
@@ -673,7 +673,7 @@ index fd304d6ddc..5f176b67e9 100644
  
  ## `@deepseek-ai/dsh-tool-skill`
  
-@@ -2830,3 +2950,108 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
+@@ -2920,3 +3040,108 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
  来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
  
  web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。

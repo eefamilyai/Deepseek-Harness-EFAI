@@ -30,10 +30,13 @@ import type { SeamRequest } from '../src/seam.ts'
  * what makes `mock.calls[0]?.[0]` a real element rather than an empty-tuple
  * index, so the assertions below can read the fields without a cast.
  */
-interface ExecArg {
-  readonly callId?: unknown
+interface ExecCall {
+  readonly id?: unknown
   readonly name?: unknown
   readonly arguments?: unknown
+}
+interface ExecArg {
+  readonly calls?: readonly ExecCall[]
   readonly agent?: unknown
   readonly signal?: AbortSignal
 }
@@ -54,19 +57,25 @@ function ctxWithTools(tools: unknown): Context {
   return { tools, get: (name: string) => (name === 'tools' ? tools : undefined) } as unknown as Context
 }
 
-/** A successful registry outcome for `value`. */
+/**
+ * A successful registry outcome for `value`, wrapped as the one-call batch the
+ * registry now settles: `results` is model-ordered and carries the call id it
+ * answered.
+ */
 function okResult(value: unknown, meta?: unknown) {
-  return {
+  const result = {
     isError: false as const,
     value,
     content: [{ type: 'text', text: 'rendered' }],
     ...meta !== undefined ? { meta } : {},
   }
+  return (callId: unknown) => ({ results: [{ callId, result }], additionalContexts: [], concluded: false })
 }
 
 /** A `ctx.tools.execute` stand-in that always resolves with `value`. */
 function executeReturning(value: unknown, meta?: unknown) {
-  return vi.fn(async (_exec: ExecArg) => okResult(value, meta))
+  const batch = okResult(value, meta)
+  return vi.fn(async (exec: ExecArg) => batch(exec.calls?.[0]?.id))
 }
 
 describe('dispatchSeam tools.call', () => {
@@ -83,11 +92,11 @@ describe('dispatchSeam tools.call', () => {
     // directly, or every policy stage in front of it would be skipped.
     expect(execute).toHaveBeenCalledTimes(1)
     const exec = execute.mock.calls[0]?.[0]
-    expect(exec?.name).toBe('db_query')
-    expect(exec?.arguments).toEqual({ sql: 'select 1' })
+    expect(exec?.calls?.[0]?.name).toBe('db_query')
+    expect(JSON.parse(String(exec?.calls?.[0]?.arguments))).toEqual({ sql: 'select 1' })
     // A call id the registry can log and derive a root id from.
-    expect(typeof exec?.callId).toBe('string')
-    expect((exec?.callId as string).startsWith('kernel:')).toBe(true)
+    expect(typeof exec?.calls?.[0]?.id).toBe('string')
+    expect(String(exec?.calls?.[0]?.id).startsWith('kernel:')).toBe(true)
   })
 
   it('carries cancellation through, never leaving the registry without a signal', async () => {
@@ -108,14 +117,21 @@ describe('dispatchSeam tools.call', () => {
   it('defaults arguments to an empty object so a no-argument tool stays callable', async () => {
     const execute = executeReturning(null)
     await dispatchSeam(ctxWithTools({ execute }), undefined, { id: 'r', op: 'tools.call', args: { name: 'ping' } })
-    expect(execute.mock.calls[0]?.[0]?.arguments).toEqual({})
+    expect(JSON.parse(String(execute.mock.calls[0]?.[0]?.calls?.[0]?.arguments))).toEqual({})
   })
 
   it('reports a failed call as a failure, preserving the model-facing text and code', async () => {
-    const execute = vi.fn(async (_exec: ExecArg) => ({
-      isError: true as const,
-      content: [{ type: 'text', text: 'permission denied by policy' }],
-      error: { message: 'denied', info: { name: 'HarnessError', code: 'DENIED' } },
+    const execute = vi.fn(async (exec: ExecArg) => ({
+      results: [{
+        callId: exec.calls?.[0]?.id,
+        result: {
+          isError: true as const,
+          content: [{ type: 'text', text: 'permission denied by policy' }],
+          error: { message: 'denied', info: { name: 'HarnessError', code: 'DENIED' } },
+        },
+      }],
+      additionalContexts: [],
+      concluded: false,
     }))
     const response = await dispatchSeam(ctxWithTools({ execute }), undefined, callRequest('danger'))
 

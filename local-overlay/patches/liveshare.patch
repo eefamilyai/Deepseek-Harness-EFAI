@@ -1,0 +1,14 @@
+diff --git a/packages/experimental/liveshare/src/endpoint-classification.ts b/packages/experimental/liveshare/src/endpoint-classification.ts
+index 343664cb6e..5b5c2feb31 100644
+--- a/packages/experimental/liveshare/src/endpoint-classification.ts
++++ b/packages/experimental/liveshare/src/endpoint-classification.ts
+@@ -214,6 +214,9 @@ export const VIEWER_ENDPOINT_CLASSES = {
+   'agentPresets/list': 'owner-only', // owner agent presets
+   'agentPresets/read': 'owner-only', // owner agent presets
+   'agentPresets/select': 'owner-only', // owner agent presets
++  // DSH-FORK(schedule): the fork's Automation-tasks page creates its own task.
++  // EXIT: upstream ships a creation form on that page instead of a Remote create.
++  'schedule/create': 'owner-only', // owner schedules
+   'schedule/catalog': 'owner-only', // owner schedules
+   'schedule/delete': 'owner-only', // owner schedules
+   'schedule/deleteInactive': 'owner-only', // owner schedules

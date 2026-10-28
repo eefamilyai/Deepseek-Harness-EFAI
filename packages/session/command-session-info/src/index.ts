@@ -91,12 +91,10 @@ function collect(invocation: CommandInvocation, ctx: Context): SessionInfo {
   const { agent } = invocation
   const header = agent.session.header
   const options = agent.options
-  // Authoritative live selection: the entry point installs the agent's current
-  // provider/model on its scoped context through `installModelSelection` (the
-  // picker switch is applied there immediately, before the next request logs a
-  // header). Fall back to the creation-time options when no selection seam is
-  // installed (e.g. a minimal custom entry point).
-  const selected = agent.ctx.modelSelection
+  // Authoritative live selection: the Agent's model records a switch as soon as
+  // the picker applies it, before the next request logs a header. It falls back
+  // to the creation-time options when no choice was recorded.
+  const selected = agent.model.current()
 
   const snapshot = ctx.sessionProjections.snapshot(agent.session)
   const values = snapshot.values as unknown as Record<string, unknown>

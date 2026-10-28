@@ -7,13 +7,13 @@ index 2b7a412b8f..0000000000
 -../.agents/skills
 \ No newline at end of file
 diff --git a/.gitattributes b/.gitattributes
-index e878c9db19..3a717e9850 100644
+index 2bead994d2..2e0c433951 100644
 --- a/.gitattributes
 +++ b/.gitattributes
-@@ -13,3 +13,10 @@ docs/persistence-schema.json linguist-generated=true
- docs/persistence-changes/*.schema.json linguist-generated=true
- docs/persistence-changes/releases/*.schema.json linguist-generated=true
- docs/persistence-changes/historical-formats/*.schema.json linguist-generated=true
+@@ -16,3 +16,10 @@ docs/persistence-changes/historical-formats/*.schema.json linguist-generated=tru
+ 
+ # Unified patch blank context lines require their leading space.
+ patches/*.patch whitespace=-blank-at-eol
 +
 +# DSH-FORK(all): the fork's mod layer is committed as unified diffs, and the format
 +# writes a context line for an empty line as a single space, so the patch set cannot
@@ -168,10 +168,10 @@ index 3cb86ce87d..66c7d00c8e 100644
 +# The packed copy of the Kiln runtime (scripts/pack-kiln.mjs); the source is python/kiln/runtime.
 +packages/kernel/kernel-python/kiln/
 diff --git a/package.json b/package.json
-index a5e45dbf91..64d25bc8e6 100644
+index 9dccd6008b..2cae885ed6 100644
 --- a/package.json
 +++ b/package.json
-@@ -107,6 +107,9 @@
+@@ -108,6 +108,9 @@
      "verify-md-links": "tsx scripts/verify-md-links.ts",
      "verify-doc-site-fragments": "tsx scripts/verify-doc-site-fragments.ts",
      "verify-public-repository-links": "tsx scripts/verify-public-repository-links.ts",

@@ -42,22 +42,29 @@ interface Harness {
 
 function fakeHarness(handler: (name: string, args: Record<string, unknown>) => unknown): Harness {
   const calls: Harness['calls'] = []
-  const execute = async (exec: { name: string; arguments: unknown; callId: string }) => {
-    calls.push({ name: exec.name, args: exec.arguments, callId: exec.callId })
-    const args = (exec.arguments ?? {}) as Record<string, unknown>
-    try {
-      return {
-        isError: false as const,
-        value: handler(exec.name, args),
-        content: [{ type: 'text', text: `ran ${exec.name}` }],
+  // One raw call batch in, one model-ordered outcome out: the shape the registry
+  // settles now, with the call id echoed back so the seam can correlate it.
+  const execute = async (batch: { calls: readonly { id: string; name: string; arguments: string }[] }) => {
+    const call = batch.calls[0]
+    if (call === undefined) throw new Error('the kernel sent an empty call batch')
+    const args = (JSON.parse(call.arguments || '{}') ?? {}) as Record<string, unknown>
+    calls.push({ name: call.name, args, callId: call.id })
+    const settled = ((): unknown => {
+      try {
+        return {
+          isError: false as const,
+          value: handler(call.name, args),
+          content: [{ type: 'text', text: `ran ${call.name}` }],
+        }
+      } catch (error) {
+        return {
+          isError: true as const,
+          content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+          error: { message: error instanceof Error ? error.message : String(error) },
+        }
       }
-    } catch (error) {
-      return {
-        isError: true as const,
-        content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
-        error: { message: error instanceof Error ? error.message : String(error) },
-      }
-    }
+    })()
+    return { results: [{ callId: call.id, result: settled }], additionalContexts: [], concluded: false }
   }
   // The read-only ops the kernel's discovery helpers use, so `tool_help` and
   // `list_tools` see the same registry `execute` serves.

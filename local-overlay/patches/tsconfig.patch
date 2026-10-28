@@ -1,8 +1,8 @@
 diff --git a/tsconfig.client.json b/tsconfig.client.json
-index b2f0423c7c..a1010fbeb4 100644
+index 26d88ff45e..0c27f05e60 100644
 --- a/tsconfig.client.json
 +++ b/tsconfig.client.json
-@@ -152,6 +152,23 @@
+@@ -168,6 +168,23 @@
      { "path": "./packages/api/workspace-files/tsconfig.client.json" },
      { "path": "./packages/client/web" },
      { "path": "./packages/context/file-reference" },
@@ -28,10 +28,10 @@ index b2f0423c7c..a1010fbeb4 100644
    ]
  }
 diff --git a/tsconfig.host.json b/tsconfig.host.json
-index 6eb4662f88..a60384c525 100644
+index 2ac375604b..a2178c732d 100644
 --- a/tsconfig.host.json
 +++ b/tsconfig.host.json
-@@ -257,6 +257,7 @@
+@@ -289,6 +289,7 @@
      { "path": "./packages/client/ui-chat/tsconfig.host.json" },
      { "path": "./packages/client/ui-conversation/tsconfig.host.json" },
      { "path": "./packages/client/ui-settings/tsconfig.host.json" },
@@ -39,7 +39,7 @@ index 6eb4662f88..a60384c525 100644
      { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
  
      { "path": "./packages/host/product-telemetry-otel" },
-@@ -449,6 +450,7 @@
+@@ -493,6 +494,7 @@
      { "path": "./packages/compaction/compaction-basic" },
      { "path": "./packages/compaction/command-compact" },
      { "path": "./packages/compaction/compaction-tool-result-pruner" },
@@ -47,7 +47,7 @@ index 6eb4662f88..a60384c525 100644
      { "path": "./packages/compaction/compaction-image-offload" },
      { "path": "./packages/web/web" },
      { "path": "./packages/web/web-search-exa" },
-@@ -533,6 +535,36 @@
+@@ -583,6 +585,36 @@
      { "path": "./apps/cli" },
      { "path": "./apps/plugin-market-generator" },
      { "path": "./apps/desktop-host" },

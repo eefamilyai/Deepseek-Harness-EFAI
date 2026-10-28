@@ -32,6 +32,7 @@ import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import { Config, apply } from '../src/index.ts'
@@ -89,6 +90,8 @@ async function bootRoster(initial: Record<string, unknown> = {}): Promise<{ ctx:
   onTestFinished(async () => { await ctx.fiber.dispose() })
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
+  // The prompt asks the executor to describe the offered tools.
+  await ctx.plugin(NativeToolExecutor)
   return { ctx, patchPath: profile.patchPath }
 }
 

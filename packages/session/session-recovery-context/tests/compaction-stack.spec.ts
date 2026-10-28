@@ -25,7 +25,7 @@ import * as masking from '@deepseek-ai/dsh-output-masking'
 import { MASK_MARKER } from '@deepseek-ai/dsh-output-masking'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
-import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as recovery from '@deepseek-ai/dsh-session-recovery-context'
 import { HANDOFF_PREAMBLE, HANDOFF_SOURCE_KIND } from '@deepseek-ai/dsh-session-recovery-context'
 
@@ -117,7 +117,6 @@ async function stack(model: ScriptedReader, withMasking: boolean): Promise<Conte
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TokenMeter)
   ctx.llm.registerAdapter(['mock'], model)
-  ctx.on('agent/request', async (_payload, next) => ({ ...await next(), provider: 'mock', model: 'mock' }))
   ctx.tools.register(defineContentToolFixture({
     name: 'read',
     description: 'Read a file.',
@@ -142,8 +141,8 @@ async function run(modules: number, contextWindow: number, withMasking: boolean)
   const model = new ScriptedReader(modules, contextWindow)
   const ctx = await stack(model, withMasking)
   const agent = await ctx.agentLoop.create(SessionId(`stack-${String(withMasking)}`), {
-    provider: 'unconfigured-agent-fallback',
-    model: 'unconfigured-agent-fallback',
+    provider: 'mock',
+    model: 'mock',
   })
   const done = idle(ctx, agent)
   agent.followup(createUserMessage({ content: [{ type: 'text', text: REQUEST }], source: { kind: 'user' } }))

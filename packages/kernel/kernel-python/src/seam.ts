@@ -263,22 +263,28 @@ function goalsOf(ctx: Context | undefined): GoalsSeamShape | undefined {
 interface ToolSchemaShape { readonly name: string; readonly description: string; readonly parameters: Record<string, unknown> }
 
 /**
- * One tool call handed to `ctx.tools.execute`. `callId` is a plain string here
- * because the registry's `ToolCallId` is a branded string — the same value at
- * run time — and this package does not depend on `dsh-llm` at run time. The
- * kernel mints `<request id>`, which is already unique per seam round trip.
+ * One raw call in the batch handed to `ctx.tools.execute`. `id` is a plain
+ * string here because the registry's `ToolCallId` is a branded string — the same
+ * value at run time — and this package does not depend on `dsh-llm` at run time.
+ * The kernel mints `<request id>`, which is already unique per seam round trip.
+ * `arguments` is the model's raw JSON text, which the registry parses, so a
+ * value the kernel could not have expressed as a string cannot arrive here.
  *
- * `parent` is deliberately absent: it is an opaque registry-owned token the
- * kernel has no way to obtain, so a `mode: 'ptc'` deployment denies a direct
- * native dispatch. That denial is actionable and names the route to take, so
- * the kernel reports it rather than silently degrading.
+ * `toolSet` is deliberately absent: a resolved step set belongs to one model
+ * step, and a kernel cell is not inside one. Unconditional tools therefore admit
+ * the call, and a conditional tool answers `UNKNOWN_TOOL` instead of running
+ * without admission.
  */
-interface ToolCallExecShape {
-  readonly callId: string
+interface ToolCallBlockShape {
+  readonly id: string
   readonly name: string
-  readonly arguments: unknown
+  readonly arguments: string
+}
+/** One raw call batch, mirrored from the registry's `ToolBatchInput`. */
+interface ToolBatchInputShape {
+  readonly calls: readonly ToolCallBlockShape[]
+  readonly signal: AbortSignal
   readonly agent?: unknown
-  readonly signal?: AbortSignal
 }
 /** The registry's normalized outcome, reduced to what crosses the seam. */
 interface ToolCallResultShape {
@@ -288,10 +294,14 @@ interface ToolCallResultShape {
   readonly meta?: unknown
   readonly error?: { readonly message?: string; readonly info?: { readonly name?: string; readonly code?: string } }
 }
+/** Model-ordered outcomes of one batch. */
+interface ToolBatchResultShape {
+  readonly results: readonly { readonly callId: string; readonly result: ToolCallResultShape }[]
+}
 interface ToolsSeamShape {
   schemas(scope?: unknown): ToolSchemaShape[]
   get(name: string, scope?: unknown): ToolSchemaShape | undefined
-  execute(exec: ToolCallExecShape): Promise<ToolCallResultShape>
+  execute(batch: ToolBatchInputShape): Promise<ToolBatchResultShape>
 }
 
 function toolsOf(ctx: Context | undefined): ToolsSeamShape | undefined {
@@ -658,10 +668,10 @@ async function dispatchTools(
   const callId = `kernel:${request.id}`
   const owner = agent
   try {
-    const result = await tools.execute({
-      callId,
-      name,
-      arguments: callArgs,
+    // One call makes one batch: the registry settles raw call batches, and a
+    // model-ordered single result is what this seam returns.
+    const batch = await tools.execute({
+      calls: [{ id: callId, name, arguments: JSON.stringify(callArgs) }],
       ...owner !== undefined ? { agent: owner } : {},
       // `signal` is REQUIRED by the registry, which fuses it with the caller's
       // own so replacement cannot detach caller cancellation. A seam request
@@ -669,6 +679,9 @@ async function dispatchTools(
       // never-aborted controller — not `undefined`.
       signal: signal ?? new AbortController().signal,
     })
+    const settled = batch.results[0]?.result
+    if (settled === undefined) return failed(request.id, new Error('tools.call settled no result'))
+    const result = settled
     // Project the normalized outcome down to lossless JSON. `value` is the
     // canonical lossless-JSON result — the closest analogue to what a `run_code`
     // program receives — and `content` is the model-facing rendering, kept so

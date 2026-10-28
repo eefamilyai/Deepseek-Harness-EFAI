@@ -18,13 +18,15 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LlmRuntime, { ToolCallId, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Message, UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as recovery from '@deepseek-ai/dsh-session-recovery-context'
 import {
   HANDOFF_PREAMBLE,
@@ -305,6 +307,7 @@ function sessionAgent(session: Session): Agent {
     options: {},
     session,
     inbox: unsupportedInbox(),
+    model: unsupportedModel(),
     status: 'running',
     ctx: new Context(),
     send: () => {},
@@ -322,7 +325,7 @@ async function step(ctx: Context, agent: Agent, kind: 'enter' | 'reject' = 'ente
   const proposed = createUserMessage({ content: [{ type: 'text', text: 'the operator asks something' }], source: { kind: 'user' } })
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [proposed], turn: 1, step: 1, signal: SIGNAL },
+    { messages: [proposed], turn: 1, step: 1, signal: SIGNAL, modelSelection: { provider: 'test', model: 'test' } },
     () => Promise.resolve(kind === 'reject'
       ? { kind: 'reject' as const }
       : { kind: 'enter' as const, messages: [proposed] }),
@@ -425,6 +428,7 @@ describe('in the real agent loop', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(recovery, { root: await tempDir('recovery-loop-'), git: false })
     let steps = 0

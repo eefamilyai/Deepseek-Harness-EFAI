@@ -34,14 +34,25 @@ function skill(skillName: string) {
 }
 
 /**
+ * Fold recorded events through the projection, the way the registry folds a
+ * session log; both the fake registry and the projection cases read the same way.
+ * @param events - recorded events in log order.
+ * @returns the projected invoked-skills state.
+ */
+function foldInvoked(events: readonly unknown[]): InvokedSkills {
+  return events.reduce<InvokedSkills>(
+    (state, event) => invokedSkillsProjection.apply(state, event as never),
+    invokedSkillsProjection.init(),
+  )
+}
+
+/**
  * A context whose skill registry answers for `available`, plus a session
  * surface reporting `visibleSkills` as still readable.
  */
 function harness(options: {
   available?: string[]
   visibleSkills?: string[]
-  /** Answer as a registry whose invokedSkills registration has gone. */
-  withdrawProjection?: boolean
   decision?: PreStepDecision
   messages?: UserMessage[]
 } = {}) {
@@ -66,16 +77,18 @@ function harness(options: {
       surface: { nodes: events.map(event => event.seq) },
     },
   } as unknown as Agent
-  // The registry folds the session's events through whatever the plugin registers.
+  // The registry folds the session's events through whatever the plugin registers,
+  // and hands back the handle that is the only reader carrying the state type.
   const registered: string[] = []
+  const stateOf = (): InvokedSkills => foldInvoked(events)
   ctx.provide('sessionProjections', {
-    register: (definition: typeof invokedSkillsProjection) => { registered.push(definition.key) },
-    stateOf: (_session: unknown, key: string) => {
-      if (!registered.includes(key) || options.withdrawProjection === true) return undefined
-      return events.reduce<InvokedSkills>(
-        (state, event) => invokedSkillsProjection.apply(state, event as never),
-        invokedSkillsProjection.init(),
-      )
+    register: (definition: typeof invokedSkillsProjection) => {
+      registered.push(definition.key)
+      return Promise.resolve({
+        stateOf,
+        readerFor: () => stateOf,
+        dispose: () => Promise.resolve(),
+      })
     },
   })
 
@@ -88,7 +101,7 @@ function harness(options: {
     async step(): Promise<PreStepDecision> {
       return await ctx.waterfall(
         'agent/pre-step',
-        { agent, messages: options.messages ?? [], turn: 1, step: 1, signal },
+        { agent, messages: options.messages ?? [], turn: 1, step: 1, signal, modelSelection: { provider: 'test', model: 'test' } },
         () => Promise.resolve(base),
       )
     },
@@ -118,10 +131,7 @@ describe('invoked skills', () => {
     { seq: 3, type: 'user/message', data: { source: { kind: 'user' } } },
     { seq: 4, type: 'assistant/message', data: {} },
   ]
-  const fold = () => events.reduce<InvokedSkills>(
-    (state, event) => invokedSkillsProjection.apply(state, event as never),
-    invokedSkillsProjection.init(),
-  )
+  const fold = () => foldInvoked(events)
 
   it('records each injected body by seq and ignores every other event by reference', () => {
     expect(fold()).toEqual({ 1: 'kept', 2: 'pruned' })
@@ -207,9 +217,13 @@ describe('the pre-step listener', () => {
 })
 
 describe('projection registration', () => {
-  it('refuses to guess when the invokedSkills registration is gone', async () => {
-    const subject = harness({ available: ['dsh-session-history'], withdrawProjection: true })
-    await subject.ctx.plugin({ name, inject, apply, Config }, {})
-    await expect(subject.step()).rejects.toThrow('skill-injection: the invokedSkills projection is not registered')
+  it('reads the projection it registered itself, through the handle registration returned', async () => {
+    // The plugin owns this registration, so "not registered" is no longer a state a
+    // reader can meet; what matters is that it registers once and reads that handle.
+    const subject = harness({ available: ['dsh-session-history'], visibleSkills: ['dsh-session-history'] })
+    await subject.ctx.plugin({ name, inject, apply, Config }, { alwaysLoadSkills: [] })
+    expect((await subject.step() as { messages: UserMessage[] }).messages).toEqual([])
+    // The body is still on the surface, so nothing is re-injected.
+    expect(subject.looked).toEqual([])
   })
 })

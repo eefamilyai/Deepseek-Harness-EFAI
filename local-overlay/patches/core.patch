@@ -1,160 +1,18 @@
-diff --git a/packages/core/agent/src/model-selection.ts b/packages/core/agent/src/model-selection.ts
-index 8921bc12a4..ae1303a8b0 100644
---- a/packages/core/agent/src/model-selection.ts
-+++ b/packages/core/agent/src/model-selection.ts
-@@ -18,6 +18,35 @@ declare module '@deepseek-ai/dsh-llm' {
-   }
- }
- 
-+/**
-+ * Selection belonging to each Agent scope, keyed by the exact scope context the
-+ * selection was installed on. A Cordis accessor is declared in ONE process-wide
-+ * property table, so `modelSelection` can only ever be declared once however
-+ * many Agents run; the accessor that wins must therefore resolve its value from
-+ * the scope the read was made through rather than close over one Agent's.
-+ * Keying by the scope lets the entry die with that scope.
-+ */
-+const selectionByScope = new WeakMap<object, ModelSelectionRef>()
-+
-+/**
-+ * Find the selection owning the scope a read was made through.
-+ *
-+ * A read arrives on the Agent's own scope or on any context extending it, so
-+ * the nearest registered ancestor is the owner. Absent means the reading scope
-+ * carries no Agent selection — never some other Agent's.
-+ * @param reading - context the `modelSelection` read went through.
-+ * @returns the owning selection, or undefined when this scope has none.
-+ */
-+function selectionOwnerOf(reading: object): ModelSelectionRef | undefined {
-+  let cursor: object | null = reading
-+  while (cursor !== null) {
-+    const found = selectionByScope.get(cursor)
-+    if (found !== undefined) return found
-+    cursor = Object.getPrototypeOf(cursor)
-+  }
-+  return undefined
-+}
-+
- /** Complete provider, model, and optional reasoning effort selected for one live Agent. */
- export interface ModelSelection {
-   /** Registered provider route. */
-@@ -79,6 +108,25 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
-  * @returns Disposer for all scoped waterfall listeners.
-  */
- export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
-+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: upstream resolves
-+  // the accessor from the reading scope instead of closing over one selection.
-+  //
-+  // Declaring an accessor twice is a hard cordis error, and a resume or
-+  // reconnect re-enters setup on the same agent context before the previous
-+  // attempt unwound — hence the declaration is guarded. But the guarded
-+  // property table is on the ROOT reflect service, not per scope, so the guard
-+  // is true for every Agent after the first; returning early there left each of
-+  // them with no accessor of its own, and its `modelSelection` reads resolved
-+  // to whichever Agent installed first. Registering the selection per scope and
-+  // resolving it from the reading scope is what keeps two live Agents apart.
-+  selectionByScope.set(agentCtx, selection)
-+  if (!('modelSelection' in agentCtx)) {
-+    agentCtx.accessor('modelSelection', {
-+      get(this: Context) {
-+        return selectionOwnerOf(this)?.current
-+      },
-+    })
-+  }
-   const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
-     const selected = selection.current
-     const assembled = await next()
-@@ -128,5 +176,21 @@ export function installModelSelection(agentCtx: Context, selection: ModelSelecti
-     disposeAssembly()
-     disposeRequest()
-     disposeNotice()
-+    // Only the install that still owns the entry may drop it, so a re-entry
-+    // that replaced this selection keeps its own registration.
-+    if (selectionByScope.get(agentCtx) === selection) selectionByScope.delete(agentCtx)
-+  }
-+}
-+
-+
-+declare module '@deepseek-ai/cordis' {
-+  interface Context {
-+    /**
-+     * Live provider/model selection for the Agent owning this scoped context,
-+     * resolved through the entry point's precedence (picker switch, logged
-+     * request header, deployment default). Absent when no selection is
-+     * installed for this scope.
-+     */
-+    modelSelection?: ModelSelection | undefined
-   }
- }
-diff --git a/packages/core/agent/tests/model-selection.spec.ts b/packages/core/agent/tests/model-selection.spec.ts
-index 27b2a7bffd..a43128e1fd 100644
---- a/packages/core/agent/tests/model-selection.spec.ts
-+++ b/packages/core/agent/tests/model-selection.spec.ts
-@@ -188,4 +188,48 @@ describe('installModelSelection()', () => {
-     })
-     await ctx.fiber.dispose()
-   })
-+
-+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
-+  it('keeps two Agents in one process reading their own selections', async () => {
-+    // The production shape: ONE Host process composes many Agents, each on its
-+    // own scope extending a shared root. Cordis declares an accessor in a
-+    // single process-wide property table, so only the first Agent can declare
-+    // `modelSelection`; every later one must still read its own selection
-+    // rather than the first Agent's.
-+    const ctx = new Context()
-+    await ctx.plugin(SystemPrompt)
-+    function scope(): void {}
-+    const ctxA = ctx.plugin(scope).ctx.extend({ agent: 'a' })
-+    const ctxB = ctx.plugin(scope).ctx.extend({ agent: 'b' })
-+
-+    installModelSelection(ctxA, { current: { provider: 'alpha', model: 'a1' }, assembled: undefined })
-+    installModelSelection(ctxB, { current: { provider: 'beta', model: 'b1' }, assembled: undefined })
-+
-+    expect(ctxA.modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
-+    expect(ctxB.modelSelection).toEqual({ provider: 'beta', model: 'b1' })
-+    // A context extending an Agent scope reads through to that Agent, and an
-+    // unscoped ancestor carries no selection at all.
-+    expect(ctxA.extend({}).modelSelection).toEqual({ provider: 'alpha', model: 'a1' })
-+    expect(ctx.modelSelection).toBeUndefined()
-+    await ctx.fiber.dispose()
-+  })
-+
-+  // DSH-FORK(fix): fork edit on an upstream-owned file. EXIT: follows packages/core/agent/src/model-selection.ts.
-+  it('adopts a scope that already declares the accessor instead of crashing on re-entry', async () => {
-+    // A resume/reconnect can re-enter setup on the same agent context before the
-+    // first attempt's fiber unwound; a second raw accessor declaration throws
-+    // `already declared`, which failed the whole resume. The second install must
-+    // be a no-op that leaves the first wiring intact.
-+    const ctx = new Context()
-+    await ctx.plugin(SystemPrompt)
-+    const first: ModelSelectionRef = { current: { provider: 'alpha', model: 'a1' }, assembled: undefined }
-+    installModelSelection(ctx, first)
-+
-+    const second: ModelSelectionRef = { current: { provider: 'beta', model: 'b1' }, assembled: undefined }
-+    expect(() => installModelSelection(ctx, second)).not.toThrow()
-+    // Re-entry on ONE scope replaces that scope's selection: the latest install
-+    // is what the scope reads, and no accessor was declared twice.
-+    expect(ctx.modelSelection).toEqual({ provider: 'beta', model: 'b1' })
-+    await ctx.fiber.dispose()
-+  })
- })
 diff --git a/packages/core/tools/tests/gen-tool-catalog.spec.ts b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-index bc0b2ba97d..2f265f2887 100644
+index 4948fdb66f..bff79886ba 100644
 --- a/packages/core/tools/tests/gen-tool-catalog.spec.ts
 +++ b/packages/core/tools/tests/gen-tool-catalog.spec.ts
-@@ -30,9 +30,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
+@@ -30,8 +30,12 @@ describe('gen-tool-catalog collectToolCatalog', () => {
        'cordis_inspect_query',
        'create_goal', 'create_worktree', 'edit', 'exit_plan_mode', 'get_goal', 'glob', 'grep',
        'interrupt_agent', 'interrupt_agent', 'job_kill', 'job_list', 'job_output',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
 +      'kernel',
        'list_agents', 'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
--      'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',
--      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
+-      'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'plugin_market', 'present', 'propose_action', 'pwsh', 'pwsh', 'ralph',
 +      'list_subagent_models', 'load_workspace_dependencies', 'lsp',
 +      // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: follows scripts/gen-tool-catalog.ts.
-+      'notebook_edit', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',      'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
++      'notebook_edit', 'plugin_manager', 'plugin_market', 'present', 'propose_action', 'pwsh', 'pwsh', 'ralph',
+       'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_delete',
        'schedule_list', 'schedule_update', 'send_message', 'send_message', 'session_event_read', 'session_event_search',
        'session_event_trace', 'session_search', 'session_trace', 'skill', 'spawn_teammate',
-       'stagehand_act', 'stagehand_extract', 'stagehand_navigate', 'stagehand_observe', 'stagehand_screenshot', 'stagehand_tabs',

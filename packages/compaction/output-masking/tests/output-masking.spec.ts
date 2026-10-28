@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -155,6 +155,7 @@ function sessionAgent(session: Session): Agent {
     options: {},
     session,
     inbox: unsupportedInbox(),
+    model: unsupportedModel(),
     status: 'running',
     ctx: new Context(),
     send: () => {},
@@ -182,7 +183,7 @@ async function step(ctx: Context, agent: Agent, inner: () => void = () => {}): P
   const proposed = createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } })
   const decision = await agentEvents(ctx, agent).waterfall(
     'agent/pre-step',
-    { messages: [proposed], turn: 1, step: 1, signal: SIGNAL },
+    { messages: [proposed], turn: 1, step: 1, signal: SIGNAL, modelSelection: { provider: 'test', model: 'test' } },
     () => {
       inner()
       return Promise.resolve({ kind: 'enter' as const, messages: [proposed] })
@@ -219,8 +220,10 @@ describe('the pass ahead of each step', () => {
     // A second step finds nothing left to mask.
     await step(ctx, sessionAgent(session))
     expect(session.snapshotEvents().filter(event => event.type === 'compaction/prune')).toHaveLength(4)
-    const state = ctx.sessionProjections.stateOf(session, MASKING_PROJECTION)
-    expect(state?.nodes.filter(node => node.result?.masked === true).map(node => node.result?.target)).toEqual(['f0.ts', 'f1.ts', 'f2.ts', 'f3.ts'])
+    // The projection is host-only, so it has no wire view to read from a snapshot;
+    // the deprecated accessor still answers the live state.
+    const state = ctx.sessionProjections.stateOf(session, MASKING_PROJECTION) as MaskingSurface
+    expect(state.nodes.filter(node => node.result?.masked === true).map(node => node.result?.target)).toEqual(['f0.ts', 'f1.ts', 'f2.ts', 'f3.ts'])
   })
 
   it('waits until a pass would mask at least minBatch results', async () => {
@@ -261,7 +264,7 @@ describe('pricing', () => {
     await replayCtx.plugin(TokenMeter)
     const replay = Session.create(SessionId('priced-replay'), session.snapshotEvents())
     expect(replayCtx.tokenMeter.measure(replay).surfaceTokens).toBe(live)
-    const state = ctx.sessionProjections.stateOf(session, MASKING_PROJECTION)
-    expect(state?.nodes.reduce((sum, node) => sum + node.tokens, 0)).toBe(live)
+    const state = ctx.sessionProjections.stateOf(session, MASKING_PROJECTION) as MaskingSurface
+    expect(state.nodes.reduce((sum, node) => sum + node.tokens, 0)).toBe(live)
   })
 })

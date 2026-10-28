@@ -7,6 +7,12 @@
   ],
   "patchGroups": [
     {
+      "name": "liveshare",
+      "paths": [
+        "packages/experimental/liveshare/"
+      ]
+    },
+    {
       "name": "job-kind-augmentation",
       "paths": [
         "packages/experimental/tool-terminal/",

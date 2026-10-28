@@ -1,8 +1,8 @@
 diff --git a/packages/client/ui-conversation/src/client/locales.ts b/packages/client/ui-conversation/src/client/locales.ts
-index f1f708073b..3159033ae5 100644
+index dca76eb57f..40dfac0dc8 100644
 --- a/packages/client/ui-conversation/src/client/locales.ts
 +++ b/packages/client/ui-conversation/src/client/locales.ts
-@@ -326,6 +326,8 @@ export const zh = {
+@@ -329,6 +329,8 @@ export const zh = {
    'tool.title.stopCordis': '停止 Cordis 插件',
    'tool.title.removeCordis': '移除 Cordis 插件',
    'tool.title.pwsh': '运行命令',
@@ -11,7 +11,7 @@ index f1f708073b..3159033ae5 100644
    'tool.title.readImage': '读取图片',
    'tool.title.grep': '搜索文件内容',
    'tool.title.glob': '查找文件',
-@@ -706,6 +708,7 @@ export const en = {
+@@ -712,6 +714,7 @@ export const en = {
    'tool.title.stopCordis': 'Stop Cordis Plugin',
    'tool.title.removeCordis': 'Remove Cordis Plugin',
    'tool.title.pwsh': 'Pwsh',
@@ -19,11 +19,65 @@ index f1f708073b..3159033ae5 100644
    'tool.title.readImage': 'Read image',
    'tool.title.grep': 'Grep',
    'tool.title.glob': 'Glob',
+@@ -1094,6 +1097,8 @@ export const ja = {
+   'tool.title.stopCordis': 'Cordis プラグインを停止',
+   'tool.title.removeCordis': 'Cordis プラグインを削除',
+   'tool.title.pwsh': 'Pwsh',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  'tool.title.kernel': 'Python',
+   'tool.title.readImage': '画像を読み取り',
+   'tool.title.grep': 'Grep',
+   'tool.title.glob': 'Glob',
+@@ -1474,6 +1479,8 @@ export const es = {
+   'tool.title.stopCordis': 'Detener el complemento Cordis',
+   'tool.title.removeCordis': 'Eliminar el complemento Cordis',
+   'tool.title.pwsh': 'Pwsh',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  'tool.title.kernel': 'Python',
+   'tool.title.readImage': 'Leer imagen',
+   'tool.title.grep': 'grep',
+   'tool.title.glob': 'globo',
+@@ -1856,6 +1863,8 @@ export const fr = {
+   'tool.title.stopCordis': 'Arrêter le plug-in Cordis',
+   'tool.title.removeCordis': 'Supprimer le plug-in Cordis',
+   'tool.title.pwsh': 'Pwsh',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  'tool.title.kernel': 'Python',
+   'tool.title.readImage': "Lire l'image",
+   'tool.title.grep': 'Grep',
+   'tool.title.glob': 'Glob',
+@@ -2238,6 +2247,8 @@ export const de = {
+   'tool.title.stopCordis': 'Stoppen Sie das Cordis-Plugin',
+   'tool.title.removeCordis': 'Entfernen Sie das Cordis-Plugin',
+   'tool.title.pwsh': 'Pwsh',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  'tool.title.kernel': 'Python',
+   'tool.title.readImage': 'Bild lesen',
+   'tool.title.grep': 'Grep',
+   'tool.title.glob': 'Globus',
+@@ -2620,6 +2631,8 @@ export const ru = {
+   'tool.title.stopCordis': 'Остановить плагин Cordis',
+   'tool.title.removeCordis': 'Удалить плагин Cordis',
+   'tool.title.pwsh': 'Пшш',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  'tool.title.kernel': 'Python',
+   'tool.title.readImage': 'Читать изображение',
+   'tool.title.grep': 'Греп',
+   'tool.title.glob': 'Глоб',
+@@ -3002,6 +3015,8 @@ export const pt = {
+   'tool.title.stopCordis': 'Parar o plug-in Cordis',
+   'tool.title.removeCordis': 'Remover plug-in Cordis',
+   'tool.title.pwsh': 'Pwsh',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  'tool.title.kernel': 'Python',
+   'tool.title.readImage': 'Ler imagem',
+   'tool.title.grep': 'Grep',
+   'tool.title.glob': 'globo',
 diff --git a/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx b/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx
-index 40df87269b..2129a1c803 100644
+index b46db926da..f43282e48a 100644
 --- a/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx
 +++ b/packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx
-@@ -150,9 +150,9 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
+@@ -151,9 +151,9 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
              })}
            </span>
            <span className={css.titleGroup}>
@@ -36,10 +90,10 @@ index 40df87269b..2129a1c803 100644
          </div>
          <div className={css.body}>
 diff --git a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
-index bcd1005a30..0e49537d0a 100644
+index 2f7a1fd979..5c9200c147 100644
 --- a/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
 +++ b/packages/client/ui-conversation/tests/skeleton.client.spec.tsx
-@@ -386,11 +386,12 @@ function mount(
+@@ -408,11 +408,12 @@ function mount(
  }
  
  describe('Hero chrome', () => {
@@ -54,7 +108,7 @@ index bcd1005a30..0e49537d0a 100644
      expect(renderSlot).toHaveBeenCalledOnce()
      expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
      const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
-@@ -554,7 +555,6 @@ describe('ConversationRoot resident composer', () => {
+@@ -576,7 +577,6 @@ describe('ConversationRoot resident composer', () => {
      expect(b.slotCalls).not.toContain('conversation.session.header.utilities')
      expect(b.slotCalls).not.toContain('conversation.session.header.actions')
      expect(b.view.getByText('探索未至之境')).toBeTruthy()

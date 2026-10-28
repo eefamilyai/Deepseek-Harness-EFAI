@@ -1,8 +1,8 @@
 diff --git a/scripts/gen-cordis-catalog.ts b/scripts/gen-cordis-catalog.ts
-index ebd7527142..3b55dcf428 100644
+index 001bd59229..c7cc87b03f 100644
 --- a/scripts/gen-cordis-catalog.ts
 +++ b/scripts/gen-cordis-catalog.ts
-@@ -76,6 +76,11 @@ export const SERVICE_PAGE: Record<string, string> = {
+@@ -79,6 +79,11 @@ export const SERVICE_PAGE: Record<string, string> = {
    shellEnv: 'shell.md',
    clientModules: 'client-modules.md',
    ptcRuntime: 'ptc-runtime.md',
@@ -13,8 +13,8 @@ index ebd7527142..3b55dcf428 100644
 +  aiAccounts: 'llm-streaming.md',
    browserUse: 'browser-use.md',
    computerUse: 'computer-use.md',
-   commands: 'commands.md',
-@@ -94,6 +99,9 @@ export const SERVICE_PAGE: Record<string, string> = {
+   cuaAccess: 'computer-use.md',
+@@ -98,6 +103,9 @@ export const SERVICE_PAGE: Record<string, string> = {
    fs: 'filesystem.md',
    goals: 'goal.md',
    schedule: 'schedule.md',
@@ -24,15 +24,7 @@ index ebd7527142..3b55dcf428 100644
    inspector: 'extensions.md',
    webServer: 'web-server.md',
    webApp: 'web-server.md',
-@@ -175,6 +183,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
-   appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
-   appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
-   cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
-+  modelSelection: 'not a service: Agent-scoped accessor value (ModelSelection | undefined) installed by an entry point — packages/core/agent/README.md owns the selection contract',
-   configuredAgentIdentities: 'not a service: launcher-provided boot-context value (ConfiguredAgentIdentities | undefined) — packages/core/agent-loop/README.md owns this launcher contract',
-   launcherSessionQueryPath: 'not a service: launcher-provided boot-context value (string | undefined) — packages/session-query/session-query-sqlite/README.md owns this launcher contract',
-   dshHomePath: 'not a service: boot-provided root accessor function (typeof dshHomePath | undefined) for Loader !!js config expressions — packages/boot/app-boot/README.md owns the boot contract',
-@@ -284,6 +293,19 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
+@@ -295,6 +303,19 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
   * appear on more than one page.
   */
  export const LINK_MAP: Readonly<Record<string, string>> = {
@@ -52,7 +44,7 @@ index ebd7527142..3b55dcf428 100644
    Principal: 'typert.md',
    PrincipalMap: 'typert.md',
    RemoteAccessResource: 'typert.md',
-@@ -368,6 +390,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
+@@ -435,6 +456,13 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
    LlmNativeAuth: 'llm-streaming.md',
    LlmModelDiscoveryRequest: 'llm-streaming.md',
    LlmDiscoveredModel: 'llm-streaming.md',
@@ -66,7 +58,7 @@ index ebd7527142..3b55dcf428 100644
    ResolvedRetryPolicy: 'llm-streaming.md',
    Message: 'llm-streaming.md',
    MessageSource: 'llm-streaming.md',
-@@ -905,6 +934,22 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+@@ -1003,6 +1031,22 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
    PresetMetadata: 'preset display text is owned by packages/preset/agent-preset-registry/README.md',
    BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
    BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
@@ -90,10 +82,10 @@ index ebd7527142..3b55dcf428 100644
    ManualCompactAgentContext: 'manual compaction service input is owned by packages/compaction/compaction/src/index.ts',
    ClientResponse: 'wire response message is owned by packages/client/connection/src/rpc.ts',
 diff --git a/scripts/gen-doc-graphs.ts b/scripts/gen-doc-graphs.ts
-index 69eedf37b2..af8fe638d7 100644
+index 158ef7d46f..97eec2b63f 100644
 --- a/scripts/gen-doc-graphs.ts
 +++ b/scripts/gen-doc-graphs.ts
-@@ -242,10 +242,52 @@ const SERVICE_ROLES: ServiceRole[] = [
+@@ -295,10 +295,52 @@ const SERVICE_ROLES: ServiceRole[] = [
      pkg: 'llm',
      title: 'LLM adapter registry',
      mode: 'seam',
@@ -147,7 +139,7 @@ index 69eedf37b2..af8fe638d7 100644
    {
      key: 'deepseekLlmApiExtensions',
      pkg: 'deepseek-llm-api-extensions',
-@@ -651,6 +693,22 @@ const SERVICE_ROLES: ServiceRole[] = [
+@@ -704,6 +746,22 @@ const SERVICE_ROLES: ServiceRole[] = [
      mode: 'core',
      note: 'Stores tasks independently of Session activation and queues due messages in the original Session.',
    },
@@ -171,10 +163,10 @@ index 69eedf37b2..af8fe638d7 100644
      key: 'goals',
      pkg: 'goal',
 diff --git a/scripts/gen-tool-catalog.ts b/scripts/gen-tool-catalog.ts
-index c4ed48c185..c52f249792 100644
+index 15f4ca2ddb..84340588dd 100644
 --- a/scripts/gen-tool-catalog.ts
 +++ b/scripts/gen-tool-catalog.ts
-@@ -52,6 +52,8 @@ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
+@@ -57,6 +57,8 @@ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
  import * as ToolPresent from '@deepseek-ai/dsh-tool-present'
  import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
  import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
@@ -183,9 +175,9 @@ index c4ed48c185..c52f249792 100644
  import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
  import TerminalSessionService from '@deepseek-ai/dsh-terminal'
  import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
-@@ -77,6 +79,9 @@ import McpResources from '@deepseek-ai/dsh-mcp-resources'
+@@ -82,6 +84,9 @@ import McpResources from '@deepseek-ai/dsh-mcp-resources'
  import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
- import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
+ import * as ToolSubagentOar from '@deepseek-ai/dsh-experimental-tool-subagent-oar'
  import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
 +import KernelRuntime from '@deepseek-ai/dsh-kernel'
 +import * as ToolKernel from '@deepseek-ai/dsh-tool-kernel'
@@ -193,7 +185,7 @@ index c4ed48c185..c52f249792 100644
  import WorkflowEngine from '@deepseek-ai/dsh-workflow'
  import type { WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
  import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
-@@ -413,6 +418,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -430,6 +435,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
    },
@@ -216,7 +208,7 @@ index c4ed48c185..c52f249792 100644
    {
      pkg: '@deepseek-ai/dsh-tool-terminal',
      dir: 'tool-terminal',
-@@ -688,6 +709,38 @@ const TOOL_PACKAGES: ToolPackage[] = [
+@@ -718,6 +739,38 @@ const TOOL_PACKAGES: ToolPackage[] = [
      note:
        'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
    },
@@ -256,24 +248,26 @@ index c4ed48c185..c52f249792 100644
  
  /** One package's contribution to the catalog: its schemas plus attribution. */
 diff --git a/scripts/package-dependency-policy.ts b/scripts/package-dependency-policy.ts
-index ef15d1bbf7..b6947828b4 100644
+index 21ad78761d..61cc27804f 100644
 --- a/scripts/package-dependency-policy.ts
 +++ b/scripts/package-dependency-policy.ts
-@@ -51,6 +51,7 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
+@@ -51,6 +51,9 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
   * prominent heading in the pull request description.
   */
  const SAFE_HOST_DEPENDENCY_EXPORTS = {
++  // DSH-FORK(desktop): the Host resolves the profile it boots through these.
++  // EXIT: upstream exports profile resolution from a package the Host may import.
 +  '@deepseek-ai/dsh-app-boot': ['PROFILE_TEMPLATES', 'initProfile', 'resolveProfileDir'],
+   '@deepseek-ai/dsh-atomic-write': ['withFileLock', 'writeFileAtomic'],
+   '@deepseek-ai/dsh-computer-use/brand': ['ComputerUseProviderName'],
    '@deepseek-ai/dsh-credentials': ['credentialKey'],
-   '@deepseek-ai/dsh-deque': ['Deque'],
-   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
 diff --git a/scripts/verify-package-readme-model-experience.ts b/scripts/verify-package-readme-model-experience.ts
-index 2c313a3dea..30e6d2bf86 100644
+index 1bd528fa66..344366a612 100644
 --- a/scripts/verify-package-readme-model-experience.ts
 +++ b/scripts/verify-package-readme-model-experience.ts
-@@ -37,6 +37,13 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
-   'packages/util/workspace-path': 'The package only formats Workspace paths for browser UI; it never constructs model input.',
+@@ -40,6 +40,13 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
    'packages/util/values': 'The package only validates, snapshots, compares, freezes, or rejects caller-owned values; consumers own every model-facing use.',
+   'packages/util/official-bundles': 'The package only lists bundle package names and their display metadata; the loaded plugin tree owns model context.',
    'packages/util/code-language': 'The package only maps a filename suffix to a syntax-highlighting language id; the read consumer owns the persisted hint.',
 +  // DSH-FORK(all): the fork ships package READMEs for fork-owned packages, so these
 +  // audited allowlists must name them; without entries the gate rejects a correct README.
@@ -285,7 +279,7 @@ index 2c313a3dea..30e6d2bf86 100644
  }
  
  /**
-@@ -83,6 +90,22 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+@@ -98,6 +105,22 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
    'packages/shell/pwsh-local': { kind: 'indirect', reason: 'The executor backend delegates model rendering to dsh-tool-pwsh.' },
    'packages/ptc-runtime/ptc-runtime': { kind: 'indirect', reason: 'The service interface delegates model rendering to PTC mode in dsh-tools.' },
    'packages/core/agent-tool-presentation': { kind: 'indirect', reason: 'The row only selects between the two projections dsh-tools owns; it registers no prompt, schema, or result of its own.' },

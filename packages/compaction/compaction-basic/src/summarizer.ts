@@ -324,6 +324,9 @@ export async function summarizeWithLlm(
     // EXIT: upstream stops replaying a compaction transcript as live agent turns.
     system: SUMMARIZER_ROLE,
     messages,
+    // The adapter still needs the tool definitions the Session has been using,
+    // even though this request offers no tool channel of its own.
+    toolHistory: agent.session.toolHistory(),
     maxTokens: config.maxTokens,
     sessionId: agent.session.id,
     purpose: 'compaction',

@@ -153,10 +153,10 @@ index d37448d5ad..342252563d 100644
      const execution = await context.commands.execute(agent, '/compact', [], new AbortController().signal)
      if (execution === undefined) throw new Error('Loader composition did not resolve /compact')
 diff --git a/packages/compaction/compaction-basic/src/index.ts b/packages/compaction/compaction-basic/src/index.ts
-index 163cec3810..ec3e77f642 100644
+index 096fa72fe4..1fb855748d 100644
 --- a/packages/compaction/compaction-basic/src/index.ts
 +++ b/packages/compaction/compaction-basic/src/index.ts
-@@ -383,7 +383,10 @@ export class BasicCompactionEngine extends CompactionEngine {
+@@ -407,7 +407,10 @@ export class BasicCompactionEngine extends CompactionEngine {
    override compactNow(
      agent: Agent,
      signal: AbortSignal,
@@ -167,7 +167,7 @@ index 163cec3810..ec3e77f642 100644
    ): Promise<CompactionResult | null> {
      signal.throwIfAborted()
      try {
-@@ -407,6 +410,7 @@ export class BasicCompactionEngine extends CompactionEngine {
+@@ -431,6 +434,7 @@ export class BasicCompactionEngine extends CompactionEngine {
                owner: null,
                stability: 'selected-span',
                ...sourceCommandId === undefined ? {} : { sourceCommandId },
@@ -258,7 +258,7 @@ index 7b3d77d299..dacd14cf37 100644
    }
  }
 diff --git a/packages/compaction/compaction-basic/src/summarizer.ts b/packages/compaction/compaction-basic/src/summarizer.ts
-index 2d258fa410..dcb6ac5867 100644
+index 2d258fa410..dbbf0f5998 100644
 --- a/packages/compaction/compaction-basic/src/summarizer.ts
 +++ b/packages/compaction/compaction-basic/src/summarizer.ts
 @@ -4,6 +4,17 @@
@@ -499,7 +499,7 @@ index 2d258fa410..dcb6ac5867 100644
   * @param agent - supplies routed-model history, fallback model, and session id.
   * @param signal - optional cancellation forwarded to the adapter.
   * @returns safe text-only summary blocks and the exact call envelope and output.
-@@ -143,18 +303,27 @@ export async function summarizeWithLlm(
+@@ -143,18 +303,30 @@ export async function summarizeWithLlm(
  
    const assembler = new BlockAssembler()
    const messages: RequestMessage[] = [
@@ -526,16 +526,18 @@ index 2d258fa410..dcb6ac5867 100644
 +    // EXIT: upstream stops replaying a compaction transcript as live agent turns.
 +    system: SUMMARIZER_ROLE,
      messages,
--    toolHistory: agent.session.toolHistory(),
++    // The adapter still needs the tool definitions the Session has been using,
++    // even though this request offers no tool channel of its own.
+     toolHistory: agent.session.toolHistory(),
 -    ...input.tools === undefined ? {} : { tools: [...input.tools] },
      maxTokens: config.maxTokens,
      sessionId: agent.session.id,
      purpose: 'compaction',
 diff --git a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
-index 3736aa5c5e..c436816ae8 100644
+index cf6780933d..ed010fae4c 100644
 --- a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
 +++ b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
-@@ -1383,6 +1383,12 @@ async function summarizerHarness(
+@@ -1384,6 +1384,12 @@ async function summarizerHarness(
    return { ctx, adapter, compact }
  }
  
@@ -548,7 +550,7 @@ index 3736aa5c5e..c436816ae8 100644
  describe('default one-shot summarizer', () => {
    it.each([undefined, '', 'SYSTEM HEAD\n精确前缀\n'])('preserves the routed prefix through region summarization with system %j', async (system) => {
      const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
-@@ -1394,13 +1400,29 @@ describe('default one-shot summarizer', () => {
+@@ -1395,13 +1401,29 @@ describe('default one-shot summarizer', () => {
      })
      const nodes = [...session.surface.nodes]
      const start = system === undefined ? 0 : 1
@@ -583,7 +585,7 @@ index 3736aa5c5e..c436816ae8 100644
      expect(instruction).toMatchObject({ role: 'user' })
      expect(instruction).not.toHaveProperty('id')
      expect(instruction).not.toHaveProperty('source')
-@@ -1485,10 +1507,20 @@ describe('default one-shot summarizer', () => {
+@@ -1486,10 +1508,20 @@ describe('default one-shot summarizer', () => {
        messages: [system, prefix],
      }, agent(conversation(1), MODEL))
  
@@ -607,7 +609,7 @@ index 3736aa5c5e..c436816ae8 100644
      const last = messages.at(-1)?.content[0]
      const lastText = last?.type === 'text' ? last.text : ''
      expect(lastText).toContain('Write concise English engineering prose.')
-@@ -1535,8 +1567,14 @@ describe('default one-shot summarizer', () => {
+@@ -1536,8 +1568,14 @@ describe('default one-shot summarizer', () => {
        model: 'policy-summary',
        maxTokens: 222,
      })
@@ -625,7 +627,7 @@ index 3736aa5c5e..c436816ae8 100644
  
    it('resolves the latest routed provider/model before the AgentOptions pair', async () => {
 diff --git a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
-index 8d762591eb..95c0135a56 100644
+index 2777a6e29b..13dc612c38 100644
 --- a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
 +++ b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
 @@ -96,12 +96,10 @@ class OverflowRecoveryAdapter extends LlmAdapter {

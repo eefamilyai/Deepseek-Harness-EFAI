@@ -1,8 +1,8 @@
 diff --git a/packages/session/session-format-v0-to-v1/src/payload-validation.ts b/packages/session/session-format-v0-to-v1/src/payload-validation.ts
-index 5b19f7cc66..ce65328a5e 100644
+index 7fd302dfd9..5f3be5ff0e 100644
 --- a/packages/session/session-format-v0-to-v1/src/payload-validation.ts
 +++ b/packages/session/session-format-v0-to-v1/src/payload-validation.ts
-@@ -758,9 +758,33 @@ function finishReasonValue(value: SessionFormatJsonValue | undefined, label: str
+@@ -759,9 +759,33 @@ function finishReasonValue(value: SessionFormatJsonValue | undefined, label: str
    nonEmptyString(reason['kind'], `${label} kind`)
  }
  
@@ -38,7 +38,7 @@ index 5b19f7cc66..ce65328a5e 100644
      throw new SessionFormatError(`${label} blocks must be an array`)
    }
  }
-@@ -952,30 +976,93 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
+@@ -950,30 +974,93 @@ function modelRouteValue(value: SessionFormatJsonValue | undefined, label: strin
    nonEmptyString(route['model'], `${label} model`)
  }
  

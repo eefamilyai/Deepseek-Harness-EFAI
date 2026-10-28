@@ -50,6 +50,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "yaml": "^2.9.0",

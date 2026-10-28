@@ -13,6 +13,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { dispatchSeam } from '@deepseek-ai/dsh-kernel-python/src/seam.ts'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as DevTools from '../src/index.ts'
 
 const roots: string[] = []
@@ -22,6 +23,7 @@ async function mounted(config: Record<string, unknown> = {}): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
+  await ctx.plugin(NativeToolExecutor)
   // The loader validates plain config itself; a pre-validated one carries volatile references.
   await ctx.plugin(DevTools, config)
   return ctx

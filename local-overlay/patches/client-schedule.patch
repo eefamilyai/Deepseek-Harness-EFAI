@@ -1,46 +1,17 @@
-diff --git a/packages/client/ui-schedule/README.i18n.yaml b/packages/client/ui-schedule/README.i18n.yaml
-index 205e4c6b84..223e355847 100644
---- a/packages/client/ui-schedule/README.i18n.yaml
-+++ b/packages/client/ui-schedule/README.i18n.yaml
-@@ -15,8 +15,8 @@
-   en: d152484eb41ac6b4
-   zh: 405b30feaf48c087
- /deepseek-ai-dsh-client-ui-schedule/use-this-package:
--  en: edba0e1573f3ce42
--  zh: 77875b469d94cc62
-+  en: 3123dd83469273fd
-+  zh: 30cb678b808b0220
- /deepseek-ai-dsh-client-ui-schedule/use-this-package/time-zone-data-source:
-   en: 6bd6882dbbbefcb0
-   zh: 03aa15f1a65d13dc
-@@ -33,8 +33,8 @@
-   en: 4b81350950285d47
-   zh: 6dc3d5cf7ca8a622
- /deepseek-ai-dsh-client-ui-schedule/known-limitations-and-deferred-work:
--  en: ce8cd6e03f4763ae
--  zh: 65ad26aad74d83ca
-+  en: eaf1f412ba212bdc
-+  zh: ea835b1bd148a8ab
- /deepseek-ai-dsh-client-ui-schedule/known-limitations-and-deferred-work/dev-note:
-   en: e67f633dc6fe7773
-   zh: a4b126f9a4eaca6f
 diff --git a/packages/client/ui-schedule/README.md b/packages/client/ui-schedule/README.md
-index 220af1e6c7..1dd8dc0423 100644
+index ee91c4aa00..eb2bb99eaa 100644
 --- a/packages/client/ui-schedule/README.md
 +++ b/packages/client/ui-schedule/README.md
-@@ -25,10 +25,9 @@ Manage active and inactive tasks from the Automation tasks page and the right Si
+@@ -25,7 +25,7 @@ Manage active and inactive tasks from the Automation tasks page and the right Si
  <a id="use-this-package"></a>
  ## Use this package
  
--The shipped Web composition mounts `ui-schedule` with the Host Schedule service. The clock context that supplies the model's current time is preset-owned: `standard`, `cordis`, and `ptc` declare it, and `minimal` declares neither it nor the reminder tools. The Automation tasks sidebar entry opens a global page without selecting or activating a Session. The page header's New action starts a new Session, where the reminder is created by asking the model; the page itself has no creation form. Its task list supports text search and one All, Enabled, and Inactive status filter row; search matches the stored task name, the instruction, and the internal Session id, not a resolved Session title, and the empty state keeps the heading's New action beside the notice. Selecting an active or inactive task opens a second detail level with Rules and Records tabs. Every list row shows the task's stored title with its status, frequency, and next run and never the original Session name; the detail's name control shows the stored title. Rules contains the complete reminder, status, next target for active tasks, original recurrence rule, and task id. Daily rule labels show the saved local time and exact stored IANA zone, preserving nonzero seconds and milliseconds rather than substituting the browser's zone. The Linked session entry in the detail tab strip names the linked Session by its catalog title, falling back to the Session id when no title is available. When the strip cannot fit the tab list beside the labelled entry, the entry becomes an icon button with the same button style as More task actions, with the Session chat icon and a Linked session tooltip that also shows while the entry is disabled; the entry keeps focus when it switches layouts; the tab list scrolls without a visible scrollbar. It opens an available, unarchived Session after metadata loads; pending Session or Workspace metadata, an archived Session, missing Session membership, or a Workspace query error keeps it disabled with an explanation. The click rechecks availability; browsing does not unarchive the Session. Only this action requests Session activation. Deletion is available from the More task actions menu in the detail's top strip, separate from navigation.
-+The shipped Web composition mounts `ui-schedule` with the Host Schedule service. The clock context that supplies the model's current time is preset-owned: `standard`, `cordis`, and `ptc` declare it, and `minimal` declares neither it nor the reminder tools. The Automation tasks sidebar entry opens a global page without selecting or activating a Session. The page header's New action opens the page's own creation form, which carries a name, an instruction, the Session the task delivers into, and one recurrence rule, and submits them through the `schedule` Remote namespace's `create` endpoint.<!-- DSH-FORK(schedule): the fork adds a creation form to this page; upstream's New action starts a new Session the reader must describe the reminder in. EXIT: upstream ships a creation form. --> Its task list supports text search and one All, Enabled, and Inactive status filter row; search matches the stored task name, the instruction, and the internal Session id, not a resolved Session title, and the empty state keeps the heading's New action beside the notice. Selecting an active or inactive task opens a second detail level with Rules and Records tabs. Every list row shows the task's stored title with its status, frequency, and next run and never the original Session name; the detail's name control shows the stored title. Rules contains the complete reminder, status, next target for active tasks, original recurrence rule, and task id. Daily rule labels show the saved local time and exact stored IANA zone, preserving nonzero seconds and milliseconds rather than substituting the browser's zone. The Linked session entry in the detail tab strip names the linked Session by its catalog title, falling back to the Session id when no title is available. When the strip cannot fit the tab list beside the labelled entry, the entry becomes an icon button with the same button style as More task actions, with the Session chat icon and a Linked session tooltip that also shows while the entry is disabled; the entry keeps focus when it switches layouts; the tab list scrolls without a visible scrollbar. It opens an available, unarchived Session after metadata loads; pending Session or Workspace metadata, an archived Session, missing Session membership, or a Workspace query error keeps it disabled with an explanation. The click rechecks availability; browsing does not unarchive the Session. Only this action requests Session activation. Deletion is available from the More task actions menu in the detail's top strip, separate from navigation.
+-The shipped Web composition mounts `ui-schedule` with the Host Schedule service. The clock context that supplies the model's current time is preset-owned: `standard`, `cordis`, and `ptc` declare it, and `minimal` declares neither it nor the reminder tools. The Automation tasks sidebar entry opens a global page without selecting or activating a Session. The page header's New action starts a new Session, where the reminder is created by asking the model; the page itself has no creation form. Once the catalog holds an inactive task, the search row's More task actions menu offers Clear all inactive tasks, which removes every inactive task after a confirmation that states how many inactive tasks the catalog currently holds. The page's task list supports text search and one Enabled, Inactive, and All status filter row, starting on Enabled; search matches the stored task name, the instruction, and the internal Session id, not a resolved Session title, and the empty state shows a decorative document-and-clock illustration above its notice and New action, with colors that follow the light or dark theme. Selecting an active or inactive task opens a second detail level with Rules and Records tabs. Every list row shows the task's stored title with its status, frequency, and next run and never the original Session name; the detail's name control shows the stored title. Rules contains the complete reminder, status, next target for active tasks, original recurrence rule, and task id. Daily rule labels show the saved local time and exact stored IANA zone, preserving nonzero seconds and milliseconds rather than substituting the browser's zone. The Linked session entry in the detail tab strip names the linked Session by its catalog title, falling back to the Session id when no title is available. When the strip cannot fit the tab list beside the labelled entry, the entry becomes an icon button with the same button style as More task actions, with the Session chat icon and a Linked session tooltip that also shows while the entry is disabled; the entry keeps focus when it switches layouts; the tab list scrolls without a visible scrollbar. It opens an available, unarchived Session after metadata loads; pending Session or Workspace metadata, an archived Session, missing Session membership, or a Workspace query error keeps it disabled with an explanation. The click rechecks availability; browsing does not unarchive the Session. Only this action requests Session activation. Deletion is available from the More task actions menu in the detail's top strip, separate from navigation.
++The shipped Web composition mounts `ui-schedule` with the Host Schedule service. The clock context that supplies the model's current time is preset-owned: `standard`, `cordis`, and `ptc` declare it, and `minimal` declares neither it nor the reminder tools. The Automation tasks sidebar entry opens a global page without selecting or activating a Session. The page header's New action opens the page's own creation form, which carries a name, an instruction, the Session the task delivers into, and one recurrence rule, and submits them through the `schedule` Remote namespace's `create` endpoint.<!-- DSH-FORK(schedule): the fork adds a creation form to this page; upstream's New action starts a new Session the reader must describe the reminder in. EXIT: upstream ships a creation form. --> Once the catalog holds an inactive task, the search row's More task actions menu offers Clear all inactive tasks, which removes every inactive task after a confirmation that states how many inactive tasks the catalog currently holds. The page's task list supports text search and one Enabled, Inactive, and All status filter row, starting on Enabled; search matches the stored task name, the instruction, and the internal Session id, not a resolved Session title, and the empty state shows a decorative document-and-clock illustration above its notice and New action, with colors that follow the light or dark theme. Selecting an active or inactive task opens a second detail level with Rules and Records tabs. Every list row shows the task's stored title with its status, frequency, and next run and never the original Session name; the detail's name control shows the stored title. Rules contains the complete reminder, status, next target for active tasks, original recurrence rule, and task id. Daily rule labels show the saved local time and exact stored IANA zone, preserving nonzero seconds and milliseconds rather than substituting the browser's zone. The Linked session entry in the detail tab strip names the linked Session by its catalog title, falling back to the Session id when no title is available. When the strip cannot fit the tab list beside the labelled entry, the entry becomes an icon button with the same button style as More task actions, with the Session chat icon and a Linked session tooltip that also shows while the entry is disabled; the entry keeps focus when it switches layouts; the tab list scrolls without a visible scrollbar. It opens an available, unarchived Session after metadata loads; pending Session or Workspace metadata, an archived Session, missing Session membership, or a Workspace query error keeps it disabled with an explanation. The click rechecks availability; browsing does not unarchive the Session. Only this action requests Session activation. Deletion is available from the More task actions menu in the detail's top strip, separate from navigation.
  
- The page header keeps the title at its natural width and moves New to another line when the two no longer fit together. The action label stays on one line.
--
- Selecting a task from the list opens Rules; refreshing that task preserves the selected tab. Rules edits an active task's name, instruction, and run time; the edits stay in a local draft until saved, and inactive tasks remain read-only. Unmodified Left/Right arrows cycle the tabs, Home/End select the first/last tab, and keyboard focus follows the selection. The tabs do not consume these keys with Alt, Ctrl, Meta, or Shift. The linked-Session control in the detail tab strip stays available on the Rules tab, and confirmed deletion is available from either view.
+ The page header keeps the title at its natural width and moves the actions to another line when the title and the actions no longer fit together. Each action label stays on one line. On a coarse pointer the list's search box and the detail's instruction and run-time fields take a 16px step — iOS Safari zooms the visual viewport for a focused field below that size — while the name control keeps its 20px step and a fine pointer keeps the compact steps.
  
- Rules shows the rule in a Run time card whose rows edit a local draft: Repeat is a menu of Weekly, Monday to Friday, Every day, Every N hours, Every N minutes, Every N seconds, Once, and Custom (cron), a weekly rule adds a Weekday row, a fixed-rate choice edits only the interval quantity in the unit it names, a one-shot rule edits separate Date and Time rows, and Custom (cron) edits one Cron expression row holding a five-field expression, interpreted in the selected time zone. The card parses that expression in the browser and, under the row, shows a localized sentence describing it; an expression the Host would reject shows the localized validation message in place of that sentence and blocks Save. A stored weekly rule whose weekday set is exactly Monday through Friday selects the Monday to Friday choice. The Date row is a read-only trigger showing the staged date as `YYYY/MM/DD` and opening a month calendar with localized weekday headings, month navigation, and a marked today; the draft and the submitted text keep the ISO form; the Time row is a read-only trigger showing one 24-hour clock and opening three scrolling columns of hours, minutes, and seconds with the staged value marked and scrolled into view. A calendar or clock pick stages the draft under the same staged save as every other row, arrow keys walk the open column or grid, Enter stages the marked value, Escape closes the panel and returns focus to its row, and a disabled row cannot open one. Clock rows show whole seconds, an untouched row keeps a stored millisecond value for its submit, and editing a time submits whole-second precision. Time zone is a searchable, height-bounded menu. An unlabeled top block keeps the five most recently selected exact zones in browser-local storage; first use seeds the actual system zone and UTC rather than inferring a location from UI language. The system zone is marked, and the remaining inventory is ordered by current UTC offset and canonical IANA id. Each visible label puts `UTC±HH:MM` before the localized zone name; canonical ids stay internal but remain searchable. Zones that ICU renders with the same offset and localized name share one visible row; every grouped id remains searchable, and an already stored id remains selected instead of being rewritten. The inventory comes from `Intl.supportedValuesOf('timeZone')`, and names come from `Intl.DateTimeFormat(..., { timeZoneName: 'longGeneric' })`: both are browser ICU/CLDR data, not a scraped or product-maintained translation table. There is therefore no crawler or generated zone-name resource to refresh. A third-party locale supplies its ordinary `time.locale` value and automatically receives the corresponding ICU names; only the selector's surrounding UI copy needs translation. When the runtime cannot enumerate zones, a short identifier fallback is offered, and a stored zone outside the offered set is kept. Daily, Weekly, and Cron keep their stored rule and IANA zone, and each frequency line names the zone only when it differs from the host's system zone. A one-shot After/At seeds the date and time from the record's stored zone, or this device's zone when the record stores none, so the seeded clock names the stored instant; changing that zone keeps the entered clock values and changes the instant. A kind the card seeds on selection uses the committed occurrence's clock and the choice's zone, which is the record's stored zone or this device's zone, a seeded weekly rule starts from that occurrence's weekday in that zone, and a seeded cron rule states that occurrence's clock as a daily expression. Every accepts at least 60 whole seconds, independent of time zones. One Save submits the complete expected record with the staged change and preserves the id, original Session, latest receipt, and saved history; [Schedule](../../schedule/schedule/README.md#use-this-package) defines future-target selection, reanchoring, and unchanged-rule no-ops.
-@@ -95,7 +94,7 @@ None. Catalog presentation does not enter model requests.
+@@ -97,7 +97,7 @@ None. Catalog presentation does not enter model requests.
  - Saved records describe inbox delivery, not model execution results. Tasks without saved history expose only their existing receipt until new deliveries append records; unsaved earlier records and prompt snapshots cannot be recovered. Previously physically deleted tasks are not restored.
  - Twenty-record pages bound the number of records requested, not prompt bytes or the storage a task retains. Delivery history is bounded by the Host plugin's configuration: `deliveryHistoryDays` (default 30) and `deliveryHistoryRecords` (default 200), pruned when an acknowledgment is appended, with the latest receipt always kept and a pruned older window reported as unavailable; see [Schedule limits](../../schedule/schedule/README.md#known-limitations-and-deferred-work).
  - Deletion does not cancel a reminder already queued for execution. The linked-Session control in the detail tab strip opens the original conversation through ordinary Session navigation and its recovery policy, not a message-specific jump.
@@ -50,22 +21,19 @@ index 220af1e6c7..1dd8dc0423 100644
  <a id="dev-note"></a>
  ### Dev Note
 diff --git a/packages/client/ui-schedule/README.zh.md b/packages/client/ui-schedule/README.zh.md
-index 88575c4405..a9f22d70c0 100644
+index c89225104e..cee322983a 100644
 --- a/packages/client/ui-schedule/README.zh.md
 +++ b/packages/client/ui-schedule/README.zh.md
-@@ -25,10 +25,9 @@ kind: "package-reference"
+@@ -25,7 +25,7 @@ kind: "package-reference"
  <a id="use-this-package"></a>
  ## 使用本包
  
--随发行版交付的 Web 组合把 `ui-schedule` 与 Host Schedule 服务一起挂载。为模型提供当前时间的时钟上下文归 preset 所有：`standard`、`cordis` 与 `ptc` 声明它，`minimal` 既不声明它，也不声明提醒工具。侧栏的自动化任务入口打开全局页面，不选择或激活会话。页面页头的“新建”操作会打开一个新会话，提醒由模型在该会话中创建；页面本身没有创建表单。列表支持文本搜索和一行“全部/已开启/未运行”状态筛选；搜索匹配任务已存储的名称、指令和内部会话 id，不匹配解析出的会话标题，空状态在提示旁保留页头的“新建”操作。选择活动或未运行任务后，进入含“规则”和“任务运行记录”页签的第二层详情。每条列表行显示任务已存储的标题及其状态、频率和下次运行，不显示原会话名称；详情中的名称输入框显示任务已存储的标题。“规则”显示完整提醒、状态、活动任务的下一目标时间、原始重复规则和任务 id。每天的规则标签显示已保存的本地时间与精确的存储 IANA 时区，保留非零秒与毫秒，而不替换为浏览器时区。详情页签条内的“关联会话”入口按会话标题显示，取不到标题时回退显示会话 id。页签条放不下页签列表和带文字的入口时，入口收为与“更多任务操作”同样式的图标按钮，使用会话对话图标，悬停提示“关联会话”，入口禁用时也会显示；切换形态时保留焦点；页签列表可滚动但不显示滚动条。元数据加载后，它可打开可用且未归档的会话；会话或 Workspace 元数据尚未就绪、会话已归档、会话不在列表中或 Workspace 查询失败时，入口保持禁用并显示原因。点击时会重新检查可用性；浏览不会取消会话归档。仅此操作请求激活会话。删除位于详情顶部条带的“更多任务操作”菜单。
-+随发行版交付的 Web 组合把 `ui-schedule` 与 Host Schedule 服务一起挂载。为模型提供当前时间的时钟上下文归 preset 所有：`standard`、`cordis` 与 `ptc` 声明它，`minimal` 既不声明它，也不声明提醒工具。侧栏的自动化任务入口打开全局页面，不选择或激活会话。页面页头的“新建”操作打开页面自身的创建表单：填写名称、指令、任务投递到的会话和一条重复规则，并通过 `schedule` Remote 命名空间的 `create` 端点提交。<!-- DSH-FORK(schedule)：本 fork 为该页面增加创建表单；上游的“新建”会打开一个新会话，由读者在其中描述提醒。EXIT：上游提供创建表单。 -->列表支持文本搜索和一行“全部/已开启/未运行”状态筛选；搜索匹配任务已存储的名称、指令和内部会话 id，不匹配解析出的会话标题，空状态在提示旁保留页头的“新建”操作。选择活动或未运行任务后，进入含“规则”和“任务运行记录”页签的第二层详情。每条列表行显示任务已存储的标题及其状态、频率和下次运行，不显示原会话名称；详情中的名称输入框显示任务已存储的标题。“规则”显示完整提醒、状态、活动任务的下一目标时间、原始重复规则和任务 id。每天的规则标签显示已保存的本地时间与精确的存储 IANA 时区，保留非零秒与毫秒，而不替换为浏览器时区。详情页签条内的“关联会话”入口按会话标题显示，取不到标题时回退显示会话 id。页签条放不下页签列表和带文字的入口时，入口收为与“更多任务操作”同样式的图标按钮，使用会话对话图标，悬停提示“关联会话”，入口禁用时也会显示；切换形态时保留焦点；页签列表可滚动但不显示滚动条。元数据加载后，它可打开可用且未归档的会话；会话或 Workspace 元数据尚未就绪、会话已归档、会话不在列表中或 Workspace 查询失败时，入口保持禁用并显示原因。点击时会重新检查可用性；浏览不会取消会话归档。仅此操作请求激活会话。删除位于详情顶部条带的“更多任务操作”菜单。
+-随发行版交付的 Web 组合把 `ui-schedule` 与 Host Schedule 服务一起挂载。为模型提供当前时间的时钟上下文归 preset 所有：`standard`、`cordis` 与 `ptc` 声明它，`minimal` 既不声明它，也不声明提醒工具。侧栏的自动化任务入口打开全局页面，不选择或激活会话。页面页头的“新建”操作会打开一个新会话，提醒由模型在该会话中创建；页面本身没有创建表单。目录中存在已结束任务后，搜索行右侧的「更多任务操作」菜单提供「清除全部已结束任务」，经确认后移除全部已结束任务，确认提示说明目录当前包含多少个已结束任务。列表支持文本搜索和一行“已开启/已结束/全部”状态筛选，默认停在“已开启”；搜索匹配任务已存储的名称、指令和内部会话 id，不匹配解析出的会话标题，空状态在提示和“新建”操作上方显示装饰性的文档与时钟插画，配色跟随浅色或深色主题。选择活动或已结束任务后，进入含“规则”和“任务运行记录”页签的第二层详情。每条列表行显示任务已存储的标题及其状态、频率和下次运行，不显示原会话名称；详情中的名称输入框显示任务已存储的标题。“规则”显示完整提醒、状态、活动任务的下一目标时间、原始重复规则和任务 id。每天的规则标签显示已保存的本地时间与精确的存储 IANA 时区，保留非零秒与毫秒，而不替换为浏览器时区。详情页签条内的“关联会话”入口按会话标题显示，取不到标题时回退显示会话 id。页签条放不下页签列表和带文字的入口时，入口收为与“更多任务操作”同样式的图标按钮，使用会话对话图标，悬停提示“关联会话”，入口禁用时也会显示；切换形态时保留焦点；页签列表可滚动但不显示滚动条。元数据加载后，它可打开可用且未归档的会话；会话或 Workspace 元数据尚未就绪、会话已归档、会话不在列表中或 Workspace 查询失败时，入口保持禁用并显示原因。点击时会重新检查可用性；浏览不会取消会话归档。仅此操作请求激活会话。删除位于详情顶部条带的“更多任务操作”菜单。
++随发行版交付的 Web 组合把 `ui-schedule` 与 Host Schedule 服务一起挂载。为模型提供当前时间的时钟上下文归 preset 所有：`standard`、`cordis` 与 `ptc` 声明它，`minimal` 既不声明它，也不声明提醒工具。侧栏的自动化任务入口打开全局页面，不选择或激活会话。页面页头的“新建”操作打开页面自身的创建表单：填写名称、指令、任务投递到的会话和一条重复规则，并通过 `schedule` Remote 命名空间的 `create` 端点提交。<!-- DSH-FORK(schedule)：本 fork 为该页面增加创建表单；上游的“新建”会打开一个新会话，由读者在其中描述提醒。EXIT：上游提供创建表单。 -->目录中存在已结束任务后，搜索行右侧的「更多任务操作」菜单提供「清除全部已结束任务」，经确认后移除全部已结束任务，确认提示说明目录当前包含多少个已结束任务。列表支持文本搜索和一行“已开启/已结束/全部”状态筛选，默认停在“已开启”；搜索匹配任务已存储的名称、指令和内部会话 id，不匹配解析出的会话标题，空状态在提示和“新建”操作上方显示装饰性的文档与时钟插画，配色跟随浅色或深色主题。选择活动或已结束任务后，进入含“规则”和“任务运行记录”页签的第二层详情。每条列表行显示任务已存储的标题及其状态、频率和下次运行，不显示原会话名称；详情中的名称输入框显示任务已存储的标题。“规则”显示完整提醒、状态、活动任务的下一目标时间、原始重复规则和任务 id。每天的规则标签显示已保存的本地时间与精确的存储 IANA 时区，保留非零秒与毫秒，而不替换为浏览器时区。详情页签条内的“关联会话”入口按会话标题显示，取不到标题时回退显示会话 id。页签条放不下页签列表和带文字的入口时，入口收为与“更多任务操作”同样式的图标按钮，使用会话对话图标，悬停提示“关联会话”，入口禁用时也会显示；切换形态时保留焦点；页签列表可滚动但不显示滚动条。元数据加载后，它可打开可用且未归档的会话；会话或 Workspace 元数据尚未就绪、会话已归档、会话不在列表中或 Workspace 查询失败时，入口保持禁用并显示原因。点击时会重新检查可用性；浏览不会取消会话归档。仅此操作请求激活会话。删除位于详情顶部条带的“更多任务操作”菜单。
  
- 页头按标题的自然宽度排布；标题和“新建”无法并排容纳时，将按钮移到下一行。操作文案保持单行。
--
- 从列表选择任务时默认打开“规则”；刷新同一任务会保留当前页签。活动任务的“规则”修改名称、指令和运行时间；这些修改保留在本地草稿中直到保存，未运行任务保持只读。不带修饰键的左右方向键循环切换页签，Home/End 选择第一个/最后一个页签，键盘焦点随选择移动。页签不会拦截这些键与 Alt、Ctrl、Meta 或 Shift 的组合。共用的会话入口位于详情页签条内，在“规则”页签可见；确认删除操作在两种页签下都可用。
+ 页头按标题的自然宽度排布；标题和操作无法并排容纳时，将操作移到下一行。每个操作文案保持单行。粗指针设备上，列表的搜索框以及详情的指令和运行时间输入框采用 16px 字号——iOS Safari 会放大聚焦到更小字号输入框时的视觉视口——而名称输入框保留 20px、细指针设备保留紧凑字号。
  
- “规则”在“运行时间”卡片中以行编辑本地草稿：“重复”是含每周、周一至周五、每天、每 N 小时、每 N 分钟、每 N 秒、仅一次和自定义（cron）的菜单，每周规则增加“星期”行，固定速率选项只修改它所属单位的间隔数量，一次性规则用独立的“日期”和“时间”两行编辑目标，自定义（cron）用一行“Cron 表达式”编辑按所选时区解释的 5 字段表达式。卡片在浏览器中解析该表达式，并在该行下方显示描述它的本地化语句；Host 会拒绝的表达式改为显示本地化校验信息，并在解析通过前阻止保存。已存储的每周规则若星期集合恰好为周一至周五，则选中“周一至周五”选项。“日期”行是只读触发器，以 `YYYY/MM/DD` 显示暂存的日期并展开带本地化星期表头、月份切换和今天标记的月历；草稿与提交文本保持 ISO 形态；“时间”行是只读触发器，显示统一的 24 小时时钟，并展开时、分、秒三列可滚动列表，当前值高亮并在打开时滚动到可见。在月历或时钟上点选即按与其他行相同的分阶段保存写入草稿；方向键在打开的列或网格内移动，Enter 选定当前值，Escape 关闭面板并把焦点还给所在行，被禁用的行无法打开面板。时钟行显示到秒，未改动的行在提交时保留已存储的毫秒值，编辑时间时按整秒精度提交。“时区”使用高度受限的可搜索菜单。顶部无标题区域保留浏览器本地最近选过的 5 个准确时区；首次使用按真实系统时区和 UTC 初始化，而不根据界面语言猜测所在地。系统时区带有标记，其余清单按当前 UTC 偏移、再按规范 IANA 标识排序。可见文案把 `UTC±HH:MM` 放在本地化时区名称之前；IANA 标识仅在内部使用，但可用于搜索。ICU 显示成相同偏移和本地化名称的多个时区只占一行；所有被合并的标识仍可用于搜索，任务已保存的标识也会继续作为选中值，不会被改写。时区清单来自 `Intl.supportedValuesOf('timeZone')`，名称来自 `Intl.DateTimeFormat(..., { timeZoneName: 'longGeneric' })`：两者都是浏览器内置的 ICU/CLDR 数据，不是抓取或产品自维护的翻译表。因此没有需要刷新的爬虫或生成时区资源；第三方语言包只需提供常规的 `time.locale` 值，即可自动获得对应的 ICU 名称，仅需翻译选择器周边的 UI 文案。运行时无法枚举时改用简短的标识候选列表，已存储但不在其中的时区会保留。每天、每周和 cron 保留各自已存储的规则与时区，其频率行仅在时区与宿主系统时区不同时标出时区。一次性 After/At 以记录已存储的时区初始化日期和时间；记录未保存时区时取本设备时区，初始钟表值在该时区下仍表示同一瞬时；更改时区会保留输入的钟表值并改变时点。因选择种类而重新初始化的种类使用已提交发生时点的钟表值和该选项的时区，该时区取记录已存储的时区或本设备时区：每周的星期取自该发生时点在该时区下的星期，cron 则把该发生时点的钟表值写成每天执行的表达式。固定间隔至少为 60 整秒，不受时区影响。一次保存以分阶段的变更提交完整预期记录，并保留 id、原会话、最近一次回执及已保存历史；未来目标选择、重新确定起算时间和未变更规则的无写入语义见 [Schedule](../../schedule/schedule/README.zh.md#use-this-package)。
-@@ -95,7 +94,7 @@ kind: "package-reference"
+@@ -97,7 +97,7 @@ kind: "package-reference"
  - 已保存的记录描述收件箱投递，不表示模型执行结果。没有已保存历史的任务仅呈现已有回执，直到新投递追加记录；未保存的更早记录和提示文本快照无法恢复。此前已物理删除的任务不会恢复。
  - 每页 20 条仅限制请求的记录数，不限制提示文本字节数或任务保留的存储。投递历史由 Host 插件的配置设界：`deliveryHistoryDays`（默认 30）与 `deliveryHistoryRecords`（默认 200），在追加确认时裁剪，最近一次回执始终保留，被裁剪的更早窗口报告为不可用；见 [Schedule 限制](../../schedule/schedule/README.zh.md#known-limitations-and-deferred-work)。
  - 删除不会取消已经排队执行的提醒。详情页签条内的关联会话入口使用普通会话导航及其恢复策略打开原对话，不直接跳转到特定消息。
@@ -75,10 +43,10 @@ index 88575c4405..a9f22d70c0 100644
  <a id="dev-note"></a>
  ### 开发备注
 diff --git a/packages/client/ui-schedule/src/client/TaskManagerPage.tsx b/packages/client/ui-schedule/src/client/TaskManagerPage.tsx
-index 8f09c96137..1f1009d321 100644
+index 3c330c9f26..1938005c53 100644
 --- a/packages/client/ui-schedule/src/client/TaskManagerPage.tsx
 +++ b/packages/client/ui-schedule/src/client/TaskManagerPage.tsx
-@@ -6,24 +6,30 @@ import {
+@@ -7,9 +7,11 @@ import {
  } from '@deepseek-ai/dsh-client-ui-primitives'
  import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
  import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -91,7 +59,8 @@ index 8f09c96137..1f1009d321 100644
  import { TaskDetail, useTaskDetail, type TaskDetailInjected } from './TaskDetail.tsx'
  import { useRelativeClock } from './relative-clock.ts'
  import { formatScheduleFrequency, nextRunParts, taskName, zoneLabel } from './schedule-format.ts'
- import type { FrequencyZone } from './schedule-format.ts'
+@@ -17,15 +19,19 @@ import type { FrequencyZone } from './schedule-format.ts'
+ import { ScheduleEmptyIllustration } from './ScheduleEmptyIllustration.tsx'
  import css from './TaskManagerPage.module.css'
  
 +// DSH-FORK(schedule): the page opens a creation form instead of starting a Session,
@@ -110,19 +79,19 @@ index 8f09c96137..1f1009d321 100644
     */
 -  readonly onNewTask: () => void
 +  readonly onCreateTask: (request: ScheduleCreateTaskRequest) => Promise<NewTaskOutcome>
- }
- 
- /** Root-scoped task catalog props derived from the framework and injected actions. */
-@@ -39,12 +45,20 @@ type StatusFilter = 'all' | ScheduleCatalogEntry['status']
+   /**
+    * Remove every ended Host task, after this page has confirmed the action.
+    *
+@@ -51,12 +57,20 @@ type StatusFilter = 'all' | ScheduleCatalogEntry['status']
   * @returns the searchable task list beside the selected task's detail.
   */
  export function TaskManagerPage(props: TaskManagerPageProps) {
--  const { useCatalog, onNewTask, onRetry, t } = props
-+  const { useCatalog, onCreateTask, onRetry, t, useSessions, useWorkspaces } = props
+-  const { useCatalog, onNewTask, onClearEnded, onRetry, t } = props
++  const { useCatalog, onCreateTask, onClearEnded, onRetry, t, useSessions, useWorkspaces } = props
    const catalog = useCatalog(snapshot => snapshot)
    const { records, status } = catalog
    const [search, setSearch] = useState('')
-   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
    const [selectedId, setSelectedId] = useState<ScheduleId | null>(null)
 +  // The page owns its creation form: opening it starts a draft, and the task it
 +  // creates binds to whichever Session the reader picks there.
@@ -132,28 +101,28 @@ index 8f09c96137..1f1009d321 100644
 +  const sessionChoices = useMemo<readonly NewTaskSession[]>(() => sessions.ids
 +    .filter(id => !workspaces.archivedSessionIds.includes(id))
 +    .map(id => ({ id, label: sessionLabel(id, sessions).text })), [sessions, workspaces])
-   // The rows state how long remains, so they read the shared ticking clock
-   // rather than a value sampled at mount: a catalog refresh can move the target
-   // this text describes.
-@@ -117,7 +131,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
+   const [clearConfirm, setClearConfirm] = useState(false)
+   const [clearMenu, setClearMenu] = useState(false)
+   const [clearing, setClearing] = useState(false)
+@@ -186,7 +200,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
              <div className={css.pageHeading}>
                <h1 ref={headingRef} tabIndex={-1}>{t('title')}</h1>
                <div className={css.creationActions}>
--                <Button variant="primary" size="sm" className={css.newButton} icon={<IconPlusOutlineRegular size={13} />} onClick={onNewTask}>{t('new.action')}</Button>
-+                <Button variant="primary" size="sm" className={css.newButton} icon={<IconPlusOutlineRegular size={13} />} onClick={() => { setCreating(true) }}>{t('new.action')}</Button>
+-                <Button variant="primary" size="sm" className={css.headerAction} icon={<IconPlusOutlineRegular size={13} />} onClick={onNewTask}>{t('new.action')}</Button>
++                <Button variant="primary" size="sm" className={css.headerAction} icon={<IconPlusOutlineRegular size={13} />} onClick={() => { setCreating(true) }}>{t('new.action')}</Button>
                </div>
              </div>
              <div className={css.filters}>
-@@ -153,7 +167,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
+@@ -254,7 +268,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                {status === 'ready' && rows.length === 0 && <div className={css.empty} role="status">
-                 <IconClockOutlineRegular size={24} className={css.emptyGlyph} />
+                 <ScheduleEmptyIllustration className={css.emptyIllustration} />
                  <h2>{t(emptyTitle)}</h2>
 -                <Button variant="outline" className={css.emptyAction} onClick={onNewTask}>
 +                <Button variant="outline" className={css.emptyAction} onClick={() => { setCreating(true) }}>
                    {t('empty.action')}
                  </Button>
                </div>}
-@@ -208,6 +222,16 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
+@@ -309,6 +323,16 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
          onDeleted={closeDetails}
          onClose={closeDetails}
        />}
@@ -167,14 +136,14 @@ index 8f09c96137..1f1009d321 100644
 +        onClose={() => { setCreating(false) }}
 +        t={t}
 +      />}
-     </section>
-   )
- }
+       <Modal
+         className={css.confirmDialog as string}
+         contentClassName={css.confirmContent as string}
 diff --git a/packages/client/ui-schedule/src/client/index.ts b/packages/client/ui-schedule/src/client/index.ts
-index 084d0edb8d..ad2c506849 100644
+index 7dcbc32ee3..7cdb6c3595 100644
 --- a/packages/client/ui-schedule/src/client/index.ts
 +++ b/packages/client/ui-schedule/src/client/index.ts
-@@ -53,6 +53,7 @@ import { ScheduleTaskTabTitle } from './ScheduleTaskTabTitle.tsx'
+@@ -55,6 +55,7 @@ import { ScheduleTaskTabTitle } from './ScheduleTaskTabTitle.tsx'
  import { SessionScheduleHover } from './SessionScheduleHover.tsx'
  import { SessionScheduleMark } from './SessionScheduleMark.tsx'
  import { createSessionScheduleSource, type SessionScheduleSourceFactory } from './session-schedule-state.ts'
@@ -182,36 +151,36 @@ index 084d0edb8d..ad2c506849 100644
  import { TaskTabBindings } from './task-tab-bindings.ts'
  import { TaskManagerPage, type TaskManagerInjected } from './TaskManagerPage.tsx'
  import type { TaskDetailInjected } from './TaskDetail.tsx'
-@@ -165,14 +166,25 @@ export function apply(ctx: ClientContext): void {
-     locale: MANAGER_NS,
-     inject: (): ScheduleTaskCatalogInjected & ScheduleTaskBindingInjected => ({ hooks: detail.hooks, taskBindings }),
-   }, ScheduleTaskTabTitle))
-+  // DSH-FORK(schedule): the page creates its own task through a Remote endpoint the
-+  // Desktop's app.asar does not ship, so this wiring is a fork delta on an upstream file.
-+  // EXIT: upstream ships a creation form on the Automation tasks page.
-   ctx.slots.inject('main', () => ctx.slots.register({
-     name: 'main',
-     key: PANEL_ID,
-     locale: MANAGER_NS,
-     inject: (): TaskManagerInjected => ({
-       ...detail,
--      // The page has no creation form: a new reminder starts in a Session.
--      onNewTask: () => { ctx.uiWorkspace.startSession() },
-+      // The page's own form creates the task through the Host endpoint, so a new
-+      // reminder never has to be asked for in a chat first.
-+      onCreateTask: async (request) => {
-+        const result = await ctx.remote.schedule.create(request)
-+        if (!result.ok) return { ok: false, message: 'create.failed' }
-+        if (!result.value.created) return { ok: false, message: timingError(result.value.code) }
-+        // The write is in, so this readback must not join a read sent before it.
-+        await manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest)
-+        return { ok: true }
-+      },
-     }),
-   }, TaskManagerPage))
-   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+@@ -193,14 +194,25 @@ export function apply(ctx: ClientContext): void {
+       locale: MANAGER_NS,
+       inject: (): ScheduleTaskCatalogInjected & ScheduleTaskBindingInjected => ({ hooks: detail.hooks, taskBindings }),
+     }, ScheduleTaskTabTitle))
++    // DSH-FORK(schedule): the page creates its own task through a Remote endpoint the
++    // Desktop's app.asar does not ship, so this wiring is a fork delta on an upstream file.
++    // EXIT: upstream ships a creation form on the Automation tasks page.
+     yield ctx.slots.inject('main', () => ctx.slots.register({
+       name: 'main',
+       key: PANEL_ID,
+       locale: MANAGER_NS,
+       inject: (): TaskManagerInjected => ({
+         ...detail,
+-        // The page has no creation form: a new reminder starts in a Session.
+-        onNewTask: () => { ctx.uiWorkspace.startSession() },
++        // The page's own form creates the task through the Host endpoint, so a new
++        // reminder never has to be asked for in a chat first.
++        onCreateTask: async (request) => {
++          const result = await ctx.remote.schedule.create(request)
++          if (!result.ok) return { ok: false, message: 'create.failed' }
++          if (!result.value.created) return { ok: false, message: timingError(result.value.code) }
++          // The write is in, so this readback must not join a read sent before it.
++          await manager.onRetry(manager.hooks.catalog.getSnapshot().readRequest)
++          return { ok: true }
++        },
+         onClearEnded: async () => {
+           const outcome = await clearEnded()
+           deleteToast.reportClear(outcome)
 diff --git a/packages/client/ui-schedule/src/client/task-manager-locales.ts b/packages/client/ui-schedule/src/client/task-manager-locales.ts
-index 7439d9733b..a3c9dca677 100644
+index fffde14568..f22321cd21 100644
 --- a/packages/client/ui-schedule/src/client/task-manager-locales.ts
 +++ b/packages/client/ui-schedule/src/client/task-manager-locales.ts
 @@ -18,6 +18,19 @@ export const en = {
@@ -234,7 +203,7 @@ index 7439d9733b..a3c9dca677 100644
    'statusFilter.label': 'Task status',
    'statusFilter.all': 'All',
    'status.active': 'Enabled',
-@@ -162,6 +175,18 @@ export const zh: Record<TaskManagerKey, string> = {
+@@ -174,6 +187,18 @@ export const zh: Record<TaskManagerKey, string> = {
    'search.placeholder': '搜索自动化任务',
    'search.clear': '清空搜索',
    'empty.action': '新建自动化任务',
@@ -253,11 +222,130 @@ index 7439d9733b..a3c9dca677 100644
    'statusFilter.label': '任务状态',
    'statusFilter.all': '全部',
    'status.active': '已开启',
+@@ -325,6 +350,18 @@ export const ja = {
+   'search.placeholder': '自動化タスクを検索',
+   'search.clear': '検索をクリア',
+   'empty.action': '新規自動化タスク',
++  // DSH-FORK(schedule): 新建表单的文案。EXIT: 上游在自动化任务页提供创建表单。
++  'create.title': '新しい自動化タスク',
++  'create.close': '閉じる',
++  'create.session': '配信先',
++  'create.sessionSearch': 'セッションを検索',
++  'create.sessionLoading': 'セッションを読み込み中…',
++  'create.sessionEmpty': 'このタスクを受け取れるセッションがありません。',
++  'create.sessionRequired': 'このタスクの配信先セッションを選択してください。',
++  'create.weekdaysRequired': '曜日を1つ以上選択してください。',
++  'create.confirm': 'タスクを作成',
++  'create.creating': '作成中…',
++  'create.failed': 'タスクを作成できませんでした。接続を確認してもう一度お試しください。',
+   'statusFilter.label': 'タスクの状態',
+   'statusFilter.all': 'すべて',
+   'status.active': '有効',
+@@ -474,6 +511,19 @@ export const es = {
+   'search.placeholder': 'Tareas de automatización de búsqueda',
+   'search.clear': 'Borrar búsqueda',
+   'empty.action': 'Nueva tarea de automatización',
++  // DSH-FORK(schedule): copy for the fork's creation form.
++  // EXIT: upstream ships a creation form on the Automation tasks page.
++  'create.title': 'Nueva tarea de automatización',
++  'create.close': 'Cerrar',
++  'create.session': 'Se entrega en',
++  'create.sessionSearch': 'Buscar sesiones',
++  'create.sessionLoading': 'Cargando sesiones…',
++  'create.sessionEmpty': 'No hay ninguna sesión disponible para recibir esta tarea.',
++  'create.sessionRequired': 'Elige la sesión en la que se entrega esta tarea.',
++  'create.weekdaysRequired': 'Elige al menos un día de la semana.',
++  'create.confirm': 'Crear tarea',
++  'create.creating': 'Creando…',
++  'create.failed': 'No se pudo crear la tarea. Comprueba la conexión e inténtalo de nuevo.',
+   'statusFilter.label': 'Estado de la tarea',
+   'statusFilter.all': 'Todos',
+   'status.active': 'Habilitado',
+@@ -626,6 +676,19 @@ export const fr = {
+   'search.placeholder': "Tâches d'automatisation de la recherche",
+   'search.clear': 'Effacer la recherche',
+   'empty.action': "Nouvelle tâche d'automatisation",
++  // DSH-FORK(schedule): copy for the fork's creation form.
++  // EXIT: upstream ships a creation form on the Automation tasks page.
++  'create.title': 'Nouvelle tâche d\'automatisation',
++  'create.close': 'Fermer',
++  'create.session': 'Livrée dans',
++  'create.sessionSearch': 'Rechercher des sessions',
++  'create.sessionLoading': 'Chargement des sessions…',
++  'create.sessionEmpty': 'Aucune session disponible pour recevoir cette tâche.',
++  'create.sessionRequired': 'Choisissez la session dans laquelle cette tâche est livrée.',
++  'create.weekdaysRequired': 'Choisissez au moins un jour de la semaine.',
++  'create.confirm': 'Créer la tâche',
++  'create.creating': 'Création…',
++  'create.failed': 'Impossible de créer la tâche. Vérifiez la connexion et réessayez.',
+   'statusFilter.label': 'Statut de la tâche',
+   'statusFilter.all': 'Tout',
+   'status.active': 'Activé',
+@@ -778,6 +841,19 @@ export const de = {
+   'search.placeholder': 'Suchautomatisierungsaufgaben',
+   'search.clear': 'Suche löschen',
+   'empty.action': 'Neue Automatisierungsaufgabe',
++  // DSH-FORK(schedule): copy for the fork's creation form.
++  // EXIT: upstream ships a creation form on the Automation tasks page.
++  'create.title': 'Neue Automatisierungsaufgabe',
++  'create.close': 'Schließen',
++  'create.session': 'Wird geliefert in',
++  'create.sessionSearch': 'Sitzungen durchsuchen',
++  'create.sessionLoading': 'Sitzungen werden geladen…',
++  'create.sessionEmpty': 'Keine Sitzung kann diese Aufgabe empfangen.',
++  'create.sessionRequired': 'Wählen Sie die Sitzung, in die diese Aufgabe geliefert wird.',
++  'create.weekdaysRequired': 'Wählen Sie mindestens einen Wochentag.',
++  'create.confirm': 'Aufgabe erstellen',
++  'create.creating': 'Wird erstellt…',
++  'create.failed': 'Die Aufgabe konnte nicht erstellt werden. Prüfen Sie die Verbindung und versuchen Sie es erneut.',
+   'statusFilter.label': 'Aufgabenstatus',
+   'statusFilter.all': 'Alle',
+   'status.active': 'Aktiviert',
+@@ -930,6 +1006,19 @@ export const ru = {
+   'search.placeholder': 'Задачи автоматизации поиска',
+   'search.clear': 'Очистить поиск',
+   'empty.action': 'Новая задача автоматизации',
++  // DSH-FORK(schedule): copy for the fork's creation form.
++  // EXIT: upstream ships a creation form on the Automation tasks page.
++  'create.title': 'Новая задача автоматизации',
++  'create.close': 'Закрыть',
++  'create.session': 'Доставляется в',
++  'create.sessionSearch': 'Поиск сессий',
++  'create.sessionLoading': 'Загрузка сессий…',
++  'create.sessionEmpty': 'Нет доступной сессии для получения этой задачи.',
++  'create.sessionRequired': 'Выберите сессию, в которую доставляется эта задача.',
++  'create.weekdaysRequired': 'Выберите хотя бы один день недели.',
++  'create.confirm': 'Создать задачу',
++  'create.creating': 'Создание…',
++  'create.failed': 'Не удалось создать задачу. Проверьте подключение и повторите попытку.',
+   'statusFilter.label': 'Статус задачи',
+   'statusFilter.all': 'Все',
+   'status.active': 'Включено',
+@@ -1082,6 +1171,19 @@ export const pt = {
+   'search.placeholder': 'Tarefas de automação de pesquisa',
+   'search.clear': 'Limpar pesquisa',
+   'empty.action': 'Nova tarefa de automação',
++  // DSH-FORK(schedule): copy for the fork's creation form.
++  // EXIT: upstream ships a creation form on the Automation tasks page.
++  'create.title': 'Nova tarefa de automação',
++  'create.close': 'Fechar',
++  'create.session': 'Entregue em',
++  'create.sessionSearch': 'Pesquisar sessões',
++  'create.sessionLoading': 'Carregando sessões…',
++  'create.sessionEmpty': 'Nenhuma sessão disponível para receber esta tarefa.',
++  'create.sessionRequired': 'Escolha a sessão em que esta tarefa é entregue.',
++  'create.weekdaysRequired': 'Escolha pelo menos um dia da semana.',
++  'create.confirm': 'Criar tarefa',
++  'create.creating': 'Criando…',
++  'create.failed': 'Não foi possível criar a tarefa. Verifique a conexão e tente novamente.',
+   'statusFilter.label': 'Status da tarefa',
+   'statusFilter.all': 'Todos',
+   'status.active': 'Habilitado',
 diff --git a/packages/client/ui-schedule/tests/browser-plugin.client.spec.ts b/packages/client/ui-schedule/tests/browser-plugin.client.spec.ts
-index 4fa73699b9..2a7ad93f66 100644
+index 5ae0ea5ac2..4d47dadde9 100644
 --- a/packages/client/ui-schedule/tests/browser-plugin.client.spec.ts
 +++ b/packages/client/ui-schedule/tests/browser-plugin.client.spec.ts
-@@ -300,9 +300,15 @@ describe('ui-schedule browser half', () => {
+@@ -323,9 +323,15 @@ describe('ui-schedule browser half', () => {
      }
    })
  
@@ -275,7 +363,7 @@ index 4fa73699b9..2a7ad93f66 100644
      const owner = ctx.slots.register({
        name: 'root',
        children: {
-@@ -311,7 +317,6 @@ describe('ui-schedule browser half', () => {
+@@ -334,7 +340,6 @@ describe('ui-schedule browser half', () => {
          main: { kind: 'keyed', scope: 'root' },
        },
      } as never, Empty)
@@ -283,7 +371,7 @@ index 4fa73699b9..2a7ad93f66 100644
      const fiber = ctx.plugin({ inject: [...inject], apply })
      await fiber.await()
      try {
-@@ -330,10 +335,14 @@ describe('ui-schedule browser half', () => {
+@@ -353,10 +358,14 @@ describe('ui-schedule browser half', () => {
        ) as ScheduleTaskCatalogInjected & ScheduleTaskBindingInjected
        expect(chip.taskBindings).toBe(body.taskBindings)
        expect(chip.hooks.catalog).toBe(body.hooks.catalog)
@@ -302,7 +390,7 @@ index 4fa73699b9..2a7ad93f66 100644
        await fiber.dispose()
        owner()
 diff --git a/packages/client/ui-schedule/tests/task-detail.client.spec.tsx b/packages/client/ui-schedule/tests/task-detail.client.spec.tsx
-index ff64d41b88..5dde4466a1 100644
+index 97bef63a33..4b3d3dc538 100644
 --- a/packages/client/ui-schedule/tests/task-detail.client.spec.tsx
 +++ b/packages/client/ui-schedule/tests/task-detail.client.spec.tsx
 @@ -121,7 +121,7 @@ function mount(
@@ -311,23 +399,23 @@ index ff64d41b88..5dde4466a1 100644
      onRetry: vi.fn(async () => {}),
 -    onNewTask: vi.fn(),
 +    onCreateTask: vi.fn<TaskManagerPageProps['onCreateTask']>(async () => ({ ok: true })),
+     onClearEnded: vi.fn(async () => {}),
      onUpdateTiming: vi.fn<TaskManagerPageProps['onUpdateTiming']>(async ({ expected }) => ({
        ok: true, value: { id: expected.id, updated: false, record: expected },
-     })),
 diff --git a/packages/client/ui-schedule/tests/task-manager-page.client.spec.tsx b/packages/client/ui-schedule/tests/task-manager-page.client.spec.tsx
-index 7f29237374..b8241ea1bf 100644
+index e185f2d136..c0c457ddde 100644
 --- a/packages/client/ui-schedule/tests/task-manager-page.client.spec.tsx
 +++ b/packages/client/ui-schedule/tests/task-manager-page.client.spec.tsx
-@@ -177,7 +177,7 @@ function mount(
+@@ -178,7 +178,7 @@ function mount(
      ...allowAllAccess,
      onDelete: vi.fn<TaskManagerPageProps['onDelete']>(async () => 'deleted'),
      onRetry: vi.fn(async () => {}),
 -    onNewTask: vi.fn(),
 +    onCreateTask: vi.fn<TaskManagerPageProps['onCreateTask']>(async () => ({ ok: true })),
+     onClearEnded: vi.fn(async () => {}),
      onUpdateTiming: vi.fn<TaskManagerPageProps['onUpdateTiming']>(async ({ expected }) => ({
        ok: true, value: { id: expected.id, updated: false, record: expected },
-     })),
-@@ -614,13 +614,16 @@ it('updates original Session navigation as metadata arrives and archive state ch
+@@ -621,13 +621,16 @@ it('updates original Session navigation as metadata arrives and archive state ch
  })
  
  describe('Task manager catalog', () => {
@@ -347,7 +435,7 @@ index 7f29237374..b8241ea1bf 100644
    })
  
    it('lays the page out on the mock content column, heading, search field, and rows', () => {
-@@ -812,7 +815,7 @@ describe('Task manager catalog', () => {
+@@ -821,7 +824,7 @@ describe('Task manager catalog', () => {
    })
  
    it('combines search with the status filter and clears a no-match result from the empty state', () => {
@@ -356,7 +444,7 @@ index 7f29237374..b8241ea1bf 100644
      const statuses = screen.getByRole('group', { name: en['statusFilter.label'] })
      const chooseStatus = (name: string) => fireEvent.click(within(statuses).getByRole('button', { name }))
      fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'release' } })
-@@ -821,10 +824,10 @@ describe('Task manager catalog', () => {
+@@ -830,10 +833,10 @@ describe('Task manager catalog', () => {
      expect(taskNames()).toEqual([])
      expect(screen.getByRole('status').textContent).toContain(en['list.noMatches'])
      expect(screen.queryByText(en['list.empty'])).toBeNull()

@@ -15,7 +15,7 @@ index f966141c8b..13d0ea830c 100644
      'pty-send': 'pty-send'
    }
 diff --git a/packages/shell/tool-pwsh/src/index.ts b/packages/shell/tool-pwsh/src/index.ts
-index 5d08a54151..973cc53cd0 100644
+index a3472b4357..eae4f060ee 100644
 --- a/packages/shell/tool-pwsh/src/index.ts
 +++ b/packages/shell/tool-pwsh/src/index.ts
 @@ -40,7 +40,10 @@ import { processJob, processOutcome, processSources, ringDelta } from './backgro

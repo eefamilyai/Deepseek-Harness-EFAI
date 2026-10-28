@@ -7,7 +7,7 @@ import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import SandboxedFileSystem from '@deepseek-ai/dsh-fs-sandbox'
@@ -15,6 +15,7 @@ import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as ToolNotebookEdit from '@deepseek-ai/dsh-tool-notebook-edit'
 
 const contexts: Context[] = []
@@ -35,6 +36,7 @@ function agent(ctx: Context, cwd: string): Agent {
     options: {},
     session,
     inbox: unsupportedInbox(),
+    model: unsupportedModel(),
     status: 'idle',
     ctx: scope.ctx,
     send: () => {},
@@ -64,14 +66,20 @@ function expectToolError(
   if (code !== undefined) expect(result.error.info?.code).toBe(code)
 }
 
-function call(ctx: Context, owner: Agent | undefined, args: unknown) {
-  return ctx.tools.execute({
+async function call(ctx: Context, owner: Agent | undefined, args: unknown) {
+  const batch = await ctx.tools.execute({
+    calls: [{
+      type: 'tool-call',
+      id: ToolCallId(`notebook-edit-${++callNumber}`),
+      name: 'notebook_edit',
+      arguments: JSON.stringify(args),
+    }],
     signal: new AbortController().signal,
-    callId: ToolCallId(`notebook-edit-${++callNumber}`),
-    name: 'notebook_edit',
-    arguments: args,
     ...owner === undefined ? {} : { agent: owner },
   })
+  const settled = batch.results[0]?.result
+  if (settled === undefined) throw new Error('the batch settled no result for the single call')
+  return settled
 }
 
 async function setup(
@@ -84,11 +92,13 @@ async function setup(
   contexts.push(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  await ctx.plugin(NativeToolExecutor)
+  // The registry folds its turn-boundary projection, so it waits for this service.
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (options.sandboxMode === undefined) {
     await ctx.plugin(LocalFileSystem, { cwd: root })
   } else {
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SandboxPolicy, { mode: options.sandboxMode, workspaceRoot: root })
     await ctx.plugin(SandboxedFileSystem, { cwd: root })
   }

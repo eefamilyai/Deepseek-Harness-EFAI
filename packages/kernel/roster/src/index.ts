@@ -8,24 +8,26 @@
  * and a Loader fact is read once at boot — which is why the previous switch
  * demanded a restart.
  *
- * This package resolves that tension by filtering the assembled prompt rather
- * than the composition: `system-prompt/assemble` is a scope-filtered waterfall
- * whose argument carries BOTH the tool schemas and the prompt sections, so one
- * listener drops a disabled tool and its guidance together.
+ * This package resolves that tension without touching the composition, through
+ * the two seams the registry offers. A tool the registry can mask is denied in
+ * the Agent's own scope at `agent/pre-step`, so it leaves that step's admitted
+ * set and its declaration leaves the request. A tool a preset registers in its
+ * own scope cannot be masked there; for those the roster drops the tool's
+ * `tool:<name>` guidance section from the assembly and refuses the call.
  *
  * Three properties make that safe:
  *
- * - **The roster is stable for a whole turn.** `system-prompt/assemble` runs
- *   once per step, so an unguarded settings change would change the model's
- *   hands between steps. A change is held as PENDING and promoted at
- *   `agent/turn-stopping` — the serial point awaited before a completed turn
- *   commits — so a toggle lands exactly when the model stops generating.
- * - **Visibility is not enforcement.** Filtering the assembly does not remove a
- *   tool from the execution path: the registry still resolves a name the model
- *   remembers from earlier in the conversation. A monotonic `tools.guard()`
- *   denies those calls, so a hidden tool is also an uncallable one.
- * - **The change is announced.** A different roster changes the assembled tool
- *   list, which the agent loop records as a new request series. That is the
+ * - **The roster is stable for a whole turn.** Both hooks run per step, so an
+ *   unguarded settings change would change the model's hands between steps. A
+ *   change is held as PENDING and promoted at `agent/turn-stopping` — the
+ *   serial point awaited before a completed turn commits — so a toggle lands
+ *   exactly when the model stops generating.
+ * - **Visibility is not enforcement.** Neither the mask nor the dropped section
+ *   stops a model that remembers the name from earlier in the conversation. A
+ *   monotonic `tools.guard()` denies those calls, so a hidden tool is also an
+ *   uncallable one.
+ * - **The change is announced.** A different admitted set changes the request,
+ *   which the agent loop records as a new request series. That is the
  *   prompt-cache invalidation a configuration surface warns about.
  *
  * ```yaml
@@ -37,6 +39,7 @@
  */
 
 import type { Context, Volatile } from '@deepseek-ai/cordis'
+import { scopeOf } from '@deepseek-ai/dsh-scope'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
 // The Loader's `loader/volatile-update` event and `fiber.entry`.
@@ -289,23 +292,70 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   ctx.inject(['tools', 'systemPrompt'], (runtime) => {
-    // 1. The prompt: drop a hidden tool's schema and its guidance together. The
-    //    returned assembly is authoritative, which is what makes this possible
-    //    without unmounting anything.
-    runtime.on('system-prompt/assemble', async (_assembly, _context, next) => {
+    /**
+     * Restriction this plugin installed in one agent scope, so a roster change
+     * replaces the mask instead of stacking another one on top.
+     */
+    const denials = new WeakMap<Context, { names: string; dispose: () => void }>()
+
+    /**
+     * Narrow one agent's tool set to what the roster leaves switched on.
+     *
+     * `tools.restrict` is the registry's own mask: a denied tool leaves the step's
+     * admitted set, so its schema leaves the request and a call naming it answers
+     * `UNKNOWN_TOOL`. The registry accepts only names the scope inherits, so a tool
+     * a preset registers in its own scope cannot be masked here and stays declared;
+     * the guard below is what refuses those, and it refuses everything either way.
+     * @param agentCtx - the agent's scoped context.
+     */
+    const denyHidden = (agentCtx: Context): void => {
+      // `schemas()` with no argument answers the global view; the mask only
+      // shows in the view of the scope that owns it.
+      const mounted = agentCtx.tools.schemas(scopeOf(agentCtx)).map(schema => schema.name)
+      // Raw names, not the normalized ones: the registry matches its own spelling.
+      const hidden = mounted.filter(name => !toolVisible(active, name)).sort()
+      const key = hidden.join(',')
+      const installed = denials.get(agentCtx)
+      if (installed?.names === key) return
+      installed?.dispose()
+      denials.delete(agentCtx)
+      if (hidden.length === 0) return
+      const accepted: string[] = []
+      for (const name of hidden) {
+        try {
+          // Probe one name at a time: the batch call rejects the whole mask when a
+          // single name is not the registry's to restrict, and a scope-local tool is
+          // the guard's business rather than a failure here.
+          const probe = agentCtx.tools.restrict({ deny: [name] })
+          probe()
+          accepted.push(name)
+        } catch (error) {
+          if (!(error instanceof Error) || !error.message.includes('unknown global tool')) throw error
+        }
+      }
+      if (accepted.length === 0) return
+      denials.set(agentCtx, { names: key, dispose: agentCtx.tools.restrict({ deny: accepted }) })
+    }
+
+    // 1. The prompt: a hidden tool's guidance goes with it. Tool declarations are
+    //    the registration's own now, so the mask above is what removes them.
+    runtime.on('system-prompt/assemble', async (_assembly, context, next) => {
       const out = await next()
-      const mounted = out.tools.map(tool => tool.name)
+      const mounted = runtime.tools.schemas(context.scope).map(schema => schema.name)
       // Before this plugin's own filter: a tool switched off is exactly the entry
-      // the page has to keep showing, and the assembled list is where the
+      // the page has to keep showing, and the registry's view is where the
       // agent-scoped ones appear.
       learnRoster(ctx, config, mounted)
       const hidden = hiddenToolNames(active, mounted)
       if (hidden.size === 0) return out
-      return {
-        ...out,
-        tools: out.tools.filter(tool => !hidden.has(normalize(tool.name))),
-        sections: out.sections.filter(entry => !sectionHidden(hidden, entry.name)),
-      }
+      return { ...out, sections: out.sections.filter(entry => !sectionHidden(hidden, entry.name)) }
+    })
+
+    // 2. The scope mask follows the roster: it is applied where an agent is in
+    //    hand, so a switch turned off during one turn reaches the next one.
+    runtime.on('agent/pre-step', ({ agent }, next) => {
+      denyHidden(agent.ctx)
+      return next()
     })
 
     // The page renders a switch per entry of this map. At mount the registry has
@@ -313,15 +363,15 @@ export function apply(ctx: Context, config: Config): void {
     // agent can be offered.
     learnRoster(ctx, config, runtime.tools.schemas().map(schema => schema.name))
 
-    // 2. Execution: filtering the prompt does not stop a model that remembers
-    //    the name, so a hidden tool must also refuse to run.
+    // 3. Execution: neither the mask nor the guidance covers a model that
+    //    remembers the name, so a hidden tool must also refuse to run.
     runtime.tools.guard(execution =>
       toolVisible(active, execution.name)
         ? undefined
         : `tool "${execution.name}" is switched off in settings; turn it on to call it`,
     )
 
-    // 3. The turn boundary: hold a change until the model stops generating, so
+    // 4. The turn boundary: hold a change until the model stops generating, so
     //    one turn never changes hands between its steps.
     runtime.on('agent/turn-stopping', () => {
       if (!sameRoster(pending, active)) active = pending
