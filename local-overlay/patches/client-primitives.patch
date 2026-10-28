@@ -1,3 +1,16 @@
+diff --git a/packages/client/ui-primitives/README.i18n.yaml b/packages/client/ui-primitives/README.i18n.yaml
+index e6a2cb577d..c467284653 100644
+--- a/packages/client/ui-primitives/README.i18n.yaml
++++ b/packages/client/ui-primitives/README.i18n.yaml
+@@ -24,7 +24,7 @@
+   en: b3744373b4b2c1fb
+   zh: 2dbde8ee0bfa5f28
+ /deepseek-ai-dsh-client-ui-primitives/use-this-package/rendering-agent-output:
+-  en: 32d4557c4429e00d
++  en: b389ec4d45b14ce2
+   zh: 293a6fef712f7502
+ /deepseek-ai-dsh-client-ui-primitives/use-this-package/localizing-copy:
+   en: a943603b74080ef5
 diff --git a/packages/client/ui-primitives/README.md b/packages/client/ui-primitives/README.md
 index d95d802886..f05f5c9dfd 100644
 --- a/packages/client/ui-primitives/README.md

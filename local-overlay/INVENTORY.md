@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **68** in **17** patch(es).
+Tier-2 files: **71** in **17** patch(es).
 
 ## Patches
 
@@ -76,8 +76,9 @@ Tier-2 files: **68** in **17** patch(es).
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
-### `patches/client-primitives.patch` — 3 file(s)
+### `patches/client-primitives.patch` — 4 file(s)
 
+- `packages/client/ui-primitives/README.i18n.yaml`
 - `packages/client/ui-primitives/README.md`
 - `packages/client/ui-primitives/src/markdown/MarkdownText.tsx`
 - `packages/client/ui-primitives/src/markdown/plain-text.ts`
@@ -89,8 +90,9 @@ Tier-2 files: **68** in **17** patch(es).
 - `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
 - `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
 
-### `patches/client-schedule.patch` — 8 file(s)
+### `patches/client-schedule.patch` — 9 file(s)
 
+- `packages/client/ui-schedule/README.i18n.yaml`
 - `packages/client/ui-schedule/README.md`
 - `packages/client/ui-schedule/README.zh.md`
 - `packages/client/ui-schedule/src/client/TaskManagerPage.tsx`
@@ -100,8 +102,9 @@ Tier-2 files: **68** in **17** patch(es).
 - `packages/client/ui-schedule/tests/task-detail.client.spec.tsx`
 - `packages/client/ui-schedule/tests/task-manager-page.client.spec.tsx`
 
-### `patches/schedule.patch` — 4 file(s)
+### `patches/schedule.patch` — 5 file(s)
 
+- `packages/schedule/schedule/README.i18n.yaml`
 - `packages/schedule/schedule/README.md`
 - `packages/schedule/schedule/README.zh.md`
 - `packages/schedule/schedule/src/index.ts`
@@ -169,7 +172,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 843 paths do not exist upstream, so no patch covers them and none can conflict.
+These 848 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -199,6 +202,7 @@ These 843 paths do not exist upstream, so no patch covers them and none can conf
 - `.agents/skills/skill-builder/SKILL.md`
 - `.merge-port/MERGE-STATUS.md`
 - `.merge-port/apiproxy-and-fixtures.patch`
+- `.merge-port/merges/2026-10-28-0.2.2-alpha.2.md`
 - `.recon/.gitignore`
 - `.recon/CONTINUE-model-dropdown.md`
 - `.recon/OPERATOR-ACTION-restart-bridge.md`
@@ -418,6 +422,7 @@ These 843 paths do not exist upstream, so no patch covers them and none can conf
 - `efai/ensure-profile-bundles.test.mjs`
 - `efai/fork-aliases.mjs`
 - `efai/merge_upstream.py`
+- `efai/record-snapshots.mjs`
 - `efai/regen-tsconfig-paths.mjs`
 - `efai/test_merge_upstream.py`
 - `install.ps1`
@@ -440,6 +445,7 @@ These 843 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/core.patch`
 - `local-overlay/patches/docs.patch`
 - `local-overlay/patches/job-kind-augmentation.patch`
+- `local-overlay/patches/liveshare.patch`
 - `local-overlay/patches/root-meta.patch`
 - `local-overlay/patches/schedule.patch`
 - `local-overlay/patches/session-format-migration.patch`
@@ -897,6 +903,8 @@ These 843 paths do not exist upstream, so no patch covers them and none can conf
 - `packages/web/web-browser/tests/sidebar-driver.spec.ts`
 - `packages/web/web-browser/tests/tool.spec.ts`
 - `packages/web/web-browser/tsconfig.json`
+- `probe-ob.mjs`
+- `probe-ph.mjs`
 - `python/kiln/provider_bridge.py`
 - `python/kiln/runtime/.python-version`
 - `python/kiln/runtime/DS-DIRECT-FLAGGING.md`
