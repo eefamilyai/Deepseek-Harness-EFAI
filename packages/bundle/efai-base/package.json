@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-efai-base",
   "description": "The fork's shared rows as a profile bundle: the kernel, the Kiln routes, memory, and the runtime roster, stacked over dsh-base",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "restricted"
   },

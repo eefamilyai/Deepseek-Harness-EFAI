@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-effects",
   "description": "Frame-wide visual effects: ambient DeepSeek whale backdrop, a bottom-right focus lock button with a rotating nature scene and passcode gate, and their Settings toggles.",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

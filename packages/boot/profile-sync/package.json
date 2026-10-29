@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-profile-sync",
   "description": "Keeps model providers, plugin enablement, and API key references identical across every profile under the harness home",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "restricted"
   },

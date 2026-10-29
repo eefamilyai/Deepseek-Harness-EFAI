@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-browser-sidebar",
   "description": "Carries the agent's browser pages in the Desktop window's right sidebar: the agentBrowser Host service and the AI Browser tab that performs and shows them",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "restricted"
   },

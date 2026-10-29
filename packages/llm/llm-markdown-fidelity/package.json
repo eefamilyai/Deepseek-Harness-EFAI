@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-llm-markdown-fidelity",
   "description": "Markdown fidelity for a model's text stream: a table's delimiter row goes back on its own line",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "restricted"
   },

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-efai-identity",
   "description": "The fork identity opener: the first line of the system prompt, rewritten on the assembly so it holds however the shipped opener is configured",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "restricted"
   },

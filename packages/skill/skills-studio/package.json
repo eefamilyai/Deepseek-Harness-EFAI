@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skills-studio",
   "description": "Skills tab: list, write, and remove skills in the folders the skill loader scans, with a Skill Builder chat that helps author them",
-  "version": "0.2.1-rc.3",
+  "version": "0.2.2-alpha.2",
   "publishConfig": {
     "access": "restricted"
   },
