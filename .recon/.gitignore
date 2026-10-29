@@ -31,3 +31,6 @@ spill_*
 postfix-cases.json
 measure.json
 patched-desktop-host.js
+
+# Live protocol captures and the Chrome profile used for them (large, contains a session)
+dsw-live/

@@ -1,0 +1,27 @@
+{
+  "name": "dswg",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DeepSeek Web Gateway - OpenAI/Anthropic-compatible API over DeepSeek web accounts, one real Chromium profile per account.",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "node --watch src/main.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "node ../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "import-profile": "node scripts/import-profile.ts",
+    "smoke": "node scripts/smoke.ts",
+    "reset": "node scripts/reset.ts",
+    "doctor": "node scripts/doctor.ts",
+    "soak": "node scripts/soak.ts",
+    "replay": "node scripts/replay.ts",
+    "oracle": "node scripts/oracle.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1"
+  },
+  "devDependencies": {}
+}
