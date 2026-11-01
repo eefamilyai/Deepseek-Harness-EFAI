@@ -258,7 +258,7 @@ index 7b3d77d299..dacd14cf37 100644
    }
  }
 diff --git a/packages/compaction/compaction-basic/src/summarizer.ts b/packages/compaction/compaction-basic/src/summarizer.ts
-index 2d258fa410..dbbf0f5998 100644
+index 2d258fa410..cfbab8183f 100644
 --- a/packages/compaction/compaction-basic/src/summarizer.ts
 +++ b/packages/compaction/compaction-basic/src/summarizer.ts
 @@ -4,6 +4,17 @@
@@ -433,13 +433,47 @@ index 2d258fa410..dbbf0f5998 100644
  }
  
  /** Safe summary content plus the exact auxiliary call envelope recorded with it. */
-@@ -107,12 +218,61 @@ export type SummaryResult = {
+@@ -107,12 +218,101 @@ export type SummaryResult = {
  )
  
  /**
 - * Run the default cache-reusing `ctx.llm.stream()` summarization call: replay
 - * the conversation prefix, then append the compaction instruction as the final
 - * user message so the provider's warm prefix cache is reused.
++ * Render one replayed block as its transcript line.
++ *
++ * Only an image and a file travel live (see {@link quotedReplay}); every other
++ * block is text here, because a block a route cannot carry in a user turn fails
++ * the whole compaction request instead of degrading.
++ * @param block - the replayed content block.
++ * @param media - receives the blocks that must reach the provider as themselves.
++ * @returns the transcript line, or undefined when the block contributes none.
++ */
++function quotedLine(block: ContentBlock, media: ContentBlock[]): string | undefined {
++  const tag = block.type
++  switch (block.type) {
++    case 'text':
++      return block.text
++    case 'image':
++    case 'file':
++      media.push(block)
++      return `[${block.type} attached]`
++    case 'tool-call':
++      return `[tool call ${block.name}] ${block.arguments}`
++    case 'tool-addition':
++      return `[tool added: ${block.toolName}]`
++    case 'tool-removal':
++      return `[tool removed: ${block.toolName}]`
++    case 'reasoning':
++      // A checkpoint condenses what happened; the agent's private reasoning is not material.
++      return undefined
++    default:
++      // A merge-extensible block keeps its tag visible; no built-in route carries it live.
++      return `[${tag}]`
++  }
++}
++
++/**
 + * Demote the entire replayed conversation into quoted material.
 + *
 + * The replayed transcript is a chat in the agent's own voice: user turns,
@@ -449,12 +483,17 @@ index 2d258fa410..dbbf0f5998 100644
 + * message is therefore flattened into ONE fenced user turn, labelled by its
 + * original role, and the request carries no assistant or tool turn at all.
 + *
-+ * A non-text block — an image above all — travels as itself, appended to that
-+ * same quoted turn. Stringified into the transcript it would reach the provider
-+ * as prose and stop being an image: the offload recovery reads the request's
-+ * live image blocks to find what exceeds the route's budget, so a request that
-+ * flattened them could never recover, and one that dropped them would ask the
-+ * summarizer to describe a picture it was never shown.
++ * Only the blocks a provider must receive as themselves ride the turn live, and
++ * they ride it appended to that same quoted turn: an image, because stringified
++ * it would reach the provider as prose and stop being an image — the offload
++ * recovery reads the request's live image blocks to find what exceeds the
++ * route's budget, so a request that flattened them could never recover — and a
++ * file, which request assembly projects to its handle text for every route.
++ * Every other block becomes its own transcript line. A block left live that the
++ * route cannot represent in a user turn fails the whole request instead of
++ * degrading: a tool-change block from a developer message is rejected by every
++ * built-in route, so quoting the transcript live made a conversation that
++ * changed its tool set impossible to compact.
 + *
 + * A one-shot user input carries no `source`, which is what this is: material
 + * assembled for this request, not a durable conversation message.
@@ -466,11 +505,12 @@ index 2d258fa410..dbbf0f5998 100644
 +  const turns: string[] = []
 +  const media: ContentBlock[] = []
 +  for (const message of messages) {
-+    const rendered = message.content.map((block) => {
-+      if (block.type === 'text') return block.text
-+      media.push(block)
-+      return `[${block.type} attached]`
-+    }).join('\n').trim()
++    const rendered = message.content
++      .flatMap((block) => {
++        const line = quotedLine(block, media)
++        return line === undefined ? [] : [line]
++      })
++      .join('\n').trim()
 +    if (rendered.length === 0) continue
 +    turns.push(`--- ${message.role} ---\n${rendered}`)
 +  }
@@ -499,7 +539,7 @@ index 2d258fa410..dbbf0f5998 100644
   * @param agent - supplies routed-model history, fallback model, and session id.
   * @param signal - optional cancellation forwarded to the adapter.
   * @returns safe text-only summary blocks and the exact call envelope and output.
-@@ -143,18 +303,30 @@ export async function summarizeWithLlm(
+@@ -143,18 +343,30 @@ export async function summarizeWithLlm(
  
    const assembler = new BlockAssembler()
    const messages: RequestMessage[] = [
@@ -534,9 +574,18 @@ index 2d258fa410..dbbf0f5998 100644
      sessionId: agent.session.id,
      purpose: 'compaction',
 diff --git a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
-index cf6780933d..ed010fae4c 100644
+index cf6780933d..b741036536 100644
 --- a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
 +++ b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
+@@ -13,7 +13,7 @@ import {
+   resolveTargetPolicy,
+ } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
+ import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
+-import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
++import LlmRuntime, { createUserMessage, createDeveloperMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+ import type {
+   ContentBlock,
 @@ -1384,6 +1384,12 @@ async function summarizerHarness(
    return { ctx, adapter, compact }
  }
@@ -585,7 +634,59 @@ index cf6780933d..ed010fae4c 100644
      expect(instruction).toMatchObject({ role: 'user' })
      expect(instruction).not.toHaveProperty('id')
      expect(instruction).not.toHaveProperty('source')
-@@ -1486,10 +1508,20 @@ describe('default one-shot summarizer', () => {
+@@ -1411,6 +1433,51 @@ describe('default one-shot summarizer', () => {
+     if (system !== undefined) expect(session.surface.nodes[0]).toBe(nodes[0])
+   })
+ 
++  it('quotes a tool-change developer message instead of replaying its blocks into the user turn', async () => {
++    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
++    const session = conversation(2)
++    const headerSeq = session.append('request/header', {
++      header: {
++        config: { provider: MODEL, model: MODEL },
++        tools: [
++          { name: 'web_search', description: 'search', parameters: { type: 'object' } },
++          { name: 'pwsh', description: 'shell', parameters: { type: 'object' } },
++        ],
++      },
++      reason: 'change',
++    }).seq
++    session.append('developer/message', {
++      turn: 3,
++      step: 1,
++      message: createDeveloperMessage({
++        source: { kind: 'tool-registry' },
++        content: [
++          { type: 'tool-addition', toolName: 'web_search' },
++          { type: 'tool-removal', toolName: 'pwsh' },
++        ],
++      }),
++      headerSeq,
++    }, { surfaceOp: 'append' })
++    const nodes = [...session.surface.nodes]
++
++    await compact.compactRegion(nodes[0]!, nodes[nodes.length - 1]!, agent(session, MODEL), SIGNAL)
++
++    // A user turn carrying tool-change blocks is unrepresentable on every built-in
++    // route ("DeepSeek Messages cannot represent tool-change blocks outside
++    // developer messages"), so compacting any conversation whose tool set changed
++    // failed outright. The change belongs in the transcript as text.
++    const messages = adapter.lastOptions?.messages ?? []
++    expect(messages.every(message => message.role === 'user')).toBe(true)
++    const blocks = messages.flatMap(message => message.content)
++    expect(blocks.map(block => block.type)).not.toContain('tool-addition')
++    expect(blocks.map(block => block.type)).not.toContain('tool-removal')
++    const quoted = blocks[0]
++    const quotedText = quoted?.type === 'text' ? quoted.text : ''
++    expect(quotedText).toContain('--- developer ---')
++    expect(quotedText).toContain('[tool added: web_search]')
++    expect(quotedText).toContain('[tool removed: pwsh]')
++  })
++
+   it('requires complete raw output when a subclass marks one local LLM stream call', () => {
+     expectTypeOf<{
+       summary: ContentBlock[]
+@@ -1486,10 +1553,20 @@ describe('default one-shot summarizer', () => {
        messages: [system, prefix],
      }, agent(conversation(1), MODEL))
  
@@ -609,7 +710,7 @@ index cf6780933d..ed010fae4c 100644
      const last = messages.at(-1)?.content[0]
      const lastText = last?.type === 'text' ? last.text : ''
      expect(lastText).toContain('Write concise English engineering prose.')
-@@ -1536,8 +1568,14 @@ describe('default one-shot summarizer', () => {
+@@ -1536,8 +1613,14 @@ describe('default one-shot summarizer', () => {
        model: 'policy-summary',
        maxTokens: 222,
      })

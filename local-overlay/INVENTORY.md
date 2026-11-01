@@ -172,7 +172,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 848 paths do not exist upstream, so no patch covers them and none can conflict.
+These 929 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -205,6 +205,7 @@ These 848 paths do not exist upstream, so no patch covers them and none can conf
 - `.merge-port/merges/2026-10-28-0.2.2-alpha.2.md`
 - `.recon/.gitignore`
 - `.recon/CONTINUE-model-dropdown.md`
+- `.recon/DEEPSEEK-WEB-GATEWAY.md`
 - `.recon/OPERATOR-ACTION-restart-bridge.md`
 - `.recon/OPERATOR-SUMMARY-ds-mute.md`
 - `.recon/TASKS-skills-tab-peak-send-sync-provider-toggles.md`
@@ -292,6 +293,7 @@ These 848 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/register-hooks.mjs`
 - `.recon/release-notes-efai-desktop-0.2.0-rc.2.md`
 - `.recon/release-notes-efai-desktop-0.2.1-rc.3.md`
+- `.recon/release-notes-efai-desktop-0.2.2-alpha.2.md`
 - `.recon/repack-desktop-asar.mjs`
 - `.recon/repaint-caption-strip.py`
 - `.recon/replay.mjs`
@@ -311,6 +313,7 @@ These 848 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/transparent-install.json`
 - `.recon/transparent-window-probe.mjs`
 - `.recon/ts-spec-hooks.mjs`
+- `.recon/upstream-update-0.2.2-alpha.2.md`
 - `.recon/validate-asar.mjs`
 - `.recon/vitest-shim.mjs`
 - `.recon/vitest.salvage.mjs`
@@ -418,6 +421,84 @@ These 848 paths do not exist upstream, so no patch covers them and none can conf
 - `desktop/harness-desktop/package.json`
 - `desktop/install-app-asar.mjs`
 - `docs/tool-call-formats.txt`
+- `dswg/DESIGN.md`
+- `dswg/README.md`
+- `dswg/data/.gitignore`
+- `dswg/docs/ADMIN-API.md`
+- `dswg/package.json`
+- `dswg/recon/01-load.mjs`
+- `dswg/recon/02-signin-dom.mjs`
+- `dswg/recon/03-login.mjs`
+- `dswg/recon/04-seed-token.mjs`
+- `dswg/recon/05-turn.mjs`
+- `dswg/recon/06-inpage-turn.mjs`
+- `dswg/recon/07-thinking-search.mjs`
+- `dswg/recon/08-toolformats.mjs`
+- `dswg/scripts/doctor.ts`
+- `dswg/scripts/import-profile.ts`
+- `dswg/scripts/mine.ts`
+- `dswg/scripts/oracle.ts`
+- `dswg/scripts/replay.ts`
+- `dswg/scripts/reset.ts`
+- `dswg/scripts/smoke.ts`
+- `dswg/scripts/soak.ts`
+- `dswg/scripts/start-background.cjs`
+- `dswg/src/api/admin.ts`
+- `dswg/src/api/anthropic.ts`
+- `dswg/src/api/canonical.ts`
+- `dswg/src/api/openai.ts`
+- `dswg/src/api/services.ts`
+- `dswg/src/browser/capture.ts`
+- `dswg/src/browser/native.ts`
+- `dswg/src/browser/page-runtime.js`
+- `dswg/src/browser/pool.ts`
+- `dswg/src/browser/worker.ts`
+- `dswg/src/config.ts`
+- `dswg/src/engine/accounts.ts`
+- `dswg/src/engine/health.ts`
+- `dswg/src/engine/models.ts`
+- `dswg/src/engine/prompt.ts`
+- `dswg/src/engine/turn.ts`
+- `dswg/src/main.ts`
+- `dswg/src/store/accounts.ts`
+- `dswg/src/store/corpus.ts`
+- `dswg/src/store/db.ts`
+- `dswg/src/store/keys.ts`
+- `dswg/src/store/usage.ts`
+- `dswg/src/store/wirelog.ts`
+- `dswg/src/tools/envelope.ts`
+- `dswg/src/tools/invoke.ts`
+- `dswg/src/tools/learn.ts`
+- `dswg/src/tools/protocol.ts`
+- `dswg/src/tools/repair.ts`
+- `dswg/src/tools/roleplay.ts`
+- `dswg/src/tools/salvage.ts`
+- `dswg/src/upstream/stream.ts`
+- `dswg/src/upstream/verdict.ts`
+- `dswg/src/util/async.ts`
+- `dswg/src/util/crypto.ts`
+- `dswg/src/util/errors.ts`
+- `dswg/src/util/http.ts`
+- `dswg/src/util/ids.ts`
+- `dswg/src/util/log.ts`
+- `dswg/src/util/stop.ts`
+- `dswg/src/util/text.ts`
+- `dswg/test/adversarial.test.ts`
+- `dswg/test/cross.test.ts`
+- `dswg/test/engine.test.ts`
+- `dswg/test/faults.test.ts`
+- `dswg/test/fixtures/replies.ts`
+- `dswg/test/horizon.test.ts`
+- `dswg/test/http.test.ts`
+- `dswg/test/parser.test.ts`
+- `dswg/test/pool.test.ts`
+- `dswg/test/salvage.test.ts`
+- `dswg/test/store.test.ts`
+- `dswg/test/stream.test.ts`
+- `dswg/tsconfig.json`
+- `dswg/ui/app.js`
+- `dswg/ui/index.html`
+- `dswg/ui/styles.css`
 - `efai/ensure-profile-bundles.mjs`
 - `efai/ensure-profile-bundles.test.mjs`
 - `efai/fork-aliases.mjs`

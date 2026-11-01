@@ -13,7 +13,7 @@ import {
   resolveTargetPolicy,
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, createDeveloperMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
@@ -1431,6 +1431,51 @@ describe('default one-shot summarizer', () => {
     expect(Object.isFrozen(instruction?.content[0])).toBe(true)
     expect(result.shadowedSeqs).toEqual(nodes.slice(start, start + 2))
     if (system !== undefined) expect(session.surface.nodes[0]).toBe(nodes[0])
+  })
+
+  it('quotes a tool-change developer message instead of replaying its blocks into the user turn', async () => {
+    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
+    const session = conversation(2)
+    const headerSeq = session.append('request/header', {
+      header: {
+        config: { provider: MODEL, model: MODEL },
+        tools: [
+          { name: 'web_search', description: 'search', parameters: { type: 'object' } },
+          { name: 'pwsh', description: 'shell', parameters: { type: 'object' } },
+        ],
+      },
+      reason: 'change',
+    }).seq
+    session.append('developer/message', {
+      turn: 3,
+      step: 1,
+      message: createDeveloperMessage({
+        source: { kind: 'tool-registry' },
+        content: [
+          { type: 'tool-addition', toolName: 'web_search' },
+          { type: 'tool-removal', toolName: 'pwsh' },
+        ],
+      }),
+      headerSeq,
+    }, { surfaceOp: 'append' })
+    const nodes = [...session.surface.nodes]
+
+    await compact.compactRegion(nodes[0]!, nodes[nodes.length - 1]!, agent(session, MODEL), SIGNAL)
+
+    // A user turn carrying tool-change blocks is unrepresentable on every built-in
+    // route ("DeepSeek Messages cannot represent tool-change blocks outside
+    // developer messages"), so compacting any conversation whose tool set changed
+    // failed outright. The change belongs in the transcript as text.
+    const messages = adapter.lastOptions?.messages ?? []
+    expect(messages.every(message => message.role === 'user')).toBe(true)
+    const blocks = messages.flatMap(message => message.content)
+    expect(blocks.map(block => block.type)).not.toContain('tool-addition')
+    expect(blocks.map(block => block.type)).not.toContain('tool-removal')
+    const quoted = blocks[0]
+    const quotedText = quoted?.type === 'text' ? quoted.text : ''
+    expect(quotedText).toContain('--- developer ---')
+    expect(quotedText).toContain('[tool added: web_search]')
+    expect(quotedText).toContain('[tool removed: pwsh]')
   })
 
   it('requires complete raw output when a subclass marks one local LLM stream call', () => {

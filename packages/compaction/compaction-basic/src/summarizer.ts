@@ -218,6 +218,40 @@ export type SummaryResult = {
 )
 
 /**
+ * Render one replayed block as its transcript line.
+ *
+ * Only an image and a file travel live (see {@link quotedReplay}); every other
+ * block is text here, because a block a route cannot carry in a user turn fails
+ * the whole compaction request instead of degrading.
+ * @param block - the replayed content block.
+ * @param media - receives the blocks that must reach the provider as themselves.
+ * @returns the transcript line, or undefined when the block contributes none.
+ */
+function quotedLine(block: ContentBlock, media: ContentBlock[]): string | undefined {
+  const tag = block.type
+  switch (block.type) {
+    case 'text':
+      return block.text
+    case 'image':
+    case 'file':
+      media.push(block)
+      return `[${block.type} attached]`
+    case 'tool-call':
+      return `[tool call ${block.name}] ${block.arguments}`
+    case 'tool-addition':
+      return `[tool added: ${block.toolName}]`
+    case 'tool-removal':
+      return `[tool removed: ${block.toolName}]`
+    case 'reasoning':
+      // A checkpoint condenses what happened; the agent's private reasoning is not material.
+      return undefined
+    default:
+      // A merge-extensible block keeps its tag visible; no built-in route carries it live.
+      return `[${tag}]`
+  }
+}
+
+/**
  * Demote the entire replayed conversation into quoted material.
  *
  * The replayed transcript is a chat in the agent's own voice: user turns,
@@ -227,12 +261,17 @@ export type SummaryResult = {
  * message is therefore flattened into ONE fenced user turn, labelled by its
  * original role, and the request carries no assistant or tool turn at all.
  *
- * A non-text block — an image above all — travels as itself, appended to that
- * same quoted turn. Stringified into the transcript it would reach the provider
- * as prose and stop being an image: the offload recovery reads the request's
- * live image blocks to find what exceeds the route's budget, so a request that
- * flattened them could never recover, and one that dropped them would ask the
- * summarizer to describe a picture it was never shown.
+ * Only the blocks a provider must receive as themselves ride the turn live, and
+ * they ride it appended to that same quoted turn: an image, because stringified
+ * it would reach the provider as prose and stop being an image — the offload
+ * recovery reads the request's live image blocks to find what exceeds the
+ * route's budget, so a request that flattened them could never recover — and a
+ * file, which request assembly projects to its handle text for every route.
+ * Every other block becomes its own transcript line. A block left live that the
+ * route cannot represent in a user turn fails the whole request instead of
+ * degrading: a tool-change block from a developer message is rejected by every
+ * built-in route, so quoting the transcript live made a conversation that
+ * changed its tool set impossible to compact.
  *
  * A one-shot user input carries no `source`, which is what this is: material
  * assembled for this request, not a durable conversation message.
@@ -244,11 +283,12 @@ function quotedReplay(messages: readonly Message[], tools?: readonly ToolSchema[
   const turns: string[] = []
   const media: ContentBlock[] = []
   for (const message of messages) {
-    const rendered = message.content.map((block) => {
-      if (block.type === 'text') return block.text
-      media.push(block)
-      return `[${block.type} attached]`
-    }).join('\n').trim()
+    const rendered = message.content
+      .flatMap((block) => {
+        const line = quotedLine(block, media)
+        return line === undefined ? [] : [line]
+      })
+      .join('\n').trim()
     if (rendered.length === 0) continue
     turns.push(`--- ${message.role} ---\n${rendered}`)
   }
