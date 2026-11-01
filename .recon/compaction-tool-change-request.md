@@ -72,29 +72,30 @@ route already did (`flattenMessage` renders the call as its DSML block).
 - `pnpm run verify-fork-overlay`: 17 patches, 71 Tier-2 files, base `f3803c9697`,
   round-trip verified.
 
-## Live application (no restart)
+## Live application: attempted, rejected, reverted
 
-The installed 0.2.2-alpha.2 build still carries the old module, so the profile
-`cordis.patch.yml` now overrides the shipped `standard` preset with the checkout's
-build for that one row:
+Overriding the shipped `standard` preset with the checkout's build (a patch keyed
+by `preset-standard` whose `compaction-basic` row named
+`D:/deepseek-kernel-harness/packages/compaction/compaction-basic/lib/index.js`)
+does NOT work. The preset mount rejected its own composition:
 
-```yaml
-- id: preset-standard
-  name: '@deepseek-ai/dsh-agent-preset'
-  config:
-    ...
-    - id: compaction-basic
-      name: 'D:/deepseek-kernel-harness/packages/compaction/compaction-basic/lib/index.js'
+```
+new session failed: SessionCreateError: session create failed:
+agent-preset/invalid: compaction-basic
+(D:/deepseek-kernel-harness/packages/compaction/compaction-basic/lib/index.js): never started
 ```
 
-A patch keyed by the preset row replaces its complete `config`, so the block
-restates the shipped plugins list verbatim apart from that row. Delete the `name`
-override once a release carries the fix; the backup of the pre-override patch is
-`cordis.patch.yml.bak-compaction-live`.
+Every new session failed to create for as long as the row was in place, in the
+running harness and in a test instance alike. The override was removed within
+minutes and all four presets resolve `@deepseek-ai/dsh-compaction-basic` from the
+installation again (`fiberState: 2` on each).
 
-Caveat: the checkout module resolves `@deepseek-ai/dsh-llm` and
-`@deepseek-ai/dsh-compaction` from the checkout's `node_modules`, so it holds a
-second copy of those classes. `LlmError` `instanceof` checks in
-`compaction-image-offload` (overflow recovery for image-heavy conversations) do
-not cross that copy boundary; everything else keys on service names or error
-codes.
+The likely cause is that the checkout build imports its own copies of
+`@deepseek-ai/dsh-compaction`, `@deepseek-ai/dsh-llm` and
+`@deepseek-ai/schemastery` from the checkout's `node_modules`, so its
+`schemastery` `Config` object is a foreign instance in the host process and the
+preset activation audit never sees the row start. An absolute-path row works in
+the *profile* composition (that is how `kernel-python` runs from this checkout);
+it does not work for a row inside an agent preset.
+
+Consequence: this fix reaches a running installation only through a build.
