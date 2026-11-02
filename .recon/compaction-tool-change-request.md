@@ -99,3 +99,20 @@ the *profile* composition (that is how `kernel-python` runs from this checkout);
 it does not work for a row inside an agent preset.
 
 Consequence: this fix reaches a running installation only through a build.
+
+## Shipped
+
+Version 0.2.2-alpha.3 (commit `90c8a222de` bumped the family, `6930524359` carries
+these notes), tag `efai-desktop-v0.2.2-alpha.3`, release
+https://github.com/eefamilyai/Deepseek-Harness-EFAI/releases/tag/efai-desktop-v0.2.2-alpha.3
+
+Installer `deepseek-harness-0.2.2-alpha.3-win-x64-unsigned.exe`, 326,686,460 bytes,
+SHA-256 `EADFE07C9A01618320F20D2ACC5A8B78812DC9346B0D380F11EFC791A603374F` (GitHub
+reports the same digest). `app.asar` inside the built package carries
+`[tool added: ` exactly once — the fixed renderer — and the packaged
+`dsh/package.json` reads `0.2.2-alpha.3`.
+
+The family-wide bump (414 manifests) is what `pnpm run release:dsh 0.2.2-alpha.3`
+does, and it re-pins upstream-owned manifests to the fork's version line. The next
+upstream merge will therefore see version-only conflicts on the manifests upstream
+changed; `efai/merge_upstream.py` resolves that class by rule.
