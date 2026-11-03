@@ -187,7 +187,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 932 paths do not exist upstream, so no patch covers them and none can conflict.
+These 934 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -326,6 +326,7 @@ These 932 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/sites-e2e.mjs`
 - `.recon/standalone-distribution.md`
 - `.recon/tool-call-colour-palette.md`
+- `.recon/tool-call-image-gallery.md`
 - `.recon/tool-gaps-from-operator-feedback.md`
 - `.recon/trace-shape-b.mjs`
 - `.recon/transparent-install.json`
@@ -540,6 +541,7 @@ These 932 paths do not exist upstream, so no patch covers them and none can conf
 - `local-overlay/patches/client-schedule.patch`
 - `local-overlay/patches/client-settings.patch`
 - `local-overlay/patches/client-shell.patch`
+- `local-overlay/patches/client-tool.patch`
 - `local-overlay/patches/compaction.patch`
 - `local-overlay/patches/core.patch`
 - `local-overlay/patches/docs.patch`
