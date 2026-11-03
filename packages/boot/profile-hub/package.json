@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-profile-hub",
   "description": "Profile hub: the dsh profiles on this machine, with the Remote surface a landing page uses to create, remove, launch, and enter one",
-  "version": "0.2.2-alpha.3",
+  "version": "0.2.2-alpha.4",
   "publishConfig": {
     "access": "restricted"
   },
