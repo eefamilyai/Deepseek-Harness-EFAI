@@ -10,6 +10,7 @@ import { searchCardModel } from '../models/search-card-model.ts'
 import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { webCardModel } from '../models/web-card-model.ts'
 import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
+import { imageCardModel } from '../models/image-card-model.ts'
 import { localizeAutoReviewDenial } from '../models/auto-review-denial.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 
@@ -30,7 +31,7 @@ export type GenericToolCardProps = ToolCallOwnerProps & {
 }
 
 /** @param props - current tool stage and locale. @returns its preparation or dispatched card. */
-export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, useDisclosure, t }: GenericToolCardProps) {
+export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, renderImages, useDisclosure, t }: GenericToolCardProps) {
   const model = toolRowModel(toolName, block, cwd, home)
   const autoReview = model.autoReviewDenial === null
     ? null
@@ -40,6 +41,10 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
   const diff = diffCardModel(block)
   const search = searchCardModel(block)
   const web = webCardModel(block)
+  // Any tool whose settled result carries image blocks gets the gallery, not
+  // only the keyed read_image row: a screenshot or a capture shows its pixels
+  // the same way a file read does.
+  const image = imageCardModel(block)
   // A failing exit status is the terminal card's own error signal (the call
   // itself settles isError:false), surfaced through the row's error summary.
   const state = model.state === 'ok' && terminal !== null && terminalFailed(terminal)
@@ -66,6 +71,8 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
       read={read}
       search={search}
       web={web}
+      image={image}
+      renderImages={renderImages}
       state={state}
       filePath={model.filePath}
       onOpenFile={singleFile ? openFile : undefined}

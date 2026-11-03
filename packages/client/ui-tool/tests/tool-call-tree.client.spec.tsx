@@ -75,6 +75,33 @@ describe('ToolCallTree', () => {
     expect(owners.map(owner => owner.callId)).toEqual(['parent', 'child-42'])
   })
 
+  it('expands to the shared image gallery for any image-bearing tool, not only read_image', () => {
+    const block = {
+      ...root('shot', { name: 'desktop_test_instance', argsRaw: '{}' }),
+      content: [
+        { type: 'text', text: 'captured the window' },
+        { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 10, width: 4, height: 4 } },
+      ],
+    } as unknown as ToolResultNode
+    const galleries: { images: readonly unknown[] }[] = []
+    const base = props(block)
+    const renderSlot = ((
+      key: string,
+      owner: { images?: readonly unknown[] },
+      options?: { fallback?: React.ReactNode },
+    ) => {
+      if (key !== 'tool.call.images') return options?.fallback ?? null
+      galleries.push({ images: owner.images ?? [] })
+      return <div data-gallery />
+    }) as unknown as ToolTreeProps['renderSlot']
+    const view = render(<ToolCallTree {...base} renderSlot={renderSlot} />)
+    expect(view.container.querySelector('[data-gallery]')).toBeNull()
+    fireEvent.click(view.container.querySelector('[data-expandable]')!)
+    expect(view.container.querySelector('[data-gallery]')).not.toBeNull()
+    expect(galleries).toHaveLength(1)
+    expect(galleries[0]?.images).toHaveLength(1)
+  })
+
   it('dispatches preparation through the existing keyed toolview with no argument fields', () => {
     const owners: ToolCallOwnerProps[] = []
     const view = render(<ToolCallTree {...props({

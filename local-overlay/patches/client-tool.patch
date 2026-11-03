@@ -1,0 +1,757 @@
+diff --git a/packages/client/ui-tool/README.md b/packages/client/ui-tool/README.md
+index 3854a5a92a..ae42c4b901 100644
+--- a/packages/client/ui-tool/README.md
++++ b/packages/client/ui-tool/README.md
+@@ -43,7 +43,7 @@ ctx.slots.inject('tool.call.toolview', () =>
+   }, BusinessToolRow))
+ ```
+ 
+-The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the `phase` discriminant and its stage-specific `block`, optional `cwd` and `home`, the Gateway-authorized `loadImage` loader (for a view whose result carries durable images), and plain `openFile`/`inspect` callbacks. A PTC dispatch block retains its event's `parentCallId`; a root Session call has no such field, so descendants route through the same keyed dispatch — a registered view such as `read_image` renders its card there, and unregistered descendants keep the generic flattened form. Path summaries relativize to the Session cwd first, then replace a leftover POSIX Host home with `~`; `filePath` and Host open prefer the operation-time absolute result path while displayed labels keep the authored argument. Successful older root results retain their argument fallback; pending relative paths wait for a result. The registration receives the normal Session slot runtime share but no React node or Runtime service.
++The owner payload is `ToolCallOwnerProps`: `callId`, `toolName`, the `phase` discriminant and its stage-specific `block`, optional `cwd` and `home`, the Gateway-authorized `loadImage` loader, the `renderImages` renderer the call tree binds to the Tool-owned `tool.call.images` slot, and plain `openFile`/`inspect` callbacks. A PTC dispatch block retains its event's `parentCallId`; a root Session call has no such field, so descendants route through the same keyed dispatch — a registered view such as `read_image` renders its card there, and unregistered descendants keep the generic flattened form. Path summaries relativize to the Session cwd first, then replace a leftover POSIX Host home with `~`; `filePath` and Host open prefer the operation-time absolute result path while displayed labels keep the authored argument. Successful older root results retain their argument fallback; pending relative paths wait for a result. The registration receives the normal Session slot runtime share but no React node or Runtime service.
+ 
+ ### Built-in views
+ 
+@@ -79,7 +79,7 @@ Tool Definitions own the [lazy argument view](../../util/values/README.md). Rows
+ ### Cards
+ 
+ 
+-Every card is read in place in the call tree; there is no second, full-height presentation of a selected call. Row renderers share one pure card model for each terminal, read, diff, search, and web card, and the image card's gallery renders through the tool-owned `tool.call.images` slot, followed by the full recorded path and each attached image's pixel size (with the original size when downscaled) and byte count. These models validate raw call arguments, result content, failure state, persisted metadata, PTC dispatch `parentCallId`, and Session path facts. Unsupported or malformed inputs use flattened Tool result text. A file-path summary opens the file through the owner's `openFile`, which the chat view routes to the right Sidebar's text preview; `inspect` opens the trajectory view and is absent when that View is unavailable; cards then omit Inspect. Card-specific limits and fallback rules for the terminal, diff, read, search, and web cards remain in [the ui-primitives README](../ui-primitives/README.md); the image card's model in this package carries its own fallback rules.
++Every card is read in place in the call tree; there is no second, full-height presentation of a selected call. Row renderers share one pure card model for each terminal, read, diff, search, and web card, and the image card's gallery renders through the tool-owned `tool.call.images` slot, followed by the recorded path when the call named one and each attached image's pixel size (with the original size when downscaled) and byte count. The image card derives from the result content alone, so every image-bearing tool — a file read, a DevTools screenshot, a browser capture, or a tool added later — shows its pixels when the row is expanded; the Tool call tree is the single entry that declares the slot, so a keyed row and the generic fallback render the same gallery. These models validate raw call arguments, result content, failure state, persisted metadata, PTC dispatch `parentCallId`, and Session path facts. Unsupported or malformed inputs use flattened Tool result text. A file-path summary opens the file through the owner's `openFile`, which the chat view routes to the right Sidebar's text preview; `inspect` opens the trajectory view and is absent when that View is unavailable; cards then omit Inspect. Card-specific limits and fallback rules for the terminal, diff, read, search, and web cards remain in [the ui-primitives README](../ui-primitives/README.md); the image card's model in this package carries its own fallback rules.
+ 
+ Search cards treat an exact empty `include` as omitted; invalid types, whitespace-only values, negated filters, and comma-separated lists remain generic.
+ 
+diff --git a/packages/client/ui-tool/src/client/apply.ts b/packages/client/ui-tool/src/client/apply.ts
+index e6a866d1b2..4dac86ba57 100644
+--- a/packages/client/ui-tool/src/client/apply.ts
++++ b/packages/client/ui-tool/src/client/apply.ts
+@@ -37,6 +37,9 @@ export function apply(ctx: ClientContext): void {
+     locale: NS,
+     children: {
+       'tool.call.toolview': { kind: 'keyed', scope: 'session' },
++      // The tree owns the image gallery for every image-bearing call: one
++      // declarer, so a keyed row and the generic fallback render the same slot.
++      'tool.call.images': { kind: 'single', scope: 'session' },
+     },
+     inject: toolInject,
+   }, ToolCallTree))
+diff --git a/packages/client/ui-tool/src/client/contract/slots.ts b/packages/client/ui-tool/src/client/contract/slots.ts
+index 9b16052b89..8dac9b4f3c 100644
+--- a/packages/client/ui-tool/src/client/contract/slots.ts
++++ b/packages/client/ui-tool/src/client/contract/slots.ts
+@@ -1,4 +1,5 @@
+ /** Tool UI slot declarations and their composed component props. */
++import type { ReactNode } from 'react'
+ import type {
+   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, SessionIdOf,
+ } from '@deepseek-ai/dsh-client-ui-slots'
+@@ -31,20 +32,31 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
+     /**
+      * Durable images of a settled image-bearing Tool call, rendered through
+      * the attachment presentation plugin. The Tool layer never imports an
+-     * attachment implementation: a toolview declares this slot as a child and
+-     * renders it with the image card's references plus the Gateway-authorized
+-     * loader it received in its owner, and the attachment plugin fills the
+-     * gallery. Composing no attachment presentation plugin renders nothing,
+-     * which is why the image card keeps its own envelope text beside the
+-     * gallery. A child slot is declared by exactly one entry: registering a
+-     * second toolview that declares the same child throws at load, so a
+-     * future image-bearing tool must reuse this entry or own a distinct
+-     * slot.
++     * attachment implementation: the Tool call tree declares this slot as its
++     * child, renders it with the image card's references plus the
++     * Gateway-authorized loader, and the attachment plugin fills the gallery.
++     * Composing no attachment presentation plugin renders nothing, which is why
++     * the image card keeps its own text beside the gallery.
++     *
++     * The tree is the single declarer, so every image-bearing tool — a file
++     * read, a screenshot, a browser capture, and any tool added later — shows
++     * its pixels through the same gallery when the row is expanded, and every
++     * atomic view receives the renderer in its owner payload.
+      */
+     'tool.call.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
+   }
+ }
+ 
++/**
++ * Render one call's durable images through the Tool image slot.
++ *
++ * Supplied in every atomic view's owner payload by the Tool call tree, the single
++ * entry that declares the slot; a row decides only where the gallery sits.
++ * @param images - the result's durable references, in result order.
++ * @returns the rendered gallery, or nothing when no attachment presentation plugin composes.
++ */
++export type ToolImagesRenderer = (images: readonly MessageImageSource[]) => ReactNode
++
+ /** Owner currency of the Tool image gallery slot: references plus the loader. */
+ export interface ToolImagesOwnerProps {
+   /** Durable references or submission-echo previews in result order. */
+@@ -71,6 +83,12 @@ export interface ToolCallCommonProps {
+   openFile: (path: string, options?: OpenFileOptions) => void
+   /** Chat-supplied, Gateway-authorized loader for durable images; Tool views do not manage attachment URLs. */
+   loadImage: MessageImageLoader
++  /**
++   * Render this call's result images through the Tool image slot. The tree binds
++   * the Gateway-authorized loader, so a row supplies only the references it drew
++   * from the image card model.
++   */
++  renderImages?: ToolImagesRenderer | undefined
+   /** Inspect this call in the trajectory view when available. */
+   inspect?: (() => void) | undefined
+ }
+@@ -152,6 +170,6 @@ export type ToolHostInfoInjected = {
+ 
+ /** Full props of the Tool call-tree renderer registered as a tool-call Chat Node. */
+ export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
+-  & PropsRenderSlots<'tool.call.toolview'>
++  & PropsRenderSlots<'tool.call.toolview' | 'tool.call.images'>
+   & PropsLocale<'conversation'>
+   & InjectFace<ToolHostInfoInjected>
+diff --git a/packages/client/ui-tool/src/client/tool/ToolCallTree.tsx b/packages/client/ui-tool/src/client/tool/ToolCallTree.tsx
+index d6419aa205..f9db8d7d97 100644
+--- a/packages/client/ui-tool/src/client/tool/ToolCallTree.tsx
++++ b/packages/client/ui-tool/src/client/tool/ToolCallTree.tsx
+@@ -1,7 +1,7 @@
+ /** Root/subcall Tool composition with one keyed atomic dispatch path. */
+ import { memo, useMemo, type ReactNode } from 'react'
+ import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
+-import type { ToolCallOwnerProps, ToolCallPhaseProps, ToolTreeProps } from '../contract/slots.ts'
++import type { ToolCallOwnerProps, ToolCallPhaseProps, ToolImagesRenderer, ToolTreeProps } from '../contract/slots.ts'
+ import { toolRowModel } from './models/tool-call-model.ts'
+ import { GenericToolCard } from './toolviews/GenericToolCard.tsx'
+ import css from './ToolCallTree.module.css'
+@@ -26,6 +26,14 @@ const ToolCall = memo(function ToolCall({
+   home?: string | undefined
+   children?: ReactNode
+ }) {
++  const renderImages: ToolImagesRenderer = useMemo(
++    () => (images: Parameters<ToolImagesRenderer>[0]) => renderSlot('tool.call.images', {
++      images,
++      loadImage,
++      align: 'start',
++    }),
++    [renderSlot, loadImage],
++  )
+   const owner: ToolCallOwnerProps = useMemo(() => ({
+     callId,
+     toolName,
+@@ -34,9 +42,10 @@ const ToolCall = memo(function ToolCall({
+     cwd,
+     home,
+     loadImage,
++    renderImages,
+     useDisclosure,
+     inspect: inspectCall === undefined ? undefined : () => { inspectCall(callId) },
+-  }), [callId, toolName, call, openFile, cwd, home, loadImage, inspectCall, useDisclosure])
++  }), [callId, toolName, call, openFile, cwd, home, loadImage, renderImages, inspectCall, useDisclosure])
+   const autoReviewDenied = useMemo(
+     () => call.phase === 'result' && toolRowModel(toolName, call.block).autoReviewDenial !== null,
+     [toolName, call],
+diff --git a/packages/client/ui-tool/src/client/tool/components/ToolRow.tsx b/packages/client/ui-tool/src/client/tool/components/ToolRow.tsx
+index fb1a92af5f..447e8df068 100644
+--- a/packages/client/ui-tool/src/client/tool/components/ToolRow.tsx
++++ b/packages/client/ui-tool/src/client/tool/components/ToolRow.tsx
+@@ -5,12 +5,12 @@ import {
+   TerminalBlock, TextShimmer, WebBlock,
+   diffTotals,
+ } from '@deepseek-ai/dsh-client-ui-primitives'
+-import type { PropsRenderSlots, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
++import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+ import type { OpenFileOptions, UseDisclosure } from '@deepseek-ai/dsh-client-ui-chat/client'
+-import type { MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client'
+ import { CHAT_DIFF_MAX_LINES, type DiffCardModel } from '../models/diff-card-model.ts'
+ import { CHAT_READ_MAX_LINES, type ReadCardModel } from '../models/read-card-model.ts'
+ import type { ImageCardModel } from '../models/image-card-model.ts'
++import type { ToolImagesRenderer } from '../../contract/slots.ts'
+ import { CHAT_SEARCH_MAX_LINES, type SearchCardModel } from '../models/search-card-model.ts'
+ import {
+   localizeTerminalCardModel, terminalBlockLabels, terminalExitLabel, type TerminalCardModel,
+@@ -69,13 +69,11 @@ export interface ToolRowProps {
+    */
+   image?: ImageCardModel | null | undefined
+   /**
+-   * Dispatch the image gallery through the tool-owned `tool.call.images`
+-   * slot, supplied by the toolview that owns this row together with the
+-   * Gateway-authorized loader.
++   * Render the gallery through the tool-owned `tool.call.images` slot. The Tool
++   * call tree binds the slot and the Gateway-authorized loader, so a row passes
++   * the references the image card model derived and nothing else.
+    */
+-  renderSlot?: PropsRenderSlots<'tool.call.images'>['renderSlot'] | undefined
+-  /** Gateway-authorized image URL loader for the gallery slot. */
+-  loadImage?: MessageImageLoader | undefined
++  renderImages?: ToolImagesRenderer | undefined
+   search?: SearchCardModel | null | undefined
+   web?: WebCardModelProps | null | undefined
+   /** Read-only fields/list card derived from a successful recorded result. */
+@@ -137,8 +135,7 @@ export const ToolRow = memo(function ToolRow({
+   diff,
+   read,
+   image,
+-  renderSlot,
+-  loadImage,
++  renderImages,
+   search,
+   web,
+   details,
+@@ -161,7 +158,7 @@ export const ToolRow = memo(function ToolRow({
+     : localizeTerminalCardModel(terminal, t), [terminal, t])
+   const diffBody = diff ?? null
+   const readBody = read ?? null
+-  const imageBody = image !== undefined && image !== null && renderSlot !== undefined && loadImage !== undefined
++  const imageBody = image !== undefined && image !== null && renderImages !== undefined
+     ? image
+     : null
+   const searchBody = search ?? null
+@@ -279,13 +276,9 @@ export const ToolRow = memo(function ToolRow({
+                      flattened output, which JSON.stringifies the image block. They
+                      stay visible when the attachment slot renders nothing. */
+                   <div className={css.imageBody}>
+-                    {renderSlot !== undefined && loadImage !== undefined && renderSlot('tool.call.images', {
+-                      images: imageBody.images,
+-                      loadImage,
+-                      align: 'start',
+-                    })}
++                    {renderImages?.(imageBody.images)}
+                     <div className={css.imageMeta}>
+-                      <div>{imageBody.path}</div>
++                      {imageBody.path === undefined ? null : <div>{imageBody.path}</div>}
+                       {imageBody.images.map(({ attachment }, index) => (
+                         <div key={index}>
+                           {attachment.originalDimensions === undefined
+@@ -367,7 +360,7 @@ export const ToolRow = memo(function ToolRow({
+     </div>
+   ) : undefined, [
+     open, detailsBody, askQuestionBody, terminalBody, terminalLabels, diffBody, diffLabels, readBody, readLabels,
+-    imageBody, renderSlot, loadImage, searchBody, searchLabels, webBody, webLabels, inspect, t, onOpenFile,
++    imageBody, renderImages, searchBody, searchLabels, webBody, webLabels, inspect, t, onOpenFile,
+     variant, bodyText, cardBody, outputText, state,
+   ])
+   return (
+diff --git a/packages/client/ui-tool/src/client/tool/models/image-card-model.ts b/packages/client/ui-tool/src/client/tool/models/image-card-model.ts
+index f4bd7e660b..1f6c7928a0 100644
+--- a/packages/client/ui-tool/src/client/tool/models/image-card-model.ts
++++ b/packages/client/ui-tool/src/client/tool/models/image-card-model.ts
+@@ -4,16 +4,26 @@ import type { ToolCallBlock } from './tool-call-model.ts'
+ import { parsedToolCall } from './raw-tool-call.ts'
+ 
+ /**
+- * The image-card material one settled call contributes: the read path plus the
+- * durable references the attachment slot renders as a gallery.
++ * The image-card material one settled call contributes: the durable references
++ * the attachment slot renders as a gallery, plus the path a read named when the
++ * call has one.
++ *
++ * Every image-bearing tool contributes this card, not only `read_image`: a
++ * screenshot, a browser capture, and a file read all settle with image blocks,
++ * and each must show its pixels when the row is expanded. A call with no image
++ * blocks in its result contributes nothing and keeps the generic body.
+  *
+  * The bytes are not here. `attachmentId` is opaque and provider-owned, so a UI
+  * resolves it to a Gateway-authorized URL at render time; this model never parses
+  * it nor derives a path from it.
+  */
+ export interface ImageCardModel {
+-  /** The resolved path as recorded, unshortened; the row summary already shows the short form. */
+-  path: string
++  /**
++   * The resolved path as recorded, unshortened, when the call named a file; the
++   * row summary already shows its short form. Absent for a call that returns an
++   * image without addressing a path, such as a screenshot.
++   */
++  path?: string
+   /** The durable images this result returned, in result order. */
+   images: readonly { readonly attachment: ImageAttachmentRef }[]
+   /**
+@@ -180,14 +190,18 @@ function fullyRendered(content: readonly unknown[]): boolean {
+ }
+ 
+ /**
+- * Derive a settled image card after validating the call head, persisted
+- * metadata (or its argument fallback), and the model-facing image envelope.
++ * Derive a settled image card from the result's own content, whatever tool
++ * produced it.
+  *
+  * The card is result-side only: a call carries no content until `execute`
+- * returns, so a running `read_image` has none and this returns null for it.
+- * Both root and nested calls settle as ToolResultNode. Historical nested
+- * records without presentation metadata fall back to the call's own
+- * `file_path` argument for the path.
++ * returns, so a running call has none and this returns null for it. Every
++ * settled call qualifies on its content alone — one or more well-formed image
++ * blocks and nothing the card would hide — so a new image-bearing tool needs no
++ * change here.
++ *
++ * A `read_image` keeps the extra path line: its persisted metadata carries the
++ * resolved path, and a nested call without metadata falls back to the call's own
++ * `file_path` argument. Any other tool shows the gallery without a path.
+  * @param block - running or settled Tool block.
+  * @returns the image-card props, or null for the generic path.
+  */
+@@ -195,17 +209,6 @@ export function imageCardModel(block: ToolCallBlock): ImageCardModel | null {
+   // Result-side only: a running call is not a ToolResultNode and carries no
+   // content, so it has no card here.
+   if (!('kind' in block) || block.isError) return null
+-  const call = parsedToolCall(block)
+-  if (call?.name !== 'read_image') return null
+-  const { file_path: filePath } = call.args
+-  if (typeof filePath !== 'string' || filePath.trim() === '') return null
+-  // Historical nested records without metadata use the authored file_path
+-  // for the path. A root call with missing or malformed meta
+-  // declines — malformed tool data falls back to the generic card, which shows
+-  // the flattened content rather than an author-typed path.
+-  const metaPath = imageMeta(block.meta)?.path
+-  const path = metaPath ?? (block.parentCallId !== undefined ? filePath : null)
+-  if (path === null) return null
+   // The card renders only text and image blocks; a block of any other type must
+   // not be silently hidden, so the whole card declines to the generic form.
+   if (!fullyRendered(block.content)) return null
+@@ -213,11 +216,39 @@ export function imageCardModel(block: ToolCallBlock): ImageCardModel | null {
+   // truth; `meta` contributes only the path, which the content does not carry.
+   const refs = imageReferences(block.content)
+   if (refs === null) return null
+-  // A result without the envelope is not a well-formed image read.
+-  if (!block.content.some(part => part.type === 'text' && typeof part.text === 'string' && IMAGE_ENVELOPE.test(part.text))) return null
++  const path = imageCardPath(block.meta, block.parentCallId, parsedToolCall(block))
++  // A malformed read_image declines the whole card rather than showing a
++  // gallery under an author-typed path the tool never recorded.
++  if (path === null) return null
+   return {
+-    path,
++    ...path === undefined ? {} : { path },
+     images: refs.map(ref => ({ attachment: ref })),
+     extraText: extraTexts(block.content),
+   }
+ }
++
++/**
++ * The path line a card shows, when the call addressed a file.
++ *
++ * Only `read_image` names one: its metadata carries the resolved display path,
++ * and a nested record without metadata falls back to the call's own `file_path`
++ * argument. A read_image with neither is malformed and declines the whole card;
++ * every other tool returns undefined and shows the gallery alone.
++ * @param meta - persisted presentation metadata of unknown shape.
++ * @param parentCallId - the parent call id of a nested call, absent for a root call.
++ * @param call - the parsed call, when its arguments are readable.
++ * @returns the path, undefined when the card shows none, or null to decline.
++ */
++function imageCardPath(
++  meta: unknown,
++  parentCallId: string | undefined,
++  call: ReturnType<typeof parsedToolCall>,
++): string | undefined | null {
++  const metaPath = imageMeta(meta)?.path
++  // A tool that is not a file read shows whatever path it recorded, if any.
++  if (call?.name !== 'read_image') return metaPath
++  const named = call.args.file_path
++  const authored = typeof named === 'string' && named.trim() !== '' ? named : undefined
++  if (authored === undefined) return null
++  return metaPath ?? (parentCallId !== undefined ? authored : null)
++}
+diff --git a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+index 0eb6c1334e..f308f82de8 100644
+--- a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
++++ b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
+@@ -60,6 +60,8 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
+   write: 'write',
+   edit: 'edit',
+   run_code: 'code',
++  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
++  kernel: 'code',
+   cordis_package_inspect: 'read',
+   cordis_runtime_inspect: 'read',
+   // The three run-control verbs take one package id and produce a receipt, so
+@@ -73,6 +75,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
+ 
+ /** Tool-owned titles that refine a generic row variant without replacing it. */
+ const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
++  kernel: 'tool.title.kernel',
+   cordis_package_inspect: 'tool.title.inspect',
+   cordis_runtime_inspect: 'tool.title.inspect',
+   cordis_run: 'tool.title.runCordis',
+diff --git a/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx b/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
+index bc0faacb13..371e7b3809 100644
+--- a/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
++++ b/packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx
+@@ -10,6 +10,7 @@ import { searchCardModel } from '../models/search-card-model.ts'
+ import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
+ import { webCardModel } from '../models/web-card-model.ts'
+ import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
++import { imageCardModel } from '../models/image-card-model.ts'
+ import { localizeAutoReviewDenial } from '../models/auto-review-denial.ts'
+ import { ToolRow } from '../components/ToolRow.tsx'
+ 
+@@ -30,7 +31,7 @@ export type GenericToolCardProps = ToolCallOwnerProps & {
+ }
+ 
+ /** @param props - current tool stage and locale. @returns its preparation or dispatched card. */
+-export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, useDisclosure, t }: GenericToolCardProps) {
++export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect, renderImages, useDisclosure, t }: GenericToolCardProps) {
+   const model = toolRowModel(toolName, block, cwd, home)
+   const autoReview = model.autoReviewDenial === null
+     ? null
+@@ -40,6 +41,10 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
+   const diff = diffCardModel(block)
+   const search = searchCardModel(block)
+   const web = webCardModel(block)
++  // Any tool whose settled result carries image blocks gets the gallery, not
++  // only the keyed read_image row: a screenshot or a capture shows its pixels
++  // the same way a file read does.
++  const image = imageCardModel(block)
+   // A failing exit status is the terminal card's own error signal (the call
+   // itself settles isError:false), surfaced through the row's error summary.
+   const state = model.state === 'ok' && terminal !== null && terminalFailed(terminal)
+@@ -66,6 +71,8 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
+       read={read}
+       search={search}
+       web={web}
++      image={image}
++      renderImages={renderImages}
+       state={state}
+       filePath={model.filePath}
+       onOpenFile={singleFile ? openFile : undefined}
+diff --git a/packages/client/ui-tool/src/client/tool/toolviews/read-family-row.tsx b/packages/client/ui-tool/src/client/tool/toolviews/read-family-row.tsx
+index bd1ca438bd..ebc2546a38 100644
+--- a/packages/client/ui-tool/src/client/tool/toolviews/read-family-row.tsx
++++ b/packages/client/ui-tool/src/client/tool/toolviews/read-family-row.tsx
+@@ -8,7 +8,6 @@
+ 
+ import type { ReactNode } from 'react'
+ import { IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+ import type { ToolCallViewProps } from '../../contract/slots.ts'
+ import { toolRowModel } from '../models/tool-call-model.ts'
+ import { ToolRow, type ToolRowProps } from '../components/ToolRow.tsx'
+@@ -16,16 +15,16 @@ import { ToolRow, type ToolRowProps } from '../components/ToolRow.tsx'
+ /** Full row props of a read-family toolview: the runtime share plus its locale seat. */
+ export type ReadFamilyRowProps = ToolCallViewProps & { t: ToolRowProps['t'] }
+ 
+-/** read_image row props: the runtime share, the declared image child slot, and the locale seat. */
+-export type ReadImageRowProps = ReadFamilyRowProps & PropsRenderSlots<'tool.call.images'>
++/** read_image row props: the runtime share and the locale seat; the image renderer rides the runtime share. */
++export type ReadImageRowProps = ReadFamilyRowProps
+ 
+ /**
+  * The card material one read-family row contributes: exactly the ToolRow card
+  * props that row owns. `read` supplies `read` and the line its call named;
+- * `read_image` supplies `image` together with the slot dispatcher and loader
+- * that draw it.
++ * `read_image` supplies `image` together with the renderer the Tool call tree
++ * passed in the owner payload.
+  */
+-export type ReadFamilyCard = Pick<ToolRowProps, 'read' | 'image' | 'renderSlot' | 'loadImage' | 'filePathLine'>
++export type ReadFamilyCard = Pick<ToolRowProps, 'read' | 'image' | 'renderImages' | 'filePathLine'>
+ 
+ /**
+  * Compose a read-family row: the shared chrome and model-derived fields, plus the
+diff --git a/packages/client/ui-tool/src/client/tool/toolviews/read-image-row.tsx b/packages/client/ui-tool/src/client/tool/toolviews/read-image-row.tsx
+index 14a41fb714..f903088157 100644
+--- a/packages/client/ui-tool/src/client/tool/toolviews/read-image-row.tsx
++++ b/packages/client/ui-tool/src/client/tool/toolviews/read-image-row.tsx
+@@ -2,9 +2,10 @@
+ // tool. The row composes the shared read-family assembly and feeds it the durable
+ // image reference as ToolRow's `image` card material, so the image renders through
+ // the Tool-owned `tool.call.images` slot inside the collapsed-by-default expanded
+-// body — the same unified interaction every other card row has. The attachment
+-// presentation plugin fills that slot; the tool layer only ever supplies the
+-// references and the Gateway-authorized loader it received from the chat node.
++// body — the same unified interaction every other card row has. The Tool call tree
++// declares that slot once for every image-bearing call and hands each row the
++// renderer, so this row, the generic row, and any future image tool share one
++// gallery; the tool layer only ever supplies the references.
+ //
+ // Claiming the `read_image` key suppresses the generic fallback for EVERY
+ // read_image result, so this component must cover all of the tool's shapes, not
+@@ -28,19 +29,17 @@ import { CONVERSATION_NS as NS } from '../../locale.ts'
+  * slot this entry declares.
+  */
+ export function ReadImageRow(props: ReadImageRowProps) {
+-  const { block, renderSlot, loadImage } = props
++  const { block, renderImages } = props
+   return readFamilyRow(props, {
+     image: imageCardModel(block),
+-    renderSlot,
+-    loadImage,
++    renderImages,
+   })
+ }
+ 
+ /**
+  * The read_image row as a plain registrant plugin following the atomic Tool-view
+- * declaration across independent activation and reload lifetimes. Declaring
+- * `tool.call.images` as a child slot authorizes this entry's `renderSlot` to
+- * dispatch the gallery.
++ * declaration across independent activation and reload lifetimes. The image slot
++ * belongs to the Tool call tree, so this entry declares no child of its own.
+  */
+ export const readImageToolview = {
+   name: 'read-image-toolview',
+@@ -55,7 +54,6 @@ export const readImageToolview = {
+         name: 'tool.call.toolview',
+         key: 'read_image',
+         locale: NS,
+-        children: { 'tool.call.images': { kind: 'single', scope: 'session' } },
+       }, ReadImageRow))
+   },
+ }
+diff --git a/packages/client/ui-tool/tests/image-card.client.spec.tsx b/packages/client/ui-tool/tests/image-card.client.spec.tsx
+index 5343cfed91..33a169af6b 100644
+--- a/packages/client/ui-tool/tests/image-card.client.spec.tsx
++++ b/packages/client/ui-tool/tests/image-card.client.spec.tsx
+@@ -21,12 +21,11 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
+ import type { StartedToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+ import type { SessionId } from '@deepseek-ai/dsh-session/types'
+-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+ import type { MessageImageLoader } from '@deepseek-ai/dsh-client-ui-conversation/client'
+ import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
+ import { PartialArguments } from '@deepseek-ai/dsh-util-values'
+ import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+-import type { ToolImagesOwnerProps, ToolTreeProps } from '../src/client/contract/slots.ts'
++import type { ToolImagesRenderer, ToolTreeProps } from '../src/client/contract/slots.ts'
+ import { imageCardModel } from '../src/client/tool/models/image-card-model.ts'
+ import { ReadImageRow, readImageToolview } from '../src/client/tool/toolviews/read-image-row.tsx'
+ 
+@@ -88,15 +87,15 @@ const settled = (over?: Partial<ToolResultNode>): ToolResultNode => {
+ }
+ 
+ /**
+- * A renderSlot stub standing in for the attachment presentation plugin's
+- * `tool.call.images` gallery. The owner is the real `ToolImagesOwnerProps` —
+- * `MessageImageSource` is a union of a durable attachment arm and a
+- * submission-echo preview arm, so the stub renders both.
++ * A renderer stub standing in for the attachment presentation plugin's gallery.
++ * The owner hands over the card's references — `MessageImageSource` is a union
++ * of a durable attachment arm and a submission-echo preview arm, so the stub
++ * renders both.
+  */
+-const stubRenderSlot = (): PropsRenderSlots<'tool.call.images'>['renderSlot'] => (
+-  vi.fn((_key: 'tool.call.images', owner: ToolImagesOwnerProps) => (
++const stubRenderImages = (): ToolImagesRenderer => (
++  vi.fn((images: Parameters<ToolImagesRenderer>[0]) => (
+     <div data-images>
+-      {owner.images.map((image, index) => (
++      {images.map((image, index) => (
+         'attachment' in image ? (
+           <span key={image.attachment.attachmentId} data-image-id={image.attachment.attachmentId} />
+         ) : (
+@@ -104,7 +103,7 @@ const stubRenderSlot = (): PropsRenderSlots<'tool.call.images'>['renderSlot'] =>
+         )
+       ))}
+     </div>
+-  )) as unknown as PropsRenderSlots<'tool.call.images'>['renderSlot']
++  )) as unknown as ToolImagesRenderer
+ )
+ 
+ /** Authenticated loader stand-in; the stub gallery never resolves it. */
+@@ -258,8 +257,16 @@ describe('imageCardModel', () => {
+     expect(withMeta?.path).toBe('shots/persisted.png')
+   })
+ 
+-  it('declines a call head that is not read_image', () => {
+-    expect(imageCardModel(settled({ call: { name: 'read', argsRaw: ARGS } }))).toBeNull()
++  it('cards any tool whose result carries images, and shows a path only when one was recorded', () => {
++    // Every image-bearing tool shows its pixels: a screenshot returns an image
++    // without addressing a file, so its card carries no path line.
++    const screenshot = imageCardModel(settled({
++      call: { name: 'desktop_test_instance', argsRaw: ARGS },
++      // A screenshot persists no presentation path; only a file read records one.
++      meta: undefined,
++    }))
++    expect(screenshot).toEqual({ images: [{ attachment: sampleImage }], extraText: null })
++    // read_image with neither recorded metadata nor a usable argument is malformed.
+     expect(imageCardModel(settled({ call: { name: 'read_image', argsRaw: '{"file_path":"  "}' } }))).toBeNull()
+   })
+ })
+@@ -276,10 +283,10 @@ describe('ReadImageRow keyed toolview', () => {
+ 
+   const rowProps = (
+     block: StartedToolCall | ToolResultNode,
+-    renderSlot?: PropsRenderSlots<'tool.call.images'>['renderSlot'],
++    renderImages?: ToolImagesRenderer,
+     loader: MessageImageLoader = loadImage,
+   ): Parameters<typeof ReadImageRow>[0] => ({
+-    useDisclosure, callId: 'c1', toolName: 'read_image', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), renderSlot, loadImage: loader,
++    useDisclosure, callId: 'c1', toolName: 'read_image', ...('kind' in block ? { phase: 'result' as const, block: block } : { phase: block.phase, block: block }), openFile: vi.fn(), renderImages, loadImage: loader,
+     sessionId: SID, useSessions: bindSnapshotSelector(list()),
+     t,
+   } as Parameters<typeof ReadImageRow>[0])
+@@ -293,7 +300,7 @@ describe('ReadImageRow keyed toolview', () => {
+     // (FILE_PATH_VARIANTS covers only read/write/edit), so the openable path the
+     // row advertises would never be openable.
+     const openFile = vi.fn()
+-    const view = render(<ReadImageRow {...rowProps(settled(), stubRenderSlot())} openFile={openFile} />)
++    const view = render(<ReadImageRow {...rowProps(settled(), stubRenderImages())} openFile={openFile} />)
+     expect(view.container.querySelector('[data-variant]')?.getAttribute('data-variant')).toBe('read')
+     const link = view.container.querySelector('button[class*="fileLink"]')
+     expect(link).not.toBeNull()
+@@ -302,23 +309,19 @@ describe('ReadImageRow keyed toolview', () => {
+   })
+ 
+   it('expands to the image, dispatched through the tool-owned image slot', () => {
+-    const renderSlot = stubRenderSlot()
+-    const view = render(<ReadImageRow {...rowProps(settled(), renderSlot)} />)
++    const renderImages = stubRenderImages()
++    const view = render(<ReadImageRow {...rowProps(settled(), renderImages)} />)
+     expect(view.container.querySelector('[data-images]')).toBeNull()
+     toggleRow(view)
+     expect(view.container.querySelector('[data-images]')).not.toBeNull()
+-    expect(renderSlot).toHaveBeenLastCalledWith('tool.call.images', {
+-      images: [{ attachment: sampleImage }],
+-      loadImage,
+-      align: 'start',
+-    })
++    expect(renderImages).toHaveBeenLastCalledWith([{ attachment: sampleImage }])
+     expect(view.container.querySelector(`[data-image-id="${sampleImage.attachmentId}"]`)).not.toBeNull()
+   })
+ 
+   it('never prints the raw attachment object under the picture', () => {
+     // The row's flattened output JSON.stringifies the image block the real content
+     // carries, so the card takes its text from the derived envelope instead.
+-    const view = render(<ReadImageRow {...rowProps(settled(), stubRenderSlot())} />)
++    const view = render(<ReadImageRow {...rowProps(settled(), stubRenderImages())} />)
+     toggleRow(view)
+     const text = view.container.textContent ?? ''
+     expect(text).not.toContain('"attachmentId"')
+@@ -328,7 +331,7 @@ describe('ReadImageRow keyed toolview', () => {
+   })
+ 
+   it('shows the full path once, then the image size, under the picture', () => {
+-    const view = render(<ReadImageRow {...rowProps(settled({ meta: imageMeta({ path: '/w/app/shots/card.png' }) }), stubRenderSlot())} />)
++    const view = render(<ReadImageRow {...rowProps(settled({ meta: imageMeta({ path: '/w/app/shots/card.png' }) }), stubRenderImages())} />)
+     toggleRow(view)
+     const lines = [...view.container.querySelectorAll('[class*="imageMeta"] > div')].map(line => line.textContent)
+     expect(lines).toEqual(['/w/app/shots/card.png', '1496x260px，24588 字节'])
+@@ -336,7 +339,7 @@ describe('ReadImageRow keyed toolview', () => {
+ 
+   it('names the original size of a downscaled image', () => {
+     const downscaled = { ...sampleImage, originalDimensions: { width: 2992, height: 520 } }
+-    const view = render(<ReadImageRow {...rowProps(settled({ content: withImage(downscaled) } as never), stubRenderSlot())} />)
++    const view = render(<ReadImageRow {...rowProps(settled({ content: withImage(downscaled) } as never), stubRenderImages())} />)
+     toggleRow(view)
+     expect(view.container.textContent).toContain('1496x260px（由 2992x520px 缩小），24588 字节')
+   })
+@@ -344,50 +347,50 @@ describe('ReadImageRow keyed toolview', () => {
+   it('keeps appended non-envelope text under the picture', () => {
+     const view = render(<ReadImageRow {...rowProps(settled({
+       content: [...settled().content, { type: 'text', text: 'analysis: empty card' }],
+-    } as never), stubRenderSlot())} />)
++    } as never), stubRenderImages())} />)
+     toggleRow(view)
+     expect(view.container.textContent).toContain('analysis: empty card')
+   })
+ 
+-  it('keeps the result text readable when the attachment slot renders nothing', () => {
+-    // The attachment slot renders nothing in a deployment without the attachment
++  it('keeps the result text readable when the gallery renders nothing', () => {
++    // The slot renders nothing in a deployment without the attachment
+     // presentation plugin. That must not leave a blank card.
+-    const emptySlot = vi.fn(() => null)
+-    const view = render(<ReadImageRow {...rowProps(settled(), emptySlot as never)} />)
++    const emptyRenderer = vi.fn(() => null) as unknown as ToolImagesRenderer
++    const view = render(<ReadImageRow {...rowProps(settled(), emptyRenderer)} />)
+     toggleRow(view)
+-    expect(emptySlot).toHaveBeenCalled()
++    expect(emptyRenderer).toHaveBeenCalled()
+     expect(view.container.querySelector('[data-images]')).toBeNull()
+     expect(view.container.textContent).toContain('1496x260px，24588 字节')
+   })
+ 
+-  it('degrades to the text body when neither the slot nor the loader is supplied', () => {
++  it('degrades to the text body when no image renderer is supplied', () => {
+     const view = render(<ReadImageRow {...rowProps(settled(), undefined)} />)
+     toggleRow(view)
+     expect(view.container.querySelector('[data-images]')).toBeNull()
+   })
+ 
+   it('a running call renders the summary row alone', () => {
+-    const renderSlot = stubRenderSlot()
+-    const view = render(<ReadImageRow {...rowProps(running(), renderSlot)} />)
++    const renderImages = stubRenderImages()
++    const view = render(<ReadImageRow {...rowProps(running(), renderImages)} />)
+     expect(view.container.querySelector('[data-images]')).toBeNull()
+-    expect(renderSlot).not.toHaveBeenCalled()
++    expect(renderImages).not.toHaveBeenCalled()
+   })
+ 
+   it('a refusal renders its error without an image card', () => {
+     // read_image refuses a text-only route, a missing attachment service, and an
+     // unreadable file. Claiming the key means this row owns those shapes too.
+-    const renderSlot = stubRenderSlot()
++    const renderImages = stubRenderImages()
+     const view = render(<ReadImageRow {...rowProps(settled({
+       isError: true,
+       meta: undefined,
+       content: [{ type: 'text', text: 'Error: model "x" does not declare image input' }],
+-    } as never), renderSlot)} />)
++    } as never), renderImages)} />)
+     expect(view.container.querySelector('[data-images]')).toBeNull()
+-    expect(renderSlot).not.toHaveBeenCalled()
++    expect(renderImages).not.toHaveBeenCalled()
+     expect(view.container.textContent).toContain('does not declare image input')
+   })
+ 
+-  it('registers under the read_image key of the keyed toolview slot, declaring the image slot', () => {
++  it('registers under the read_image key of the keyed toolview slot, declaring no child slot', () => {
+     const registered: { name: unknown; key?: unknown; children?: unknown }[] = []
+     const ctx = { slots: {
+       inject: (_name: string, callback: () => () => void) => callback(),
+@@ -401,7 +404,6 @@ describe('ReadImageRow keyed toolview', () => {
+       name: 'tool.call.toolview',
+       key: 'read_image',
+       locale: 'conversation',
+-      children: { 'tool.call.images': { kind: 'single', scope: 'session' } },
+     }])
+     expect(readImageToolview.inject).toEqual(['slots'])
+   })
+diff --git a/packages/client/ui-tool/tests/preparing-rows.client.spec.tsx b/packages/client/ui-tool/tests/preparing-rows.client.spec.tsx
+index fe1086dcfe..0693504a2a 100644
+--- a/packages/client/ui-tool/tests/preparing-rows.client.spec.tsx
++++ b/packages/client/ui-tool/tests/preparing-rows.client.spec.tsx
+@@ -29,7 +29,7 @@ function preparation(name: string, args = new PartialArguments()): Extract<Props
+     phase: 'preparing', callId: 'call', toolName: name,
+     block: { phase: 'preparing', args, callId: 'call', name, turn: 1, step: 1, time: 1, subCalls: [] },
+     cwd: '/workspace', t: makeTranslate(en, common), useDisclosure, openFile: vi.fn(), loadImage: vi.fn(),
+-    useTodoHistory: vi.fn(), useSession: vi.fn(() => false), renderSlot: vi.fn(() => null),
++    useTodoHistory: vi.fn(), useSession: vi.fn(() => false), renderImages: vi.fn(() => null),
+     useProjection: vi.fn(() => undefined), revealPanel: vi.fn(() => false), reviewPanel: vi.fn(() => false),
+   } as Extract<Props, { phase: 'preparing' }>
+ }
+diff --git a/packages/client/ui-tool/tests/tool-call-tree.client.spec.tsx b/packages/client/ui-tool/tests/tool-call-tree.client.spec.tsx
+index ba95f97801..9bc14074ca 100644
+--- a/packages/client/ui-tool/tests/tool-call-tree.client.spec.tsx
++++ b/packages/client/ui-tool/tests/tool-call-tree.client.spec.tsx
+@@ -75,6 +75,33 @@ describe('ToolCallTree', () => {
+     expect(owners.map(owner => owner.callId)).toEqual(['parent', 'child-42'])
+   })
+ 
++  it('expands to the shared image gallery for any image-bearing tool, not only read_image', () => {
++    const block = {
++      ...root('shot', { name: 'desktop_test_instance', argsRaw: '{}' }),
++      content: [
++        { type: 'text', text: 'captured the window' },
++        { type: 'image', attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 10, width: 4, height: 4 } },
++      ],
++    } as unknown as ToolResultNode
++    const galleries: { images: readonly unknown[] }[] = []
++    const base = props(block)
++    const renderSlot = ((
++      key: string,
++      owner: { images?: readonly unknown[] },
++      options?: { fallback?: React.ReactNode },
++    ) => {
++      if (key !== 'tool.call.images') return options?.fallback ?? null
++      galleries.push({ images: owner.images ?? [] })
++      return <div data-gallery />
++    }) as unknown as ToolTreeProps['renderSlot']
++    const view = render(<ToolCallTree {...base} renderSlot={renderSlot} />)
++    expect(view.container.querySelector('[data-gallery]')).toBeNull()
++    fireEvent.click(view.container.querySelector('[data-expandable]')!)
++    expect(view.container.querySelector('[data-gallery]')).not.toBeNull()
++    expect(galleries).toHaveLength(1)
++    expect(galleries[0]?.images).toHaveLength(1)
++  })
++
+   it('dispatches preparation through the existing keyed toolview with no argument fields', () => {
+     const owners: ToolCallOwnerProps[] = []
+     const view = render(<ToolCallTree {...props({

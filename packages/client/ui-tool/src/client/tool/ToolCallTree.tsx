@@ -1,7 +1,7 @@
 /** Root/subcall Tool composition with one keyed atomic dispatch path. */
 import { memo, useMemo, type ReactNode } from 'react'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { ToolCallOwnerProps, ToolCallPhaseProps, ToolTreeProps } from '../contract/slots.ts'
+import type { ToolCallOwnerProps, ToolCallPhaseProps, ToolImagesRenderer, ToolTreeProps } from '../contract/slots.ts'
 import { toolRowModel } from './models/tool-call-model.ts'
 import { GenericToolCard } from './toolviews/GenericToolCard.tsx'
 import css from './ToolCallTree.module.css'
@@ -26,6 +26,14 @@ const ToolCall = memo(function ToolCall({
   home?: string | undefined
   children?: ReactNode
 }) {
+  const renderImages: ToolImagesRenderer = useMemo(
+    () => (images: Parameters<ToolImagesRenderer>[0]) => renderSlot('tool.call.images', {
+      images,
+      loadImage,
+      align: 'start',
+    }),
+    [renderSlot, loadImage],
+  )
   const owner: ToolCallOwnerProps = useMemo(() => ({
     callId,
     toolName,
@@ -34,9 +42,10 @@ const ToolCall = memo(function ToolCall({
     cwd,
     home,
     loadImage,
+    renderImages,
     useDisclosure,
     inspect: inspectCall === undefined ? undefined : () => { inspectCall(callId) },
-  }), [callId, toolName, call, openFile, cwd, home, loadImage, inspectCall, useDisclosure])
+  }), [callId, toolName, call, openFile, cwd, home, loadImage, renderImages, inspectCall, useDisclosure])
   const autoReviewDenied = useMemo(
     () => call.phase === 'result' && toolRowModel(toolName, call.block).autoReviewDenial !== null,
     [toolName, call],

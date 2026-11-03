@@ -116,24 +116,3 @@ index 2f7a1fd979..5c9200c147 100644
      expect(b.view.queryByTestId('view-chat')).toBeNull()
      // The same machine-backed textarea is live in the hero, and the
      // persistence mirror stays bound (ConversationSession mounts chrome-hidden
-diff --git a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-index 0eb6c1334e..f308f82de8 100644
---- a/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-+++ b/packages/client/ui-tool/src/client/tool/models/tool-call-model.ts
-@@ -60,6 +60,8 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
-   write: 'write',
-   edit: 'edit',
-   run_code: 'code',
-+  // DSH-FORK(kernel): fork edit on an upstream-owned file. EXIT: upstream models the kernel tool call.
-+  kernel: 'code',
-   cordis_package_inspect: 'read',
-   cordis_runtime_inspect: 'read',
-   // The three run-control verbs take one package id and produce a receipt, so
-@@ -73,6 +75,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
- 
- /** Tool-owned titles that refine a generic row variant without replacing it. */
- const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
-+  kernel: 'tool.title.kernel',
-   cordis_package_inspect: 'tool.title.inspect',
-   cordis_runtime_inspect: 'tool.title.inspect',
-   cordis_run: 'tool.title.runCordis',

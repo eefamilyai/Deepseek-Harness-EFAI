@@ -1,4 +1,5 @@
 /** Tool UI slot declarations and their composed component props. */
+import type { ReactNode } from 'react'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, SessionIdOf,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -31,19 +32,30 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /**
      * Durable images of a settled image-bearing Tool call, rendered through
      * the attachment presentation plugin. The Tool layer never imports an
-     * attachment implementation: a toolview declares this slot as a child and
-     * renders it with the image card's references plus the Gateway-authorized
-     * loader it received in its owner, and the attachment plugin fills the
-     * gallery. Composing no attachment presentation plugin renders nothing,
-     * which is why the image card keeps its own envelope text beside the
-     * gallery. A child slot is declared by exactly one entry: registering a
-     * second toolview that declares the same child throws at load, so a
-     * future image-bearing tool must reuse this entry or own a distinct
-     * slot.
+     * attachment implementation: the Tool call tree declares this slot as its
+     * child, renders it with the image card's references plus the
+     * Gateway-authorized loader, and the attachment plugin fills the gallery.
+     * Composing no attachment presentation plugin renders nothing, which is why
+     * the image card keeps its own text beside the gallery.
+     *
+     * The tree is the single declarer, so every image-bearing tool — a file
+     * read, a screenshot, a browser capture, and any tool added later — shows
+     * its pixels through the same gallery when the row is expanded, and every
+     * atomic view receives the renderer in its owner payload.
      */
     'tool.call.images': { kind: 'single'; scope: 'session'; owner: ToolImagesOwnerProps }
   }
 }
+
+/**
+ * Render one call's durable images through the Tool image slot.
+ *
+ * Supplied in every atomic view's owner payload by the Tool call tree, the single
+ * entry that declares the slot; a row decides only where the gallery sits.
+ * @param images - the result's durable references, in result order.
+ * @returns the rendered gallery, or nothing when no attachment presentation plugin composes.
+ */
+export type ToolImagesRenderer = (images: readonly MessageImageSource[]) => ReactNode
 
 /** Owner currency of the Tool image gallery slot: references plus the loader. */
 export interface ToolImagesOwnerProps {
@@ -71,6 +83,12 @@ export interface ToolCallCommonProps {
   openFile: (path: string, options?: OpenFileOptions) => void
   /** Chat-supplied, Gateway-authorized loader for durable images; Tool views do not manage attachment URLs. */
   loadImage: MessageImageLoader
+  /**
+   * Render this call's result images through the Tool image slot. The tree binds
+   * the Gateway-authorized loader, so a row supplies only the references it drew
+   * from the image card model.
+   */
+  renderImages?: ToolImagesRenderer | undefined
   /** Inspect this call in the trajectory view when available. */
   inspect?: (() => void) | undefined
 }
@@ -152,6 +170,6 @@ export type ToolHostInfoInjected = {
 
 /** Full props of the Tool call-tree renderer registered as a tool-call Chat Node. */
 export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
-  & PropsRenderSlots<'tool.call.toolview'>
+  & PropsRenderSlots<'tool.call.toolview' | 'tool.call.images'>
   & PropsLocale<'conversation'>
   & InjectFace<ToolHostInfoInjected>

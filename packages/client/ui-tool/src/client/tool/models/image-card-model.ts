@@ -4,16 +4,26 @@ import type { ToolCallBlock } from './tool-call-model.ts'
 import { parsedToolCall } from './raw-tool-call.ts'
 
 /**
- * The image-card material one settled call contributes: the read path plus the
- * durable references the attachment slot renders as a gallery.
+ * The image-card material one settled call contributes: the durable references
+ * the attachment slot renders as a gallery, plus the path a read named when the
+ * call has one.
+ *
+ * Every image-bearing tool contributes this card, not only `read_image`: a
+ * screenshot, a browser capture, and a file read all settle with image blocks,
+ * and each must show its pixels when the row is expanded. A call with no image
+ * blocks in its result contributes nothing and keeps the generic body.
  *
  * The bytes are not here. `attachmentId` is opaque and provider-owned, so a UI
  * resolves it to a Gateway-authorized URL at render time; this model never parses
  * it nor derives a path from it.
  */
 export interface ImageCardModel {
-  /** The resolved path as recorded, unshortened; the row summary already shows the short form. */
-  path: string
+  /**
+   * The resolved path as recorded, unshortened, when the call named a file; the
+   * row summary already shows its short form. Absent for a call that returns an
+   * image without addressing a path, such as a screenshot.
+   */
+  path?: string
   /** The durable images this result returned, in result order. */
   images: readonly { readonly attachment: ImageAttachmentRef }[]
   /**
@@ -180,14 +190,18 @@ function fullyRendered(content: readonly unknown[]): boolean {
 }
 
 /**
- * Derive a settled image card after validating the call head, persisted
- * metadata (or its argument fallback), and the model-facing image envelope.
+ * Derive a settled image card from the result's own content, whatever tool
+ * produced it.
  *
  * The card is result-side only: a call carries no content until `execute`
- * returns, so a running `read_image` has none and this returns null for it.
- * Both root and nested calls settle as ToolResultNode. Historical nested
- * records without presentation metadata fall back to the call's own
- * `file_path` argument for the path.
+ * returns, so a running call has none and this returns null for it. Every
+ * settled call qualifies on its content alone — one or more well-formed image
+ * blocks and nothing the card would hide — so a new image-bearing tool needs no
+ * change here.
+ *
+ * A `read_image` keeps the extra path line: its persisted metadata carries the
+ * resolved path, and a nested call without metadata falls back to the call's own
+ * `file_path` argument. Any other tool shows the gallery without a path.
  * @param block - running or settled Tool block.
  * @returns the image-card props, or null for the generic path.
  */
@@ -195,17 +209,6 @@ export function imageCardModel(block: ToolCallBlock): ImageCardModel | null {
   // Result-side only: a running call is not a ToolResultNode and carries no
   // content, so it has no card here.
   if (!('kind' in block) || block.isError) return null
-  const call = parsedToolCall(block)
-  if (call?.name !== 'read_image') return null
-  const { file_path: filePath } = call.args
-  if (typeof filePath !== 'string' || filePath.trim() === '') return null
-  // Historical nested records without metadata use the authored file_path
-  // for the path. A root call with missing or malformed meta
-  // declines — malformed tool data falls back to the generic card, which shows
-  // the flattened content rather than an author-typed path.
-  const metaPath = imageMeta(block.meta)?.path
-  const path = metaPath ?? (block.parentCallId !== undefined ? filePath : null)
-  if (path === null) return null
   // The card renders only text and image blocks; a block of any other type must
   // not be silently hidden, so the whole card declines to the generic form.
   if (!fullyRendered(block.content)) return null
@@ -213,11 +216,39 @@ export function imageCardModel(block: ToolCallBlock): ImageCardModel | null {
   // truth; `meta` contributes only the path, which the content does not carry.
   const refs = imageReferences(block.content)
   if (refs === null) return null
-  // A result without the envelope is not a well-formed image read.
-  if (!block.content.some(part => part.type === 'text' && typeof part.text === 'string' && IMAGE_ENVELOPE.test(part.text))) return null
+  const path = imageCardPath(block.meta, block.parentCallId, parsedToolCall(block))
+  // A malformed read_image declines the whole card rather than showing a
+  // gallery under an author-typed path the tool never recorded.
+  if (path === null) return null
   return {
-    path,
+    ...path === undefined ? {} : { path },
     images: refs.map(ref => ({ attachment: ref })),
     extraText: extraTexts(block.content),
   }
+}
+
+/**
+ * The path line a card shows, when the call addressed a file.
+ *
+ * Only `read_image` names one: its metadata carries the resolved display path,
+ * and a nested record without metadata falls back to the call's own `file_path`
+ * argument. A read_image with neither is malformed and declines the whole card;
+ * every other tool returns undefined and shows the gallery alone.
+ * @param meta - persisted presentation metadata of unknown shape.
+ * @param parentCallId - the parent call id of a nested call, absent for a root call.
+ * @param call - the parsed call, when its arguments are readable.
+ * @returns the path, undefined when the card shows none, or null to decline.
+ */
+function imageCardPath(
+  meta: unknown,
+  parentCallId: string | undefined,
+  call: ReturnType<typeof parsedToolCall>,
+): string | undefined | null {
+  const metaPath = imageMeta(meta)?.path
+  // A tool that is not a file read shows whatever path it recorded, if any.
+  if (call?.name !== 'read_image') return metaPath
+  const named = call.args.file_path
+  const authored = typeof named === 'string' && named.trim() !== '' ? named : undefined
+  if (authored === undefined) return null
+  return metaPath ?? (parentCallId !== undefined ? authored : null)
 }

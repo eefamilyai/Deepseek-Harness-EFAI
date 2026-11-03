@@ -79,6 +79,12 @@
       ]
     },
     {
+      "name": "client-tool",
+      "paths": [
+        "packages/client/ui-tool/"
+      ]
+    },
+    {
       "name": "client-primitives",
       "paths": [
         "packages/client/ui-primitives/"

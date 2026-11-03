@@ -8,7 +8,7 @@ Every file listed under **Patches** is an upstream-owned file this fork modifies
 That list is the whole merge cost of an upstream update, and the patches are the
 fork's side of it: each one applies onto the base commit above.
 
-Tier-2 files: **71** in **17** patch(es).
+Tier-2 files: **83** in **18** patch(es).
 
 ## Patches
 
@@ -76,6 +76,22 @@ Tier-2 files: **71** in **17** patch(es).
 
 - `packages/client/ui-settings/src/client/config-form.ts`
 
+### `patches/client-tool.patch` — 13 file(s)
+
+- `packages/client/ui-tool/README.md`
+- `packages/client/ui-tool/src/client/apply.ts`
+- `packages/client/ui-tool/src/client/contract/slots.ts`
+- `packages/client/ui-tool/src/client/tool/ToolCallTree.tsx`
+- `packages/client/ui-tool/src/client/tool/components/ToolRow.tsx`
+- `packages/client/ui-tool/src/client/tool/models/image-card-model.ts`
+- `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
+- `packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx`
+- `packages/client/ui-tool/src/client/tool/toolviews/read-family-row.tsx`
+- `packages/client/ui-tool/src/client/tool/toolviews/read-image-row.tsx`
+- `packages/client/ui-tool/tests/image-card.client.spec.tsx`
+- `packages/client/ui-tool/tests/preparing-rows.client.spec.tsx`
+- `packages/client/ui-tool/tests/tool-call-tree.client.spec.tsx`
+
 ### `patches/client-primitives.patch` — 4 file(s)
 
 - `packages/client/ui-primitives/README.i18n.yaml`
@@ -83,12 +99,11 @@ Tier-2 files: **71** in **17** patch(es).
 - `packages/client/ui-primitives/src/markdown/MarkdownText.tsx`
 - `packages/client/ui-primitives/src/markdown/plain-text.ts`
 
-### `patches/client-shell.patch` — 4 file(s)
+### `patches/client-shell.patch` — 3 file(s)
 
 - `packages/client/ui-conversation/src/client/locales.ts`
 - `packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx`
 - `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`
-- `packages/client/ui-tool/src/client/tool/models/tool-call-model.ts`
 
 ### `patches/client-schedule.patch` — 9 file(s)
 
@@ -172,7 +187,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 931 paths do not exist upstream, so no patch covers them and none can conflict.
+These 932 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -310,6 +325,7 @@ These 931 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/site-certificate-not-private.md`
 - `.recon/sites-e2e.mjs`
 - `.recon/standalone-distribution.md`
+- `.recon/tool-call-colour-palette.md`
 - `.recon/tool-gaps-from-operator-feedback.md`
 - `.recon/trace-shape-b.mjs`
 - `.recon/transparent-install.json`

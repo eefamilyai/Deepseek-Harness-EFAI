@@ -37,6 +37,9 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: {
       'tool.call.toolview': { kind: 'keyed', scope: 'session' },
+      // The tree owns the image gallery for every image-bearing call: one
+      // declarer, so a keyed row and the generic fallback render the same slot.
+      'tool.call.images': { kind: 'single', scope: 'session' },
     },
     inject: toolInject,
   }, ToolCallTree))
