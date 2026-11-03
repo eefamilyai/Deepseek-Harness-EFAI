@@ -8,7 +8,7 @@ kind: "package-reference"
 
 ## Summary
 
-Colour-codes the compact conversation rows by family, so a scrolled transcript can be indexed by hue: search, read, mutate, shell, code, think, instruction, and the generic call each get one accent. The package has two halves. The palette registers as a theme override layer, so it follows the active light/dark palette and retracts when this plugin unmounts. The binding sheet puts each hue on the rows, keyed on attributes upstream already emits — never on a CSS-module class, whose name is hashed per bundle and belongs to a bundle this package does not build.
+Colour-codes the compact conversation rows by family, so a scrolled transcript can be indexed by hue: search, read, write, edit, shell, code, think, instruction, and the generic call each get one accent. The hues are spaced in OKLCH at one perceived lightness per palette and clear a 4.5:1 floor on their own background, so neighbouring families stay distinguishable without any of them shouting. The package has two halves. The palette registers as a theme override layer, so it follows the active light/dark palette and retracts when this plugin unmounts. The binding sheet puts each hue on the rows, keyed on attributes upstream already emits — never on a CSS-module class, whose name is hashed per bundle and belongs to a bundle this package does not build.
 
 ## Table of Contents
 
@@ -43,7 +43,7 @@ Two properties the sheet encodes rather than inherits:
 
 | File | Role |
 |---|---|
-| `src/client/tokens.ts` | the palette, one `--dsw-alias-flow-*` alias and its step per family, registered as a theme layer |
+| `src/client/tokens.ts` | the palette: one `--dsw-static-flow-<family>-bright`/`-deep` step pair in this package's own namespace, and the `--dsw-alias-flow-*` alias that picks one per palette, registered as a theme layer |
 | `src/client/accents.css` | the binding: each family's token on its root, the read that paints row text, and the separator dot |
 
 The package spec reads both as artifacts: every tool variant upstream classifies is bound, every declared hue is bound (and only the one deliberate product accent is not a flow hue), the Cordis binding follows the variants it overrides, no read selector is a bare row, no selector matches a hashed class, and the dot is keyed on its own attribute.

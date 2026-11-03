@@ -19,8 +19,10 @@
    rows (ReasoningRow's root carries `think`). */
 [data-variant='search'] { --dsh-row-accent: var(--dsw-alias-flow-search); }
 [data-variant='read'] { --dsh-row-accent: var(--dsw-alias-flow-read); }
-[data-variant='write'],
-[data-variant='edit'] { --dsh-row-accent: var(--dsw-alias-flow-mutate); }
+[data-variant='write'] { --dsh-row-accent: var(--dsw-alias-flow-write); }
+/* A rewrite of an existing file is its own hue: writing a file and editing one
+   are the two mutations a scan most needs to tell apart. */
+[data-variant='edit'] { --dsh-row-accent: var(--dsw-alias-flow-edit); }
 [data-variant='bash'] { --dsh-row-accent: var(--dsw-alias-flow-shell); }
 [data-variant='code'] { --dsh-row-accent: var(--dsw-alias-flow-code); }
 [data-variant='others'] { --dsh-row-accent: var(--dsw-alias-flow-generic); }

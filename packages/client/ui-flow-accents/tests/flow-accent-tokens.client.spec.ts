@@ -13,13 +13,14 @@ import { FLOW_ACCENT_TOKENS, apply, inject } from '../src/client/index.ts'
 
 const FAMILIES = [
   '--dsw-alias-flow-code',
+  '--dsw-alias-flow-edit',
   '--dsw-alias-flow-generic',
   '--dsw-alias-flow-instruct',
-  '--dsw-alias-flow-mutate',
   '--dsw-alias-flow-read',
   '--dsw-alias-flow-search',
   '--dsw-alias-flow-shell',
   '--dsw-alias-flow-think',
+  '--dsw-alias-flow-write',
 ]
 
 /** Token names in the layer that start with `prefix`. */
@@ -28,7 +29,7 @@ function named(prefix: string): string[] {
 }
 
 describe('the flow-accent layer', () => {
-  it('declares all eight family accents', () => {
+  it('declares all nine family accents', () => {
     expect(named('--dsw-alias-flow-')).toEqual(FAMILIES)
   })
 
