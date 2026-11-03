@@ -42,4 +42,6 @@ The card now derives from the result content alone. The Tool call tree declares 
 - `pnpm run build:check`: host and client aggregate checks pass.
 - Overlay: 18 patches, 83 Tier-2 files, base `f3803c9697`, round-trip and frozen-seam checks green.
 
-SHA-256 of the installer: `PENDING`
+Installer: 326,686,452 bytes.
+
+SHA-256 of the installer: `93B772D13569D24B8C9412AC96536D38280A33A4E34AD695D5CE3F614F26D03A`
