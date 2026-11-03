@@ -87,7 +87,7 @@ function buildInventory(state) {
 const base = readBase()
 const rules = readRules()
 const records = changedPaths(base)
-const { tier1, tier2, generated, unclaimed } = classify(records, rules)
+const { tier1, tier2, generated, releaseManaged, unclaimed } = classify(records, rules, base)
 
 if (unclaimed.length > 0) {
   console.error('Paths no rule claims — add a patchGroup in rules.json, or move the edit to a fork-owned file:')
@@ -166,4 +166,5 @@ if (checkOnly) {
   for (const record of generated) {
     console.log(`GENERATED (never patched) ${record.path}  ->  ${generatedFor(record.path, rules).regenerate}`)
   }
+  if (releaseManaged.length > 0) console.log(`RELEASE-MANAGED version-only manifest(s): ${releaseManaged.length}`)
 }

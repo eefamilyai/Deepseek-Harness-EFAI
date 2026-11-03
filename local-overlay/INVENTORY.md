@@ -172,7 +172,7 @@ A generator owns these. On an upstream update take upstream's side wholesale, th
 
 ## Fork-owned, no patch needed
 
-These 929 paths do not exist upstream, so no patch covers them and none can conflict.
+These 931 paths do not exist upstream, so no patch covers them and none can conflict.
 
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.i18n.yaml`
 - `.agents/notes/implemented/architecture/2026-09-11-kernel-tools-seam-explicit-agent.md`
@@ -223,6 +223,7 @@ These 929 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/cdp-console.mjs`
 - `.recon/check-desktop-patch.mjs`
 - `.recon/check-desktop-selection.mjs`
+- `.recon/compaction-tool-change-request.md`
 - `.recon/corner-after-bottom.png`
 - `.recon/corner-after-top.png`
 - `.recon/corner-before-bottom.png`
@@ -294,6 +295,7 @@ These 929 paths do not exist upstream, so no patch covers them and none can conf
 - `.recon/release-notes-efai-desktop-0.2.0-rc.2.md`
 - `.recon/release-notes-efai-desktop-0.2.1-rc.3.md`
 - `.recon/release-notes-efai-desktop-0.2.2-alpha.2.md`
+- `.recon/release-notes-efai-desktop-0.2.2-alpha.3.md`
 - `.recon/repack-desktop-asar.mjs`
 - `.recon/repaint-caption-strip.py`
 - `.recon/replay.mjs`

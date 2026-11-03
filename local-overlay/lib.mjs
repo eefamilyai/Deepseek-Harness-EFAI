@@ -154,20 +154,77 @@ export function changedPaths(base) {
 }
 
 /**
- * Split the changed paths into the three tiers the contract defines.
+ * Whether a base text and a working text differ only in their `version` field.
+ *
+ * The dsh family shares one version across every workspace manifest, so cutting
+ * a release rewrites the version line of every package upstream owns. That is
+ * the release's number, not an edit the fork intends to own across a merge, so
+ * it must stay out of the patches the way a generated file does.
+ * @param baseText - the manifest as the base commit has it.
+ * @param workingText - the manifest as the working tree has it.
+ * @returns whether dropping `version` from both leaves identical JSON.
+ */
+function versionOnlyDifference(baseText, workingText) {
+  const withoutVersion = (text) => {
+    const parsed = JSON.parse(text)
+    if (parsed === null || typeof parsed !== 'object') return undefined
+    delete parsed.version
+    return JSON.stringify(parsed)
+  }
+  try {
+    const base = withoutVersion(baseText)
+    return base !== undefined && base === withoutVersion(workingText)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * List the manifests whose only change from the base commit is their version.
+ * @param records - change records from `changedPaths`.
+ * @param base - the commit to compare against.
+ * @returns the matching records, in input order.
+ */
+export function versionManaged(records, base) {
+  const managed = []
+  for (const record of records) {
+    if (record.status !== 'M' || !record.path.endsWith('package.json')) continue
+    let baseText
+    let workingText
+    try {
+      baseText = git(['show', `${base}:${record.path}`])
+      workingText = readFileSync(join(repo, record.path), 'utf8')
+    } catch (_unreadableManifest) {
+      // A manifest the base does not carry is an addition, and one that cannot be
+      // read here is reported by the classification that follows.
+      continue
+    }
+    if (versionOnlyDifference(baseText, workingText)) managed.push(record)
+  }
+  return managed
+}
+
+/**
+ * Split the changed paths into the tiers the contract defines.
  *
  * Tier 1 is fork-owned and needs no patch. Tier 2 is an upstream file the fork
  * modifies and is the entire merge cost. Generated files are excluded from both
- * because a generator rewrites them; the mod records the command instead.
+ * because a generator rewrites them; the mod records the command instead. A
+ * manifest whose only difference is its version line is excluded the same way:
+ * the family version belongs to the release, and a merge resolves it by rule.
  * @param records - change records from `changedPaths`.
  * @param rules - the parsed `rules.json`.
+ * @param base - the commit the working tree is compared against; when given,
+ *   manifests whose only change is their version are kept out of Tier 2.
  * @returns the classified tiers plus any path no rule claims.
  */
-export function classify(records, rules) {
+export function classify(records, rules, base) {
   const tier1 = []
   const tier2 = []
   const generated = []
+  const releaseManaged = []
   const unclaimed = []
+  const releaseManagedPaths = new Set(base === undefined ? [] : versionManaged(records, base).map(record => record.path))
   for (const record of records) {
     if (record.status === 'A') {
       tier1.push(record.path)
@@ -178,13 +235,17 @@ export function classify(records, rules) {
       generated.push(record)
       continue
     }
+    if (releaseManagedPaths.has(record.path)) {
+      releaseManaged.push(record)
+      continue
+    }
     if (groupFor(record.path, rules) !== null) {
       tier2.push(record)
       continue
     }
     unclaimed.push(record)
   }
-  return { tier1, tier2, generated, unclaimed }
+  return { tier1, tier2, generated, releaseManaged, unclaimed }
 }
 
 /**

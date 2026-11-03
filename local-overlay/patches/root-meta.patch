@@ -168,9 +168,17 @@ index 3cb86ce87d..66c7d00c8e 100644
 +# The packed copy of the Kiln runtime (scripts/pack-kiln.mjs); the source is python/kiln/runtime.
 +packages/kernel/kernel-python/kiln/
 diff --git a/package.json b/package.json
-index 9dccd6008b..2cae885ed6 100644
+index 9dccd6008b..f78dae0103 100644
 --- a/package.json
 +++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@deepseek-ai/dsh-root",
+-  "version": "0.2.2-alpha.2",
++  "version": "0.2.2-alpha.3",
+   "license": "MIT",
+   "private": true,
+   "type": "module",
 @@ -108,6 +108,9 @@
      "verify-md-links": "tsx scripts/verify-md-links.ts",
      "verify-doc-site-fragments": "tsx scripts/verify-doc-site-fragments.ts",

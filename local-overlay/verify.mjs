@@ -48,7 +48,7 @@ function under(root, path) {
 
 const base = readBase()
 const rules = readRules()
-const { tier2, generated, unclaimed } = classify(changedPaths(base), rules)
+const { tier2, generated, releaseManaged, unclaimed } = classify(changedPaths(base), rules, base)
 
 if (unclaimed.length > 0) {
   console.error('Paths no rule claims:')

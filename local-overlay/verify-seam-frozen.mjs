@@ -26,7 +26,7 @@ const SEAM_FILE = fileURLToPath(new URL('SEAM.json', import.meta.url))
 
 const base = readBase()
 const rules = readRules()
-const { tier2 } = classify(changedPaths(base), rules)
+const { tier2 } = classify(changedPaths(base), rules, base)
 const current = tier2.map(record => record.path).sort()
 
 if (process.argv.includes('--record')) {

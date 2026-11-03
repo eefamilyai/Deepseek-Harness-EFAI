@@ -105,7 +105,7 @@ if (checkOnly && threeWay) {
   } else {
     // Only the patches covering changed paths are applied, and each group is
     // rebuilt from the base so the bytes applied are the ones this run verified.
-    const { tier2 } = classify(changedPaths(base), rules)
+    const { tier2 } = classify(changedPaths(base), rules, base)
     const byGroup = new Map(rules.patchGroups.map(group => [group.name, []]))
     for (const record of tier2) {
       if (generatedFor(record.path, rules) !== null) continue

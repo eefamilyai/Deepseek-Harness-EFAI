@@ -1,7 +1,16 @@
 diff --git a/apps/cli/package.json b/apps/cli/package.json
-index a77b89b9f2..2aa5e28bb8 100644
+index a77b89b9f2..6be6b4c89f 100644
 --- a/apps/cli/package.json
 +++ b/apps/cli/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "@deepseek-ai/dsh",
+   "description": "dsh CLI: profile launch, plugin management, and configuration inspection",
+-  "version": "0.2.2-alpha.2",
++  "version": "0.2.2-alpha.3",
+   "publishConfig": {
+     "access": "public"
+   },
 @@ -38,6 +38,8 @@
      "@deepseek-ai/dsh-compaction-basic": "workspace:*",
      "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:*",
